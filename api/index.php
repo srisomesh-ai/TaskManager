@@ -622,6 +622,77 @@ case 'bs_from_task':
     echo json_encode(['success'=>true,'id'=>$newId,'task_id'=>$t['task_id']]);
     break;
 
+// ============================================================
+// FINANCE PORTAL ACTIONS
+// ============================================================
+case 'verify_pin':
+    $pin=trim($body['pin']??'');
+    try{$pdo->exec("CREATE TABLE IF NOT EXISTS finance_settings(id INT AUTO_INCREMENT PRIMARY KEY,setting_key VARCHAR(50) UNIQUE,setting_value TEXT)ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");}catch(Exception $e){}
+    try{$pdo->exec("INSERT IGNORE INTO finance_settings(setting_key,setting_value)VALUES('finance_pin','9999')");}catch(Exception $e){}
+    $s=$pdo->prepare("SELECT setting_value FROM finance_settings WHERE setting_key='finance_pin'");$s->execute();$stored=$s->fetchColumn()?:'9999';
+    echo json_encode($pin===$stored?['success'=>true]:['success'=>false,'error'=>'Wrong PIN']);break;
+
+case 'update_pin':
+    $pin=trim($body['pin']??'');if(strlen($pin)<4){echo json_encode(['error'=>'Min 4 digits']);break;}
+    $pdo->prepare("INSERT INTO finance_settings(setting_key,setting_value)VALUES('finance_pin',?)ON DUPLICATE KEY UPDATE setting_value=?")->execute([$pin,$pin]);
+    echo json_encode(['success'=>true]);break;
+
+case 'get_suppliers':
+    try{$pdo->exec("CREATE TABLE IF NOT EXISTS suppliers(id INT AUTO_INCREMENT PRIMARY KEY,company VARCHAR(10) DEFAULT 'BGPT',name VARCHAR(150) NOT NULL,contact_person VARCHAR(100),phone VARCHAR(20),email VARCHAR(150),address TEXT,gst_no VARCHAR(20),device_types TEXT,notes TEXT,is_active TINYINT(1) DEFAULT 1,created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");}catch(Exception $e){}
+    $s=$pdo->prepare("SELECT * FROM suppliers WHERE company=? AND is_active=1 ORDER BY name");$s->execute([$_GET['company']??'BGPT']);echo json_encode(['suppliers'=>$s->fetchAll()]);break;
+
+case 'save_supplier':
+    $id=intval($body['id']??0);$name=trim($body['name']??'');if(!$name){echo json_encode(['error'=>'Name required']);break;}
+    if($id){$pdo->prepare("UPDATE suppliers SET name=?,contact_person=?,phone=?,email=?,address=?,gst_no=?,device_types=?,notes=?,company=? WHERE id=?")->execute([trim($body['name']),trim($body['contact_person']??''),trim($body['phone']??''),trim($body['email']??''),trim($body['address']??''),trim($body['gst_no']??''),trim($body['device_types']??''),trim($body['notes']??''),$body['company']??'BGPT',$id]);}
+    else{$pdo->prepare("INSERT INTO suppliers(company,name,contact_person,phone,email,address,gst_no,device_types,notes)VALUES(?,?,?,?,?,?,?,?,?)")->execute([$body['company']??'BGPT',trim($body['name']),trim($body['contact_person']??''),trim($body['phone']??''),trim($body['email']??''),trim($body['address']??''),trim($body['gst_no']??''),trim($body['device_types']??''),trim($body['notes']??'')]);}
+    echo json_encode(['success'=>true,'id'=>$id?:$pdo->lastInsertId()]);break;
+
+case 'delete_supplier':
+    $pdo->prepare("UPDATE suppliers SET is_active=0 WHERE id=?")->execute([intval($body['id']??0)]);echo json_encode(['success'=>true]);break;
+
+case 'get_purchase_orders':
+    try{$pdo->exec("CREATE TABLE IF NOT EXISTS purchase_orders(id INT AUTO_INCREMENT PRIMARY KEY,company VARCHAR(10) DEFAULT 'BGPT',po_number VARCHAR(30) UNIQUE NOT NULL,supplier_id INT,order_date DATE,expected_date DATE NULL,status VARCHAR(30) DEFAULT 'Draft',total_amount DECIMAL(10,2) DEFAULT 0,paid_amount DECIMAL(10,2) DEFAULT 0,payment_mode VARCHAR(50),payment_ref VARCHAR(100),notes TEXT,created_by VARCHAR(100),created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");}catch(Exception $e){}
+    try{$pdo->exec("CREATE TABLE IF NOT EXISTS purchase_order_items(id INT AUTO_INCREMENT PRIMARY KEY,po_id INT,device_model VARCHAR(100),quantity INT DEFAULT 1,received_qty INT DEFAULT 0,unit_cost DECIMAL(10,2),total_cost DECIMAL(10,2),notes TEXT)ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");}catch(Exception $e){}
+    $co=$_GET['company']??'BGPT';$s=$pdo->prepare("SELECT p.*,s.name as supplier_name FROM purchase_orders p LEFT JOIN suppliers s ON p.supplier_id=s.id WHERE p.company=? ORDER BY p.order_date DESC");$s->execute([$co]);$orders=$s->fetchAll();
+    foreach($orders as &$o){$i=$pdo->prepare("SELECT * FROM purchase_order_items WHERE po_id=?");$i->execute([$o['id']]);$o['items']=$i->fetchAll();}
+    echo json_encode(['orders'=>$orders]);break;
+
+case 'save_purchase_order':
+    $id=intval($body['id']??0);$items=$body['items']??[];$total=array_sum(array_column($items,'total_cost'));$co=$body['company']??'BGPT';
+    if($id){$pdo->prepare("UPDATE purchase_orders SET supplier_id=?,order_date=?,expected_date=?,status=?,total_amount=?,paid_amount=?,payment_mode=?,payment_ref=?,notes=? WHERE id=?")->execute([intval($body['supplier_id']),$body['order_date'],$body['expected_date']?:null,$body['status']??'Draft',$total,floatval($body['paid_amount']??0),$body['payment_mode']??'',$body['payment_ref']??'',$body['notes']??'',$id]);$pdo->prepare("DELETE FROM purchase_order_items WHERE po_id=?")->execute([$id]);}
+    else{$yr=date('Y');$cnt=$pdo->query("SELECT COUNT(*) FROM purchase_orders WHERE YEAR(created_at)=$yr")->fetchColumn();$pn='PO-'.$yr.'-'.str_pad($cnt+1,4,'0',STR_PAD_LEFT);$pdo->prepare("INSERT INTO purchase_orders(company,po_number,supplier_id,order_date,expected_date,status,total_amount,paid_amount,payment_mode,payment_ref,notes,created_by)VALUES(?,?,?,?,?,?,?,?,?,?,?,?)")->execute([$co,$pn,intval($body['supplier_id']),$body['order_date'],$body['expected_date']?:null,$body['status']??'Draft',$total,floatval($body['paid_amount']??0),$body['payment_mode']??'',$body['payment_ref']??'',$body['notes']??'',$cu['name']]);$id=$pdo->lastInsertId();}
+    foreach($items as $item){$pdo->prepare("INSERT INTO purchase_order_items(po_id,device_model,quantity,received_qty,unit_cost,total_cost,notes)VALUES(?,?,?,?,?,?,?)")->execute([$id,$item['device_model'],intval($item['quantity']),intval($item['received_qty']??0),floatval($item['unit_cost']),floatval($item['total_cost']),$item['notes']??'']);}
+    echo json_encode(['success'=>true,'id'=>$id]);break;
+
+case 'delete_purchase_order':
+    $id=intval($body['id']??0);$pdo->prepare("DELETE FROM purchase_order_items WHERE po_id=?")->execute([$id]);$pdo->prepare("DELETE FROM purchase_orders WHERE id=?")->execute([$id]);echo json_encode(['success'=>true]);break;
+
+case 'get_expenses':
+    try{$pdo->exec("CREATE TABLE IF NOT EXISTS expenses(id INT AUTO_INCREMENT PRIMARY KEY,company VARCHAR(10) DEFAULT 'BGPT',date DATE,category VARCHAR(50),description TEXT,amount DECIMAL(10,2),payment_mode VARCHAR(50),paid_to VARCHAR(100),reference VARCHAR(100),receipt_note TEXT,created_by VARCHAR(100),created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");}catch(Exception $e){}
+    $co=$_GET['company']??'BGPT';$w=['company=?'];$pa=[$co];
+    if(!empty($_GET['from'])){$w[]='date>=?';$pa[]=$_GET['from'];}if(!empty($_GET['to'])){$w[]='date<=?';$pa[]=$_GET['to'];}if(!empty($_GET['category'])){$w[]='category=?';$pa[]=$_GET['category'];}
+    $s=$pdo->prepare("SELECT * FROM expenses WHERE ".implode(' AND ',$w)." ORDER BY date DESC");$s->execute($pa);$rows=$s->fetchAll();
+    echo json_encode(['expenses'=>$rows,'total'=>array_sum(array_column($rows,'amount'))]);break;
+
+case 'save_expense':
+    $id=intval($body['id']??0);
+    if($id){$sets=[];$vals=[];foreach(['company','date','category','description','amount','payment_mode','paid_to','reference','receipt_note']as $f){if(isset($body[$f])){$sets[]="$f=?";$vals[]=$body[$f];}}$vals[]=$id;$pdo->prepare("UPDATE expenses SET ".implode(',',$sets)." WHERE id=?")->execute($vals);}
+    else{$pdo->prepare("INSERT INTO expenses(company,date,category,description,amount,payment_mode,paid_to,reference,receipt_note,created_by)VALUES(?,?,?,?,?,?,?,?,?,?)")->execute([$body['company']??'BGPT',$body['date'],$body['category'],$body['description'],floatval($body['amount']),$body['payment_mode']??'',$body['paid_to']??'',$body['reference']??'',$body['receipt_note']??'',$cu['name']]);$id=$pdo->lastInsertId();}
+    echo json_encode(['success'=>true,'id'=>$id]);break;
+
+case 'delete_expense':
+    $pdo->prepare("DELETE FROM expenses WHERE id=?")->execute([intval($body['id']??0)]);echo json_encode(['success'=>true]);break;
+
+case 'get_accounts_summary':
+    $co=$_GET['company']??'BGPT';$from=$_GET['from']??date('Y-01-01');$to=$_GET['to']??date('Y-m-d');
+    try{$q1=$pdo->prepare("SELECT COALESCE(SUM(total_price),0)ts,COALESCE(SUM(payment_received),0)tr,COALESCE(SUM(pending_payment),0)tp,COALESCE(SUM(CASE WHEN type='sales' THEN total_price ELSE 0 END),0)si,COALESCE(SUM(CASE WHEN type='license' THEN total_price ELSE 0 END),0)li,COALESCE(SUM(CASE WHEN type='sales' THEN qty ELSE 0 END),0)ds,COUNT(*)tc FROM balance_sheet_entries WHERE profile=? AND date BETWEEN ? AND ?");$q1->execute([$co,$from,$to]);$inc=$q1->fetch();}catch(Exception $e){$inc=['ts'=>0,'tr'=>0,'tp'=>0,'si'=>0,'li'=>0,'ds'=>0,'tc'=>0];}
+    $q2=$pdo->prepare("SELECT COALESCE(SUM(total_amount),0)tp,COALESCE(SUM(paid_amount),0)pp,COUNT(*)pc FROM purchase_orders WHERE company=? AND order_date BETWEEN ? AND ? AND status!='Cancelled'");$q2->execute([$co,$from,$to]);$pur=$q2->fetch();
+    try{$q3=$pdo->prepare("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE company=? AND date BETWEEN ? AND ?");$q3->execute([$co,$from,$to]);$tex=floatval($q3->fetchColumn());}catch(Exception $e){$tex=0;}
+    try{$q4=$pdo->prepare("SELECT category,COALESCE(SUM(amount),0)ct FROM expenses WHERE company=? AND date BETWEEN ? AND ? GROUP BY category ORDER BY ct DESC");$q4->execute([$co,$from,$to]);$cats=$q4->fetchAll();}catch(Exception $e){$cats=[];}
+    try{$q5=$pdo->prepare("SELECT DATE_FORMAT(date,'%Y-%m')month,COALESCE(SUM(total_price),0)income,COALESCE(SUM(payment_received),0)received FROM balance_sheet_entries WHERE profile=? AND date BETWEEN ? AND ? GROUP BY DATE_FORMAT(date,'%Y-%m') ORDER BY month");$q5->execute([$co,$from,$to]);$monthly=$q5->fetchAll();}catch(Exception $e){$monthly=[];}
+    $gp=floatval($inc['ts']??0)-floatval($pur['tp']??0);
+    echo json_encode(['income'=>['total_sales'=>$inc['ts']??0,'total_received'=>$inc['tr']??0,'total_pending'=>$inc['tp']??0,'sales_income'=>$inc['si']??0,'license_income'=>$inc['li']??0,'devices_sold'=>$inc['ds']??0,'total_entries'=>$inc['tc']??0],'purchases'=>['total_po'=>$pur['tp']??0,'po_count'=>$pur['pc']??0],'expenses_by_category'=>$cats,'total_expenses'=>$tex,'gross_profit'=>$gp,'net_profit'=>$gp-$tex,'monthly'=>$monthly]);break;
+
 default:
     http_response_code(404);
     echo json_encode(['error'=>'Unknown action: '.$action]);
