@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Finance Portal – Bharat GPS</title>
+<style>
+:root{
+  --bg:#f0f2f5;--sur:#fff;--sur2:#f7f8fa;--sur3:#eef0f4;
+  --bdr:#d0d5dd;--acc:#1a3a6b;--acc2:#2451a3;--accl:#e8eef8;
+  --grn:#1a7a3a;--grnb:#e8f5ec;--red:#c0392b;--redb:#fdecea;
+  --blu:#1a56a0;--blub:#e8f0fb;--saf:#e07b00;--safb:#fff3e0;
+  --pur:#5b2d8e;--purb:#f0eaf8;--org:#d4680a;--orgb:#fff0e0;
+  --tx:#1a1f2e;--tx2:#4a5568;--tx3:#8a9ab0;
+  --r:10px;--rs:7px;--sh:0 2px 8px rgba(0,0,0,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Calibri','Segoe UI',sans-serif;background:var(--bg);color:var(--tx);min-height:100vh}
+
+/* PIN SCREEN */
+#pin-screen{position:fixed;inset:0;background:linear-gradient(160deg,#1a3a6b,#0f2550,#1a1f2e);display:flex;align-items:center;justify-content:center;z-index:9999}
+.pin-card{background:var(--sur);border-radius:16px;padding:36px 32px;max-width:380px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+.pin-logo{height:70px;object-fit:contain;margin-bottom:12px}
+.pin-title{font-size:20px;font-weight:800;color:var(--acc);margin-bottom:4px}
+.pin-sub{font-size:13px;color:var(--tx3);margin-bottom:24px}
+.pin-dots{display:flex;justify-content:center;gap:12px;margin-bottom:20px}
+.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--bdr);background:var(--sur2);transition:all .2s}
+.pin-dot.filled{background:var(--acc);border-color:var(--acc)}
+.pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:240px;margin:0 auto 16px}
+.pin-btn{padding:16px;background:var(--sur2);border:1.5px solid var(--bdr);border-radius:var(--r);font-size:20px;font-weight:700;cursor:pointer;color:var(--tx);transition:all .15s}
+.pin-btn:hover{background:var(--accl);border-color:var(--acc2);color:var(--acc)}
+.pin-btn.zero{grid-column:2}
+.pin-clear{grid-column:3;font-size:16px;color:var(--red)}
+.pin-error{color:var(--red);font-size:13px;font-weight:700;height:20px;margin-bottom:8px}
+
+/* APP */
+#app{display:none}
+#app.show{display:block}
+
+/* TOPBAR */
+.topbar{background:linear-gradient(135deg,#1a3a6b,#2451a3);height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.2)}
+.topbar-left{display:flex;align-items:center;gap:12px}
+.topbar-logo{height:36px;object-fit:contain;filter:brightness(0) invert(1)}
+.topbar-title{color:#fff;font-size:15px;font-weight:800}
+.topbar-right{display:flex;align-items:center;gap:8px}
+.company-badge{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700}
+.topbar-btn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;padding:6px 12px;border-radius:var(--rs);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+.topbar-btn:hover{background:rgba(255,255,255,.22)}
+
+/* COMPANY SWITCHER */
+.company-bar{background:var(--sur);border-bottom:2px solid var(--bdr);padding:8px 16px;display:flex;align-items:center;gap:10px}
+.company-btn{padding:6px 16px;border-radius:20px;border:2px solid var(--bdr);background:var(--sur2);font-size:13px;font-weight:700;cursor:pointer;color:var(--tx2);font-family:inherit;transition:all .2s}
+.company-btn.active{background:var(--acc);border-color:var(--acc);color:#fff}
+.company-label{font-size:12px;color:var(--tx3);margin-right:4px}
+
+/* NAV TABS */
+.nav-tabs{background:var(--sur);border-bottom:2px solid var(--bdr);display:flex;overflow-x:auto;padding:0 8px}
+.nav-tab{padding:12px 18px;font-size:13px;font-weight:700;cursor:pointer;color:var(--tx3);border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap;font-family:inherit;background:none;border-top:none;border-left:none;border-right:none}
+.nav-tab.active{color:var(--acc);border-bottom-color:var(--acc)}
+.nav-tab:hover{color:var(--acc2);background:var(--sur2)}
+
+/* PAGES */
+.page{display:none;padding:16px;max-width:1200px;margin:0 auto}
+.page.active{display:block}
+
+/* CARDS */
+.card{background:var(--sur);border:1.5px solid var(--bdr);border-radius:var(--r);margin-bottom:12px;overflow:hidden;box-shadow:var(--sh)}
+.card-header{padding:12px 16px;background:var(--sur2);border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between}
+.card-header h3{font-size:14px;font-weight:800;color:var(--acc)}
+.card-body{padding:14px 16px}
+
+/* STAT CARDS */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:16px}
+.stat-card{background:var(--sur);border:1.5px solid var(--bdr);border-radius:var(--r);padding:14px;text-align:center;box-shadow:var(--sh)}
+.stat-val{font-size:22px;font-weight:800;margin-top:4px}
+.stat-lbl{font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;margin-top:3px}
+.stat-icon{font-size:22px}
+
+/* FORM */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.field{display:flex;flex-direction:column;gap:4px}
+.field.span-2{grid-column:1/-1}
+.field label{font-size:11px;font-weight:800;color:var(--tx2);text-transform:uppercase;letter-spacing:.3px}
+.field input,.field select,.field textarea{padding:10px 12px;background:var(--sur2);border:1.5px solid var(--bdr);border-radius:var(--rs);color:var(--tx);font-family:inherit;font-size:14px;outline:none}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--acc2);box-shadow:0 0 0 3px rgba(36,81,163,.1)}
+.req{color:var(--red)}
+
+/* TABLE */
+.table-wrap{overflow-x:auto;border-radius:var(--rs);border:1px solid var(--bdr)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{background:var(--acc);color:rgba(255,255,255,.9);padding:9px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
+td{padding:8px 12px;border-bottom:1px solid var(--sur3);vertical-align:middle}
+tr:hover td{background:var(--sur2)}
+tr:last-child td{border-bottom:none}
+
+/* BUTTONS */
+.btn{padding:9px 16px;border-radius:var(--rs);font-family:inherit;font-weight:700;font-size:13px;cursor:pointer;border:none;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:var(--acc);color:#fff}
+.btn-primary:hover{background:var(--acc2)}
+.btn-success{background:var(--grn);color:#fff}
+.btn-danger{background:var(--red);color:#fff}
+.btn-secondary{background:var(--sur2);color:var(--tx);border:1.5px solid var(--bdr)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-full{width:100%;justify-content:center}
+
+/* BADGE */
+.badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:700}
+.badge-draft{background:#f0f0f0;color:#666}
+.badge-sent{background:var(--blub);color:var(--blu)}
+.badge-partial{background:var(--safb);color:var(--saf)}
+.badge-received{background:var(--grnb);color:var(--grn)}
+.badge-cancelled{background:var(--redb);color:var(--red)}
+.badge-income{background:var(--grnb);color:var(--grn)}
+.badge-expense{background:var(--redb);color:var(--red)}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000;padding:16px}
+.modal-box{background:var(--sur);border-radius:var(--r);max-width:680px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.modal-header{padding:16px 18px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;background:var(--sur2)}
+.modal-header h3{font-size:15px;font-weight:800;color:var(--acc)}
+.modal-body{padding:18px}
+.modal-close{background:none;border:none;font-size:18px;cursor:pointer;color:var(--tx3);padding:4px}
+
+/* EMPTY */
+.empty{text-align:center;padding:48px 16px;color:var(--tx3)}
+.empty-icon{font-size:48px;margin-bottom:12px}
+
+/* P&L */
+.pl-section{background:var(--sur);border:1.5px solid var(--bdr);border-radius:var(--r);overflow:hidden;margin-bottom:12px}
+.pl-head{padding:12px 16px;font-size:13px;font-weight:800;display:flex;justify-content:space-between;align-items:center}
+.pl-row{padding:9px 16px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--sur3);font-size:13px}
+.pl-row.sub{padding-left:32px;color:var(--tx2)}
+.pl-row.total{font-weight:800;background:var(--sur2)}
+.pl-row.profit{font-weight:800;font-size:15px}
+.pl-row.green{background:var(--grnb);color:var(--grn)}
+.pl-row.red{background:var(--redb);color:var(--red)}
+
+/* TOOLBAR */
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.toolbar-select{padding:8px 12px;background:var(--sur);border:1.5px solid var(--bdr);border-radius:var(--rs);font-family:inherit;font-size:13px;color:var(--tx);outline:none}
+.toolbar-select:focus{border-color:var(--acc2)}
+
+.items-table{width:100%;border-collapse:collapse;margin-top:8px}
+.items-table th{background:var(--sur3);padding:7px 10px;font-size:11px;font-weight:700;text-align:left;color:var(--tx2)}
+.items-table td{padding:6px 10px;border-bottom:1px solid var(--sur3)}
+.items-table input,.items-table select{padding:5px 8px;border:1.5px solid var(--bdr);border-radius:5px;font-family:inherit;font-size:13px;width:100%;background:var(--sur2)}
+</style>
+</head>
+<body>
+
+<!-- PIN SCREEN -->
+<div id="pin-screen">
+  <div class="pin-card">
+    <img src="" id="pin-logo" class="pin-logo" alt="Bharat GPS">
+    <div class="pin-title">Finance Portal</div>
+    <div class="pin-sub">Admin access only — Enter PIN to continue</div>
+    <div class="pin-dots">
+      <div class="pin-dot" id="d0"></div>
+      <div class="pin-dot" id="d1"></div>
+      <div class="pin-dot" id="d2"></div>
+      <div class="pin-dot" id="d3"></div>
+    </div>
+    <div class="pin-error" id="pin-error"></div>
+    <div class="pin-pad">
+      <button class="pin-btn" onclick="pinPress('1')">1</button>
+      <button class="pin-btn" onclick="pinPress('2')">2</button>
+      <button class="pin-btn" onclick="pinPress('3')">3</button>
+      <button class="pin-btn" onclick="pinPress('4')">4</button>
+      <button class="pin-btn" onclick="pinPress('5')">5</button>
+      <button class="pin-btn" onclick="pinPress('6')">6</button>
+      <button class="pin-btn" onclick="pinPress('7')">7</button>
+      <button class="pin-btn" onclick="pinPress('8')">8</button>
+      <button class="pin-btn" onclick="pinPress('9')">9</button>
+      <button class="pin-btn zero" onclick="pinPress('0')">0</button>
+      <button class="pin-btn pin-clear" onclick="pinClear()">⌫</button>
+    </div>
+    <div style="font-size:11px;color:var(--tx3);margin-top:8px">
+      <a href="index.html" style="color:var(--tx3)">← Back to Task Manager</a>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-left">
+      <img src="" id="top-logo" class="topbar-logo" alt="Bharat GPS">
+      <div class="topbar-title">💰 Finance Portal</div>
+    </div>
+    <div class="topbar-right">
+      <span class="company-badge" id="top-company">BGPT</span>
+      <a href="index.html" class="topbar-btn">← Task Manager</a>
+      <button class="topbar-btn" onclick="lockPortal()">🔒 Lock</button>
+    </div>
+  </div>
+
+  <!-- COMPANY SWITCHER -->
+  <div class="company-bar">
+    <span class="company-label">Company:</span>
+    <button class="company-btn active" id="cmp-bgpt" onclick="switchCompany('BGPT')">🏢 Bharat GPS Tracker (BGPT)</button>
+    <button class="company-btn" id="cmp-sbgt" onclick="switchCompany('SBGT')">🏛️ SRIBHARAT GPS (SBGT)</button>
+  </div>
+
+  <!-- NAV TABS -->
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showTab('accounts')" id="tab-accounts">📊 Accounts</button>
+    <button class="nav-tab" onclick="showTab('bs')" id="tab-bs">💰 Balance Sheet</button>
+    <button class="nav-tab" onclick="showTab('purchase')" id="tab-purchase">📦 Purchase Orders</button>
+    <button class="nav-tab" onclick="showTab('expenses')" id="tab-expenses">💸 Expenses</button>
+    <button class="nav-tab" onclick="showTab('suppliers')" id="tab-suppliers">🏭 Suppliers</button>
+    <button class="nav-tab" onclick="showTab('settings')" id="tab-settings">⚙️ Settings</button>
+  </div>
+
+  <!-- ACCOUNTS PAGE -->
+  <div class="page active" id="page-accounts">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div>
+        <h2 style="font-size:20px;font-weight:800;color:var(--acc)">📊 Accounts Overview</h2>
+        <p style="font-size:13px;color:var(--tx3)">P&L summary based on Balance Sheet entries</p>
+      </div>
+      <div class="toolbar" style="margin:0">
+        <select id="acc-year" class="toolbar-select" onchange="loadAccounts()">
+          <option value="2026">2026</option>
+          <option value="2025">2025</option>
+        </select>
+        <select id="acc-month" class="toolbar-select" onchange="loadAccounts()">
+          <option value="all">Full Year</option>
+          <option value="01">January</option><option value="02">February</option>
+          <option value="03">March</option><option value="04">April</option>
+          <option value="05">May</option><option value="06">June</option>
+          <option value="07">July</option><option value="08">August</option>
+          <option value="09">September</option><option value="10">October</option>
+          <option value="11">November</option><option value="12">December</option>
+        </select>
+      </div>
+    </div>
+    <div id="accounts-content"><div class="empty"><div class="empty-icon">⏳</div><p>Loading...</p></div></div>
+  </div>
+
+  <!-- BALANCE SHEET PAGE -->
+  <div class="page" id="page-bs">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div>
+        <h2 style="font-size:20px;font-weight:800;color:var(--acc)">💰 Balance Sheet</h2>
+        <p style="font-size:13px;color:var(--tx3)">Sales & License/Service entries</p>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="showBSEntry('sales')">➕ Sales Entry</button>
+        <button class="btn btn-secondary" onclick="showBSEntry('license')">➕ License Entry</button>
+        <button class="btn btn-secondary btn-sm" onclick="exportBSCSV()">⬇ CSV</button>
+      </div>
+    </div>
+    <div id="bs-stats-bar" class="stat-grid"></div>
+    <div class="toolbar">
+      <select id="bs-filter-type" class="toolbar-select" onchange="loadBS()">
+        <option value="">All Types</option>
+        <option value="sales">Sales</option>
+        <option value="license">License/Service</option>
+      </select>
+      <select id="bs-filter-period" class="toolbar-select" onchange="loadBS()">
+        <option value="current">This Month</option>
+        <option value="last">Last Month</option>
+        <option value="quarter">This Quarter</option>
+        <option value="year">This Year</option>
+        <option value="all">All Time</option>
+        <option value="pending">Pending Only</option>
+      </select>
+      <input type="text" id="bs-search" class="toolbar-select" placeholder="Search..." oninput="filterBS()" style="min-width:180px">
+    </div>
+    <div id="bs-content"></div>
+  </div>
+
+  <!-- PURCHASE ORDERS PAGE -->
+  <div class="page" id="page-purchase">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div>
+        <h2 style="font-size:20px;font-weight:800;color:var(--acc)">📦 Purchase Orders</h2>
+        <p style="font-size:13px;color:var(--tx3)">GPS device procurement from suppliers</p>
+      </div>
+      <button class="btn btn-primary" onclick="showPOForm()">➕ New Purchase Order</button>
+    </div>
+    <div id="po-content"></div>
+  </div>
+
+  <!-- EXPENSES PAGE -->
+  <div class="page" id="page-expenses">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div>
+        <h2 style="font-size:20px;font-weight:800;color:var(--acc)">💸 Expenses</h2>
+        <p style="font-size:13px;color:var(--tx3)">Operational expenses tracking</p>
+      </div>
+      <button class="btn btn-primary" onclick="showExpenseForm()">➕ Add Expense</button>
+    </div>
+    <div class="toolbar">
+      <select id="exp-period" class="toolbar-select" onchange="loadExpenses()">
+        <option value="current">This Month</option>
+        <option value="last">Last Month</option>
+        <option value="year">This Year</option>
+        <option value="all">All Time</option>
+      </select>
+      <select id="exp-category" class="toolbar-select" onchange="loadExpenses()">
+        <option value="">All Categories</option>
+        <option>Fuel</option><option>Travel</option><option>Office</option>
+        <option>Salary</option><option>Rent</option><option>Marketing</option>
+        <option>Equipment</option><option>Vehicle</option><option>Other</option>
+      </select>
+    </div>
+    <div id="exp-content"></div>
+  </div>
+
+  <!-- SUPPLIERS PAGE -->
+  <div class="page" id="page-suppliers">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div>
+        <h2 style="font-size:20px;font-weight:800;color:var(--acc)">🏭 Suppliers</h2>
+        <p style="font-size:13px;color:var(--tx3)">GPS device suppliers & vendors</p>
+      </div>
+      <button class="btn btn-primary" onclick="showSupplierForm()">➕ Add Supplier</button>
+    </div>
+    <div id="suppliers-content"></div>
+  </div>
+
+  <!-- SETTINGS PAGE -->
+  <div class="page" id="page-settings">
+    <h2 style="font-size:20px;font-weight:800;color:var(--acc);margin-bottom:16px">⚙️ Finance Settings</h2>
+    <div class="card" style="max-width:400px">
+      <div class="card-header"><h3>🔒 Change Finance PIN</h3></div>
+      <div class="card-body">
+        <div class="field" style="margin-bottom:12px"><label>New PIN (min 4 digits)</label><input type="password" id="new-pin" placeholder="Enter new PIN" maxlength="10"></div>
+        <div class="field" style="margin-bottom:12px"><label>Confirm PIN</label><input type="password" id="confirm-pin" placeholder="Repeat PIN" maxlength="10"></div>
+        <button class="btn btn-primary" onclick="changePIN()">💾 Update PIN</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal" onclick="if(event.target===this)closeModal()">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="modal-title">Modal</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+const API  = 'api/finance_api.php';
+const BSAPI= 'api/index.php';    // for balance sheet (shared with task manager)
+let authToken = localStorage.getItem('bgps_token') || '';
+let currentCompany = localStorage.getItem('finance_company') || 'BGPT';
+let pinValue = '';
+let bsAllData = [];
+let suppliersCache = [];
+
+// ============================================================
+// PIN SYSTEM
+// ============================================================
+function pinPress(n) {
+  if (pinValue.length >= 4) return;
+  pinValue += n;
+  updatePinDots();
+  if (pinValue.length === 4) setTimeout(verifyPin, 200);
+}
+function pinClear() {
+  pinValue = pinValue.slice(0, -1);
+  updatePinDots();
+  document.getElementById('pin-error').textContent = '';
+}
+function updatePinDots() {
+  for (let i = 0; i < 4; i++) {
+    document.getElementById('d'+i).classList.toggle('filled', i < pinValue.length);
+  }
+}
+async function verifyPin() {
+  try {
+    const res = await finApi('verify_pin', {}, 'POST', {pin: pinValue});
+    if (res.success) {
+      document.getElementById('pin-screen').style.display = 'none';
+      document.getElementById('app').classList.add('show');
+      document.getElementById('top-company').textContent = currentCompany;
+      initFinance();
+    } else {
+      document.getElementById('pin-error').textContent = '❌ Incorrect PIN';
+      pinValue = '';
+      updatePinDots();
+      setTimeout(() => document.getElementById('pin-error').textContent = '', 2000);
+    }
+  } catch(e) {
+    document.getElementById('pin-error').textContent = '❌ Connection error';
+    pinValue = '';
+    updatePinDots();
+  }
+}
+function lockPortal() {
+  pinValue = '';
+  updatePinDots();
+  document.getElementById('app').classList.remove('show');
+  document.getElementById('pin-screen').style.display = 'flex';
+  document.getElementById('pin-error').textContent = '';
+}
+// Keyboard support for PIN
+document.addEventListener('keydown', e => {
+  if (document.getElementById('pin-screen').style.display !== 'none') {
+    if (e.key >= '0' && e.key <= '9') pinPress(e.key);
+    if (e.key === 'Backspace') pinClear();
+  }
+});
+
+// ============================================================
+// API HELPERS
+// ============================================================
+async function finApi(action, params={}, method='GET', body=null) {
+  const url = API + '?action=' + action + (method==='GET' ? '&'+new URLSearchParams(params) : '');
+  const opts = {method, headers: {'X-Auth-Token': authToken}};
+  if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  const r = await fetch(url, opts);
+  return r.json();
+}
+async function taskApi(action, params={}, method='GET', body=null) {
+  const url = BSAPI + '?action=' + action + (method==='GET' ? '&'+new URLSearchParams(params) : '');
+  const opts = {method, headers: {'X-Auth-Token': authToken}};
+  if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  const r = await fetch(url, opts);
+  return r.json();
+}
+function fmt(v) { return '₹' + parseFloat(v||0).toLocaleString('en-IN'); }
+function fmtDate(d) { return d ? new Date(d).toLocaleDateString('en-IN') : '–'; }
+
+// ============================================================
+// INIT
+// ============================================================
+function initFinance() {
+  // Set company buttons
+  document.getElementById('cmp-bgpt').classList.toggle('active', currentCompany==='BGPT');
+  document.getElementById('cmp-sbgt').classList.toggle('active', currentCompany==='SBGT');
+  // Set year selector to current year
+  document.getElementById('acc-year').value = new Date().getFullYear();
+  loadAccounts();
+}
+
+function switchCompany(c) {
+  currentCompany = c;
+  localStorage.setItem('finance_company', c);
+  document.getElementById('cmp-bgpt').classList.toggle('active', c==='BGPT');
+  document.getElementById('cmp-sbgt').classList.toggle('active', c==='SBGT');
+  document.getElementById('top-company').textContent = c;
+  // Reload current tab
+  const active = document.querySelector('.page.active');
+  if (active) {
+    const id = active.id.replace('page-','');
+    const reload = {accounts:loadAccounts,bs:loadBS,purchase:loadPO,expenses:loadExpenses,suppliers:loadSuppliers};
+    if (reload[id]) reload[id]();
+  }
+}
+
+function showTab(name) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+  const loaders = {accounts:loadAccounts,bs:loadBS,purchase:loadPO,expenses:loadExpenses,suppliers:loadSuppliers};
+  if (loaders[name]) loaders[name]();
+}
+
+// ============================================================
+// ACCOUNTS / P&L
+// ============================================================
+async function loadAccounts() {
+  const year  = document.getElementById('acc-year')?.value || new Date().getFullYear();
+  const month = document.getElementById('acc-month')?.value || 'all';
+  let from, to;
+  if (month === 'all') { from=year+'-01-01'; to=year+'-12-31'; }
+  else { from=year+'-'+month+'-01'; const d=new Date(year,parseInt(month),0); to=year+'-'+month+'-'+String(d.getDate()).padStart(2,'0'); }
+
+  const res = await finApi('get_accounts_summary', {company:currentCompany, from, to});
+  renderAccounts(res);
+}
+
+function renderAccounts(d) {
+  const inc   = d.income || {};
+  const pur   = d.purchases || {};
+  const totalIncome  = parseFloat(inc.total_sales||0);
+  const totalReceived= parseFloat(inc.total_received||0);
+  const totalPending = parseFloat(inc.total_pending||0);
+  const salesIncome  = parseFloat(inc.sales_income||0);
+  const licIncome    = parseFloat(inc.license_income||0);
+  const poTotal      = parseFloat(pur.total_po||0);
+  const totalExp     = parseFloat(d.total_expenses||0);
+  const grossProfit  = parseFloat(d.gross_profit||0);
+  const netProfit    = parseFloat(d.net_profit||0);
+
+  document.getElementById('accounts-content').innerHTML = `
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-val" style="color:var(--grn)">${fmt(totalIncome)}</div><div class="stat-lbl">Total Income</div></div>
+      <div class="stat-card"><div class="stat-icon">✅</div><div class="stat-val" style="color:var(--grn)">${fmt(totalReceived)}</div><div class="stat-lbl">Received</div></div>
+      <div class="stat-card"><div class="stat-icon">⏳</div><div class="stat-val" style="color:var(--red)">${fmt(totalPending)}</div><div class="stat-lbl">Pending</div></div>
+      <div class="stat-card"><div class="stat-icon">📦</div><div class="stat-val" style="color:var(--org)">${fmt(poTotal)}</div><div class="stat-lbl">Purchase Cost</div></div>
+      <div class="stat-card"><div class="stat-icon">💸</div><div class="stat-val" style="color:var(--red)">${fmt(totalExp)}</div><div class="stat-lbl">Expenses</div></div>
+      <div class="stat-card" style="border-color:${netProfit>=0?'var(--grn)':'var(--red)'}">
+        <div class="stat-icon">${netProfit>=0?'📈':'📉'}</div>
+        <div class="stat-val" style="color:${netProfit>=0?'var(--grn)':'var(--red)'}">${fmt(netProfit)}</div>
+        <div class="stat-lbl">Net Profit</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div>
+        <div class="pl-section">
+          <div class="pl-head" style="background:var(--grnb);color:var(--grn)"><span>📥 Income</span><strong>${fmt(totalIncome)}</strong></div>
+          <div class="pl-row sub"><span>GPS Sales</span><span>${fmt(salesIncome)}</span></div>
+          <div class="pl-row sub"><span>License / Service</span><span>${fmt(licIncome)}</span></div>
+          <div class="pl-row total"><span>Total Income</span><strong>${fmt(totalIncome)}</strong></div>
+        </div>
+        <div class="pl-section">
+          <div class="pl-head" style="background:var(--redb);color:var(--red)"><span>📤 Cost of Goods</span><strong>${fmt(poTotal)}</strong></div>
+          <div class="pl-row sub"><span>Purchase Orders (${pur.po_count||0} POs)</span><span>${fmt(poTotal)}</span></div>
+          <div class="pl-row total"><span>Gross Profit</span><strong style="color:${grossProfit>=0?'var(--grn)':'var(--red)'}">${fmt(grossProfit)}</strong></div>
+        </div>
+        <div class="pl-section">
+          <div class="pl-head" style="background:var(--safb);color:var(--saf)"><span>💸 Operating Expenses</span><strong>${fmt(totalExp)}</strong></div>
+          ${(d.expenses_by_category||[]).map(e=>`<div class="pl-row sub"><span>${e.category}</span><span>${fmt(e.cat_total||e.total_expenses)}</span></div>`).join('')}
+          <div class="pl-row total"><span>Total Expenses</span><strong>${fmt(totalExp)}</strong></div>
+        </div>
+        <div class="pl-section">
+          <div class="pl-row profit ${netProfit>=0?'green':'red'}">
+            <span>${netProfit>=0?'📈':'📉'} Net Profit</span>
+            <strong>${fmt(netProfit)}</strong>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <div class="card-header"><h3>📅 Monthly Income</h3></div>
+          <div class="card-body">
+            ${(d.monthly||[]).length ? `
+            <table><thead><tr><th>Month</th><th>Income</th><th>Received</th></tr></thead><tbody>
+              ${(d.monthly||[]).map(m=>`<tr><td>${m.month}</td><td style="color:var(--blu);font-weight:700">${fmt(m.income)}</td><td style="color:var(--grn);font-weight:700">${fmt(m.received)}</td></tr>`).join('')}
+            </tbody></table>` : '<div class="empty"><div class="empty-icon">📊</div><p>No data for this period</p></div>'}
+          </div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <div class="card-header"><h3>📋 Summary</h3></div>
+          <div class="card-body">
+            <div class="pl-row"><span>Devices Sold</span><strong>${parseInt(inc.devices_sold||0)}</strong></div>
+            <div class="pl-row"><span>Total Entries</span><strong>${parseInt(inc.total_entries||0)}</strong></div>
+            <div class="pl-row"><span>Collection Rate</span><strong style="color:var(--grn)">${totalIncome>0?Math.round((totalReceived/totalIncome)*100):0}%</strong></div>
+            <div class="pl-row"><span>Outstanding</span><strong style="color:var(--red)">${fmt(totalPending)}</strong></div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ============================================================
+// BALANCE SHEET (uses task manager's bs API)
+// ============================================================
+async function loadBS() {
+  const type   = document.getElementById('bs-filter-type')?.value || '';
+  const period = document.getElementById('bs-filter-period')?.value || 'current';
+  const today  = new Date();
+  let from, to, pending = '';
+  if (period==='current')  { from=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-01'; to=today.toISOString().split('T')[0]; }
+  else if(period==='last') { const d=new Date(today.getFullYear(),today.getMonth()-1,1); from=d.toISOString().split('T')[0].slice(0,8)+'01'; to=new Date(today.getFullYear(),today.getMonth(),0).toISOString().split('T')[0]; }
+  else if(period==='quarter') { const q=Math.floor(today.getMonth()/3); from=today.getFullYear()+'-'+String(q*3+1).padStart(2,'0')+'-01'; to=today.toISOString().split('T')[0]; }
+  else if(period==='year') { from=today.getFullYear()+'-01-01'; to=today.getFullYear()+'-12-31'; }
+  else if(period==='all')  { from='2020-01-01'; to='2030-12-31'; }
+  else if(period==='pending') { from='2020-01-01'; to='2030-12-31'; pending='1'; }
+
+  const params = {profile:currentCompany, from, to};
+  if (type) params.type = type;
+  if (pending) params.pending = '1';
+
+  const res = await taskApi('bs_get_entries', params);
+  bsAllData = res.entries || [];
+  renderBSStats(res.stats||{});
+  renderBSTable(bsAllData);
+}
+
+function filterBS() {
+  const q = (document.getElementById('bs-search')?.value||'').toLowerCase();
+  if (!q) { renderBSTable(bsAllData); return; }
+  renderBSTable(bsAllData.filter(e=>
+    (e.task_id||'').toLowerCase().includes(q)||
+    (e.name_on_server||'').toLowerCase().includes(q)||
+    (e.gps_serial_no||'').toLowerCase().includes(q)||
+    (e.invoice_no||'').toLowerCase().includes(q)||
+    (e.technician_name||'').toLowerCase().includes(q)
+  ));
+}
+
+function renderBSStats(s) {
+  document.getElementById('bs-stats-bar').innerHTML = [
+    {l:'Devices Sold',v:parseInt(s.devices_sold||0),c:'var(--blu)',i:'📡'},
+    {l:'Licenses',v:parseInt(s.license_count||0),c:'var(--pur)',i:'🔄'},
+    {l:'Sales Total',v:fmt(s.total_sales),c:'var(--grn)',i:'💰'},
+    {l:'License Total',v:fmt(s.total_license),c:'var(--blu)',i:'📄'},
+    {l:'Received',v:fmt(s.payment_received),c:'var(--grn)',i:'✅'},
+    {l:'Pending',v:fmt(s.pending_payment),c:'var(--red)',i:'⚠️'},
+  ].map(x=>`<div class="stat-card"><div class="stat-icon">${x.i}</div><div class="stat-val" style="color:${x.c}">${x.v}</div><div class="stat-lbl">${x.l}</div></div>`).join('');
+}
+
+function renderBSTable(entries) {
+  const el = document.getElementById('bs-content');
+  if (!entries.length) { el.innerHTML='<div class="empty"><div class="empty-icon">💰</div><p>No entries found</p></div>'; return; }
+  el.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>#</th><th>Date</th><th>Type</th><th>Task ID</th><th>Invoice</th><th>GPS Serial/IMEI</th><th>Name on Server</th><th>Server</th><th>Device</th><th>Qty</th><th>Total</th><th>Received</th><th>Pending</th><th>Technician</th><th>Actions</th></tr></thead>
+    <tbody>${entries.map((e,i)=>`<tr style="${parseFloat(e.pending_payment||0)>0?'background:#fff8f0':''}">
+      <td style="color:var(--tx3);font-size:11px">${i+1}</td>
+      <td style="white-space:nowrap">${e.date||'–'}</td>
+      <td><span class="badge" style="background:${e.type==='sales'?'var(--blub)':'var(--purb)'};color:${e.type==='sales'?'var(--blu)':'var(--pur)'}">${e.type==='sales'?'📡':'🔄'}</span></td>
+      <td><small style="font-family:monospace;color:var(--acc2)">${e.task_id||'–'}</small></td>
+      <td><small>${e.invoice_no||'–'}</small></td>
+      <td><small style="font-family:monospace">${e.gps_serial_no||'–'}</small></td>
+      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.name_on_server||'–'}</td>
+      <td><small>${e.server_name||'–'}</small></td>
+      <td><small>${e.device_model||e.service_type||'–'}</small></td>
+      <td style="text-align:center">${e.qty||1}</td>
+      <td style="font-weight:700;color:var(--blu)">${fmt(e.total_price)}</td>
+      <td style="font-weight:700;color:var(--grn)">${fmt(e.payment_received)}</td>
+      <td style="font-weight:700;color:${parseFloat(e.pending_payment||0)>0?'var(--red)':'var(--grn)'}">${fmt(e.pending_payment)}</td>
+      <td><small>${e.technician_name||'–'}</small></td>
+      <td>
+        <button class="btn btn-secondary btn-sm" onclick="editBSEntry(${e.id})">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteBSEntry(${e.id})">🗑</button>
+      </td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+function showBSEntry(type) {
+  const isSales = type==='sales';
+  const DEVICE_PRICES = {'Engine Status':3500,'Engine Cut':4500,'Micro GPS':3500,'Engine Cut+MIC':5000,'VLTD':9500,'Magnet GPS':6000,'Basic/Normal':3500};
+  const SERVICE_PRICES = {'V2V Change':500,'Upgrade':2500,'Re-Adding':1700,'Troubleshoot':500,'Service Charge':500};
+  const LICENSE_PRICES = {'3 Months':350,'6 Months':700,'1 Year':1200};
+  const isSBGT = currentCompany==='SBGT';
+
+  openModal(isSales?'📡 New Sales Entry':'🔄 New License/Service Entry', `
+    <div class="form-grid">
+      <div class="field"><label>Date *</label><input type="date" id="bse-date" value="${new Date().toISOString().split('T')[0]}"></div>
+      <div class="field"><label>Task No.</label><input type="text" id="bse-taskid" placeholder="ID-2026-0001"></div>
+      <div class="field"><label>Invoice No.</label><input type="text" id="bse-invoice"></div>
+      ${isSales?`
+      <div class="field"><label>GPS Serial / IMEI *</label><input type="text" id="bse-imei" placeholder="356938035643809"></div>
+      <div class="field"><label>Name on Server *</label><input type="text" id="bse-nameserver"></div>
+      <div class="field"><label>Server *</label><select id="bse-server"><option value="">Select</option><option>Server 1</option><option>Server 2</option><option>Server 3</option><option>Server 4</option></select></div>
+      <div class="field"><label>Device Model *</label><select id="bse-model" onchange="bseCalc()"><option value="">Select</option>${Object.keys(DEVICE_PRICES).map(m=>`<option value="${m}">${m} — ₹${DEVICE_PRICES[m]}</option>`).join('')}</select></div>
+      <div class="field"><label>Customer Type</label><select id="bse-custtype"><option value="">Select</option><option>new_customer</option><option>existing_customer</option><option>reference_lead</option><option>3rd_party_lead</option></select></div>
+      `:`
+      <div class="field"><label>Name on Server *</label><input type="text" id="bse-nameserver"></div>
+      <div class="field"><label>Server *</label><select id="bse-server"><option value="">Select</option><option>Server 1</option><option>Server 2</option><option>Server 3</option><option>Server 4</option></select></div>
+      <div class="field"><label>Service Type</label><select id="bse-service" onchange="bseCalc()"><option value="">Select</option>${Object.keys(SERVICE_PRICES).map(s=>`<option value="${s}">${s} — ₹${SERVICE_PRICES[s]}</option>`).join('')}</select></div>
+      <div class="field"><label>License Plan</label><select id="bse-license" onchange="bseCalc()"><option value="">None</option>${Object.keys(LICENSE_PRICES).map(l=>`<option value="${l}">${l} — ₹${LICENSE_PRICES[l]}</option>`).join('')}</select></div>
+      `}
+      <div class="field"><label>Qty</label><input type="number" id="bse-qty" value="1" min="1" oninput="bseCalc()"></div>
+      <div class="field"><label>Unit Price (₹)</label><input type="number" id="bse-unit" oninput="bseCalc()"></div>
+      ${isSBGT?`<div class="field"><label>GST 18% (₹)</label><input type="number" id="bse-gst" readonly style="background:var(--sur3)"></div>`:'<input type="hidden" id="bse-gst" value="0">'}
+      <div class="field"><label>Total (₹)</label><input type="number" id="bse-total" readonly style="background:var(--sur3);font-weight:700"></div>
+      <div class="field"><label>Payment Received (₹)</label><input type="number" id="bse-recv" value="0" oninput="bseCalc()"></div>
+      <div class="field"><label>Payment Mode</label><select id="bse-paymode"><option value="">Select</option><option>Cash</option><option>UPI</option><option>Bank Transfer</option></select></div>
+      <div class="field"><label>Transaction Ref</label><input type="text" id="bse-txn"></div>
+      <div class="field"><label>Technician</label><input type="text" id="bse-tech" placeholder="Technician name"></div>
+      <div class="field"><label>Location</label><input type="text" id="bse-loc"></div>
+      <div class="field span-2"><label>Pending Reason</label><select id="bse-pend-reason"><option value="">None</option><option value="later_will_do">Customer will pay later</option><option value="discount_given">Discount given</option></select></div>
+      <div class="field span-2"><label>Remarks</label><textarea id="bse-remarks" rows="2"></textarea></div>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="saveBSEntry('${type}')">💾 Save Entry</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+    </div>
+  `);
+  // Store device prices in window for bseCalc
+  window._bsePrices = {...DEVICE_PRICES,...SERVICE_PRICES,...LICENSE_PRICES};
+  window._bseIsSBGT = isSBGT;
+}
+
+function bseCalc() {
+  const model  = document.getElementById('bse-model')?.value || document.getElementById('bse-service')?.value || document.getElementById('bse-license')?.value || '';
+  const qty    = parseFloat(document.getElementById('bse-qty')?.value||1);
+  let unit     = window._bsePrices?.[model] || parseFloat(document.getElementById('bse-unit')?.value||0);
+  if (window._bsePrices?.[model] && document.getElementById('bse-unit')) document.getElementById('bse-unit').value = unit;
+  const base   = unit * qty;
+  const gst    = window._bseIsSBGT ? +(base*0.18).toFixed(2) : 0;
+  const total  = +(base+gst).toFixed(2);
+  if (document.getElementById('bse-gst'))   document.getElementById('bse-gst').value   = gst;
+  if (document.getElementById('bse-total')) document.getElementById('bse-total').value = total;
+}
+
+async function saveBSEntry(type) {
+  const total = parseFloat(document.getElementById('bse-total')?.value||0);
+  const recv  = parseFloat(document.getElementById('bse-recv')?.value||0);
+  const body = {
+    type, profile: currentCompany,
+    date:           document.getElementById('bse-date')?.value,
+    task_id:        document.getElementById('bse-taskid')?.value||null,
+    invoice_no:     document.getElementById('bse-invoice')?.value,
+    gps_serial_no:  document.getElementById('bse-imei')?.value||null,
+    name_on_server: document.getElementById('bse-nameserver')?.value,
+    server_name:    document.getElementById('bse-server')?.value,
+    device_model:   document.getElementById('bse-model')?.value||null,
+    service_type:   document.getElementById('bse-service')?.value||null,
+    license_plan:   document.getElementById('bse-license')?.value||null,
+    customer_type:  document.getElementById('bse-custtype')?.value||null,
+    qty:            document.getElementById('bse-qty')?.value||1,
+    unit_price:     document.getElementById('bse-unit')?.value||0,
+    gst:            document.getElementById('bse-gst')?.value||0,
+    total_price:    total,
+    payment_received: recv,
+    pending_payment:  Math.max(0,total-recv),
+    payment_mode:   document.getElementById('bse-paymode')?.value,
+    payment_transaction_details: document.getElementById('bse-txn')?.value,
+    pending_reason: document.getElementById('bse-pend-reason')?.value,
+    technician_name:document.getElementById('bse-tech')?.value,
+    location:       document.getElementById('bse-loc')?.value,
+    remarks:        document.getElementById('bse-remarks')?.value,
+  };
+  const res = await taskApi('bs_add_entry',{},'POST',body);
+  if (res.success) { closeModal(); showAlert('Entry saved! ✅'); loadBS(); }
+  else showAlert('Error: '+(res.error||'Failed'));
+}
+
+function editBSEntry(id) {
+  const e = bsAllData.find(x=>x.id===id); if(!e) return;
+  openModal('✏️ Edit Entry — '+(e.task_id||e.date), `
+    <div class="form-grid">
+      <div class="field"><label>Date</label><input type="date" id="bse-edit-date" value="${e.date||''}"></div>
+      <div class="field"><label>Invoice No.</label><input type="text" id="bse-edit-inv" value="${e.invoice_no||''}"></div>
+      <div class="field"><label>GPS Serial/IMEI</label><input type="text" id="bse-edit-imei" value="${e.gps_serial_no||''}"></div>
+      <div class="field"><label>Name on Server</label><input type="text" id="bse-edit-name" value="${e.name_on_server||''}"></div>
+      <div class="field"><label>Server</label><select id="bse-edit-server">${['','Server 1','Server 2','Server 3','Server 4'].map(s=>`<option ${e.server_name===s?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="field"><label>Total Price (₹)</label><input type="number" id="bse-edit-total" value="${e.total_price||''}"></div>
+      <div class="field"><label>Payment Received (₹)</label><input type="number" id="bse-edit-recv" value="${e.payment_received||''}"></div>
+      <div class="field"><label>Payment Mode</label><select id="bse-edit-paymode">${['','Cash','UPI','Bank Transfer'].map(m=>`<option ${e.payment_mode===m?'selected':''}>${m}</option>`).join('')}</select></div>
+      <div class="field"><label>Received On</label><input type="date" id="bse-edit-recvdate" value="${e.payment_received_on||''}"></div>
+      <div class="field"><label>Transaction Ref</label><input type="text" id="bse-edit-txn" value="${e.payment_transaction_details||''}"></div>
+      <div class="field"><label>Technician</label><input type="text" id="bse-edit-tech" value="${e.technician_name||''}"></div>
+      <div class="field"><label>Location</label><input type="text" id="bse-edit-loc" value="${e.location||''}"></div>
+      <div class="field"><label>Discount Given (₹)</label><input type="number" id="bse-edit-disc" value="${e.discount_given||''}"></div>
+      <div class="field"><label>Discount Reason</label><input type="text" id="bse-edit-disc-reason" value="${e.discount_reason||''}"></div>
+      <div class="field"><label>Approved By</label><input type="text" id="bse-edit-disc-who" value="${e.discount_incharge||''}"></div>
+      <div class="field"><label>Reminder Date</label><input type="date" id="bse-edit-remind" value="${e.payment_reminder_date||''}"></div>
+      <div class="field span-2"><label>Remarks</label><textarea id="bse-edit-remarks">${e.remarks||''}</textarea></div>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="updateBSEntry(${id})">💾 Save</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+    </div>`);
+}
+
+async function updateBSEntry(id) {
+  const total = parseFloat(document.getElementById('bse-edit-total')?.value||0);
+  const recv  = parseFloat(document.getElementById('bse-edit-recv')?.value||0);
+  const body = {
+    id,
+    date: document.getElementById('bse-edit-date')?.value,
+    invoice_no: document.getElementById('bse-edit-inv')?.value,
+    gps_serial_no: document.getElementById('bse-edit-imei')?.value,
+    name_on_server: document.getElementById('bse-edit-name')?.value,
+    server_name: document.getElementById('bse-edit-server')?.value,
+    total_price: total,
+    payment_received: recv,
+    pending_payment: Math.max(0,total-recv),
+    payment_mode: document.getElementById('bse-edit-paymode')?.value,
+    payment_received_on: document.getElementById('bse-edit-recvdate')?.value||null,
+    payment_transaction_details: document.getElementById('bse-edit-txn')?.value,
+    technician_name: document.getElementById('bse-edit-tech')?.value,
+    location: document.getElementById('bse-edit-loc')?.value,
+    discount_given: document.getElementById('bse-edit-disc')?.value||0,
+    discount_reason: document.getElementById('bse-edit-disc-reason')?.value,
+    discount_incharge: document.getElementById('bse-edit-disc-who')?.value,
+    payment_reminder_date: document.getElementById('bse-edit-remind')?.value||null,
+    remarks: document.getElementById('bse-edit-remarks')?.value,
+  };
+  const res = await taskApi('bs_update_entry',{},'POST',body);
+  if (res.success) { closeModal(); showAlert('Updated! ✅'); loadBS(); }
+  else showAlert('Error: '+(res.error||'Failed'));
+}
+
+async function deleteBSEntry(id) {
+  if (!confirm('Delete this entry? Cannot be undone.')) return;
+  const res = await taskApi('bs_delete_entry',{},'POST',{id});
+  if (res.success) { showAlert('Deleted'); loadBS(); }
+  else showAlert(res.error||'Error');
+}
+
+function exportBSCSV() {
+  if (!bsAllData.length) { showAlert('No data'); return; }
+  const rows = [['Date','Type','Task ID','Invoice','GPS Serial','Name on Server','Server','Device','Qty','Total','Received','Pending','Pay Mode','Technician','Location','Remarks']];
+  bsAllData.forEach(e=>rows.push([e.date,e.type,e.task_id||'',e.invoice_no||'',e.gps_serial_no||'',e.name_on_server||'',e.server_name||'',e.device_model||e.service_type||'',e.qty,e.total_price,e.payment_received,e.pending_payment,e.payment_mode||'',e.technician_name||'',e.location||'',e.remarks||'']));
+  const csv = rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a = document.createElement('a'); a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv); a.download='balance_sheet_'+currentCompany+'_'+new Date().toISOString().split('T')[0]+'.csv'; a.click();
+}
+
+// ============================================================
+// PURCHASE ORDERS
+// ============================================================
+async function loadPO() {
+  const res = await finApi('get_purchase_orders', {company:currentCompany});
+  const orders = res.orders || [];
+  const el = document.getElementById('po-content');
+  if (!orders.length) { el.innerHTML='<div class="empty"><div class="empty-icon">📦</div><p>No purchase orders yet</p><button class="btn btn-primary" onclick="showPOForm()">➕ Create First PO</button></div>'; return; }
+
+  const statusColors = {Draft:'badge-draft',Sent:'badge-sent','Partially Received':'badge-partial',Received:'badge-received',Cancelled:'badge-cancelled'};
+  const total = orders.reduce((s,o)=>s+parseFloat(o.total_amount||0),0);
+  const paid  = orders.reduce((s,o)=>s+parseFloat(o.paid_amount||0),0);
+
+  el.innerHTML = `
+    <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">
+      <div class="stat-card"><div class="stat-icon">📋</div><div class="stat-val">${orders.length}</div><div class="stat-lbl">Total POs</div></div>
+      <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-val" style="color:var(--org)">${fmt(total)}</div><div class="stat-lbl">Total Value</div></div>
+      <div class="stat-card"><div class="stat-icon">✅</div><div class="stat-val" style="color:var(--grn)">${fmt(paid)}</div><div class="stat-lbl">Paid</div></div>
+      <div class="stat-card"><div class="stat-icon">⏳</div><div class="stat-val" style="color:var(--red)">${fmt(total-paid)}</div><div class="stat-lbl">Pending</div></div>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>PO Number</th><th>Supplier</th><th>Date</th><th>Items</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>${orders.map(o=>`<tr>
+        <td><strong style="color:var(--acc2);font-family:monospace">${o.po_number}</strong></td>
+        <td>${o.supplier_name||'–'}</td>
+        <td>${fmtDate(o.order_date)}</td>
+        <td>${(o.items||[]).map(i=>`${i.device_model} ×${i.quantity}`).join(', ')||'–'}</td>
+        <td style="font-weight:700;color:var(--org)">${fmt(o.total_amount)}</td>
+        <td style="color:var(--grn)">${fmt(o.paid_amount)}</td>
+        <td style="color:${parseFloat(o.total_amount)-parseFloat(o.paid_amount)>0?'var(--red)':'var(--grn)'}">${fmt(parseFloat(o.total_amount)-parseFloat(o.paid_amount))}</td>
+        <td><span class="badge ${statusColors[o.status]||'badge-draft'}">${o.status}</span></td>
+        <td><button class="btn btn-secondary btn-sm" onclick="editPO(${o.id})">✏️</button> <button class="btn btn-danger btn-sm" onclick="deletePO(${o.id})">🗑</button></td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+}
+
+async function showPOForm(editData=null) {
+  const suppRes = await finApi('get_suppliers', {company:currentCompany});
+  suppliersCache = suppRes.suppliers || [];
+  if (!suppliersCache.length) { showAlert('Please add a supplier first'); showTab('suppliers'); return; }
+
+  const DEVICE_MODELS = ['Engine Status','Engine Cut','Micro GPS','Magnet GPS','MIC/SOS GPS','VLTD','Basic/Normal','Other'];
+  openModal(editData?'✏️ Edit Purchase Order':'📦 New Purchase Order', `
+    <div class="form-grid">
+      <div class="field"><label>Supplier *</label><select id="po-supplier">${suppliersCache.map(s=>`<option value="${s.id}" ${editData?.supplier_id==s.id?'selected':''}>${s.name}</option>`).join('')}</select></div>
+      <div class="field"><label>Order Date *</label><input type="date" id="po-date" value="${editData?.order_date||new Date().toISOString().split('T')[0]}"></div>
+      <div class="field"><label>Expected Delivery</label><input type="date" id="po-expect" value="${editData?.expected_date||''}"></div>
+      <div class="field"><label>Status</label><select id="po-status">${['Draft','Sent','Partially Received','Received','Cancelled'].map(s=>`<option ${(editData?.status||'Draft')===s?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="field"><label>Amount Paid (₹)</label><input type="number" id="po-paid" value="${editData?.paid_amount||0}"></div>
+      <div class="field"><label>Payment Mode</label><select id="po-paymode">${['','Cash','UPI','Bank Transfer','Cheque'].map(m=>`<option ${editData?.payment_mode===m?'selected':''}>${m}</option>`).join('')}</select></div>
+      <div class="field"><label>Payment Ref</label><input type="text" id="po-payref" value="${editData?.payment_ref||''}"></div>
+      <div class="field span-2"><label>Notes</label><textarea id="po-notes" rows="2">${editData?.notes||''}</textarea></div>
+    </div>
+    <div style="margin-top:14px">
+      <div style="font-size:12px;font-weight:700;color:var(--tx2);margin-bottom:8px;text-transform:uppercase">Items *</div>
+      <table class="items-table">
+        <thead><tr><th>Device Model</th><th>Qty</th><th>Received</th><th>Unit Cost (₹)</th><th>Total (₹)</th><th></th></tr></thead>
+        <tbody id="po-items"></tbody>
+      </table>
+      <button class="btn btn-secondary btn-sm" onclick="addPOItem()" style="margin-top:8px">➕ Add Item</button>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--bdr)">
+      <div style="font-size:14px;font-weight:800">Total: <span id="po-total-display" style="color:var(--org)">₹0</span></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="savePO(${editData?.id||0})">💾 Save PO</button>
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      </div>
+    </div>
+  `);
+  window._poItems = editData?.items || [];
+  if (!window._poItems.length) addPOItem();
+  else renderPOItems();
+  // Store DEVICE_MODELS
+  window._deviceModels = DEVICE_MODELS;
+}
+
+function addPOItem() {
+  window._poItems = window._poItems || [];
+  window._poItems.push({device_model:'',quantity:1,received_qty:0,unit_cost:0,total_cost:0});
+  renderPOItems();
+}
+
+function renderPOItems() {
+  const tbody = document.getElementById('po-items'); if(!tbody) return;
+  tbody.innerHTML = (window._poItems||[]).map((item,i)=>`<tr>
+    <td><select onchange="poItemChange(${i},'device_model',this.value)">${(window._deviceModels||[]).map(m=>`<option ${item.device_model===m?'selected':''}>${m}</option>`).join('')}</select></td>
+    <td><input type="number" value="${item.quantity||1}" min="1" oninput="poItemChange(${i},'quantity',this.value)" style="width:60px"></td>
+    <td><input type="number" value="${item.received_qty||0}" min="0" oninput="poItemChange(${i},'received_qty',this.value)" style="width:60px"></td>
+    <td><input type="number" value="${item.unit_cost||0}" oninput="poItemChange(${i},'unit_cost',this.value)" style="width:90px"></td>
+    <td style="font-weight:700;color:var(--org)">₹${((item.quantity||1)*(item.unit_cost||0)).toLocaleString('en-IN')}</td>
+    <td><button class="btn btn-danger btn-sm" onclick="removePOItem(${i})">✕</button></td>
+  </tr>`).join('');
+  updatePOTotal();
+}
+
+function poItemChange(i, field, val) {
+  window._poItems[i][field] = field==='device_model'?val:parseFloat(val)||0;
+  window._poItems[i].total_cost = (window._poItems[i].quantity||1)*(window._poItems[i].unit_cost||0);
+  renderPOItems();
+}
+function removePOItem(i) { window._poItems.splice(i,1); renderPOItems(); }
+function updatePOTotal() {
+  const total = (window._poItems||[]).reduce((s,i)=>s+(i.total_cost||0),0);
+  const el = document.getElementById('po-total-display');
+  if (el) el.textContent = fmt(total);
+}
+
+async function savePO(id) {
+  const items = (window._poItems||[]).filter(i=>i.device_model&&i.quantity>0);
+  if (!items.length) { showAlert('Add at least one item'); return; }
+  const body = {
+    id: id||0, company: currentCompany,
+    supplier_id: document.getElementById('po-supplier')?.value,
+    order_date:  document.getElementById('po-date')?.value,
+    expected_date: document.getElementById('po-expect')?.value||null,
+    status:      document.getElementById('po-status')?.value,
+    paid_amount: document.getElementById('po-paid')?.value||0,
+    payment_mode:document.getElementById('po-paymode')?.value,
+    payment_ref: document.getElementById('po-payref')?.value,
+    notes:       document.getElementById('po-notes')?.value,
+    items,
+  };
+  const res = await finApi('save_purchase_order',{},'POST',body);
+  if (res.success) { closeModal(); showAlert('PO saved! ✅'); loadPO(); }
+  else showAlert('Error: '+(res.error||'Failed'));
+}
+
+async function editPO(id) {
+  const res = await finApi('get_purchase_orders', {company:currentCompany});
+  const order = (res.orders||[]).find(o=>o.id===id);
+  if (order) showPOForm(order);
+}
+
+async function deletePO(id) {
+  if (!confirm('Delete this purchase order?')) return;
+  const res = await finApi('delete_purchase_order',{},'POST',{id});
+  if (res.success) { showAlert('Deleted'); loadPO(); }
+}
+
+// ============================================================
+// EXPENSES
+// ============================================================
+async function loadExpenses() {
+  const period = document.getElementById('exp-period')?.value || 'current';
+  const cat    = document.getElementById('exp-category')?.value || '';
+  const today  = new Date();
+  let from, to;
+  if (period==='current') { from=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-01'; to=today.toISOString().split('T')[0]; }
+  else if(period==='last') { const d=new Date(today.getFullYear(),today.getMonth()-1,1); from=d.toISOString().split('T')[0].slice(0,8)+'01'; to=new Date(today.getFullYear(),today.getMonth(),0).toISOString().split('T')[0]; }
+  else if(period==='year') { from=today.getFullYear()+'-01-01'; to=today.getFullYear()+'-12-31'; }
+  else { from='2020-01-01'; to='2030-12-31'; }
+
+  const params = {company:currentCompany, from, to};
+  if (cat) params.category = cat;
+  const res = await finApi('get_expenses', params);
+  renderExpenses(res.expenses||[], res.total||0);
+}
+
+function renderExpenses(expenses, total) {
+  const el = document.getElementById('exp-content');
+  if (!expenses.length) { el.innerHTML='<div class="empty"><div class="empty-icon">💸</div><p>No expenses found</p><button class="btn btn-primary" onclick="showExpenseForm()">➕ Add Expense</button></div>'; return; }
+
+  // Category totals
+  const cats = {};
+  expenses.forEach(e=>{cats[e.category]=(cats[e.category]||0)+parseFloat(e.amount||0);});
+
+  el.innerHTML = `
+    <div class="stat-grid" style="margin-bottom:14px">
+      <div class="stat-card"><div class="stat-icon">💸</div><div class="stat-val" style="color:var(--red)">${fmt(total)}</div><div class="stat-lbl">Total Expenses</div></div>
+      ${Object.entries(cats).slice(0,4).map(([k,v])=>`<div class="stat-card"><div class="stat-icon">📌</div><div class="stat-val" style="font-size:16px">${fmt(v)}</div><div class="stat-lbl">${k}</div></div>`).join('')}
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Paid To</th><th>Amount</th><th>Mode</th><th>Ref</th><th>By</th><th>Actions</th></tr></thead>
+      <tbody>${expenses.map(e=>`<tr>
+        <td style="white-space:nowrap">${fmtDate(e.date)}</td>
+        <td><span class="badge" style="background:var(--safb);color:var(--saf)">${e.category}</span></td>
+        <td>${e.description}</td>
+        <td>${e.paid_to||'–'}</td>
+        <td style="font-weight:700;color:var(--red)">${fmt(e.amount)}</td>
+        <td><small>${e.payment_mode||'–'}</small></td>
+        <td><small>${e.reference||'–'}</small></td>
+        <td><small>${e.created_by||'–'}</small></td>
+        <td>
+          <button class="btn btn-secondary btn-sm" onclick="showExpenseForm(${JSON.stringify(e).replace(/"/g,'&quot;')})">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteExpense(${e.id})">🗑</button>
+        </td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+}
+
+function showExpenseForm(edit=null) {
+  openModal(edit?'✏️ Edit Expense':'💸 Add Expense', `
+    <div class="form-grid">
+      <div class="field"><label>Date *</label><input type="date" id="exp-date" value="${edit?.date||new Date().toISOString().split('T')[0]}"></div>
+      <div class="field"><label>Category *</label><select id="exp-cat">
+        ${['Fuel','Travel','Office','Salary','Rent','Marketing','Equipment','Vehicle','Other'].map(c=>`<option ${edit?.category===c?'selected':''}>${c}</option>`).join('')}
+      </select></div>
+      <div class="field span-2"><label>Description *</label><input type="text" id="exp-desc" value="${edit?.description||''}"></div>
+      <div class="field"><label>Amount (₹) *</label><input type="number" id="exp-amount" value="${edit?.amount||''}"></div>
+      <div class="field"><label>Payment Mode</label><select id="exp-paymode">${['','Cash','UPI','Bank Transfer'].map(m=>`<option ${edit?.payment_mode===m?'selected':''}>${m}</option>`).join('')}</select></div>
+      <div class="field"><label>Paid To</label><input type="text" id="exp-paidto" value="${edit?.paid_to||''}"></div>
+      <div class="field"><label>Reference / Receipt</label><input type="text" id="exp-ref" value="${edit?.reference||''}"></div>
+      <div class="field span-2"><label>Notes</label><textarea id="exp-notes">${edit?.receipt_note||''}</textarea></div>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="saveExpense(${edit?.id||0})">💾 Save</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+    </div>`);
+}
+
+async function saveExpense(id) {
+  const body = {
+    id, company: currentCompany,
+    date:         document.getElementById('exp-date')?.value,
+    category:     document.getElementById('exp-cat')?.value,
+    description:  document.getElementById('exp-desc')?.value,
+    amount:       document.getElementById('exp-amount')?.value,
+    payment_mode: document.getElementById('exp-paymode')?.value,
+    paid_to:      document.getElementById('exp-paidto')?.value,
+    reference:    document.getElementById('exp-ref')?.value,
+    receipt_note: document.getElementById('exp-notes')?.value,
+  };
+  if (!body.date||!body.category||!body.description||!body.amount) { showAlert('Fill required fields'); return; }
+  const res = await finApi('save_expense',{},'POST',body);
+  if (res.success) { closeModal(); showAlert('Expense saved! ✅'); loadExpenses(); }
+  else showAlert('Error: '+(res.error||'Failed'));
+}
+
+async function deleteExpense(id) {
+  if (!confirm('Delete this expense?')) return;
+  const res = await finApi('delete_expense',{},'POST',{id});
+  if (res.success) { showAlert('Deleted'); loadExpenses(); }
+}
+
+// ============================================================
+// SUPPLIERS
+// ============================================================
+async function loadSuppliers() {
+  const res = await finApi('get_suppliers', {company:currentCompany});
+  const suppliers = res.suppliers || [];
+  const el = document.getElementById('suppliers-content');
+  if (!suppliers.length) { el.innerHTML='<div class="empty"><div class="empty-icon">🏭</div><p>No suppliers yet</p><button class="btn btn-primary" onclick="showSupplierForm()">➕ Add Supplier</button></div>'; return; }
+
+  el.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>Name</th><th>Contact</th><th>Phone</th><th>Email</th><th>GST No.</th><th>Devices</th><th>Actions</th></tr></thead>
+    <tbody>${suppliers.map(s=>`<tr>
+      <td><strong>${s.name}</strong></td>
+      <td>${s.contact_person||'–'}</td>
+      <td>${s.phone||'–'}</td>
+      <td>${s.email||'–'}</td>
+      <td><small>${s.gst_no||'–'}</small></td>
+      <td><small>${s.device_types||'–'}</small></td>
+      <td>
+        <button class="btn btn-secondary btn-sm" onclick="showSupplierForm(${JSON.stringify(s).replace(/"/g,'&quot;')})">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteSupplier(${s.id})">🗑</button>
+      </td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+function showSupplierForm(edit=null) {
+  openModal(edit?'✏️ Edit Supplier':'🏭 Add Supplier', `
+    <div class="form-grid">
+      <div class="field span-2"><label>Supplier Name *</label><input type="text" id="sup-name" value="${edit?.name||''}"></div>
+      <div class="field"><label>Contact Person</label><input type="text" id="sup-contact" value="${edit?.contact_person||''}"></div>
+      <div class="field"><label>Phone</label><input type="tel" id="sup-phone" value="${edit?.phone||''}"></div>
+      <div class="field"><label>Email</label><input type="email" id="sup-email" value="${edit?.email||''}"></div>
+      <div class="field"><label>GST No.</label><input type="text" id="sup-gst" value="${edit?.gst_no||''}"></div>
+      <div class="field span-2"><label>Address</label><textarea id="sup-addr" rows="2">${edit?.address||''}</textarea></div>
+      <div class="field span-2"><label>Device Types Supplied</label><input type="text" id="sup-devices" placeholder="e.g. Engine Status, Engine Cut, VLTD" value="${edit?.device_types||''}"></div>
+      <div class="field span-2"><label>Notes</label><textarea id="sup-notes">${edit?.notes||''}</textarea></div>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="saveSupplier(${edit?.id||0})">💾 Save</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+    </div>`);
+}
+
+async function saveSupplier(id) {
+  const body = {
+    id, company: currentCompany,
+    name:           document.getElementById('sup-name')?.value,
+    contact_person: document.getElementById('sup-contact')?.value,
+    phone:          document.getElementById('sup-phone')?.value,
+    email:          document.getElementById('sup-email')?.value,
+    gst_no:         document.getElementById('sup-gst')?.value,
+    address:        document.getElementById('sup-addr')?.value,
+    device_types:   document.getElementById('sup-devices')?.value,
+    notes:          document.getElementById('sup-notes')?.value,
+  };
+  if (!body.name) { showAlert('Supplier name required'); return; }
+  const res = await finApi('save_supplier',{},'POST',body);
+  if (res.success) { closeModal(); showAlert('Supplier saved! ✅'); loadSuppliers(); }
+  else showAlert('Error: '+(res.error||'Failed'));
+}
+
+async function deleteSupplier(id) {
+  if (!confirm('Remove this supplier?')) return;
+  const res = await finApi('delete_supplier',{},'POST',{id});
+  if (res.success) { showAlert('Removed'); loadSuppliers(); }
+}
+
+// ============================================================
+// SETTINGS
+// ============================================================
+async function changePIN() {
+  const p1 = document.getElementById('new-pin')?.value;
+  const p2 = document.getElementById('confirm-pin')?.value;
+  if (!p1 || p1.length < 4) { showAlert('PIN must be at least 4 digits'); return; }
+  if (p1 !== p2) { showAlert('PINs do not match'); return; }
+  const res = await finApi('update_pin',{},'POST',{pin:p1});
+  if (res.success) { showAlert('PIN updated! ✅'); document.getElementById('new-pin').value=''; document.getElementById('confirm-pin').value=''; }
+  else showAlert(res.error||'Error');
+}
+
+// ============================================================
+// MODAL HELPERS
+// ============================================================
+function openModal(title, html) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').innerHTML = html;
+  document.getElementById('modal').style.display = 'flex';
+}
+function closeModal() {
+  document.getElementById('modal').style.display = 'none';
+}
+function showAlert(msg) {
+  const el = document.createElement('div');
+  el.style.cssText = 'position:fixed;top:70px;right:16px;background:#1a3a6b;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:700;z-index:9999;opacity:0;transition:opacity .3s;box-shadow:0 4px 16px rgba(0,0,0,.3)';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(()=>el.style.opacity='1',50);
+  setTimeout(()=>{el.style.opacity='0';setTimeout(()=>el.remove(),300);},3000);
+}
+</script>
+</body>
+</html>
