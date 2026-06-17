@@ -388,7 +388,7 @@ async function verifyPin() {
       setTimeout(() => document.getElementById('pin-error').textContent = '', 2000);
     }
   } catch(e) {
-    document.getElementById('pin-error').textContent = '❌ Connection error';
+    document.getElementById('pin-error').textContent = '❌ Error: ' + e.message;
     pinValue = '';
     updatePinDots();
   }
