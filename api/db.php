@@ -46,6 +46,12 @@ function getDB() {
             "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS discount_incharge VARCHAR(100) NULL",
             "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS profile VARCHAR(10) DEFAULT 'BGPT'",
             "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS bs_entry_id INT NULL",
+            "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS outstation_location VARCHAR(200) NULL",
+            "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS outstation_travel_paid_by VARCHAR(20) NULL",
+            "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS outstation_customer_travel_amount DECIMAL(10,2) NULL",
+            "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS outstation_claim_cap DECIMAL(10,2) NULL",
+            "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS outstation_claim_submitted DECIMAL(10,2) NULL",
+            "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS outstation_claim_status VARCHAR(20) NULL",
             // System tables
             "CREATE TABLE IF NOT EXISTS sync_log (id INT AUTO_INCREMENT PRIMARY KEY, event_type VARCHAR(50) NOT NULL, task_id INT NULL, user_id INT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_created (created_at)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
             "CREATE TABLE IF NOT EXISTS used_tokens (id INT AUTO_INCREMENT PRIMARY KEY, token_hash VARCHAR(64) UNIQUE NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
