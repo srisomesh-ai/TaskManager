@@ -149,7 +149,12 @@ case 'save_user':
         $sets[]='email=?'; $vals[]=$email;
         $sets[]='role=?';  $vals[]=$role;
         $sets[]='phone=?'; $vals[]=$phone;
-        if (!empty($body['password'])) { $sets[]='password=?'; $vals[]=password_hash($body['password'],PASSWORD_DEFAULT); }
+        if (!empty($body['password'])) {
+            $sets[]='password=?';
+            $vals[]=password_hash($body['password'],PASSWORD_DEFAULT);
+            $sets[]='auth_token=?';
+            $vals[]=null; // Force user to re-login with new password
+        }
         $vals[]=$uid;
         $pdo->prepare("UPDATE users SET ".implode(',',$sets)." WHERE id=?")->execute($vals);
     } else {
