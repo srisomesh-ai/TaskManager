@@ -349,6 +349,27 @@ case 'update_task':
             if ($rd) sendTaskCreatedCustomer($rd,$nt['name']??'',$nt['phone']??'');
         } catch(Exception $e) {}
     }
+    // Create BS entry when technician submits (Awaiting Approval) — shows installation done, payment with tech
+    if (isset($body['task_status']) && $body['task_status']==='Awaiting Approval' && $existing['task_status']!=='Awaiting Approval') {
+        try {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS balance_sheet_entries (id INT AUTO_INCREMENT PRIMARY KEY, type VARCHAR(20) DEFAULT 'sales', profile VARCHAR(10) DEFAULT 'BGPT', task_id VARCHAR(20) NULL, task_db_id INT NULL, date DATE NOT NULL, invoice_no VARCHAR(50), gps_serial_no VARCHAR(100), customer_type VARCHAR(50), name_on_server TEXT, server_name VARCHAR(50), device_model VARCHAR(100), service_type VARCHAR(100), license_plan VARCHAR(100), qty DECIMAL(10,2) DEFAULT 1, unit_price DECIMAL(10,2) DEFAULT 0, gst DECIMAL(10,2) DEFAULT 0, total_price DECIMAL(10,2) DEFAULT 0, payment_status VARCHAR(50), payment_received DECIMAL(10,2) DEFAULT 0, pending_payment DECIMAL(10,2) DEFAULT 0, payment_mode VARCHAR(50), payment_received_on DATE NULL, payment_transaction_details TEXT, pending_reason VARCHAR(100), discount_given DECIMAL(10,2) DEFAULT 0, discount_reason TEXT, discount_incharge VARCHAR(100), payment_reminder_date DATE NULL, technician_name VARCHAR(100), location VARCHAR(200), remarks TEXT, created_by_code VARCHAR(50), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            // Refresh task data
+            $bt=$pdo->prepare("SELECT t.*,u.name as tech_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?"); $bt->execute([$id]); $btask=$bt->fetch();
+            if ($btask && !$btask['bs_entry_id']) {
+                $bqty=floatval($btask['device_qty']??1);
+                $btotal=floatval($btask['price_to_collect']??0);
+                $bunit=$bqty>0?$btotal/$bqty:$btotal;
+                $brecv=floatval($btask['amount_collected']??0);
+                $bpend=max(0,$btotal-$brecv);
+                $bpayStatus=$brecv>=$btotal&&$btotal>0?'With Technician — Collected':'With Technician — Pending';
+                $bprofile=!empty($btask['profile'])?$btask['profile']:'BGPT';
+                $pdo->prepare("INSERT INTO balance_sheet_entries (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,name_on_server,server_name,device_model,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_mode,technician_name,location,remarks,created_by_code) VALUES ('sales',?,?,?,CURDATE(),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+                    ->execute([$bprofile,$btask['task_id'],$id,$btask['gps_serial_no']??null,$btask['lead_type']??null,$btask['name_on_server']??null,$btask['server_name']??null,$btask['device_details']??null,$bqty,$bunit,floatval($btask['gst_amount']??0),$btotal,$bpayStatus,$brecv,$bpend,$btask['payment_mode']??null,$btask['tech_name']??null,$btask['location']??null,$btask['general_notes']??null,$cu['name']]);
+                $bsId=$pdo->lastInsertId();
+                $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$bsId,$id]);
+            }
+        } catch(Exception $e) { error_log('BS awaiting error: '.$e->getMessage()); }
+    }
     break;
 
 // ---- DELETE TASK ----
@@ -377,29 +398,36 @@ case 'transfer_task':
 case 'approve_task':
     if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     $id=intval($body['id']??0);
-    $pdo->prepare("UPDATE tasks SET task_status='Closed',closed_at=NOW() WHERE id=?")->execute([$id]);
-    $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")->execute([$id,$userId,'Task approved and closed by manager']);
+    // Fetch task first to check payment
     $h=$pdo->prepare("SELECT t.*,u.name as tech_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?"); $h->execute([$id]); $t=$h->fetch();
-    if ($t) {
-        $hrs=(time()-strtotime($t['created_at']))/3600;
-        $stars=$hrs<=12?5:($hrs<=24?4:($hrs<=48?3:($hrs<=72?2:1)));
-        $pdo->prepare("UPDATE tasks SET star_rating=? WHERE id=? AND (star_rating IS NULL OR star_rating=0)")->execute([$stars,$id]);
-        // Auto-create balance sheet entry if not exists
-        if (!$t['bs_entry_id']) {
-            try {
-                $pdo->exec("CREATE TABLE IF NOT EXISTS balance_sheet_entries (id INT AUTO_INCREMENT PRIMARY KEY, type VARCHAR(20) DEFAULT 'sales', profile VARCHAR(10) DEFAULT 'BGPT', task_id VARCHAR(20) NULL, task_db_id INT NULL, date DATE NOT NULL, invoice_no VARCHAR(50), gps_serial_no VARCHAR(100), customer_type VARCHAR(50), name_on_server TEXT, server_name VARCHAR(50), device_model VARCHAR(100), service_type VARCHAR(100), license_plan VARCHAR(100), qty DECIMAL(10,2) DEFAULT 1, unit_price DECIMAL(10,2) DEFAULT 0, gst DECIMAL(10,2) DEFAULT 0, total_price DECIMAL(10,2) DEFAULT 0, payment_status VARCHAR(50), payment_received DECIMAL(10,2) DEFAULT 0, pending_payment DECIMAL(10,2) DEFAULT 0, payment_mode VARCHAR(50), payment_received_on DATE NULL, payment_transaction_details TEXT, pending_reason VARCHAR(100), discount_given DECIMAL(10,2) DEFAULT 0, discount_reason TEXT, discount_incharge VARCHAR(100), payment_reminder_date DATE NULL, technician_name VARCHAR(100), location VARCHAR(200), remarks TEXT, created_by_code VARCHAR(50), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-                $qty  = floatval($t['device_qty']??1);
-                $total= floatval($t['price_to_collect']??0);
-                $unit = $qty>0?$total/$qty:$total;
-                $recv = floatval($t['amount_collected']??0);
-                $pend = max(0,$total-$recv);
-                $taskProfile = !empty($t['profile']) ? $t['profile'] : 'BGPT';
-                $pdo->prepare("INSERT INTO balance_sheet_entries (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,name_on_server,server_name,device_model,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_mode,technician_name,location,remarks,created_by_code) VALUES ('sales',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-                    ->execute([$taskProfile,$t['task_id'],$id,date('Y-m-d'),$t['gps_serial_no']??null,$t['lead_type']??null,$t['name_on_server']??null,$t['server_name']??null,$t['device_details']??null,$qty,$unit,floatval($t['gst_amount']??0),$total,$t['payment_status']??'Pending',$recv,$pend,$t['payment_mode']??null,$t['tech_name']??null,$t['location']??null,$t['general_notes']??null,$cu['name']]);
-                $bsId=$pdo->lastInsertId();
-                $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$bsId,$id]);
-            } catch(Exception $e) { error_log('BS entry error: '.$e->getMessage()); }
-        }
+    if (!$t) { echo json_encode(['error'=>'Task not found']); break; }
+    $totalPrice = floatval($t['price_to_collect']??0);
+    $collected  = floatval($t['amount_collected']??0);
+    $pending    = max(0, $totalPrice - $collected);
+    // Hard block if payment pending
+    if ($pending > 0) { echo json_encode(['error'=>'Cannot close — ₹'.number_format($pending,0).' still pending. Collect full payment first.','pending'=>$pending]); break; }
+    // Close the task
+    $pdo->prepare("UPDATE tasks SET task_status='Closed',closed_at=NOW() WHERE id=?")->execute([$id]);
+    $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")->execute([$id,$userId,'Task approved and closed by manager. Full payment confirmed.']);
+    // Star rating
+    $hrs=(time()-strtotime($t['created_at']))/3600;
+    $stars=$hrs<=12?5:($hrs<=24?4:($hrs<=48?3:($hrs<=72?2:1)));
+    $pdo->prepare("UPDATE tasks SET star_rating=? WHERE id=? AND (star_rating IS NULL OR star_rating=0)")->execute([$stars,$id]);
+    // Update BS entry if exists — mark payment as received by company
+    if ($t['bs_entry_id']) {
+        $pdo->prepare("UPDATE balance_sheet_entries SET payment_status='Collected',payment_received=?,pending_payment=0,payment_received_on=CURDATE() WHERE id=?")->execute([$collected,$t['bs_entry_id']]);
+    } else {
+        // Create BS entry now (fallback if not created at Awaiting Approval)
+        try {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS balance_sheet_entries (id INT AUTO_INCREMENT PRIMARY KEY, type VARCHAR(20) DEFAULT 'sales', profile VARCHAR(10) DEFAULT 'BGPT', task_id VARCHAR(20) NULL, task_db_id INT NULL, date DATE NOT NULL, invoice_no VARCHAR(50), gps_serial_no VARCHAR(100), customer_type VARCHAR(50), name_on_server TEXT, server_name VARCHAR(50), device_model VARCHAR(100), service_type VARCHAR(100), license_plan VARCHAR(100), qty DECIMAL(10,2) DEFAULT 1, unit_price DECIMAL(10,2) DEFAULT 0, gst DECIMAL(10,2) DEFAULT 0, total_price DECIMAL(10,2) DEFAULT 0, payment_status VARCHAR(50), payment_received DECIMAL(10,2) DEFAULT 0, pending_payment DECIMAL(10,2) DEFAULT 0, payment_mode VARCHAR(50), payment_received_on DATE NULL, payment_transaction_details TEXT, pending_reason VARCHAR(100), discount_given DECIMAL(10,2) DEFAULT 0, discount_reason TEXT, discount_incharge VARCHAR(100), payment_reminder_date DATE NULL, technician_name VARCHAR(100), location VARCHAR(200), remarks TEXT, created_by_code VARCHAR(50), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            $qty2=floatval($t['device_qty']??1); $total2=floatval($t['price_to_collect']??0);
+            $unit2=$qty2>0?$total2/$qty2:$total2;
+            $taskProfile=!empty($t['profile'])?$t['profile']:'BGPT';
+            $pdo->prepare("INSERT INTO balance_sheet_entries (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,name_on_server,server_name,device_model,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_mode,technician_name,location,remarks,created_by_code,payment_received_on) VALUES ('sales',?,?,?,CURDATE(),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURDATE())")
+                ->execute([$taskProfile,$t['task_id'],$id,$t['gps_serial_no']??null,$t['lead_type']??null,$t['name_on_server']??null,$t['server_name']??null,$t['device_details']??null,$qty2,$unit2,floatval($t['gst_amount']??0),$total2,'Collected',$collected,0,$t['payment_mode']??null,$t['tech_name']??null,$t['location']??null,$t['general_notes']??null,$cu['name']]);
+            $bsId=$pdo->lastInsertId();
+            $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$bsId,$id]);
+        } catch(Exception $e) { error_log('BS close error: '.$e->getMessage()); }
     }
     echo json_encode(['success'=>true]);
     logSync($pdo,'task_closed',$id,$userId);
