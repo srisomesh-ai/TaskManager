@@ -1824,56 +1824,76 @@ async function viewTask(dbId){
   // Admin action panel
   let adminActionHtml='';
   if(isAdmin){
-    const awaitingApproval=t.task_status==='Awaiting Approval';
-    const isClosed=t.task_status==='Closed';
-    const isCancelled=t.task_status==='Cancelled';
+    const awaitingApproval = t.task_status==='Awaiting Approval';
+    const isClosed         = t.task_status==='Closed';
+    const isCancelled      = t.task_status==='Cancelled';
+    const totalPrice       = parseFloat(t.price_to_collect||0);
+    const totalCollected   = parseFloat(t.amount_collected||0);
+    const pendingBal       = Math.max(0, totalPrice - totalCollected);
+    const isFullyPaid      = pendingBal <= 0 && totalPrice > 0;
 
-    adminActionHtml=`
-      ${awaitingApproval?`
-      <div style="background:var(--green-bg);border:2px solid var(--green);border-radius:var(--radius);padding:16px;margin-bottom:16px">
-        <div style="font-size:14px;font-weight:800;color:var(--green);margin-bottom:4px">✅ Ready for Final Approval</div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Technician completed work and recorded payment. Review and close.</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          ${isStrictAdmin?`<button class="btn btn-success" onclick="adminApproveTask(${t.id})">✅ Approve & Close Task</button>`:''}
-          <button class="btn btn-danger btn-sm" onclick="adminRejectTask(${t.id})">↩ Send Back to Technician</button>
-        </div>
-      </div>`:''}
+    adminActionHtml = '<div style="margin-top:16px;border-top:2px solid var(--border);padding-top:16px">';
 
-      <div class="payment-panel" style="margin-bottom:16px">
-        <h4>💳 Record Payment</h4>
-        <div class="pay-row">
-          <div class="field"><label>Amount (₹)</label><input type="number" id="pay-amount" placeholder="0.00"></div>
-          <div class="field"><label>Mode</label><select id="pay-mode"><option>Cash</option><option>UPI</option><option>Bank Transfer</option></select></div>
-          <div class="field"><label>Ref/UTR</label><input type="text" id="pay-ref" placeholder="Optional"></div>
-          <button class="btn btn-success" onclick="recordPayment(${t.id})" style="margin-bottom:1px">💰 Record</button>
-        </div>
-      </div>
+    if(awaitingApproval){
+      const paySummary = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">'
+        +'<div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px;text-align:center"><div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-bottom:3px">Total</div><div style="font-size:17px;font-weight:800;color:var(--accent)">\u20b9'+totalPrice.toLocaleString('en-IN')+'</div></div>'
+        +'<div style="background:'+(totalCollected>0?'var(--green-bg)':'var(--surface2)')+';border-radius:var(--radius-sm);padding:10px;text-align:center"><div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-bottom:3px">Collected</div><div style="font-size:17px;font-weight:800;color:'+(totalCollected>0?'var(--green)':'var(--text3)')+'">\u20b9'+totalCollected.toLocaleString('en-IN')+'</div></div>'
+        +'<div style="background:'+(pendingBal>0?'var(--red-bg)':'var(--green-bg)')+';border-radius:var(--radius-sm);padding:10px;text-align:center"><div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-bottom:3px">Pending</div><div style="font-size:17px;font-weight:800;color:'+(pendingBal>0?'var(--red)':'var(--green)')+'">\u20b9'+pendingBal.toLocaleString('en-IN')+'</div></div>'
+        +'</div>';
 
-      <div style="margin-top:0">
-        <div class="form-section-title">📝 Add Remark</div>
-        <div class="field" style="margin-bottom:10px">
-          <textarea id="update-remark" placeholder="Add a note, observation or instruction..." rows="2"></textarea>
-        </div>
-        <div class="field" style="margin-bottom:10px">
-          <label>Reassign Technician</label>
-          <select id="update-tech"><option value="">Unassigned</option>${technicians.map(tech=>`<option value="${tech.id}"${t.assigned_to==tech.id?' selected':''}>${tech.name}</option>`).join('')}</select>
-        </div>
-        <div class="field" style="margin-bottom:14px">
-          <label>Reminder Date</label>
-          <input type="date" id="update-reminder" value="${t.reminder_date||''}">
-        </div>
-        <button class="btn btn-secondary btn-sm" onclick="updateTaskFromDetail(${t.id})">💾 Save Remark</button>
-      </div>
+      if(isFullyPaid){
+        adminActionHtml += '<div style="background:var(--green-bg);border:2px solid var(--green);border-radius:var(--radius);padding:16px;margin-bottom:14px">'
+          +'<div style="font-size:14px;font-weight:800;color:var(--green);margin-bottom:10px">\u2705 Full Payment Received \u2014 Ready to Close</div>'
+          + paySummary
+          +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+          +(isStrictAdmin?'<button class="btn btn-success" onclick="adminApproveTask('+t.id+')">\u2705 Approve &amp; Close Task</button>':'')
+          +'<button class="btn btn-secondary btn-sm" onclick="adminRejectTask('+t.id+')">\u21a9 Send Back to Technician</button>'
+          +'</div></div>';
+      } else {
+        adminActionHtml += '<div style="background:var(--red-bg);border:2px solid var(--red);border-radius:var(--radius);padding:16px;margin-bottom:14px">'
+          +'<div style="font-size:14px;font-weight:800;color:var(--red);margin-bottom:4px">\uD83D\uDD12 Cannot Close \u2014 Payment Pending</div>'
+          +'<div style="font-size:12px;color:var(--text2);margin-bottom:12px"><strong>\u20b9'+pendingBal.toLocaleString('en-IN')+'</strong> still pending.'
+          +(t.pending_reason?' Reason given: <em>'+t.pending_reason+'</em>.':'')
+          +' Task cannot be closed until full payment is collected.</div>'
+          + paySummary
+          +'<button class="btn btn-secondary btn-sm" onclick="adminRejectTask('+t.id+')">\u21a9 Send Back to Technician</button>'
+          +'</div>'
+          +'<div style="background:var(--surface);border:1.5px solid var(--saffron);border-radius:var(--radius);padding:14px;margin-bottom:14px">'
+          +'<div style="font-size:13px;font-weight:800;color:#c17f00;margin-bottom:4px">\uD83D\uDCB0 Update Pending Payment</div>'
+          +'<div style="font-size:12px;color:var(--text2);margin-bottom:10px">Record payment from customer to clear the pending balance. Task becomes eligible for closing once fully paid.</div>'
+          +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'
+          +'<div class="field" style="margin:0"><label>Amount (\u20b9)</label><input type="number" id="pay-amount" placeholder="'+pendingBal.toLocaleString('en-IN')+'"></div>'
+          +'<div class="field" style="margin:0"><label>Payment Mode</label><select id="pay-mode"><option>Cash</option><option>UPI</option><option>Bank Transfer</option></select></div>'
+          +'</div>'
+          +'<div class="field" style="margin-bottom:10px"><label>Reference / UTR</label><input type="text" id="pay-ref" placeholder="Optional"></div>'
+          +'<button class="btn btn-secondary btn-sm" onclick="adminUpdatePendingPayment('+t.id+','+totalPrice+')">\uD83D\uDCBE Record & Recheck</button>'
+          +'</div>';
+      }
+    } else if(!isClosed && !isCancelled){
+      adminActionHtml += '<div style="margin-bottom:14px">'
+        +'<div class="form-section-title">\uD83D\uDCDD Add Remark / Reassign</div>'
+        +'<div class="field" style="margin-bottom:8px"><textarea id="update-remark" placeholder="Add a note, observation or instruction..." rows="2"></textarea></div>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'
+        +'<div class="field" style="margin:0"><label>Reassign Technician</label><select id="update-tech"><option value="">Unassigned</option>'+technicians.map(function(tech){return '<option value="'+tech.id+'"'+(t.assigned_to==tech.id?' selected':'')+'>'+tech.name+'</option>';}).join('')+'</select></div>'
+        +'<div class="field" style="margin:0"><label>Reminder Date</label><input type="date" id="update-reminder" value="'+(t.reminder_date||'')+'"></div>'
+        +'</div>'
+        +'<button class="btn btn-secondary btn-sm" onclick="updateTaskFromDetail('+t.id+')">\uD83D\uDCBE Save</button>'
+        +'</div>';
+    }
 
-      <div style="margin-top:16px;padding-top:14px;border-top:1.5px solid var(--border)">
-        <div class="form-section-title" style="color:var(--red)">⚡ Final Actions</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          ${isStrictAdmin&&!isClosed&&!isCancelled?`<button class="btn btn-success" onclick="adminForceStatus(${t.id},'Closed','Task manually closed by admin.')">✅ Close Task</button>`:''}
-          ${isStrictAdmin&&!isCancelled?`<button class="btn btn-danger" onclick="adminForceStatus(${t.id},'Cancelled','Task cancelled by admin.')">🚫 Cancel Task</button>`:''}
-          ${isStrictAdmin&&(isClosed||isCancelled)?`<button class="btn btn-secondary" onclick="adminForceStatus(${t.id},'Open','Task re-opened by admin.')">🔄 Re-Open Task</button>`:''}
-          ${!isStrictAdmin?`<div style="font-size:12px;color:var(--text3);padding:8px 0">Only Admin can close, cancel or re-open tasks.</div>`:''}
-        </div>
-      </div>`;
+    if(isStrictAdmin && !isClosed && !isCancelled){
+      adminActionHtml += '<div style="padding-top:12px;border-top:1.5px solid var(--border)">'
+        +'<div class="form-section-title" style="color:var(--red)">\u26A1 Admin Actions</div>'
+        +'<button class="btn btn-danger btn-sm" onclick="adminCancelTask('+t.id+')">\uD83D\uDEAB Cancel Task</button>'
+        +'</div>';
+    }
+    if(isStrictAdmin && (isClosed||isCancelled)){
+      adminActionHtml += '<div style="padding-top:12px;border-top:1.5px solid var(--border)">'
+        +'<button class="btn btn-secondary btn-sm" onclick="adminForceStatus('+t.id+',\'Open\',\'Task re-opened by admin.\')">🔄 Re-Open Task</button>'
+        +'</div>';
+    }
+
+    adminActionHtml += '</div>';
   }
 
   document.getElementById('detail-body').innerHTML=`
@@ -2010,19 +2030,34 @@ async function adminForceStatus(taskId, status, autoRemark){
   } else showAlert(res.error,'error');
 }
 async function adminApproveTask(taskId){
-  if(!confirm('Approve and close this task?'))return;
-  const res=await api('update_task',{},'POST',{id:taskId,task_status:'Closed',remark:'Task approved and closed by manager.'});
+  if(!confirm('Approve and close this task? This action cannot be undone.')) return;
+  const res = await api('approve_task',{},'POST',{id:taskId});
   if(res.success){
-    showAlert('Task closed successfully! ✅','success');
+    showAlert('Task approved and closed! ✅','success');
     closeById('detail-modal');
-    if(allTasks.length)loadTasks();
-    if(document.getElementById('stat-total'))loadDashboard();
-    // Auto-create balance sheet entry
-    setTimeout(async()=>{
-      const bsRes = await api('bs_from_task',{},'POST',{task_db_id:taskId,profile:'BGPT'});
-      if(bsRes.success && !bsRes.existing) showAlert('📊 Balance sheet entry auto-created!','success');
-    },800);
-  } else showAlert(res.error,'error');
+    if(allTasks.length) loadTasks();
+    if(document.getElementById('stat-total')) loadDashboard();
+  } else showAlert(res.error||'Error','error');
+}
+
+async function adminUpdatePendingPayment(taskId, totalPrice){
+  const amount = parseFloat(document.getElementById('pay-amount')?.value||0);
+  const mode   = document.getElementById('pay-mode')?.value||'Cash';
+  const ref    = document.getElementById('pay-ref')?.value||'';
+  if(!amount||amount<=0){ showAlert('Enter a valid amount','error'); return; }
+  // Record the payment
+  const payRes = await api('add_payment',{},'POST',{task_id:taskId,amount,payment_mode:mode,transaction_ref:ref});
+  if(!payRes.success){ showAlert(payRes.error||'Error','error'); return; }
+  // Update amount_collected on task
+  const taskRes = await api('get_task',{id:taskId});
+  const newTotal = parseFloat(taskRes.task?.amount_collected||0);
+  const stillPending = Math.max(0, totalPrice - newTotal);
+  const updBody = {id:taskId, amount_collected:newTotal, remark:'Admin recorded payment of ₹'+amount+' via '+mode+(ref?' ('+ref+')':'')+'.'};
+  if(stillPending<=0){ updBody.payment_status='Collected'; }
+  await api('update_task',{},'POST',updBody);
+  showAlert('Payment recorded! ₹'+amount+' saved.','success');
+  viewTask(taskId);
+  if(allTasks.length) loadTasks();
 }
 
 // Admin rejects → back to In Progress
@@ -2034,11 +2069,11 @@ async function adminRejectTask(taskId){
   else showAlert(res.error,'error');
 }
 
-async function recordPayment(taskId){
-  const amount=parseFloat(document.getElementById('pay-amount').value);
-  if(!amount||amount<=0){showAlert('Enter valid amount','error');return;}
-  const res=await api('add_payment',{},'POST',{task_id:taskId,amount,payment_mode:document.getElementById('pay-mode').value,transaction_ref:document.getElementById('pay-ref').value});
-  if(res.success){showAlert('Payment recorded! Total: ₹'+res.total_collected,'success');viewTask(taskId);}
+async function adminCancelTask(taskId){
+  const reason = prompt('Reason for cancelling this task:');
+  if(reason===null) return;
+  const res = await api('update_task',{},'POST',{id:taskId,task_status:'Cancelled',remark:'Task cancelled by admin'+(reason?': '+reason:'')+'.'});
+  if(res.success){showAlert('Task cancelled','info');closeById('detail-modal');if(allTasks.length)loadTasks();}
   else showAlert(res.error,'error');
 }
 
