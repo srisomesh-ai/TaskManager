@@ -242,8 +242,8 @@ case 'create_task':
     $at  = !empty($body['assigned_to']) ? intval($body['assigned_to']) : null;
     $rd  = !empty($body['reminder_date']) ? $body['reminder_date'] : null;
     $prd = !empty($body['payment_reminder_date']) ? $body['payment_reminder_date'] : null;
-    $pdo->prepare("INSERT INTO tasks (task_id,customer_name,contact_number,email,location,lead_type,device_qty,price_to_collect,payment_mode,assigned_to,task_status,is_outstation,customer_requested_delay,is_urgent,general_notes,reminder_date,device_details,created_by,payment_reminder_date)
-        VALUES (?,?,?,?,?,?,?,?,?,?,'Open',?,?,?,?,?,?,?,?)")
+    $pdo->prepare("INSERT INTO tasks (task_id,customer_name,contact_number,email,location,lead_type,device_qty,price_to_collect,payment_mode,assigned_to,task_status,is_outstation,customer_requested_delay,is_urgent,general_notes,reminder_date,device_details,created_by,payment_reminder_date,profile,outstation_location,outstation_travel_paid_by,outstation_customer_travel_amount,outstation_claim_cap)
+        VALUES (?,?,?,?,?,?,?,?,?,?,'Open',?,?,?,?,?,?,?,?,?,?,?,?,?)")
         ->execute([
             $taskId,
             trim($body['customer_name']??''), trim($body['contact_number']??''),
@@ -252,8 +252,36 @@ case 'create_task':
             floatval($body['price_to_collect']??0), $body['payment_mode']??'',
             $at, intval($body['is_outstation']??0), intval($body['customer_requested_delay']??0),
             intval($body['is_urgent']??0), trim($body['general_notes']??''),
-            $rd, trim($body['device_details']??''), $userId, $prd
+            $rd, trim($body['device_details']??''), $userId, $prd,
+            $body['profile']??'BGPT',
+            $body['outstation_location']??null,
+            $body['outstation_travel_paid_by']??null,
+            $body['outstation_customer_travel_amount']??null,
+            $body['outstation_claim_cap']??null,
         ]);
+    // Override status for yellow outstation
+    if (!empty($body['outstation_travel_paid_by']) && $body['outstation_travel_paid_by']==='COMPANY') {
+        $newId2 = $pdo->lastInsertId();
+        if (isset($body['task_status']) && $body['task_status']==='Pending Outstation Approval') {
+            $pdo->prepare("UPDATE tasks SET task_status='Pending Outstation Approval' WHERE id=?")->execute([$newId2]);
+            // Email admin
+            try {
+                require_once __DIR__.'/mailer.php';
+                $adminEmail = 'somesh9346220090@gmail.com';
+                $adminBody = emailTemplate('<div class="greeting">⚠️ Outstation Approval Required</div>
+                <p style="font-size:14px;color:#4a5568">An outstation task needs your approval before assignment.</p>
+                <div class="details">
+                    <div class="row"><div class="label">Task ID</div><div class="value blue">'.$taskId.'</div></div>
+                    <div class="row"><div class="label">Customer</div><div class="value">'.htmlspecialchars($body['customer_name']??'').'</div></div>
+                    <div class="row"><div class="label">Location</div><div class="value">'.htmlspecialchars($body['outstation_location']??'').'</div></div>
+                    <div class="row"><div class="label">Device</div><div class="value">'.htmlspecialchars($body['device_details']??'').' × '.$body['device_qty'].'</div></div>
+                    <div class="row"><div class="label">Price</div><div class="value highlight">₹'.number_format($body['price_to_collect']??0).'</div></div>
+                </div>
+                <p style="margin-top:16px"><a href="https://salmon-goldfish-110661.hostingersite.com" style="background:#1a3a6b;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:700;font-size:13px">→ Review in Task Manager</a></p>');
+                sendMail($adminEmail, 'Admin', '⚠️ Outstation Approval Required — '.$taskId, $adminBody);
+            } catch(Exception $e) {}
+        }
+    }
     $newId = $pdo->lastInsertId();
     if (!empty($body['remark'])) $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'remark')")->execute([$newId,$userId,$body['remark']]);
     if ($at) {
@@ -281,7 +309,9 @@ case 'update_task':
     if (!$existing) { echo json_encode(['error'=>'Not found']); break; }
     $fields = ['task_status','payment_status','amount_collected','payment_mode','device_details','general_notes','reminder_date','customer_requested_delay','is_outstation','payment_reminder_date','is_urgent','star_rating',
                // Balance sheet linkage fields
-               'gps_serial_no','name_on_server','server_name','invoice_no','payment_received_on','payment_transaction_details','gst_amount','pending_reason','discount_reason','discount_incharge','profile'];
+               'gps_serial_no','name_on_server','server_name','invoice_no','payment_received_on','payment_transaction_details','gst_amount','pending_reason','discount_reason','discount_incharge','profile',
+               // Outstation fields
+               'outstation_location','outstation_travel_paid_by','outstation_customer_travel_amount','outstation_claim_cap','outstation_claim_submitted','outstation_claim_status'];
     if (in_array($userRole,['admin','assigner'])) $fields=array_merge($fields,['customer_name','contact_number','email','location','lead_type','device_qty','price_to_collect','assigned_to']);
     $sets=[]; $vals=[];
     foreach ($fields as $f) {
