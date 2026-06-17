@@ -363,8 +363,9 @@ case 'approve_task':
                 $unit = $qty>0?$total/$qty:$total;
                 $recv = floatval($t['amount_collected']??0);
                 $pend = max(0,$total-$recv);
-                $pdo->prepare("INSERT INTO balance_sheet_entries (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,name_on_server,server_name,device_model,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_mode,technician_name,location,remarks,created_by_code) VALUES ('sales','BGPT',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-                    ->execute([$t['task_id'],$id,date('Y-m-d'),$t['gps_serial_no']??null,$t['lead_type']??null,$t['name_on_server']??null,$t['server_name']??null,$t['device_details']??null,$qty,$unit,floatval($t['gst_amount']??0),$total,$t['payment_status']??'Pending',$recv,$pend,$t['payment_mode']??null,$t['tech_name']??null,$t['location']??null,$t['general_notes']??null,$cu['name']]);
+                $taskProfile = !empty($t['profile']) ? $t['profile'] : 'BGPT';
+                $pdo->prepare("INSERT INTO balance_sheet_entries (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,name_on_server,server_name,device_model,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_mode,technician_name,location,remarks,created_by_code) VALUES ('sales',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+                    ->execute([$taskProfile,$t['task_id'],$id,date('Y-m-d'),$t['gps_serial_no']??null,$t['lead_type']??null,$t['name_on_server']??null,$t['server_name']??null,$t['device_details']??null,$qty,$unit,floatval($t['gst_amount']??0),$total,$t['payment_status']??'Pending',$recv,$pend,$t['payment_mode']??null,$t['tech_name']??null,$t['location']??null,$t['general_notes']??null,$cu['name']]);
                 $bsId=$pdo->lastInsertId();
                 $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$bsId,$id]);
             } catch(Exception $e) { error_log('BS entry error: '.$e->getMessage()); }
