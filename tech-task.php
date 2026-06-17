@@ -220,10 +220,10 @@ $isOutstation = $task['is_outstation'];
 <!-- PROGRESS STEPS -->
 <div class="steps">
   <div class="step active done" id="step-info" onclick="goStep('info')"><span class="step-num">📋</span>Info</div>
-  <div class="step" id="step-updates" onclick="goStep('updates')"><span class="step-num">💬</span>Updates</div>
+  <div class="step" id="step-updates" onclick="goStep('updates')"><span class="step-num">💬</span><span style="font-size:9px">Updates<br>(Optional)</span></div>
   <div class="step <?= $installDone?'done':'' ?>" id="step-install" onclick="goStep('install')"><span class="step-num">🔧</span>Install</div>
   <div class="step <?= $paymentDone?'done':'' ?>" id="step-payment" onclick="goStep('payment')"><span class="step-num">💳</span>Payment</div>
-  <div class="step <?= $isLocked?'done':'' ?>" id="step-submit" onclick="goStep('submit')"><span class="step-num">🚀</span>Submit</div>
+  <div class="step <?= $isLocked?'done':'' ?>" id="step-submit" onclick="goStep('submit')"><span class="step-num">✅</span>Close</div>
 </div>
 
 <!-- PANEL 1: INFO -->
@@ -288,7 +288,7 @@ $isOutstation = $task['is_outstation'];
 
   <?php if(!$isLocked): ?>
   <div class="card">
-    <div class="card-head"><div style="font-size:20px">✍️</div><h3>Add Update</h3></div>
+    <div class="card-head"><div style="font-size:20px">✍️</div><h3>Add Update <span style="font-size:11px;color:var(--tx3);font-weight:400">(Optional)</span></h3></div>
     <div class="card-body">
       <?php if($st==='Open'): ?>
       <div style="background:var(--accl);border-radius:var(--rs);padding:12px;margin-bottom:12px;font-size:13px;color:var(--acc2)">
@@ -296,7 +296,7 @@ $isOutstation = $task['is_outstation'];
       </div>
       <button class="btn btn-grn" onclick="clickAttend()">🔧 Attend — Start Installation</button>
       <?php else: ?>
-      <div class="f"><label>Remark / Update</label><textarea id="upd-rem" rows="3" placeholder="What did you do? What was the status?"></textarea></div>
+      <div class="f"><label>Remark / Update</label><textarea id="upd-rem" rows="3" placeholder="Optional — log a call, note, or status update..."></textarea></div>
       <div class="f"><label>Next Step</label>
         <select id="upd-next">
           <option value="">Not decided</option>
@@ -306,7 +306,8 @@ $isOutstation = $task['is_outstation'];
           <option>Ready for installation</option>
         </select>
       </div>
-      <button class="btn" onclick="submitUpdate()">💬 Save Update</button>
+      <button class="btn btn-sec" onclick="submitUpdate()">💬 Save Update</button>
+      <button class="btn btn-grn" style="margin-top:8px" onclick="goStep('install')">🔧 Go to Installation →</button>
       <?php endif; ?>
     </div>
   </div>
@@ -319,8 +320,8 @@ $isOutstation = $task['is_outstation'];
   <div style="text-align:center;padding:40px 16px">
     <div style="font-size:48px;margin-bottom:12px">🔒</div>
     <div style="font-size:15px;font-weight:800;color:var(--tx2);margin-bottom:8px">Not Started Yet</div>
-    <div style="font-size:13px;color:var(--tx3);margin-bottom:18px">Go to Updates tab and click Attend when you are at the customer location.</div>
-    <button class="btn btn-sm" style="width:auto;margin:0 auto" onclick="goStep('updates')">← Go to Updates</button>
+    <div style="font-size:13px;color:var(--tx3);margin-bottom:18px">Click Attend in the Updates tab when you are at the customer location.</div>
+    <button class="btn btn-grn btn-sm" style="width:auto;margin:0 auto" onclick="goStep('updates')">← Attend First</button>
   </div>
   <?php else: ?>
     <?php if($installDone): ?>
@@ -330,10 +331,8 @@ $isOutstation = $task['is_outstation'];
       <p>All device data has been saved. Proceed to Payment.</p>
     </div>
     <?php endif; ?>
-
     <!-- Device cards -->
     <div id="device-cards"></div>
-
     <?php if(!$installDone): ?>
     <div id="install-next-btn" style="display:none">
       <button class="btn btn-grn" onclick="goStep('payment')">💳 All Devices Saved — Go to Payment →</button>
@@ -344,7 +343,7 @@ $isOutstation = $task['is_outstation'];
 
 <!-- PANEL 4: PAYMENT -->
 <div class="panel" id="panel-payment">
-  <?php if(!$installDone && $st!=='Task Pending'): ?>
+  <?php if(!$installDone): ?>
   <div style="text-align:center;padding:40px 16px">
     <div style="font-size:48px;margin-bottom:12px">🔒</div>
     <div style="font-size:15px;font-weight:800;color:var(--tx2);margin-bottom:8px">Complete Installation First</div>
@@ -352,119 +351,156 @@ $isOutstation = $task['is_outstation'];
     <button class="btn btn-sm" style="width:auto;margin:0 auto" onclick="goStep('install')">← Go to Installation</button>
   </div>
   <?php else: ?>
-  <!-- Price Summary -->
+
+  <!-- Price Banner -->
   <div class="price-summary">
     <div class="price-row"><span><?= htmlspecialchars($task['device_details']??'Device') ?></span><span>₹<?= number_format($pricePerDevice) ?></span></div>
     <div class="price-row"><span>Quantity</span><span>× <?= $qty ?></span></div>
     <?php if(floatval($task['gst_amount']??0)>0): ?>
     <div class="price-row"><span>GST (18%)</span><span>₹<?= number_format($task['gst_amount']) ?></span></div>
     <?php endif; ?>
-    <div class="price-total"><span>Total</span><span>₹<?= number_format($totalPrice) ?></span></div>
+    <div class="price-total"><span>💰 Amount to Collect</span><span id="total-display">₹<?= number_format($totalPrice) ?></span></div>
   </div>
 
-  <!-- Existing payments -->
-  <?php if(!empty($payments)): ?>
+  <?php if($isLocked): ?>
+  <!-- Locked view -->
+  <?php
+  $tc = array_sum(array_column($payments,'amount'));
+  $bal = max(0,$totalPrice-$tc);
+  ?>
   <div class="card">
-    <div class="card-head"><div style="font-size:20px">💰</div><h3>Payments Received</h3></div>
+    <div class="card-head"><div style="font-size:20px">💳</div><h3>Payment Summary</h3></div>
     <div class="card-body">
-      <?php
-      $totalCollected = 0;
-      foreach($payments as $p):
-        $totalCollected += floatval($p['amount']);
-      ?>
+      <?php foreach($payments as $p): ?>
       <div class="pay-item">
-        <span><?= date('d M', strtotime($p['created_at'])) ?> · <?= htmlspecialchars($p['payment_mode']??'Cash') ?></span>
+        <span><?= date('d M',strtotime($p['created_at'])) ?> · <?= htmlspecialchars($p['payment_mode']??'Cash') ?></span>
         <strong>₹<?= number_format($p['amount']) ?></strong>
       </div>
       <?php endforeach; ?>
-      <div class="ir" style="margin-top:8px">
-        <span class="il">Total Collected</span>
-        <span class="iv" style="color:var(--grn);font-size:16px">₹<?= number_format($totalCollected) ?></span>
-      </div>
-      <div class="ir">
-        <span class="il">Balance Due</span>
-        <span class="iv" style="color:<?= ($totalPrice-$totalCollected)>0?'var(--red)':'var(--grn)' ?>;font-size:16px">₹<?= number_format(max(0,$totalPrice-$totalCollected)) ?></span>
-      </div>
+      <div class="ir"><span class="il">Total Collected</span><span class="iv" style="color:var(--grn)">₹<?= number_format($tc) ?></span></div>
+      <div class="ir"><span class="il">Balance</span><span class="iv" style="color:<?= $bal>0?'var(--red)':'var(--grn)' ?>">₹<?= number_format($bal) ?></span></div>
+      <?php if($task['pending_reason']): ?>
+      <div class="ir"><span class="il">Pending Reason</span><span class="iv"><?= htmlspecialchars($task['pending_reason']) ?></span></div>
+      <?php endif; ?>
     </div>
   </div>
-  <?php else: $totalCollected=0; ?>
-  <?php endif; ?>
 
-  <?php if(!$isLocked): ?>
-  <!-- Add payment -->
+  <?php else: ?>
+  <!-- Active payment form -->
   <div class="card">
-    <div class="card-head"><div style="font-size:20px">➕</div><h3>Add Payment</h3></div>
+    <div class="card-head"><div style="font-size:20px">💳</div><h3>Enter Payment Received</h3></div>
     <div class="card-body">
-      <div class="f"><label>Amount Received (₹) <span class="req">*</span></label><input type="number" id="pay-amt" placeholder="Enter amount received"></div>
+
+      <!-- Large amount input -->
+      <div style="margin-bottom:16px">
+        <label style="font-size:11px;font-weight:800;color:var(--tx2);text-transform:uppercase;letter-spacing:.3px;display:block;margin-bottom:6px">Amount Received (₹) *</label>
+        <input type="number" id="pay-amt" placeholder="0"
+          style="width:100%;padding:14px;font-size:24px;font-weight:800;color:var(--acc);border:2px solid var(--bdr);border-radius:var(--r);background:var(--sur2);outline:none;text-align:center"
+          oninput="onPayAmtChange(this.value)">
+        <!-- Live feedback -->
+        <div id="pay-feedback" style="margin-top:8px;padding:10px 14px;border-radius:var(--rs);font-size:13px;font-weight:700;display:none"></div>
+      </div>
+
       <div class="g2">
-        <div class="f"><label>Payment Mode <span class="req">*</span></label>
+        <div class="f"><label>Payment Mode *</label>
           <select id="pay-mode">
             <option value="">Select</option>
-            <option>Cash</option><option>UPI</option><option>Bank Transfer</option>
+            <option>Cash</option>
+            <option>UPI</option>
+            <option>Bank Transfer</option>
           </select>
         </div>
-        <div class="f"><label>Transaction Ref</label><input type="text" id="pay-ref" placeholder="UPI ID / Ref no."></div>
+        <div class="f"><label>Transaction Ref / UPI ID</label>
+          <input type="text" id="pay-ref" placeholder="Optional">
+        </div>
       </div>
-      <div class="f" id="pending-reason-field" style="display:none">
-        <label>Reason for Pending Balance <span class="req">*</span></label>
-        <select id="pending-reason">
-          <option value="">Select reason</option>
-          <option value="customer_will_pay_later">Customer will pay later</option>
-          <option value="discount_given">Discount given</option>
-          <option value="partial_payment">Partial payment agreed</option>
-        </select>
+
+      <!-- Pending reason — only shows if amount less than total -->
+      <div id="pending-section" style="display:none;margin-top:4px">
+        <div style="background:var(--redb);border:1.5px solid var(--red);border-radius:var(--rs);padding:12px;margin-bottom:12px">
+          <div style="font-size:13px;font-weight:800;color:var(--red);margin-bottom:4px">⚠️ Balance Pending — Reason Required</div>
+          <div style="font-size:12px;color:var(--tx2)">Pending amount: <strong id="pending-amt-display" style="color:var(--red)">₹0</strong></div>
+        </div>
+        <div class="f"><label>Reason for Pending Balance *</label>
+          <select id="pending-reason" onchange="onPendingReasonChange(this.value)">
+            <option value="">Select reason</option>
+            <option value="customer_will_pay_later">Customer will pay later</option>
+            <option value="discount_given">Discount given — I will collect full amount</option>
+          </select>
+        </div>
+        <!-- Customer will pay later warning -->
+        <div id="cwpl-warning" style="display:none;background:#fff3e0;border:1.5px solid var(--org);border-radius:var(--rs);padding:14px;margin-top:8px">
+          <div style="font-size:13px;font-weight:800;color:var(--org);margin-bottom:8px">⏰ 48-Hour Collection Responsibility</div>
+          <div style="font-size:12px;color:var(--tx2);line-height:1.6;margin-bottom:12px">
+            By selecting this option you accept full responsibility to collect the pending payment within <strong>48 hours</strong>.
+            If payment is not collected within 48 hours, the pending amount will be <strong>deducted from your salary</strong>.
+          </div>
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;font-weight:700;color:var(--tx);text-transform:none;letter-spacing:0">
+            <input type="checkbox" id="cwpl-accept" style="width:18px;height:18px;margin-top:1px;flex-shrink:0;accent-color:var(--org)">
+            <span>I accept responsibility to collect ₹<span id="cwpl-amount">0</span> within 48 hours. I understand non-collection will affect my salary.</span>
+          </label>
+        </div>
+        <!-- Discount blocked -->
+        <div id="discount-blocked" style="display:none;background:var(--redb);border:1.5px solid var(--red);border-radius:var(--rs);padding:14px;margin-top:8px">
+          <div style="font-size:13px;font-weight:800;color:var(--red);margin-bottom:6px">❌ No Discount Applicable</div>
+          <div style="font-size:12px;color:var(--tx2);line-height:1.6">
+            The price was confirmed by the manager when this task was created. <strong>No discount can be given.</strong>
+            You must collect the full amount of ₹<?= number_format($totalPrice) ?>.
+            If the customer has an issue, contact your manager before proceeding.
+          </div>
+          <div style="margin-top:10px;font-size:12px;font-weight:800;color:var(--red)">👆 Select "Customer will pay later" or collect the full amount.</div>
+        </div>
       </div>
-      <div class="f" id="pay-remind-field" style="display:none">
-        <label>Payment Reminder Date</label>
-        <input type="date" id="pay-remind-date">
-      </div>
-      <button class="btn" onclick="addPayment()">💾 Save Payment</button>
-      <button class="btn btn-org" style="margin-top:8px" onclick="markPending()" id="mark-pending-btn">⏳ Mark as Pending (Collect Later)</button>
+
+      <button class="btn btn-grn" id="pay-next-btn" onclick="processPayment()" style="margin-top:16px;padding:14px;font-size:15px" disabled>
+        Next — Review & Close Task →
+      </button>
     </div>
   </div>
   <?php endif; ?>
   <?php endif; ?>
 </div>
 
-<!-- PANEL 5: SUBMIT -->
+<!-- PANEL 5: CLOSE TASK -->
 <div class="panel" id="panel-submit">
   <?php if($isLocked): ?>
   <div class="lockbox">
-    <div style="font-size:40px;margin-bottom:10px"><?= $st==='Closed'?'🎉':'🚀' ?></div>
-    <h3><?= $st==='Closed'?'Task Completed!':'Submitted for Approval' ?></h3>
-    <p><?= $st==='Closed'?'This task has been approved and closed by the manager.':'Your work has been submitted. The manager will review and close it.' ?></p>
+    <div style="font-size:40px;margin-bottom:10px"><?= $st==='Closed'?'🎉':'✅' ?></div>
+    <h3><?= $st==='Closed'?'Task Completed & Closed!':'Submitted — Awaiting Manager Approval' ?></h3>
+    <p><?= $st==='Closed'?'This task has been approved and closed by the manager.':'Your work is submitted. Manager will review and close the task.' ?></p>
+    <button class="btn btn-sec btn-sm" style="margin-top:14px;width:auto" onclick="window.location.href='index.html'">← Back to My Tasks</button>
   </div>
   <?php else: ?>
     <?php if(!$installDone): ?>
     <div style="text-align:center;padding:30px 14px">
       <div style="font-size:40px;margin-bottom:10px">⚠️</div>
       <div style="font-size:15px;font-weight:800;color:var(--tx2);margin-bottom:8px">Installation Not Complete</div>
-      <div style="font-size:13px;color:var(--tx3);margin-bottom:16px">Save all device information before submitting.</div>
+      <div style="font-size:13px;color:var(--tx3);margin-bottom:16px">Save all device information before closing the task.</div>
       <button class="btn btn-sm" style="width:auto;margin:0 auto" onclick="goStep('install')">← Go to Installation</button>
     </div>
-    <?php elseif(empty($payments) && floatval($task['amount_collected']??0)<=0): ?>
-    <div style="text-align:center;padding:30px 14px">
-      <div style="font-size:40px;margin-bottom:10px">💳</div>
-      <div style="font-size:15px;font-weight:800;color:var(--tx2);margin-bottom:8px">Payment Status Required</div>
-      <div style="font-size:13px;color:var(--tx3);margin-bottom:16px">Enter payment received or mark as pending before submitting.</div>
-      <button class="btn btn-sm" style="width:auto;margin:0 auto" onclick="goStep('payment')">← Go to Payment</button>
-    </div>
     <?php else: ?>
-    <!-- Summary before submit -->
+    <!-- Final summary -->
     <div class="card">
-      <div class="card-head"><div style="font-size:20px">📋</div><h3>Summary</h3></div>
+      <div class="card-head" style="background:var(--grnb)"><div style="font-size:20px">📋</div><h3 style="color:var(--grn)">Final Review Before Closing</h3></div>
       <div class="card-body">
-        <div class="ir"><span class="il">Task</span><span class="iv"><?= htmlspecialchars($task['task_id']) ?></span></div>
+        <div class="ir"><span class="il">Task ID</span><span class="iv"><?= htmlspecialchars($task['task_id']) ?></span></div>
         <div class="ir"><span class="il">Customer</span><span class="iv"><?= htmlspecialchars($task['customer_name']) ?></span></div>
         <div class="ir"><span class="il">Job</span><span class="iv"><?= htmlspecialchars($task['device_details']??'–') ?> × <?= $qty ?></span></div>
-        <div class="ir"><span class="il">Total</span><span class="iv" style="color:var(--grn)">₹<?= number_format($totalPrice) ?></span></div>
-        <div class="ir"><span class="il">Collected</span><span class="iv" style="color:var(--grn)">₹<?= number_format(floatval($task['amount_collected']??0)) ?></span></div>
-        <div class="ir"><span class="il">Balance</span><span class="iv" style="color:<?= ($totalPrice-floatval($task['amount_collected']??0))>0?'var(--red)':'var(--grn)' ?>">₹<?= number_format(max(0,$totalPrice-floatval($task['amount_collected']??0))) ?></span></div>
+        <div class="ir"><span class="il">Total Amount</span><span class="iv" style="color:var(--acc);font-weight:800;font-size:16px">₹<?= number_format($totalPrice) ?></span></div>
+        <div class="ir"><span class="il">Amount Collected</span><span class="iv" style="color:var(--grn);font-size:16px" id="final-collected">₹<?= number_format(floatval($task['amount_collected']??0)) ?></span></div>
+        <div class="ir"><span class="il">Balance</span><span class="iv" style="font-size:16px" id="final-balance">₹<?= number_format(max(0,$totalPrice-floatval($task['amount_collected']??0))) ?></span></div>
         <div class="ir"><span class="il">Devices Saved</span><span class="iv" id="submit-devices-count">–</span></div>
       </div>
     </div>
-    <button class="btn btn-grn" onclick="submitForApproval()" id="submit-btn" style="padding:16px;font-size:16px">🚀 Submit for Manager Approval</button>
-    <div style="font-size:12px;color:var(--tx3);text-align:center;margin-top:8px">Once submitted, you cannot make any changes.</div>
+    <div id="submit-payment-warning" style="display:none;background:var(--redb);border:1.5px solid var(--red);border-radius:var(--rs);padding:12px;margin-bottom:12px;font-size:13px;font-weight:700;color:var(--red)">
+      ❌ Payment not entered. Go to Payment tab first.
+    </div>
+    <button class="btn btn-grn" onclick="closeTask()" id="submit-btn" style="padding:16px;font-size:16px">
+      ✅ Close Task — Submit to Manager
+    </button>
+    <div style="font-size:12px;color:var(--tx3);text-align:center;margin-top:8px;line-height:1.5">
+      Once submitted, no further changes can be made.<br>Manager will review and approve.
+    </div>
     <?php endif; ?>
   <?php endif; ?>
 </div>
@@ -516,7 +552,7 @@ function goStep(name){
   document.getElementById('step-'+name).classList.add('active');
   currentStep = name;
   if(name==='install') renderDeviceCards();
-  if(name==='submit') updateSubmitCount();
+  if(name==='submit'){ updateSubmitCount(); updateSubmitInfo(); }
   window.scrollTo(0,0);
 }
 
@@ -725,72 +761,178 @@ function updateSubmitCount(){
   el.style.color = count===QTY ? 'var(--grn)' : 'var(--red)';
 }
 
-// PAYMENT
-function addPayment(){
-  var amt = parseFloat(document.getElementById('pay-amt').value||0);
-  var mode = document.getElementById('pay-mode').value;
-  var ref = (document.getElementById('pay-ref')||{}).value||'';
-  if(!amt||amt<=0){ toast('❌ Enter amount'); return; }
-  if(!mode){ toast('❌ Select payment mode'); return; }
+// ============================================================
+// PAYMENT LOGIC — STRICT
+// ============================================================
+var ALREADY_COLLECTED = <?= array_sum(array_column($payments,'amount')) ?>;
 
-  var balance = TOTAL_PRICE - parseFloat(T.amount_collected||0) - amt;
-  var pendReason = '';
-  if(balance > 0){
-    pendReason = (document.getElementById('pending-reason')||{}).value||'';
-    if(!pendReason){ document.getElementById('pending-reason-field').style.display='block'; toast('❌ Select reason for pending balance'); return; }
+function onPayAmtChange(val){
+  var amt = parseFloat(val||0);
+  var total = TOTAL_PRICE;
+  var pending = total - amt;
+  var feedback = document.getElementById('pay-feedback');
+  var pendSection = document.getElementById('pending-section');
+  var nextBtn = document.getElementById('pay-next-btn');
+
+  // Reset
+  document.getElementById('cwpl-warning').style.display='none';
+  document.getElementById('discount-blocked').style.display='none';
+  var pr = document.getElementById('pending-reason');
+  if(pr) pr.value='';
+  var cb = document.getElementById('cwpl-accept');
+  if(cb) cb.checked=false;
+
+  if(!amt || amt <= 0){
+    if(feedback){ feedback.style.display='none'; }
+    if(pendSection) pendSection.style.display='none';
+    nextBtn.disabled=true;
+    return;
   }
 
-  api('add_payment',{},'POST',{task_id:TID,amount:amt,payment_mode:mode,transaction_ref:ref}).then(function(r){
-    if(r.success){
-      T.amount_collected = (parseFloat(T.amount_collected||0)+amt);
-      if(pendReason) api('update_task',{},'POST',{id:TID,pending_reason:pendReason,payment_reminder_date:(document.getElementById('pay-remind-date')||{}).value||null}).catch(function(){});
-      toast('✅ Payment saved!');
-      setTimeout(function(){ window.location.reload(); },800);
-    } else toast('❌ '+(r.error||'Error'));
-  });
+  feedback.style.display='block';
+
+  if(amt >= total){
+    // Full payment — green
+    feedback.style.background='var(--grnb)';
+    feedback.style.color='var(--grn)';
+    feedback.style.border='1.5px solid var(--grn)';
+    feedback.textContent='✅ Full payment — Amount matches exactly ₹'+total.toLocaleString('en-IN');
+    if(pendSection) pendSection.style.display='none';
+    nextBtn.disabled=false;
+  } else {
+    // Partial — red, show pending section
+    var pendAmt = total - amt;
+    feedback.style.background='var(--redb)';
+    feedback.style.color='var(--red)';
+    feedback.style.border='1.5px solid var(--red)';
+    feedback.textContent='⚠️ Pending balance: ₹'+pendAmt.toLocaleString('en-IN')+' — select reason below';
+    document.getElementById('pending-amt-display').textContent='₹'+pendAmt.toLocaleString('en-IN');
+    document.getElementById('cwpl-amount').textContent=pendAmt.toLocaleString('en-IN');
+    if(pendSection) pendSection.style.display='block';
+    nextBtn.disabled=true; // disabled until reason + acceptance
+  }
 }
 
-function markPending(){
-  var reason = (document.getElementById('pending-reason')||{}).value||'';
-  if(!reason){ document.getElementById('pending-reason-field').style.display='block'; toast('❌ Select a reason'); return; }
-  api('update_task',{},'POST',{id:TID,payment_status:'Pending',pending_reason:reason,remark:'Payment marked as pending: '+reason}).then(function(r){
-    if(r.success){ toast('✅ Marked as pending'); setTimeout(function(){ window.location.reload(); },800); }
-    else toast('❌ '+(r.error||'Error'));
-  });
+function onPendingReasonChange(reason){
+  var cwpl = document.getElementById('cwpl-warning');
+  var disc = document.getElementById('discount-blocked');
+  var nextBtn = document.getElementById('pay-next-btn');
+  var cb = document.getElementById('cwpl-accept');
+  if(cb) cb.checked=false;
+
+  cwpl.style.display = reason==='customer_will_pay_later' ? 'block' : 'none';
+  disc.style.display = reason==='discount_given' ? 'block' : 'none';
+
+  if(reason==='discount_given'){
+    nextBtn.disabled=true; // permanently blocked for this choice
+  } else if(reason==='customer_will_pay_later'){
+    nextBtn.disabled=true; // enabled only after checkbox
+  } else {
+    nextBtn.disabled=true;
+  }
 }
 
-// Show pending fields when needed
-document.addEventListener('change',function(e){
-  if(e.target.id==='pay-mode'){
-    var bal = TOTAL_PRICE - parseFloat(T.amount_collected||0);
-    if(bal>0) document.getElementById('pending-reason-field').style.display='block';
+// Checkbox accept enables Next button
+document.addEventListener('change', function(e){
+  if(e.target.id==='cwpl-accept'){
+    document.getElementById('pay-next-btn').disabled = !e.target.checked;
   }
   if(e.target.id==='pending-reason'){
-    var rf = document.getElementById('pay-remind-field');
-    if(rf) rf.style.display = e.target.value ? 'block':'none';
+    onPendingReasonChange(e.target.value);
   }
 });
 
-// SUBMIT FOR APPROVAL
-function submitForApproval(){
+function processPayment(){
+  var amt = parseFloat((document.getElementById('pay-amt')||{}).value||0);
+  var mode = (document.getElementById('pay-mode')||{}).value||'';
+  var ref  = (document.getElementById('pay-ref')||{}).value||'';
+
+  if(!amt||amt<=0){ toast('❌ Enter payment amount'); return; }
+  if(!mode){ toast('❌ Select payment mode'); return; }
+
+  var pending = TOTAL_PRICE - amt;
+  var reason  = '';
+  var cwplNote = '';
+
+  if(pending > 0){
+    reason = (document.getElementById('pending-reason')||{}).value||'';
+    if(!reason){ toast('❌ Select reason for pending balance'); return; }
+    if(reason==='discount_given'){ toast('❌ No discount applicable — collect full amount'); return; }
+    if(reason==='customer_will_pay_later'){
+      var accepted = document.getElementById('cwpl-accept').checked;
+      if(!accepted){ toast('❌ Accept responsibility first'); return; }
+      cwplNote = 'Technician '+ME.name+' accepted 48-hour collection responsibility for pending ₹'+pending.toLocaleString('en-IN')+'. Non-collection will affect salary.';
+    }
+  }
+
+  var btn = document.getElementById('pay-next-btn');
+  btn.textContent='Saving...'; btn.disabled=true;
+
+  // Save payment to DB
+  api('add_payment',{},'POST',{task_id:TID,amount:amt,payment_mode:mode,transaction_ref:ref})
+  .then(function(r){
+    if(!r.success){ toast('❌ '+(r.error||'Error saving')); btn.disabled=false; btn.textContent='Next — Review & Close Task →'; return Promise.reject('err'); }
+    // Update task with collected amount and pending reason
+    var upd = {id:TID, amount_collected:amt, payment_status: pending<=0 ? 'Collected' : 'Pending'};
+    if(reason) upd.pending_reason = reason;
+    if(cwplNote) upd.remark = cwplNote;
+    if(pending>0 && reason==='customer_will_pay_later'){
+      var d = new Date(); d.setHours(d.getHours()+48);
+      upd.payment_reminder_date = d.toISOString().split('T')[0];
+    }
+    return api('update_task',{},'POST',upd);
+  })
+  .then(function(r){
+    if(!r) return;
+    T.amount_collected = amt;
+    T.payment_status = pending<=0 ? 'Collected' : 'Pending';
+    toast('✅ Payment saved!');
+    setTimeout(function(){ goStep('submit'); updateSubmitInfo(); }, 600);
+  })
+  .catch(function(e){ if(e!=='err') toast('❌ '+(e.message||'Error')); btn.disabled=false; btn.textContent='Next — Review & Close Task →'; });
+}
+
+function updateSubmitInfo(){
+  var collected = parseFloat(T.amount_collected||0);
+  var balance = Math.max(0, TOTAL_PRICE - collected);
+  var fc = document.getElementById('final-collected');
+  var fb = document.getElementById('final-balance');
+  var pw = document.getElementById('submit-payment-warning');
+  if(fc) fc.textContent = '₹'+collected.toLocaleString('en-IN');
+  if(fb){
+    fb.textContent = '₹'+balance.toLocaleString('en-IN');
+    fb.style.color = balance>0 ? 'var(--red)' : 'var(--grn)';
+  }
+  if(pw) pw.style.display = (collected<=0 && !T.payment_status) ? 'block' : 'none';
+}
+
+// CLOSE TASK
+function closeTask(){
   // Check all devices saved
   for(var i=1;i<=QTY;i++){
-    if(!getSavedDevice(i)){ toast('❌ Device '+i+' not saved yet'); goStep('install'); return; }
+    if(!getSavedDevice(i)){ toast('❌ Device '+i+' not saved'); goStep('install'); return; }
   }
-  // Check payment
+  // Check payment entered
   var collected = parseFloat(T.amount_collected||0);
-  if(collected<=0 && !T.payment_status){
-    toast('❌ Enter payment or mark as pending first'); goStep('payment'); return;
+  if(collected<=0 && !T.payment_status && !T.pending_reason){
+    toast('❌ Enter payment first'); goStep('payment'); return;
   }
-  if(!confirm('Submit this task for manager approval? You cannot make changes after this.')) return;
+  if(!confirm('Close this task and submit to manager? No changes after this.')){ return; }
   var btn = document.getElementById('submit-btn');
   if(btn){ btn.textContent='Submitting...'; btn.disabled=true; }
-  api('update_task',{},'POST',{id:TID,task_status:'Awaiting Approval',remark:'Task submitted for manager approval. All '+QTY+' device(s) installed and documented.'}).then(function(r){
+  api('update_task',{},'POST',{
+    id:TID,
+    task_status:'Awaiting Approval',
+    remark:'Task closed by '+ME.name+'. '+QTY+' device(s) installed. Payment: ₹'+parseFloat(T.amount_collected||0).toLocaleString('en-IN')+' collected.'+(T.pending_reason?' Pending reason: '+T.pending_reason:'')
+  }).then(function(r){
     if(r.success){
       IS_LOCKED=true; T.task_status='Awaiting Approval';
-      toast('🚀 Submitted! Awaiting approval.');
-      setTimeout(function(){ window.location.href='index.html'; },2000);
-    } else { toast('❌ '+(r.error||'Error')); if(btn){btn.disabled=false;btn.textContent='🚀 Submit for Manager Approval';} }
+      toast('✅ Task closed! Awaiting manager approval.');
+      setTimeout(function(){ window.location.href='index.html'; }, 2000);
+    } else {
+      toast('❌ '+(r.error||'Error'));
+      if(btn){ btn.disabled=false; btn.textContent='✅ Close Task — Submit to Manager'; }
+    }
   });
 }
 
