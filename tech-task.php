@@ -1,5 +1,6 @@
 <?php
 ini_set('display_errors',0);
+error_reporting(0);
 require_once 'api/db.php';
 $pdo = getDB();
 
@@ -11,6 +12,38 @@ if (!$token || !$tid) { header('Location: index.html'); exit; }
 $us = $pdo->prepare("SELECT * FROM users WHERE auth_token=? AND is_active=1");
 $us->execute([$token]); $me = $us->fetch();
 if (!$me) { header('Location: index.html'); exit; }
+
+// Create device installs table FIRST before any SELECT
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS task_device_installs (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      task_id INT NOT NULL,
+      device_index INT NOT NULL DEFAULT 1,
+      vehicle_number VARCHAR(50),
+      vehicle_type VARCHAR(50),
+      gps_serial_no VARCHAR(100),
+      name_on_server VARCHAR(200),
+      server_name VARCHAR(50),
+      rc_photo VARCHAR(200),
+      selfie_photo VARCHAR(200),
+      remarks TEXT,
+      saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY unique_device (task_id, device_index)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+} catch(Exception $e) {}
+
+// Add outstation columns to tasks if missing
+$outstationCols = [
+    "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS outstation_location VARCHAR(200) NULL",
+    "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS outstation_travel_paid_by VARCHAR(20) NULL",
+    "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS outstation_customer_travel_amount DECIMAL(10,2) NULL",
+    "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS outstation_claim_cap DECIMAL(10,2) NULL",
+    "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS profile VARCHAR(10) DEFAULT 'BGPT'",
+    "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS gst_amount DECIMAL(10,2) DEFAULT 0",
+];
+foreach ($outstationCols as $sql) {
+    try { $pdo->exec($sql); } catch(Exception $e) {}
+}
 
 // Task
 $ts = $pdo->prepare("SELECT t.*,u.name as technician_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?");
@@ -26,29 +59,15 @@ $ps = $pdo->prepare("SELECT * FROM payments WHERE task_id=? ORDER BY created_at 
 $ps->execute([$tid]); $payments = $ps->fetchAll();
 
 // Device installations saved
-$di = $pdo->prepare("SELECT * FROM task_device_installs WHERE task_id=? ORDER BY device_index ASC");
-try { $di->execute([$tid]); $installs = $di->fetchAll(); } catch(Exception $e) { $installs = []; }
-
-// Create device installs table if missing
-$pdo->exec("CREATE TABLE IF NOT EXISTS task_device_installs (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  task_id INT NOT NULL,
-  device_index INT NOT NULL DEFAULT 1,
-  vehicle_number VARCHAR(50),
-  vehicle_type VARCHAR(50),
-  gps_serial_no VARCHAR(100),
-  name_on_server VARCHAR(200),
-  server_name VARCHAR(50),
-  rc_photo VARCHAR(200),
-  selfie_photo VARCHAR(200),
-  remarks TEXT,
-  saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY unique_device (task_id, device_index)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+$installs = [];
+try {
+    $di = $pdo->prepare("SELECT * FROM task_device_installs WHERE task_id=? ORDER BY device_index ASC");
+    $di->execute([$tid]); $installs = $di->fetchAll();
+} catch(Exception $e) { $installs = []; }
 
 $qty = max(1, intval($task['device_qty']));
-$pricePerDevice = floatval($task['price_to_collect']) / $qty;
 $totalPrice = floatval($task['price_to_collect']);
+$pricePerDevice = $qty > 0 ? $totalPrice / $qty : $totalPrice;
 ?>
 <!DOCTYPE html>
 <html lang="en">
