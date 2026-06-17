@@ -393,11 +393,11 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
       <div class="nav-section admin-only">Reports</div>
       <div class="nav-item admin-only" onclick="showPage('daily-report')" id="nav-daily-report"><span class="nav-icon">📅</span> Daily Report</div>
       <div class="nav-item admin-only" onclick="showPage('balance-sheet')" id="nav-balance-sheet"><span class="nav-icon">💰</span> Balance Sheet</div>
-      <div class="nav-section admin-only">Accounts</div>
-      <div class="nav-item admin-only" onclick="showPage('accounts')" id="nav-accounts"><span class="nav-icon">📊</span> P&amp;L Overview</div>
-      <div class="nav-item admin-only" onclick="showPage('purchase')" id="nav-purchase"><span class="nav-icon">📦</span> Purchase Orders</div>
-      <div class="nav-item admin-only" onclick="showPage('expenses')" id="nav-expenses"><span class="nav-icon">💸</span> Expenses</div>
-      <div class="nav-item admin-only" onclick="showPage('suppliers')" id="nav-suppliers"><span class="nav-icon">🏭</span> Suppliers</div>
+      <div class="nav-section strict-admin-only">Accounts</div>
+      <div class="nav-item strict-admin-only" onclick="showPage('accounts')" id="nav-accounts"><span class="nav-icon">📊</span> P&amp;L Overview</div>
+      <div class="nav-item strict-admin-only" onclick="showPage('purchase')" id="nav-purchase"><span class="nav-icon">📦</span> Purchase Orders</div>
+      <div class="nav-item strict-admin-only" onclick="showPage('expenses')" id="nav-expenses"><span class="nav-icon">💸</span> Expenses</div>
+      <div class="nav-item strict-admin-only" onclick="showPage('suppliers')" id="nav-suppliers"><span class="nav-icon">🏭</span> Suppliers</div>
       <div class="nav-section admin-only">Administration</div>
       <div class="nav-item admin-only" onclick="showPage('admin')" id="nav-admin"><span class="nav-icon">⚙️</span> Admin Panel</div>
     </div>
@@ -690,6 +690,12 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
           <div class="field"><label>Location / Area</label><input type="text" id="f-location" placeholder="City, area, landmark"></div>
           <div class="field"><label>Lead Type</label>
             <select id="f-leadtype"><option>New Lead</option><option>Demo</option><option>3rd Party Lead</option><option>Troubleshoot</option><option>Existing Customer Lead</option><option>Outstation Lead</option></select>
+          </div>
+          <div class="field"><label>Company Profile <span class="req">*</span></label>
+            <select id="f-profile">
+              <option value="BGPT">BGPT — Bharat GPS Tracker</option>
+              <option value="SBGT">SBGT — SRIBHARAT GPS TRACKER PVT LTD</option>
+            </select>
           </div>
           <div class="field"><label>Device Qty</label><input type="number" id="f-device-qty" value="1" min="1"></div>
           <div class="field"><label>Job Type</label>
@@ -1054,7 +1060,11 @@ async function initApp(){
   document.getElementById('topbar-role-label').textContent=currentUser.role.toUpperCase();
   document.getElementById('topbar-avatar').textContent=currentUser.name[0].toUpperCase();
   const isAdmin=['admin','assigner'].includes(currentUser.role);
+  const isStrictAdmin = currentUser.role === 'admin';
+  // admin-only = admin + assigner (tasks, reports)
   document.querySelectorAll('.admin-only').forEach(el=>el.style.display=isAdmin?'':'none');
+  // strict-admin-only = admin only (accounts, finance)
+  document.querySelectorAll('.strict-admin-only').forEach(el=>el.style.display=isStrictAdmin?'':'none');
   const tRes=await api('get_users',{role:'technician'}); technicians=tRes.users||[];
   if(isAdmin) loadUrgentCount();
   startAutoRefresh(); // ← start polling
@@ -1295,6 +1305,12 @@ async function loadUrgentPage(){
   const container=document.getElementById('urgent-content');
   container.innerHTML='<div class="loading"><div class="spinner"></div></div>';
   const res=await api('get_urgent_tasks'); const tasks=res.tasks||[];
+  // Calculate age in hours from created_at
+  const now=Date.now();
+  tasks.forEach(t=>{
+    const created=new Date(t.created_at.replace(' ','T')).getTime();
+    t.age_hours=Math.floor((now-created)/3600000);
+  });
   if(!tasks.length){container.innerHTML=`<div class="empty-state"><div class="empty-icon">✅</div><h3>No urgent tasks!</h3><p>All tasks are within the 24-hour window.</p></div>`;return;}
   const critical=tasks.filter(t=>t.age_hours>=48);
   const warning=tasks.filter(t=>t.age_hours>=24&&t.age_hours<48);
@@ -1306,6 +1322,10 @@ async function loadUrgentPage(){
   if(warning.length){
     html+=`<div style="font-size:14px;font-weight:800;color:var(--saffron);margin:16px 0 10px">⚠️ WARNING — Open 24–48 Hours (${warning.length})</div>`;
     html+=warning.map(t=>urgentCard(t,'warning')).join('');
+  }
+  if(!critical.length&&!warning.length){
+    container.innerHTML=`<div class="empty-state"><div class="empty-icon">✅</div><h3>No urgent tasks!</h3><p>All tasks are within the 24-hour window.</p></div>`;
+    return;
   }
   container.innerHTML=html;
 }
@@ -1734,6 +1754,7 @@ async function viewTask(dbId){
       <div class="detail-item"><label>Email</label><span>${t.email||'–'}</span></div>
       <div class="detail-item"><label>Location</label><span>${t.location||'–'}</span></div>
       <div class="detail-item"><label>Lead Type</label><span>${t.lead_type}</span></div>
+      <div class="detail-item"><label>Company Profile</label><span style="font-weight:800;color:${(t.profile||'BGPT')==='SBGT'?'var(--purple)':'var(--accent)'}">${t.profile||'BGPT'}</span></div>
       <div class="detail-item"><label>Device Qty</label><span>${t.device_qty}</span></div>
       <div class="detail-item"><label>Job Type</label><span>${t.device_details||'–'}</span></div>
       <div class="detail-item"><label>Outstation</label><span>${t.is_outstation?'✅ Yes':'No'}</span></div>
@@ -1920,6 +1941,7 @@ async function openCreateModal(){
   document.getElementById('f-paymode').value='';
   document.getElementById('f-status').value='Open';
   document.getElementById('f-leadtype').value='New Lead';
+  if(document.getElementById('f-profile')) document.getElementById('f-profile').value='BGPT';
   document.getElementById('f-reminder').value='';
   document.getElementById('f-outstation').checked=false;
   document.getElementById('f-delay').checked=false;
@@ -1947,6 +1969,7 @@ async function editTask(dbId){
   document.getElementById('f-email').value=t.email||'';
   document.getElementById('f-location').value=t.location||'';
   document.getElementById('f-leadtype').value=t.lead_type;
+  if(document.getElementById('f-profile')) document.getElementById('f-profile').value=t.profile||'BGPT';
   document.getElementById('f-device-qty').value=t.device_qty;
   document.getElementById('f-device-details').value=t.device_details||'';
   document.getElementById('f-price').value=t.price_to_collect;
@@ -1981,6 +2004,7 @@ async function submitTask(){
     email:document.getElementById('f-email').value.trim(),
     location:document.getElementById('f-location').value.trim(),
     lead_type:document.getElementById('f-leadtype').value,
+    profile:document.getElementById('f-profile')?.value||'BGPT',
     device_qty:document.getElementById('f-device-qty').value||1,
     device_details:document.getElementById('f-device-details').value.trim(),
     price_to_collect:document.getElementById('f-price').value||0,
