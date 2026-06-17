@@ -377,6 +377,7 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
       <div class="topbar-info"><strong id="topbar-name">–</strong><span id="topbar-role-label">–</span></div>
       <div class="topbar-avatar" id="topbar-avatar">?</div>
       <button class="btn btn-primary btn-sm admin-only" onclick="openQuickTask()" style="font-size:12px;padding:7px 12px;margin-right:6px">⚡ Quick Task</button>
+      <button class="topbar-btn admin-only" onclick="openQuickTaskLog()" id="qt-log-btn" title="Quick Task Sent Log" style="margin-right:6px">📨 <span id="qt-pending-count" style="display:none;background:#ef4444;color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;margin-left:2px">0</span></button>
       <button id="notif-btn" onclick="enableNotifications()" title="Enable notifications" style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;padding:6px 10px;border-radius:var(--radius-sm);font-size:15px;cursor:pointer;margin-right:6px">🔔</button>
       <button class="topbar-logout" onclick="doLogout()">↩ Logout</button>
     </div>
@@ -673,6 +674,28 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
   </div>
 </div>
 
+<!-- QUICK TASK LOG MODAL -->
+<div class="modal-overlay" id="qt-log-modal" style="display:none" onclick="if(event.target===this)closeById('qt-log-modal')">
+  <div class="modal-box" style="max-width:700px">
+    <div class="modal-header">
+      <div><h3>📨 Quick Tasks Sent</h3><p>Track all WhatsApp booking links sent</p></div>
+      <button class="modal-close" onclick="closeById('qt-log-modal')">✕</button>
+    </div>
+    <div style="padding:14px">
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <select id="qt-log-filter" class="toolbar-select" onchange="renderQTLog()">
+          <option value="all">All</option>
+          <option value="pending">Pending (not submitted)</option>
+          <option value="submitted">Submitted (became task)</option>
+          <option value="expired">Expired</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" onclick="loadQTLog()">🔄 Refresh</button>
+      </div>
+      <div id="qt-log-content"><div class="empty-state"><div class="empty-icon">📨</div><h3>Loading...</h3></div></div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="create-modal" style="display:none" onclick="closeModal(event,'create-modal')">
   <div class="modal modal-lg" onclick="event.stopPropagation()">
     <div class="modal-header">
@@ -748,10 +771,44 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
           </div>
           <div class="field" id="reminder-date-field"><label>Task Reminder Date</label><input type="date" id="f-reminder"></div>
           <div class="field" style="display:flex;flex-direction:column;justify-content:flex-end;gap:10px;padding-bottom:4px">
-            <label class="checkbox-row"><input type="checkbox" id="f-outstation"> Outstation Lead</label>
+            <label class="checkbox-row"><input type="checkbox" id="f-outstation" onchange="toggleOutstationSection()"> Outstation Lead</label>
             <label class="checkbox-row"><input type="checkbox" id="f-delay"> Customer Requested Delay</label>
             <label class="checkbox-row"><input type="checkbox" id="f-urgent"> 🚨 Mark as Urgent</label>
           </div>
+        </div>
+      </div>
+
+      <!-- OUTSTATION SECTION — shown when checkbox ticked -->
+      <div id="outstation-section" style="display:none">
+        <div class="form-section-title">📍 Outstation Details</div>
+        <div id="outstation-margin-box" style="margin-bottom:12px"></div>
+        <div class="form-grid">
+          <div class="field">
+            <label>Travel Location (City/Area)</label>
+            <input type="text" id="f-outstation-location" placeholder="e.g. Kakinada, Rajam, Eluru">
+          </div>
+          <div class="field">
+            <label>Customer Paying Travel? <span class="req">*</span></label>
+            <select id="f-travel-paid-by" onchange="toggleTravelPaidBy()">
+              <option value="">Select</option>
+              <option value="CUSTOMER">Yes — Customer paying</option>
+              <option value="COMPANY">No — Company paying</option>
+            </select>
+          </div>
+          <div class="field" id="customer-travel-amount-field" style="display:none">
+            <label>Customer Travel Amount (₹) <span class="req">*</span></label>
+            <input type="number" id="f-customer-travel-amount" placeholder="Amount customer agreed to pay" min="0">
+          </div>
+          <div class="field" id="outstation-confirm-field" style="display:none">
+            <label style="color:var(--green);font-weight:800">✅ Confirmation Checklist</label>
+            <div style="background:var(--green-bg);border:1.5px solid rgba(26,122,58,.3);border-radius:var(--radius-sm);padding:10px;display:flex;flex-direction:column;gap:8px;margin-top:4px">
+              <label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--text)"><input type="checkbox" id="os-confirm1" style="margin-top:2px"> Customer confirmed vehicles will be available at time of visit</label>
+              <label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--text)"><input type="checkbox" id="os-confirm2" style="margin-top:2px"> Location and address confirmed with customer</label>
+              <label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--text)"><input type="checkbox" id="os-confirm3" style="margin-top:2px"> I understand this outstation trip is pre-approved</label>
+            </div>
+          </div>
+        </div>
+      </div>
         </div>
       </div>
       <div class="form-section">
@@ -871,11 +928,9 @@ function sendQuickTask(){
   if(!name){showAlert('Please enter customer name','error');return;}
   if(!phone||phone.length<10){showAlert('Please enter valid WhatsApp number','error');return;}
 
-  // Generate signed token: base64(expiry|discount|name) — validated server-side
-  const expiry = Math.floor(Date.now()/1000) + (24*60*60); // 24 hours from now
+  const expiry = Math.floor(Date.now()/1000) + (24*60*60);
   const payload = expiry + '|' + discount + '|' + name;
-  const token = btoa(payload); // base64 encode
-
+  const token = btoa(payload);
   const bookingUrl = 'https://salmon-goldfish-110661.hostingersite.com/enquiry.php?t='+encodeURIComponent(token);
   const msg = encodeURIComponent(
     'Dear '+name+',\n\n'
@@ -885,13 +940,77 @@ function sendQuickTask(){
     +'✅ Takes only 2 minutes\n'
     +'✅ Special *₹'+discount+' discount* included just for you!\n'
     +'⏰ This link is valid for *24 hours only*\n\n'
-    +'— Bharat GPS Tracker Team\n📞 09849849824'
+    +'— Bharat GPS Tracker Team\n📞 9849849824'
   );
-
   const waNum = phone.startsWith('91') ? phone : '91'+phone;
   window.open('https://wa.me/'+waNum+'?text='+msg, '_blank');
+  // Log to localStorage
+  const logs = JSON.parse(localStorage.getItem('qt_logs')||'[]');
+  logs.unshift({id:Date.now(),name,phone:waNum,discount,token,expiry,sent_by:currentUser?.name||'Admin',sent_at:new Date().toISOString(),status:'pending'});
+  localStorage.setItem('qt_logs',JSON.stringify(logs.slice(0,200)));
+  updateQTPendingCount();
   closeById('quick-task-modal');
-  showAlert('WhatsApp opened! ₹'+discount+' discount link (valid 24h) sent to '+name,'success');
+  showAlert('WhatsApp opened! ₹'+discount+' discount link (24h) sent to '+name,'success');
+}
+
+let qtLogs=[];
+function openQuickTaskLog(){document.getElementById('qt-log-modal').style.display='flex';loadQTLog();}
+function loadQTLog(){
+  qtLogs=JSON.parse(localStorage.getItem('qt_logs')||'[]');
+  const now=Math.floor(Date.now()/1000);
+  qtLogs.forEach(l=>{if(l.status==='pending'&&l.expiry<now)l.status='expired';});
+  localStorage.setItem('qt_logs',JSON.stringify(qtLogs));
+  renderQTLog();updateQTPendingCount();
+}
+function renderQTLog(){
+  const filter=document.getElementById('qt-log-filter')?.value||'all';
+  const el=document.getElementById('qt-log-content');if(!el)return;
+  let logs=qtLogs;if(filter!=='all')logs=logs.filter(function(l){return l.status===filter;});
+  if(!logs.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">📨</div><h3>No records</h3></div>';return;}
+  const SC={pending:'#fff3e0',submitted:'#e8f5ec',expired:'#f5f5f5'};
+  const SL={pending:'⏳ Pending',submitted:'✅ Submitted',expired:'⌛ Expired'};
+  const now=Math.floor(Date.now()/1000);
+  let html='<div style="font-size:12px;color:var(--text3);margin-bottom:8px">'+logs.length+' records</div><div style="display:flex;flex-direction:column;gap:8px">';
+  logs.forEach(function(log){
+    const hoursLeft=Math.max(0,Math.floor((log.expiry-now)/3600));
+    const sentDate=new Date(log.sent_at).toLocaleString('en-IN');
+    const bg=SC[log.status]||'#f5f5f5';
+    const statusColor=log.status==='submitted'?'var(--green)':log.status==='expired'?'#999':'var(--saffron)';
+    const timeNote=log.status==='pending'?'Expires in '+hoursLeft+'h':log.status==='expired'?'Expired':'Submitted as task';
+    const resendBtn=log.status==='pending'?'<button class="btn btn-secondary btn-sm" onclick="resendQT(\''+log.id+'\')">🔁 Resend</button>':'';
+    html+='<div style="background:'+bg+';border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;display:flex;align-items:center;gap:12px">'
+      +'<div style="flex:1">'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px"><strong>'+log.name+'</strong>'
+      +'<span style="font-size:11px;padding:2px 7px;border-radius:10px;background:'+statusColor+';color:#fff">'+SL[log.status]+'</span></div>'
+      +'<div style="font-size:12px;color:var(--text3)">📱 '+log.phone+' · ₹'+log.discount+' discount · by '+log.sent_by+'</div>'
+      +'<div style="font-size:11px;color:var(--text3);margin-top:2px">Sent: '+sentDate+' · '+timeNote+'</div>'
+      +'</div>'+resendBtn
+      +'<button class="btn btn-secondary btn-sm" onclick="deleteQTLog(\''+log.id+'\')">✕</button>'
+      +'</div>';
+  });
+  html+='</div>';
+  el.innerHTML=html;
+}
+function updateQTPendingCount(){
+  const logs=JSON.parse(localStorage.getItem('qt_logs')||'[]');
+  const now=Math.floor(Date.now()/1000);
+  const pending=logs.filter(l=>l.status==='pending'&&l.expiry>now).length;
+  const badge=document.getElementById('qt-pending-count');
+  if(badge){badge.style.display=pending>0?'inline':'none';badge.textContent=pending;}
+}
+function deleteQTLog(id){
+  let logs=JSON.parse(localStorage.getItem('qt_logs')||'[]');
+  logs=logs.filter(l=>String(l.id)!==String(id));
+  localStorage.setItem('qt_logs',JSON.stringify(logs));loadQTLog();
+}
+function resendQT(id){
+  const logs=JSON.parse(localStorage.getItem('qt_logs')||'[]');
+  const log=logs.find(l=>String(l.id)===String(id));if(!log)return;
+  document.getElementById('qt-name').value=log.name;
+  document.getElementById('qt-phone').value=log.phone;
+  document.getElementById('qt-discount').value=log.discount;
+  closeById('qt-log-modal');
+  document.getElementById('quick-task-modal').style.display='flex';
 }
 
 // END QUICK TASK
@@ -1944,6 +2063,13 @@ async function openCreateModal(){
   if(document.getElementById('f-profile')) document.getElementById('f-profile').value='BGPT';
   document.getElementById('f-reminder').value='';
   document.getElementById('f-outstation').checked=false;
+  document.getElementById('outstation-section').style.display='none';
+  if(document.getElementById('f-travel-paid-by')) document.getElementById('f-travel-paid-by').value='';
+  if(document.getElementById('f-customer-travel-amount')) document.getElementById('f-customer-travel-amount').value='';
+  if(document.getElementById('outstation-margin-box')) document.getElementById('outstation-margin-box').innerHTML='';
+  if(document.getElementById('customer-travel-amount-field')) document.getElementById('customer-travel-amount-field').style.display='none';
+  if(document.getElementById('outstation-confirm-field')) document.getElementById('outstation-confirm-field').style.display='none';
+  ['os-confirm1','os-confirm2','os-confirm3'].forEach(id=>{const el=document.getElementById(id);if(el)el.checked=false;});
   document.getElementById('f-delay').checked=false;
   document.getElementById('f-tech').innerHTML='<option value="">Unassigned</option>';
   technicians.forEach(t=>{const o=document.createElement('option');o.value=t.id;o.textContent=t.name;document.getElementById('f-tech').appendChild(o);});
@@ -1998,6 +2124,17 @@ async function submitTask(){
   const contact=document.getElementById('f-contact').value.trim();
   if(!custName){showAlert('Customer name is required','error');return;}
   if(!contact){showAlert('Contact number is required','error');return;}
+
+  // Outstation validation
+  const osCheck = validateOutstation();
+  if(!osCheck.ok) return;
+
+  const isOutstation = document.getElementById('f-outstation').checked;
+  const travelBy = document.getElementById('f-travel-paid-by')?.value||'';
+  const customerTravelAmt = parseFloat(document.getElementById('f-customer-travel-amount')?.value||0);
+  const qty = parseInt(document.getElementById('f-device-qty').value||1);
+  const outstationCap = isOutstation && travelBy==='COMPANY' ? getOutstationCap(qty) : 0;
+
   const body={
     customer_name:custName,
     contact_number:contact,
@@ -2010,8 +2147,12 @@ async function submitTask(){
     price_to_collect:document.getElementById('f-price').value||0,
     payment_mode:document.getElementById('f-paymode').value,
     assigned_to:document.getElementById('f-tech').value,
-    task_status:document.getElementById('f-status').value,
-    is_outstation:document.getElementById('f-outstation').checked?1:0,
+    task_status: osCheck.needsApproval ? 'Pending Outstation Approval' : document.getElementById('f-status').value,
+    is_outstation:isOutstation?1:0,
+    outstation_location:document.getElementById('f-outstation-location')?.value.trim()||null,
+    outstation_travel_paid_by:travelBy||null,
+    outstation_customer_travel_amount:customerTravelAmt||null,
+    outstation_claim_cap:outstationCap||null,
     customer_requested_delay:document.getElementById('f-delay').checked?1:0,
     general_notes:document.getElementById('f-notes').value.trim(),
     reminder_date:document.getElementById('f-reminder').value||null,
@@ -2027,7 +2168,8 @@ async function submitTask(){
   btn.textContent=editingTaskDbId?'💾 Save Changes':'✅ Create Task'; btn.disabled=false;
   if(res.success){
     closeById('create-modal');
-    showAlert(editingTaskDbId?'Task updated!':'Task created: '+res.task_id,'success');
+    if(osCheck.needsApproval) showAlert('⚠️ Task created — Pending Admin approval for outstation','warning');
+    else showAlert(editingTaskDbId?'Task updated!':'Task created: '+res.task_id,'success');
     if(!editingTaskDbId&&res.id)await uploadPendingDocs(res.id);
     const ap=document.querySelector('.page.active')?.id;
     if(ap==='page-dashboard')loadDashboard();
@@ -2940,6 +3082,132 @@ function setJobPrice(val){
   } else {
     if(lbl){lbl.textContent='';}
   }
+  // Recalculate outstation margin if outstation is ticked
+  if(document.getElementById('f-outstation')?.checked) calcOutstationMargin();
+}
+
+// ============================================================
+// OUTSTATION LOGIC
+// ============================================================
+const OUTSTATION_CAPS = {1:200, 2:350, 3:500, 4:600};
+const BASE_DEVICE_PRICES = {
+  'Basic/Normal':3500,'Engine Status':3500,'Engine Cut':4500,
+  'Micro GPS':4000,'Magnet GPS':5500,'MIC/SOS GPS':4500,'VLTD':10500,
+  'Troubleshoot/Offline':500,'Vehicle to Vehicle Change':1700,
+  'Re-Adding':1700,'Only Remove':500,'Demonstration':0
+};
+
+function getOutstationCap(qty){
+  if(qty>=5) return 700;
+  return OUTSTATION_CAPS[qty]||200;
+}
+
+function toggleOutstationSection(){
+  const checked = document.getElementById('f-outstation')?.checked;
+  document.getElementById('outstation-section').style.display = checked ? 'block' : 'none';
+  if(checked) calcOutstationMargin();
+}
+
+function toggleTravelPaidBy(){
+  const val = document.getElementById('f-travel-paid-by')?.value;
+  document.getElementById('customer-travel-amount-field').style.display = val==='CUSTOMER'?'block':'none';
+  document.getElementById('outstation-confirm-field').style.display = val?'block':'none';
+  calcOutstationMargin();
+}
+
+function calcOutstationMargin(){
+  const box = document.getElementById('outstation-margin-box'); if(!box) return;
+  const qty = parseInt(document.getElementById('f-device-qty')?.value||1);
+  const price = parseFloat(document.getElementById('f-price')?.value||0);
+  const device = document.getElementById('f-device-details')?.value||'';
+  const travelBy = document.getElementById('f-travel-paid-by')?.value||'';
+  const basePrice = BASE_DEVICE_PRICES[device]||price;
+  const redThreshold = basePrice - 500; // ₹500 less than base = red
+
+  if(!travelBy){ box.innerHTML=''; return; }
+
+  if(travelBy==='CUSTOMER'){
+    box.innerHTML=`<div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:var(--radius-sm);padding:12px;font-size:13px">
+      <div style="font-weight:800;color:var(--green);margin-bottom:4px">✅ Customer Paying Travel</div>
+      <div style="color:var(--text2)">Customer will pay travel allowance directly to technician. Company travel cost = ₹0. No claim will be allowed on this task.</div>
+    </div>`;
+    return;
+  }
+
+  // Company paying — calculate margin
+  const cap = getOutstationCap(qty);
+  const totalSale = price * qty;
+  const netMargin = totalSale - cap;
+  const isRed = price < redThreshold && qty === 1;
+  const isYellow = price >= redThreshold && price < basePrice && qty === 1;
+
+  if(isRed){
+    box.innerHTML=`<div style="background:var(--red-bg);border:2px solid var(--red);border-radius:var(--radius-sm);padding:14px;font-size:13px">
+      <div style="font-weight:800;color:var(--red);font-size:14px;margin-bottom:6px">🚨 BLOCKED — Cannot Create This Outstation Task</div>
+      <div style="color:var(--text2);margin-bottom:8px">Sending outstation for <strong>${device}</strong> at <strong>₹${price.toLocaleString('en-IN')}</strong> is not viable.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">
+        <div>Sale Price: <strong>₹${totalSale.toLocaleString('en-IN')}</strong></div>
+        <div>Travel Cost: <strong style="color:var(--red)">₹${cap}</strong></div>
+        <div>Net Margin: <strong style="color:var(--red)">₹${netMargin.toLocaleString('en-IN')}</strong></div>
+        <div>Standard Price: <strong>₹${basePrice.toLocaleString('en-IN')}</strong></div>
+      </div>
+      <div style="margin-top:8px;font-weight:700;color:var(--red)">Increase price to at least ₹${(basePrice-499).toLocaleString('en-IN')} or mark customer paying travel to proceed.</div>
+    </div>`;
+  } else if(isYellow){
+    box.innerHTML=`<div style="background:#fffde7;border:2px solid #f59f00;border-radius:var(--radius-sm);padding:14px;font-size:13px">
+      <div style="font-weight:800;color:#c17f00;font-size:14px;margin-bottom:6px">⚠️ LOW MARGIN — Admin Approval Required</div>
+      <div style="color:var(--text2);margin-bottom:8px">This task will be created in <strong>Pending Admin Approval</strong> status. Admin will receive an email notification.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">
+        <div>Sale Price: <strong>₹${totalSale.toLocaleString('en-IN')}</strong></div>
+        <div>Travel Cost: <strong style="color:#c17f00">₹${cap}</strong></div>
+        <div style="grid-column:1/-1">Net Margin: <strong style="color:#c17f00">₹${netMargin.toLocaleString('en-IN')}</strong> — Low but acceptable with approval</div>
+      </div>
+    </div>`;
+  } else {
+    box.innerHTML=`<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:12px;font-size:13px">
+      <div style="font-weight:800;color:var(--green);margin-bottom:6px">📊 Outstation Margin</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:12px">
+        <div>Sale: <strong>₹${totalSale.toLocaleString('en-IN')}</strong></div>
+        <div>Travel: <strong>₹${cap}</strong></div>
+        <div>Net: <strong style="color:var(--green)">₹${netMargin.toLocaleString('en-IN')}</strong> ✅</div>
+      </div>
+    </div>`;
+  }
+}
+
+function validateOutstation(){
+  const isOutstation = document.getElementById('f-outstation')?.checked;
+  if(!isOutstation) return {ok:true};
+
+  const qty = parseInt(document.getElementById('f-device-qty')?.value||1);
+  const price = parseFloat(document.getElementById('f-price')?.value||0);
+  const device = document.getElementById('f-device-details')?.value||'';
+  const travelBy = document.getElementById('f-travel-paid-by')?.value||'';
+  const basePrice = BASE_DEVICE_PRICES[device]||price;
+  const redThreshold = basePrice - 500;
+
+  if(!travelBy){ showAlert('Please select who is paying travel for outstation','error'); return {ok:false}; }
+
+  if(travelBy==='CUSTOMER'){
+    const amt = parseFloat(document.getElementById('f-customer-travel-amount')?.value||0);
+    if(!amt){ showAlert('Please enter customer travel amount','error'); return {ok:false}; }
+  }
+
+  // Red block
+  if(travelBy==='COMPANY' && price < redThreshold && qty===1){
+    showAlert('🚨 Cannot create — outstation margin too low. Increase price or select customer paying travel.','error');
+    return {ok:false};
+  }
+
+  // Checklist
+  const c1=document.getElementById('os-confirm1')?.checked;
+  const c2=document.getElementById('os-confirm2')?.checked;
+  const c3=document.getElementById('os-confirm3')?.checked;
+  if(!c1||!c2||!c3){ showAlert('Please confirm all outstation checklist items','error'); return {ok:false}; }
+
+  // Yellow = needs admin approval
+  const isYellow = travelBy==='COMPANY' && price>=redThreshold && price<basePrice && qty===1;
+  return {ok:true, needsApproval:isYellow};
 }
 
 // Fix 1: Free service detection
