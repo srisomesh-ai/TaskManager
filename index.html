@@ -378,7 +378,6 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
       <div class="topbar-avatar" id="topbar-avatar">?</div>
       <button class="btn btn-primary btn-sm admin-only" onclick="openQuickTask()" style="font-size:12px;padding:7px 12px;margin-right:6px">⚡ Quick Task</button>
       <button id="notif-btn" onclick="enableNotifications()" title="Enable notifications" style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;padding:6px 10px;border-radius:var(--radius-sm);font-size:15px;cursor:pointer;margin-right:6px">🔔</button>
-      <button class="topbar-btn admin-only" onclick="window.open('finance.html','_blank')" style="background:rgba(255,193,7,.2);border-color:rgba(255,193,7,.5);margin-right:6px">💰 Finance</button>
       <button class="topbar-logout" onclick="doLogout()">↩ Logout</button>
     </div>
   </div>
@@ -394,6 +393,11 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
       <div class="nav-section admin-only">Reports</div>
       <div class="nav-item admin-only" onclick="showPage('daily-report')" id="nav-daily-report"><span class="nav-icon">📅</span> Daily Report</div>
       <div class="nav-item admin-only" onclick="showPage('balance-sheet')" id="nav-balance-sheet"><span class="nav-icon">💰</span> Balance Sheet</div>
+      <div class="nav-section admin-only">Accounts</div>
+      <div class="nav-item admin-only" onclick="openAccounts('accounts')" id="nav-accounts"><span class="nav-icon">📊</span> P&amp;L Overview</div>
+      <div class="nav-item admin-only" onclick="openAccounts('purchase')" id="nav-purchase"><span class="nav-icon">📦</span> Purchase Orders</div>
+      <div class="nav-item admin-only" onclick="openAccounts('expenses')" id="nav-expenses"><span class="nav-icon">💸</span> Expenses</div>
+      <div class="nav-item admin-only" onclick="openAccounts('suppliers')" id="nav-suppliers"><span class="nav-icon">🏭</span> Suppliers</div>
       <div class="nav-section admin-only">Administration</div>
       <div class="nav-item admin-only" onclick="showPage('admin')" id="nav-admin"><span class="nav-icon">⚙️</span> Admin Panel</div>
     </div>
@@ -533,6 +537,95 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
         <div id="admin-content"></div>
       </div>
 
+      <!-- ACCOUNTS PAGES (PIN gated) -->
+      <div class="page" id="page-accounts">
+        <div class="breadcrumb">Home / Accounts / <span>P&L Overview</span></div>
+        <div class="page-header">
+          <div class="page-header-left"><h2>📊 P&amp;L Overview</h2><p>Income, costs and net profit</p></div>
+          <div class="header-actions">
+            <select id="acc-company" class="toolbar-select" onchange="loadAccounts()"><option value="BGPT">BGPT</option><option value="SBGT">SBGT</option></select>
+            <select id="acc-year" class="toolbar-select" onchange="loadAccounts()"><option value="2026">2026</option><option value="2025">2025</option></select>
+            <select id="acc-month" class="toolbar-select" onchange="loadAccounts()">
+              <option value="all">Full Year</option>
+              <option value="01">January</option><option value="02">February</option><option value="03">March</option><option value="04">April</option>
+              <option value="05">May</option><option value="06">June</option><option value="07">July</option><option value="08">August</option>
+              <option value="09">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option>
+            </select>
+          </div>
+        </div>
+        <div id="accounts-content"></div>
+      </div>
+
+      <div class="page" id="page-purchase">
+        <div class="breadcrumb">Home / Accounts / <span>Purchase Orders</span></div>
+        <div class="page-header">
+          <div class="page-header-left"><h2>📦 Purchase Orders</h2><p>GPS device procurement</p></div>
+          <div class="header-actions">
+            <select id="po-company" class="toolbar-select" onchange="loadPO()"><option value="BGPT">BGPT</option><option value="SBGT">SBGT</option></select>
+            <button class="btn btn-primary btn-sm" onclick="showPOForm()">➕ New PO</button>
+          </div>
+        </div>
+        <div id="po-content"></div>
+      </div>
+
+      <div class="page" id="page-expenses">
+        <div class="breadcrumb">Home / Accounts / <span>Expenses</span></div>
+        <div class="page-header">
+          <div class="page-header-left"><h2>💸 Expenses</h2><p>Operational expenses</p></div>
+          <div class="header-actions">
+            <select id="exp-company" class="toolbar-select" onchange="loadExpenses()"><option value="BGPT">BGPT</option><option value="SBGT">SBGT</option></select>
+            <select id="exp-period" class="toolbar-select" onchange="loadExpenses()"><option value="current">This Month</option><option value="last">Last Month</option><option value="year">This Year</option><option value="all">All Time</option></select>
+            <select id="exp-category-filter" class="toolbar-select" onchange="loadExpenses()"><option value="">All Categories</option><option>Fuel</option><option>Travel</option><option>Office</option><option>Salary</option><option>Rent</option><option>Marketing</option><option>Equipment</option><option>Vehicle</option><option>Other</option></select>
+            <button class="btn btn-primary btn-sm" onclick="showExpenseForm()">➕ Add Expense</button>
+          </div>
+        </div>
+        <div id="exp-content"></div>
+      </div>
+
+      <div class="page" id="page-suppliers">
+        <div class="breadcrumb">Home / Accounts / <span>Suppliers</span></div>
+        <div class="page-header">
+          <div class="page-header-left"><h2>🏭 Suppliers</h2><p>GPS device suppliers</p></div>
+          <div class="header-actions">
+            <select id="sup-company" class="toolbar-select" onchange="loadSuppliers()"><option value="BGPT">BGPT</option><option value="SBGT">SBGT</option></select>
+            <button class="btn btn-primary btn-sm" onclick="showSupplierForm()">➕ Add Supplier</button>
+          </div>
+        </div>
+        <div id="suppliers-content"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ACCOUNTS PIN MODAL -->
+<div class="modal-overlay" id="accounts-pin-modal" onclick="if(event.target===this)closeById('accounts-pin-modal')">
+  <div class="modal-box" style="max-width:340px;text-align:center">
+    <div style="padding:28px 24px">
+      <div style="font-size:40px;margin-bottom:8px">🔐</div>
+      <div style="font-size:17px;font-weight:800;color:var(--accent);margin-bottom:4px">Accounts Access</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:20px">Enter PIN to continue</div>
+      <div style="display:flex;justify-content:center;gap:10px;margin-bottom:16px" id="apin-dots">
+        <div style="width:13px;height:13px;border-radius:50%;border:2px solid var(--border);background:var(--surface2)" id="ap0"></div>
+        <div style="width:13px;height:13px;border-radius:50%;border:2px solid var(--border);background:var(--surface2)" id="ap1"></div>
+        <div style="width:13px;height:13px;border-radius:50%;border:2px solid var(--border);background:var(--surface2)" id="ap2"></div>
+        <div style="width:13px;height:13px;border-radius:50%;border:2px solid var(--border);background:var(--surface2)" id="ap3"></div>
+      </div>
+      <div style="color:var(--red);font-size:13px;font-weight:700;height:18px;margin-bottom:10px" id="apin-error"></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:210px;margin:0 auto 12px">
+        <button onclick="apinPress('1')" style="padding:14px;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:18px;font-weight:700;cursor:pointer">1</button>
+        <button onclick="apinPress('2')" style="padding:14px;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:18px;font-weight:700;cursor:pointer">2</button>
+        <button onclick="apinPress('3')" style="padding:14px;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:18px;font-weight:700;cursor:pointer">3</button>
+        <button onclick="apinPress('4')" style="padding:14px;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:18px;font-weight:700;cursor:pointer">4</button>
+        <button onclick="apinPress('5')" style="padding:14px;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:18px;font-weight:700;cursor:pointer">5</button>
+        <button onclick="apinPress('6')" style="padding:14px;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:18px;font-weight:700;cursor:pointer">6</button>
+        <button onclick="apinPress('7')" style="padding:14px;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:18px;font-weight:700;cursor:pointer">7</button>
+        <button onclick="apinPress('8')" style="padding:14px;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:18px;font-weight:700;cursor:pointer">8</button>
+        <button onclick="apinPress('9')" style="padding:14px;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:18px;font-weight:700;cursor:pointer">9</button>
+        <button onclick="apinPress('0')" style="grid-column:2;padding:14px;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:18px;font-weight:700;cursor:pointer">0</button>
+        <button onclick="apinClear()" style="padding:14px;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:16px;cursor:pointer;color:var(--red)">⌫</button>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="closeById('accounts-pin-modal')">Cancel</button>
     </div>
   </div>
 </div>
@@ -1013,7 +1106,7 @@ function showPage(name){
   document.getElementById('page-'+name)?.classList.add('active');
   document.getElementById('nav-'+name)?.classList.add('active');
   localStorage.setItem('bgps_last_page', name); // Fix 7: save current page
-  const map={dashboard:loadDashboard,tasks:loadTasksPage,'my-tasks':loadMyTasks,urgent:loadUrgentPage,approvals:loadApprovalsPage,'daily-report':loadDailyReport,'balance-sheet':loadBalanceSheet,admin:loadAdminPanel};
+  const map={dashboard:loadDashboard,tasks:loadTasksPage,'my-tasks':loadMyTasks,urgent:loadUrgentPage,approvals:loadApprovalsPage,'daily-report':loadDailyReport,'balance-sheet':loadBalanceSheet,admin:loadAdminPanel,accounts:loadAccounts,purchase:loadPO,expenses:loadExpenses,suppliers:loadSuppliers};
   if(map[name])map[name]();
 }
 
@@ -2862,6 +2955,352 @@ window.addEventListener('load',()=>{
   const today=new Date().toISOString().split('T')[0];
 });
 
+// ============================================================
+// ACCOUNTS — PIN GATE + P&L + PURCHASE ORDERS + EXPENSES + SUPPLIERS
+// ============================================================
+const ACCOUNTS_PIN = '9999';
+let accountsPinValue = '';
+let accountsPinTarget = 'accounts';
+let accountsUnlocked = false;
+
+function openAccounts(page) {
+  if (accountsUnlocked) {
+    showPage(page);
+    return;
+  }
+  accountsPinTarget = page;
+  accountsPinValue = '';
+  updateApinDots();
+  document.getElementById('apin-error').textContent = '';
+  document.getElementById('accounts-pin-modal').style.display = 'flex';
+}
+
+function apinPress(n) {
+  if (accountsPinValue.length >= 4) return;
+  accountsPinValue += n;
+  updateApinDots();
+  if (accountsPinValue.length === 4) setTimeout(verifyAccountsPin, 200);
+}
+
+function apinClear() {
+  accountsPinValue = accountsPinValue.slice(0, -1);
+  updateApinDots();
+  document.getElementById('apin-error').textContent = '';
+}
+
+function updateApinDots() {
+  for (let i = 0; i < 4; i++) {
+    const dot = document.getElementById('ap' + i);
+    if (dot) {
+      dot.style.background = i < accountsPinValue.length ? 'var(--accent)' : 'var(--surface2)';
+      dot.style.borderColor = i < accountsPinValue.length ? 'var(--accent)' : 'var(--border)';
+    }
+  }
+}
+
+function verifyAccountsPin() {
+  if (accountsPinValue === ACCOUNTS_PIN) {
+    accountsUnlocked = true;
+    closeById('accounts-pin-modal');
+    showPage(accountsPinTarget);
+    const loaders = {accounts: loadAccounts, purchase: loadPO, expenses: loadExpenses, suppliers: loadSuppliers};
+    if (loaders[accountsPinTarget]) loaders[accountsPinTarget]();
+  } else {
+    document.getElementById('apin-error').textContent = '❌ Incorrect PIN';
+    accountsPinValue = '';
+    updateApinDots();
+    setTimeout(() => { document.getElementById('apin-error').textContent = ''; }, 2000);
+  }
+}
+
+// Hook accounts pages into showPage map
+const _origShowPage = showPage;
+function showPage(name) {
+  _origShowPage(name);
+  const accLoaders = {accounts: loadAccounts, purchase: loadPO, expenses: loadExpenses, suppliers: loadSuppliers};
+  if (accLoaders[name] && accountsUnlocked) accLoaders[name]();
+}
+
+// ---- ACCOUNTS / P&L ----
+async function loadAccounts() {
+  const company = document.getElementById('acc-company')?.value || 'BGPT';
+  const year    = document.getElementById('acc-year')?.value || new Date().getFullYear();
+  const month   = document.getElementById('acc-month')?.value || 'all';
+  let from, to;
+  if (month === 'all') { from = year+'-01-01'; to = year+'-12-31'; }
+  else { from = year+'-'+month+'-01'; const d = new Date(year, parseInt(month), 0); to = year+'-'+month+'-'+String(d.getDate()).padStart(2,'0'); }
+  const res = await api('get_accounts_summary', {company, from, to});
+  renderAccounts(res, company);
+}
+
+function renderAccounts(d, company) {
+  const el = document.getElementById('accounts-content'); if (!el) return;
+  const fmt = v => '₹' + parseFloat(v||0).toLocaleString('en-IN');
+  const inc  = d.income || {};
+  const pur  = d.purchases || {};
+  const tex  = parseFloat(d.total_expenses||0);
+  const gp   = parseFloat(d.gross_profit||0);
+  const np   = parseFloat(d.net_profit||0);
+
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px">
+      ${[['💰','Total Income',fmt(inc.total_sales),'var(--green)'],['✅','Received',fmt(inc.total_received),'var(--green)'],['⏳','Pending',fmt(inc.total_pending),'var(--red)'],['📦','Purchase Cost',fmt(pur.total_po),'var(--saffron)'],['💸','Expenses',fmt(tex),'var(--red)'],[np>=0?'📈':'📉','Net Profit',fmt(np),np>=0?'var(--green)':'var(--red)']].map(([i,l,v,c])=>`
+        <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:12px;text-align:center">
+          <div style="font-size:20px">${i}</div>
+          <div style="font-size:18px;font-weight:800;color:${c};margin-top:4px">${v}</div>
+          <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-top:2px">${l}</div>
+        </div>`).join('')}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div>
+        <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:10px">
+          <div style="padding:10px 14px;background:var(--green-bg);color:var(--green);font-weight:800;display:flex;justify-content:space-between"><span>📥 Income</span><span>${fmt(inc.total_sales)}</span></div>
+          <div style="padding:8px 14px;display:flex;justify-content:space-between;border-top:1px solid var(--surface2);font-size:13px;padding-left:28px"><span>GPS Sales</span><span>${fmt(inc.sales_income)}</span></div>
+          <div style="padding:8px 14px;display:flex;justify-content:space-between;border-top:1px solid var(--surface2);font-size:13px;padding-left:28px"><span>License/Service</span><span>${fmt(inc.license_income)}</span></div>
+        </div>
+        <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:10px">
+          <div style="padding:10px 14px;background:var(--red-bg);color:var(--red);font-weight:800;display:flex;justify-content:space-between"><span>📦 Purchase Cost</span><span>${fmt(pur.total_po)}</span></div>
+          <div style="padding:8px 14px;display:flex;justify-content:space-between;border-top:1px solid var(--surface2);font-size:13px;font-weight:800"><span>Gross Profit</span><span style="color:${gp>=0?'var(--green)':'var(--red)'}">${fmt(gp)}</span></div>
+        </div>
+        <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:10px">
+          <div style="padding:10px 14px;background:#fff3e0;color:var(--saffron);font-weight:800;display:flex;justify-content:space-between"><span>💸 Expenses</span><span>${fmt(tex)}</span></div>
+          ${(d.expenses_by_category||[]).map(e=>`<div style="padding:8px 14px;display:flex;justify-content:space-between;border-top:1px solid var(--surface2);font-size:13px;padding-left:28px"><span>${e.category}</span><span>${fmt(e.ct)}</span></div>`).join('')}
+        </div>
+        <div style="background:${np>=0?'var(--green-bg)':'var(--red-bg)'};border:1.5px solid ${np>=0?'var(--green)':'var(--red)'};border-radius:var(--radius);padding:14px;display:flex;justify-content:space-between;font-weight:800;font-size:15px">
+          <span>${np>=0?'📈':'📉'} Net Profit</span><span style="color:${np>=0?'var(--green)':'var(--red)'}">${fmt(np)}</span>
+        </div>
+      </div>
+      <div>
+        <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);overflow:hidden">
+          <div style="padding:10px 14px;font-weight:800;color:var(--accent);background:var(--surface2)">📅 Monthly Breakdown</div>
+          ${(d.monthly||[]).length ? `<table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead><tr style="background:var(--accent);color:#fff"><th style="padding:8px 12px;text-align:left">Month</th><th style="padding:8px 12px;text-align:right">Income</th><th style="padding:8px 12px;text-align:right">Received</th></tr></thead>
+            <tbody>${(d.monthly||[]).map(m=>`<tr style="border-top:1px solid var(--surface2)"><td style="padding:8px 12px">${m.month}</td><td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--blue)">₹${parseFloat(m.income).toLocaleString('en-IN')}</td><td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--green)">₹${parseFloat(m.received).toLocaleString('en-IN')}</td></tr>`).join('')}</tbody>
+          </table>` : '<div style="padding:24px;text-align:center;color:var(--text3)">No data for this period</div>'}
+        </div>
+        <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-top:10px">
+          <div style="padding:10px 14px;font-weight:800;color:var(--accent);background:var(--surface2)">📋 Summary</div>
+          ${[['Devices Sold',parseInt(inc.devices_sold||0)],['Total Entries',parseInt(inc.total_entries||0)],['Collection Rate',parseFloat(inc.total_sales||0)>0?Math.round((parseFloat(inc.total_received||0)/parseFloat(inc.total_sales||1))*100)+'%':'0%'],['Outstanding','₹'+parseFloat(inc.total_pending||0).toLocaleString('en-IN')]].map(([l,v])=>`<div style="padding:8px 14px;display:flex;justify-content:space-between;border-top:1px solid var(--surface2);font-size:13px"><span>${l}</span><strong>${v}</strong></div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+}
+
+// ---- PURCHASE ORDERS ----
+let suppliersCache = [];
+async function loadPO() {
+  const company = document.getElementById('po-company')?.value || 'BGPT';
+  const res = await api('get_purchase_orders', {company});
+  const orders = res.orders || [];
+  const el = document.getElementById('po-content'); if (!el) return;
+  if (!orders.length) { el.innerHTML='<div class="empty-state"><div class="empty-icon">📦</div><h3>No purchase orders</h3><button class="btn btn-primary" onclick="showPOForm()">➕ Create First PO</button></div>'; return; }
+  const total = orders.reduce((s,o)=>s+parseFloat(o.total_amount||0),0);
+  const paid  = orders.reduce((s,o)=>s+parseFloat(o.paid_amount||0),0);
+  const fmt = v=>'₹'+parseFloat(v||0).toLocaleString('en-IN');
+  const STATUS_COLORS = {Draft:'#e0e0e0',Sent:'var(--blue-bg)',['Partially Received']:'#fff3e0',Received:'var(--green-bg)',Cancelled:'var(--red-bg)'};
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
+      ${[['📋','Total POs',orders.length,'var(--accent)'],['💰','Total Value',fmt(total),'var(--saffron)'],['✅','Paid',fmt(paid),'var(--green)'],['⏳','Outstanding',fmt(total-paid),'var(--red)']].map(([i,l,v,c])=>`<div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:12px;text-align:center"><div style="font-size:18px">${i}</div><div style="font-size:17px;font-weight:800;color:${c}">${v}</div><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">${l}</div></div>`).join('')}
+    </div>
+    <div class="table-wrapper"><div class="table-scroll"><table>
+      <thead><tr><th>PO Number</th><th>Supplier</th><th>Date</th><th>Items</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>${orders.map(o=>`<tr>
+        <td><strong style="font-family:monospace;color:var(--accent2)">${o.po_number}</strong></td>
+        <td>${o.supplier_name||'–'}</td>
+        <td>${o.order_date||'–'}</td>
+        <td style="font-size:12px">${(o.items||[]).map(i=>`${i.device_model}×${i.quantity}`).join(', ')||'–'}</td>
+        <td style="font-weight:700;color:var(--saffron)">${fmt(o.total_amount)}</td>
+        <td style="color:var(--green)">${fmt(o.paid_amount)}</td>
+        <td style="color:${parseFloat(o.total_amount)-parseFloat(o.paid_amount)>0?'var(--red)':'var(--green)'}">${fmt(parseFloat(o.total_amount)-parseFloat(o.paid_amount))}</td>
+        <td><span style="padding:3px 8px;border-radius:4px;font-size:11px;font-weight:700;background:${STATUS_COLORS[o.status]||'#eee'}">${o.status}</span></td>
+        <td style="display:flex;gap:4px">
+          <button class="action-btn edit" onclick="editPO(${o.id})">✏️</button>
+          <button class="action-btn delete" onclick="deletePO(${o.id})">🗑</button>
+        </td>
+      </tr>`).join('')}</tbody>
+    </table></div></div>`;
+}
+
+async function showPOForm(editData=null) {
+  const company = document.getElementById('po-company')?.value || 'BGPT';
+  const sRes = await api('get_suppliers', {company});
+  suppliersCache = sRes.suppliers || [];
+  if (!suppliersCache.length) { showAlert('Please add a supplier first in Suppliers tab', 'warning'); showPage('suppliers'); return; }
+  const MODELS = ['Engine Status','Engine Cut','Micro GPS','Magnet GPS','Engine Cut+MIC','VLTD','Basic/Normal','Other'];
+  openModal('📦 '+(editData?'Edit':'New')+' Purchase Order', `
+    <div class="form-grid">
+      <div class="field"><label>Supplier *</label><select id="po-sup">${suppliersCache.map(s=>`<option value="${s.id}" ${editData?.supplier_id==s.id?'selected':''}>${s.name}</option>`).join('')}</select></div>
+      <div class="field"><label>Order Date *</label><input type="date" id="po-date" value="${editData?.order_date||new Date().toISOString().split('T')[0]}"></div>
+      <div class="field"><label>Expected Delivery</label><input type="date" id="po-expect" value="${editData?.expected_date||''}"></div>
+      <div class="field"><label>Status</label><select id="po-status">${['Draft','Sent','Partially Received','Received','Cancelled'].map(s=>`<option ${(editData?.status||'Draft')===s?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="field"><label>Amount Paid (₹)</label><input type="number" id="po-paid" value="${editData?.paid_amount||0}"></div>
+      <div class="field"><label>Payment Mode</label><select id="po-paymode">${['','Cash','UPI','Bank Transfer','Cheque'].map(m=>`<option ${editData?.payment_mode===m?'selected':''}>${m}</option>`).join('')}</select></div>
+      <div class="field span-2"><label>Notes</label><textarea id="po-notes" rows="2">${editData?.notes||''}</textarea></div>
+    </div>
+    <div style="margin-top:12px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--text2);margin-bottom:6px">Items *</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="background:var(--surface2)"><th style="padding:6px 8px;text-align:left">Device</th><th style="padding:6px 8px">Qty</th><th style="padding:6px 8px">Unit Cost</th><th style="padding:6px 8px">Total</th><th></th></tr></thead>
+        <tbody id="po-items-body"></tbody>
+      </table>
+      <button class="btn btn-secondary btn-sm" style="margin-top:6px" onclick="addPOItem()">➕ Add Item</button>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+      <div style="font-size:14px;font-weight:800">Total: <span id="po-total-disp" style="color:var(--saffron)">₹0</span></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="savePO(${editData?.id||0})">💾 Save</button>
+        <button class="btn btn-secondary" onclick="closeById('detail-modal')">Cancel</button>
+      </div>
+    </div>`);
+  window._poItems = editData?.items||[];
+  if (!window._poItems.length) addPOItem(); else renderPOItems();
+  window._poModels = MODELS;
+}
+
+function addPOItem() { window._poItems.push({device_model:'',quantity:1,received_qty:0,unit_cost:0,total_cost:0}); renderPOItems(); }
+function removePOItem(i) { window._poItems.splice(i,1); renderPOItems(); }
+function poChange(i,f,v) { window._poItems[i][f]=f==='device_model'?v:(parseFloat(v)||0); window._poItems[i].total_cost=(window._poItems[i].quantity||1)*(window._poItems[i].unit_cost||0); renderPOItems(); }
+function renderPOItems() {
+  const tbody=document.getElementById('po-items-body'); if(!tbody) return;
+  tbody.innerHTML=(window._poItems||[]).map((item,i)=>`<tr>
+    <td style="padding:4px"><select onchange="poChange(${i},'device_model',this.value)" style="width:100%;padding:5px;border:1.5px solid var(--border);border-radius:5px;font-size:13px">${(window._poModels||[]).map(m=>`<option ${item.device_model===m?'selected':''}>${m}</option>`).join('')}</select></td>
+    <td style="padding:4px"><input type="number" value="${item.quantity||1}" min="1" oninput="poChange(${i},'quantity',this.value)" style="width:60px;padding:5px;border:1.5px solid var(--border);border-radius:5px;font-size:13px"></td>
+    <td style="padding:4px"><input type="number" value="${item.unit_cost||0}" oninput="poChange(${i},'unit_cost',this.value)" style="width:90px;padding:5px;border:1.5px solid var(--border);border-radius:5px;font-size:13px"></td>
+    <td style="padding:4px;font-weight:700;color:var(--saffron)">₹${((item.quantity||1)*(item.unit_cost||0)).toLocaleString('en-IN')}</td>
+    <td style="padding:4px"><button onclick="removePOItem(${i})" style="background:var(--red);color:#fff;border:none;border-radius:4px;padding:3px 7px;cursor:pointer">✕</button></td>
+  </tr>`).join('');
+  const total=(window._poItems||[]).reduce((s,i)=>s+(i.total_cost||0),0);
+  const el=document.getElementById('po-total-disp'); if(el) el.textContent='₹'+total.toLocaleString('en-IN');
+}
+async function savePO(id) {
+  const company=document.getElementById('po-company')?.value||'BGPT';
+  const items=(window._poItems||[]).filter(i=>i.quantity>0);
+  if(!items.length){showAlert('Add at least one item','error');return;}
+  const body={id,company,supplier_id:document.getElementById('po-sup')?.value,order_date:document.getElementById('po-date')?.value,expected_date:document.getElementById('po-expect')?.value||null,status:document.getElementById('po-status')?.value,paid_amount:document.getElementById('po-paid')?.value||0,payment_mode:document.getElementById('po-paymode')?.value,notes:document.getElementById('po-notes')?.value,items};
+  const res=await api('save_purchase_order',{},'POST',body);
+  if(res.success){closeById('detail-modal');showAlert('PO saved! ✅','success');loadPO();}
+  else showAlert(res.error||'Error','error');
+}
+async function editPO(id) { const res=await api('get_purchase_orders',{company:document.getElementById('po-company')?.value||'BGPT'}); const o=(res.orders||[]).find(x=>x.id===id); if(o) showPOForm(o); }
+async function deletePO(id) { if(!confirm('Delete this PO?')) return; const res=await api('delete_purchase_order',{},'POST',{id}); if(res.success){showAlert('Deleted','success');loadPO();} }
+
+// ---- EXPENSES ----
+async function loadExpenses() {
+  const company=document.getElementById('exp-company')?.value||'BGPT';
+  const period=document.getElementById('exp-period')?.value||'current';
+  const cat=document.getElementById('exp-category-filter')?.value||'';
+  const today=new Date(); let from,to;
+  if(period==='current'){from=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-01';to=today.toISOString().split('T')[0];}
+  else if(period==='last'){const d=new Date(today.getFullYear(),today.getMonth()-1,1);from=d.toISOString().split('T')[0].slice(0,8)+'01';to=new Date(today.getFullYear(),today.getMonth(),0).toISOString().split('T')[0];}
+  else if(period==='year'){from=today.getFullYear()+'-01-01';to=today.getFullYear()+'-12-31';}
+  else{from='2020-01-01';to='2030-12-31';}
+  const params={company,from,to}; if(cat) params.category=cat;
+  const res=await api('get_expenses',params);
+  renderExpenses(res.expenses||[], res.total||0);
+}
+function renderExpenses(expenses, total) {
+  const el=document.getElementById('exp-content'); if(!el) return;
+  const fmt=v=>'₹'+parseFloat(v||0).toLocaleString('en-IN');
+  if(!expenses.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">💸</div><h3>No expenses found</h3><button class="btn btn-primary" onclick="showExpenseForm()">➕ Add Expense</button></div>';return;}
+  const cats={};expenses.forEach(e=>{cats[e.category]=(cats[e.category]||0)+parseFloat(e.amount||0);});
+  el.innerHTML=`
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:14px">
+      <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:12px;text-align:center"><div style="font-size:18px">💸</div><div style="font-size:17px;font-weight:800;color:var(--red)">${fmt(total)}</div><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">Total</div></div>
+      ${Object.entries(cats).slice(0,4).map(([k,v])=>`<div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:12px;text-align:center"><div style="font-size:18px">📌</div><div style="font-size:15px;font-weight:800">${fmt(v)}</div><div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase">${k}</div></div>`).join('')}
+    </div>
+    <div class="table-wrapper"><div class="table-scroll"><table>
+      <thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Paid To</th><th>Amount</th><th>Mode</th><th>Ref</th><th>Actions</th></tr></thead>
+      <tbody>${expenses.map(e=>`<tr>
+        <td style="white-space:nowrap">${e.date||'–'}</td>
+        <td><span style="background:#fff3e0;color:var(--saffron);padding:3px 7px;border-radius:4px;font-size:11px;font-weight:700">${e.category}</span></td>
+        <td>${e.description}</td><td>${e.paid_to||'–'}</td>
+        <td style="font-weight:700;color:var(--red)">${fmt(e.amount)}</td>
+        <td><small>${e.payment_mode||'–'}</small></td>
+        <td><small>${e.reference||'–'}</small></td>
+        <td style="display:flex;gap:4px">
+          <button class="action-btn edit" onclick="showExpenseForm(${JSON.stringify(e).replace(/"/g,'&quot;')})">✏️</button>
+          <button class="action-btn delete" onclick="deleteExpense(${e.id})">🗑</button>
+        </td>
+      </tr>`).join('')}</tbody>
+    </table></div></div>`;
+}
+function showExpenseForm(edit=null) {
+  const company=document.getElementById('exp-company')?.value||'BGPT';
+  openModal(edit?'✏️ Edit Expense':'💸 Add Expense',`
+    <div class="form-grid">
+      <div class="field"><label>Date *</label><input type="date" id="ef-date" value="${edit?.date||new Date().toISOString().split('T')[0]}"></div>
+      <div class="field"><label>Category *</label><select id="ef-cat">${['Fuel','Travel','Office','Salary','Rent','Marketing','Equipment','Vehicle','Other'].map(c=>`<option ${edit?.category===c?'selected':''}>${c}</option>`).join('')}</select></div>
+      <div class="field span-2"><label>Description *</label><input type="text" id="ef-desc" value="${edit?.description||''}"></div>
+      <div class="field"><label>Amount (₹) *</label><input type="number" id="ef-amount" value="${edit?.amount||''}"></div>
+      <div class="field"><label>Payment Mode</label><select id="ef-paymode">${['','Cash','UPI','Bank Transfer'].map(m=>`<option ${edit?.payment_mode===m?'selected':''}>${m}</option>`).join('')}</select></div>
+      <div class="field"><label>Paid To</label><input type="text" id="ef-paidto" value="${edit?.paid_to||''}"></div>
+      <div class="field"><label>Reference</label><input type="text" id="ef-ref" value="${edit?.reference||''}"></div>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="saveExpense(${edit?.id||0},'${company}')">💾 Save</button>
+      <button class="btn btn-secondary" onclick="closeById('detail-modal')">Cancel</button>
+    </div>`);
+}
+async function saveExpense(id, company) {
+  const body={id,company,date:document.getElementById('ef-date')?.value,category:document.getElementById('ef-cat')?.value,description:document.getElementById('ef-desc')?.value,amount:document.getElementById('ef-amount')?.value,payment_mode:document.getElementById('ef-paymode')?.value,paid_to:document.getElementById('ef-paidto')?.value,reference:document.getElementById('ef-ref')?.value};
+  if(!body.date||!body.description||!body.amount){showAlert('Fill required fields','error');return;}
+  const res=await api('save_expense',{},'POST',body);
+  if(res.success){closeById('detail-modal');showAlert('Saved! ✅','success');loadExpenses();}
+  else showAlert(res.error||'Error','error');
+}
+async function deleteExpense(id){if(!confirm('Delete?'))return;const res=await api('delete_expense',{},'POST',{id});if(res.success){showAlert('Deleted','success');loadExpenses();}}
+
+// ---- SUPPLIERS ----
+async function loadSuppliers() {
+  const company=document.getElementById('sup-company')?.value||'BGPT';
+  const res=await api('get_suppliers',{company});
+  const suppliers=res.suppliers||[];
+  const el=document.getElementById('suppliers-content'); if(!el) return;
+  if(!suppliers.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">🏭</div><h3>No suppliers yet</h3><button class="btn btn-primary" onclick="showSupplierForm()">➕ Add Supplier</button></div>';return;}
+  el.innerHTML=`<div class="table-wrapper"><div class="table-scroll"><table>
+    <thead><tr><th>Name</th><th>Contact</th><th>Phone</th><th>Email</th><th>GST No.</th><th>Devices</th><th>Actions</th></tr></thead>
+    <tbody>${suppliers.map(s=>`<tr>
+      <td><strong>${s.name}</strong></td><td>${s.contact_person||'–'}</td><td>${s.phone||'–'}</td>
+      <td>${s.email||'–'}</td><td><small>${s.gst_no||'–'}</small></td><td><small>${s.device_types||'–'}</small></td>
+      <td style="display:flex;gap:4px">
+        <button class="action-btn edit" onclick="showSupplierForm(${JSON.stringify(s).replace(/"/g,'&quot;')})">✏️</button>
+        <button class="action-btn delete" onclick="deleteSupplier(${s.id})">🗑</button>
+      </td>
+    </tr>`).join('')}</tbody>
+  </table></div></div>`;
+}
+function showSupplierForm(edit=null) {
+  const company=document.getElementById('sup-company')?.value||'BGPT';
+  openModal(edit?'✏️ Edit Supplier':'🏭 Add Supplier',`
+    <div class="form-grid">
+      <div class="field span-2"><label>Supplier Name *</label><input type="text" id="sf-name" value="${edit?.name||''}"></div>
+      <div class="field"><label>Contact Person</label><input type="text" id="sf-contact" value="${edit?.contact_person||''}"></div>
+      <div class="field"><label>Phone</label><input type="tel" id="sf-phone" value="${edit?.phone||''}"></div>
+      <div class="field"><label>Email</label><input type="email" id="sf-email" value="${edit?.email||''}"></div>
+      <div class="field"><label>GST No.</label><input type="text" id="sf-gst" value="${edit?.gst_no||''}"></div>
+      <div class="field span-2"><label>Address</label><textarea id="sf-addr" rows="2">${edit?.address||''}</textarea></div>
+      <div class="field span-2"><label>Device Types</label><input type="text" id="sf-devices" value="${edit?.device_types||''}"></div>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="saveSupplier(${edit?.id||0},'${company}')">💾 Save</button>
+      <button class="btn btn-secondary" onclick="closeById('detail-modal')">Cancel</button>
+    </div>`);
+}
+async function saveSupplier(id,company){
+  const body={id,company,name:document.getElementById('sf-name')?.value,contact_person:document.getElementById('sf-contact')?.value,phone:document.getElementById('sf-phone')?.value,email:document.getElementById('sf-email')?.value,gst_no:document.getElementById('sf-gst')?.value,address:document.getElementById('sf-addr')?.value,device_types:document.getElementById('sf-devices')?.value};
+  if(!body.name){showAlert('Name required','error');return;}
+  const res=await api('save_supplier',{},'POST',body);
+  if(res.success){closeById('detail-modal');showAlert('Saved! ✅','success');loadSuppliers();}
+  else showAlert(res.error||'Error','error');
+}
+async function deleteSupplier(id){if(!confirm('Remove supplier?'))return;const res=await api('delete_supplier',{},'POST',{id});if(res.success){showAlert('Removed','success');loadSuppliers();}}
+
+function openModal(title, html) {
+  document.getElementById('detail-modal').style.display='flex';
+  document.getElementById('detail-body').innerHTML=`<div class="modal-header"><div><h3>${title}</h3></div><button class="modal-close" onclick="closeById('detail-modal')">✕</button></div><div class="detail-inner">${html}</div>`;
+}
+
+// ============================================================
 // ---- SESSION RESTORE ON REFRESH ----
 (async()=>{
   if(!authToken){
