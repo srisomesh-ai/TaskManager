@@ -234,3 +234,68 @@ ORDER BY date DESC;
 -- DONE
 -- ============================================================
 SELECT 'Schema setup complete ✅' AS status;
+
+-- ============================================================
+-- BALANCE SHEET TABLE
+-- ============================================================
+CREATE TABLE IF NOT EXISTS balance_sheet_entries (
+    id                          INT AUTO_INCREMENT PRIMARY KEY,
+    type                        ENUM('sales','license') NOT NULL DEFAULT 'sales',
+    profile                     ENUM('BGPT','SBGT') NOT NULL DEFAULT 'BGPT',
+    task_id                     VARCHAR(20) NULL,                -- links to tasks.task_id
+    task_db_id                  INT NULL,                        -- links to tasks.id
+    date                        DATE NOT NULL,
+    invoice_no                  VARCHAR(50),
+    gps_serial_no               VARCHAR(100),                    -- IMEI / VIN
+    customer_type               VARCHAR(50),
+    name_on_server              TEXT,                            -- comma separated names
+    server_name                 VARCHAR(50),
+    device_model                VARCHAR(100),
+    service_type                VARCHAR(100),
+    license_plan                VARCHAR(100),
+    qty                         DECIMAL(10,2) DEFAULT 1,
+    unit_price                  DECIMAL(10,2) DEFAULT 0,
+    gst                         DECIMAL(10,2) DEFAULT 0,
+    total_price                 DECIMAL(10,2) DEFAULT 0,
+    payment_status              VARCHAR(50),
+    payment_received            DECIMAL(10,2) DEFAULT 0,
+    pending_payment             DECIMAL(10,2) DEFAULT 0,
+    payment_mode                VARCHAR(50),
+    payment_received_on         DATE NULL,
+    payment_transaction_details TEXT,
+    pending_reason              VARCHAR(100),
+    discount_given              DECIMAL(10,2) DEFAULT 0,
+    discount_reason             TEXT,
+    discount_incharge           VARCHAR(100),
+    payment_reminder_date       DATE NULL,
+    technician_name             VARCHAR(100),
+    location                    VARCHAR(200),
+    remarks                     TEXT,
+    created_by_code             VARCHAR(50),
+    created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    INDEX idx_task_id       (task_id),
+    INDEX idx_task_db_id    (task_db_id),
+    INDEX idx_type          (type),
+    INDEX idx_profile       (profile),
+    INDEX idx_date          (date),
+    INDEX idx_payment_status(payment_status),
+    FOREIGN KEY (task_db_id) REFERENCES tasks(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- EXTRA COLUMNS FOR TASKS TABLE (balance sheet linkage)
+-- ============================================================
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS gps_serial_no              VARCHAR(100) NULL;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS name_on_server             TEXT NULL;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS server_name                VARCHAR(50) NULL;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS invoice_no                 VARCHAR(50) NULL;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS payment_received_on        DATE NULL;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS payment_transaction_details TEXT NULL;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS gst_amount                 DECIMAL(10,2) DEFAULT 0;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS pending_reason             VARCHAR(100) NULL;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS discount_reason            TEXT NULL;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS discount_incharge          VARCHAR(100) NULL;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS profile                    ENUM('BGPT','SBGT') DEFAULT 'BGPT';
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS bs_entry_id                INT NULL COMMENT 'Linked balance sheet entry';
