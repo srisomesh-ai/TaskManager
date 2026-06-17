@@ -23,7 +23,7 @@ $token = $_SERVER['HTTP_X_AUTH_TOKEN'] ?? $_GET['token'] ?? '';
 $pdo = getDB();
 
 // Auth
-$skipAuth = ['login','ping'];
+$skipAuth = ['login','ping','verify_pin'];
 $cu = null; $userId = null; $userRole = null;
 if (!in_array($action, $skipAuth)) {
     if ($token) {
