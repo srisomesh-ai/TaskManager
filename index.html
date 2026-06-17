@@ -213,7 +213,7 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
 .modal-close{width:30px;height:30px;background:var(--surface2);border:1.5px solid var(--border);border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--text2);flex-shrink:0;margin-left:12px;transition:all .13s;}
 .modal-close:hover{background:var(--red-bg);color:var(--red);}
 .modal-body{padding:18px 20px;overflow-y:auto;flex:1;}
-.modal-footer{padding:14px 20px;display:flex;justify-content:flex-end;gap:8px;border-top:1.5px solid var(--border);}
+.modal-footer{padding:14px 20px;display:flex;justify-content:flex-end;gap:8px;border-top:1.5px solid var(--border);background:var(--surface);flex-shrink:0;}
 
 /* FORM SECTIONS */
 .form-section{margin-bottom:20px;}
@@ -715,12 +715,12 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
             <select id="f-leadtype"><option>New Lead</option><option>Demo</option><option>3rd Party Lead</option><option>Troubleshoot</option><option>Existing Customer Lead</option><option>Outstation Lead</option></select>
           </div>
           <div class="field"><label>Company Profile <span class="req">*</span></label>
-            <select id="f-profile">
+            <select id="f-profile" onchange="updatePriceForGST()">
               <option value="BGPT">BGPT — Bharat GPS Tracker</option>
               <option value="SBGT">SBGT — SRIBHARAT GPS TRACKER PVT LTD</option>
             </select>
           </div>
-          <div class="field"><label>Device Qty</label><input type="number" id="f-device-qty" value="1" min="1"></div>
+          <div class="field"><label>Device Qty</label><input type="number" id="f-device-qty" value="1" min="1" oninput="updatePriceForGST()"></div>
           <div class="field"><label>Job Type</label>
             <select id="f-device-details" onchange="setJobPrice(this.value)">
               <option value="">Select Job Type</option>
@@ -740,7 +740,8 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
           </div>
           <div class="field">
             <label>Price to Collect (₹) <span id="price-default-label" style="color:var(--text3);font-weight:400;text-transform:none;font-size:11px"></span></label>
-            <input type="number" id="f-price" placeholder="Select job type to auto-fill" step="0.01">
+            <input type="number" id="f-price" placeholder="Auto-filled from job type" step="0.01" oninput="updatePriceForGST()">
+            <div id="gst-breakdown" style="display:none;margin-top:4px;background:var(--surface2);border-radius:5px;padding:6px 10px;font-size:11px;color:var(--text2)"></div>
           </div>
           <div class="field">
             <label>Committed Pay Mode?</label>
@@ -781,7 +782,8 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
       <!-- OUTSTATION SECTION — shown when checkbox ticked -->
       <div id="outstation-section" style="display:none">
         <div class="form-section-title">📍 Outstation Details</div>
-        <div id="outstation-margin-box" style="margin-bottom:12px"></div>
+        <!-- Outstation margin — admin only, never shown to assigner -->
+        <div id="outstation-margin-box" style="display:none;margin-bottom:12px"></div>
         <div class="form-grid">
           <div class="field">
             <label>Travel Location (City/Area)</label>
@@ -2054,6 +2056,9 @@ async function openCreateModal(){
   document.getElementById('f-device-qty').value=1;
   document.getElementById('f-device-details').value='';
   document.getElementById('f-price').value='';
+  document.getElementById('f-price').dataset.basePrice='';
+  document.getElementById('f-price').dataset.gstAmount='0';
+  const gbd=document.getElementById('gst-breakdown');if(gbd)gbd.style.display='none';
   const lbl=document.getElementById('price-default-label');if(lbl)lbl.textContent='';
   const prf=document.getElementById('pay-reminder-field');if(prf)prf.style.display='none';
   const pri=document.getElementById('f-pay-reminder');if(pri)pri.value='';
@@ -2096,6 +2101,17 @@ async function editTask(dbId){
   document.getElementById('f-location').value=t.location||'';
   document.getElementById('f-leadtype').value=t.lead_type;
   if(document.getElementById('f-profile')) document.getElementById('f-profile').value=t.profile||'BGPT';
+  // Restore base price and trigger GST calculation
+  const priceInp = document.getElementById('f-price');
+  if(priceInp){
+    const gstAmt = parseFloat(t.gst_amount||0);
+    const totalPrice = parseFloat(t.price_to_collect||0);
+    const baseP = gstAmt>0 ? (totalPrice-gstAmt) : totalPrice;
+    priceInp.dataset.basePrice = baseP;
+    priceInp.dataset.gstAmount = gstAmt;
+    priceInp.value = totalPrice;
+    setTimeout(updatePriceForGST, 50);
+  }
   document.getElementById('f-device-qty').value=t.device_qty;
   document.getElementById('f-device-details').value=t.device_details||'';
   document.getElementById('f-price').value=t.price_to_collect;
@@ -2145,6 +2161,7 @@ async function submitTask(){
     device_qty:document.getElementById('f-device-qty').value||1,
     device_details:document.getElementById('f-device-details').value.trim(),
     price_to_collect:document.getElementById('f-price').value||0,
+    gst_amount:parseFloat(document.getElementById('f-price')?.dataset?.gstAmount||0),
     payment_mode:document.getElementById('f-paymode').value,
     assigned_to:document.getElementById('f-tech').value,
     task_status: osCheck.needsApproval ? 'Pending Outstation Approval' : document.getElementById('f-status').value,
@@ -3070,19 +3087,51 @@ function setJobPrice(val){
     'Troubleshoot/Offline':0,'Vehicle to Vehicle Change':1700,
     'Re-Adding':1700,'Only Remove':500,'Demonstration':0
   };
-  const lbl=document.getElementById('price-default-label');
   const inp=document.getElementById('f-price');
   if(!inp) return;
   if(prices[val]!==undefined){
-    inp.value=prices[val];
-    if(lbl){
-      if(prices[val]===0){lbl.textContent='(Free Service)';lbl.style.color='var(--green)';}
-      else{lbl.textContent='(Default: ₹'+prices[val].toLocaleString('en-IN')+')';lbl.style.color='var(--text3)';}
-    }
-  } else {
-    if(lbl){lbl.textContent='';}
+    // Store base price as data attribute
+    inp.dataset.basePrice = prices[val];
+    inp.value = prices[val];
   }
-  // Recalculate outstation margin if outstation is ticked
+  updatePriceForGST();
+  if(document.getElementById('f-outstation')?.checked) calcOutstationMargin();
+}
+
+function updatePriceForGST(){
+  const profile = document.getElementById('f-profile')?.value||'BGPT';
+  const inp = document.getElementById('f-price');
+  const breakdown = document.getElementById('gst-breakdown');
+  const lbl = document.getElementById('price-default-label');
+  if(!inp) return;
+
+  // Get base price
+  const basePrice = parseFloat(inp.dataset.basePrice||inp.value||0);
+  if(!basePrice){ if(breakdown) breakdown.style.display='none'; return; }
+
+  if(profile==='SBGT'){
+    const gst = +(basePrice * 0.18).toFixed(2);
+    const total = +(basePrice + gst).toFixed(2);
+    inp.value = total;
+    if(lbl) lbl.textContent = '(Base ₹'+basePrice.toLocaleString('en-IN')+' + GST 18%)';
+    if(breakdown){
+      breakdown.style.display='block';
+      breakdown.innerHTML =
+        '💰 Base Price: <strong>₹'+basePrice.toLocaleString('en-IN')+'</strong> &nbsp;+&nbsp; '
+        +'GST 18%: <strong>₹'+gst.toLocaleString('en-IN')+'</strong> &nbsp;=&nbsp; '
+        +'Total: <strong style="color:var(--accent)">₹'+total.toLocaleString('en-IN')+'</strong>';
+    }
+    // Store GST for saving
+    inp.dataset.gstAmount = gst;
+    inp.dataset.baseForSave = basePrice;
+  } else {
+    // BGPT — no GST, use base price
+    inp.value = basePrice;
+    if(lbl && basePrice>0) lbl.textContent = '(Default: ₹'+basePrice.toLocaleString('en-IN')+')';
+    if(breakdown) breakdown.style.display='none';
+    inp.dataset.gstAmount = 0;
+    inp.dataset.baseForSave = basePrice;
+  }
   if(document.getElementById('f-outstation')?.checked) calcOutstationMargin();
 }
 
@@ -3117,6 +3166,10 @@ function toggleTravelPaidBy(){
 
 function calcOutstationMargin(){
   const box = document.getElementById('outstation-margin-box'); if(!box) return;
+  // Only show margin details to admin, never to assigner
+  const isStrictAdmin = currentUser?.role === 'admin';
+  if(isStrictAdmin) box.style.display = 'block';
+  else { box.style.display = 'none'; return; }
   const qty = parseInt(document.getElementById('f-device-qty')?.value||1);
   const price = parseFloat(document.getElementById('f-price')?.value||0);
   const device = document.getElementById('f-device-details')?.value||'';
