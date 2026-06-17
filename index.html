@@ -8,15 +8,12 @@
 // Run immediately — hide login if token exists to prevent flash
 (function(){
   if(localStorage.getItem('bgps_token')){
-    document.addEventListener('DOMContentLoaded',function(){
-      var ls=document.getElementById('login-screen');
-      var app=document.getElementById('app');
-      if(ls)ls.style.display='none';
-      if(app){app.classList.add('show');}
-    });
+    // Inject style immediately before DOM renders - prevents flash
+    document.write('<style>#login-screen{display:none!important}#app{display:flex!important}</style>');
   }
 })();
 </script>
+<style id="flash-fix"></style>
 
 <style>
 :root {
@@ -141,6 +138,9 @@ html,body{height:100%;font-family:'Calibri','Segoe UI',sans-serif;background:var
 .flash-warning{animation:flashWarning 1.5s ease-in-out infinite;}
 @keyframes flashEnquiry{0%,100%{background:rgba(26,122,58,.08);}50%{background:rgba(26,122,58,.22);}}
 .row-enquiry{animation:flashEnquiry 1.8s ease-in-out infinite;}
+.row-outstation td{background:#fff8f0!important;}
+.badge-outstation{background:#fff3e0;color:#e07b00;border:1px solid rgba(224,123,0,.4);font-weight:800;}
+.task-card.card-outstation{border-color:#e07b00;border-width:2px;background:#fffbf5;}
 .bs-tab{padding:10px 18px;background:none;border:none;font-family:inherit;font-size:13px;font-weight:700;color:var(--text3);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
 .bs-tab.active{color:var(--accent);border-bottom-color:var(--accent);background:var(--surface)}
 .bs-tab:hover{color:var(--accent2);background:var(--surface2)}
@@ -1335,8 +1335,9 @@ function renderTable(){
       const isCritical=age>=48; const isUrgent=age>=24&&age<48;
       const manualUrgent=!!t.is_urgent;
       const isSelfEnquiry = (t.general_notes||'').includes('📅 Preferred Visit') && t.task_status==='Open' && !t.assigned_to;
-      const rowClass=isCritical?'row-critical':(isUrgent||manualUrgent)?'row-urgent':isSelfEnquiry?'row-enquiry':'';
-      const ageBadge=isCritical?`<span class="badge badge-critical">🚨 ${age}h</span>`:(isUrgent||manualUrgent)?`<span class="badge badge-urgent">${manualUrgent?'🚨 Urgent':('⚠️ '+age+'h')}</span>`:isSelfEnquiry?`<span class="badge badge-enquiry">🌐 Self Booking</span>`:age>0?`<span style="font-size:11px;color:var(--text3)">${age}h</span>`:'–';
+      const isOutstation = !!t.is_outstation;
+      const rowClass=isCritical?'row-critical':(isUrgent||manualUrgent)?'row-urgent':isSelfEnquiry?'row-enquiry':isOutstation?'row-outstation':'';
+      const ageBadge=isCritical?`<span class="badge badge-critical">🚨 ${age}h</span>`:(isUrgent||manualUrgent)?`<span class="badge badge-urgent">${manualUrgent?'🚨 Urgent':('⚠️ '+age+'h')}</span>`:isSelfEnquiry?`<span class="badge badge-enquiry">🌐 Self Booking</span>`:isOutstation?`<span class="badge badge-outstation">📍 Outstation</span>`:age>0?`<span style="font-size:11px;color:var(--text3)">${age}h</span>`:'–';
       return `<tr class="${rowClass}" onclick="viewTask(${t.id})">
         <td style="color:var(--text3);font-size:11px">${start+i+1}</td>
         <td class="task-id-cell">${t.task_id}</td>
@@ -1627,14 +1628,16 @@ function renderCards(tasks){
     const age=openStatuses.includes(t.task_status)?getAgeHours(t.created_at):0;
     const isCritical=age>=48; const isUrgent=age>=24&&age<48;
     const isSelfEnq=(t.general_notes||'').includes('📅 Preferred Visit')&&t.task_status==='Open'&&!t.assigned_to;
+    const isOutstation = !!t.is_outstation;
     const clickAction = isTech
       ? `window.location.href='tech-task.php?id=${t.id}&token='+encodeURIComponent(authToken)`
       : `viewTask(${t.id})`;
-    return`<div class="task-card ${isCritical?'card-critical':isUrgent?'card-urgent':isSelfEnq?'card-enquiry':''}" onclick="${clickAction}">
+    return`<div class="task-card ${isCritical?'card-critical':isUrgent?'card-urgent':isSelfEnq?'card-enquiry':isOutstation?'card-outstation':''}" onclick="${clickAction}">
       <div class="task-card-header">
         <span class="task-id-cell">${t.task_id}</span>
         <div style="display:flex;gap:5px;align-items:center">
           ${isSelfEnq?`<span class="badge badge-enquiry">🌐 Self Booking</span>`:''}
+          ${isOutstation?`<span class="badge badge-outstation">📍 Outstation</span>`:''}
           ${isCritical?`<span class="badge badge-critical">🚨 ${age}h</span>`:isUrgent?`<span class="badge badge-urgent">⚠️ ${age}h</span>`:''}
           ${statusBadge(t.task_status)}
         </div>
