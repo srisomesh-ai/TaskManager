@@ -802,11 +802,20 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
             <input type="number" id="f-customer-travel-amount" placeholder="Amount customer agreed to pay" min="0">
           </div>
           <div class="field span-2" id="outstation-confirm-field" style="display:none">
-            <label style="color:var(--green);font-weight:800">✅ Confirmation Checklist</label>
-            <div style="background:var(--green-bg);border:1.5px solid rgba(26,122,58,.3);border-radius:var(--radius-sm);padding:10px;display:flex;flex-direction:column;gap:8px;margin-top:4px">
-              <label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--text)"><input type="checkbox" id="os-confirm1" style="margin-top:2px"> Customer confirmed vehicles will be available at time of visit</label>
-              <label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--text)"><input type="checkbox" id="os-confirm2" style="margin-top:2px"> Location and address confirmed with customer</label>
-              <label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--text)"><input type="checkbox" id="os-confirm3" style="margin-top:2px"> I understand this outstation trip is pre-approved</label>
+            <label style="color:var(--green);font-weight:800;margin-bottom:8px;display:block">✅ Confirmation Checklist</label>
+            <div style="background:var(--green-bg);border:1.5px solid rgba(26,122,58,.3);border-radius:var(--radius-sm);padding:12px 16px;display:flex;flex-direction:column;gap:12px">
+              <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin:0">
+                <input type="checkbox" id="os-confirm1" style="width:16px;height:16px;margin-top:1px;flex-shrink:0;accent-color:var(--green);cursor:pointer">
+                <span style="font-size:13px;font-weight:600;color:var(--text);line-height:1.4">Customer confirmed all vehicles will be available at the time of technician visit</span>
+              </label>
+              <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin:0">
+                <input type="checkbox" id="os-confirm2" style="width:16px;height:16px;margin-top:1px;flex-shrink:0;accent-color:var(--green);cursor:pointer">
+                <span style="font-size:13px;font-weight:600;color:var(--text);line-height:1.4">Location and full address confirmed with customer</span>
+              </label>
+              <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin:0">
+                <input type="checkbox" id="os-confirm3" style="width:16px;height:16px;margin-top:1px;flex-shrink:0;accent-color:var(--green);cursor:pointer">
+                <span style="font-size:13px;font-weight:600;color:var(--text);line-height:1.4">I confirm this outstation trip is approved and necessary</span>
+              </label>
             </div>
           </div>
         </div>
