@@ -97,6 +97,87 @@ function getDB() {
                 INDEX idx_profile (profile),
                 INDEX idx_type (type)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+            // ── INVOICING TABLES ──────────────────────────────────────────
+            "CREATE TABLE IF NOT EXISTS inv_items (
+                id VARCHAR(40) PRIMARY KEY,
+                name VARCHAR(200) NOT NULL,
+                hsn VARCHAR(50),
+                code VARCHAR(100),
+                unit VARCHAR(20) DEFAULT 'PCS',
+                category VARCHAR(100),
+                description TEXT,
+                mrp DECIMAL(12,2) DEFAULT 0,
+                sale_price DECIMAL(12,2) DEFAULT 0,
+                purchase_price DECIMAL(12,2) DEFAULT 0,
+                gst_rate DECIMAL(5,2) DEFAULT 18,
+                opening_stock INT DEFAULT 0,
+                stock_in INT DEFAULT 0,
+                stock_out INT DEFAULT 0,
+                low_stock_alert INT DEFAULT 5,
+                location VARCHAR(200),
+                is_service TINYINT(1) DEFAULT 0,
+                created_by INT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX idx_name (name),
+                INDEX idx_category (category)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+            "CREATE TABLE IF NOT EXISTS inv_parties (
+                id VARCHAR(40) PRIMARY KEY,
+                name VARCHAR(200) NOT NULL,
+                phone VARCHAR(30),
+                email VARCHAR(200),
+                gstin VARCHAR(20),
+                gst_type VARCHAR(50) DEFAULT 'Unregistered/Consumer',
+                billing_address TEXT,
+                state VARCHAR(100),
+                opening_balance DECIMAL(12,2) DEFAULT 0,
+                balance_type ENUM('receivable','payable') DEFAULT 'receivable',
+                created_by INT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX idx_name (name)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+            "CREATE TABLE IF NOT EXISTS inv_invoices (
+                id VARCHAR(40) PRIMARY KEY,
+                inv_no VARCHAR(50) NOT NULL,
+                inv_type ENUM('sale','estimate','proforma','purchase','payin','payout','saleorder','challan') DEFAULT 'sale',
+                date DATE NOT NULL,
+                due_date DATE,
+                party_id VARCHAR(40),
+                customer VARCHAR(200),
+                billing_name VARCHAR(200),
+                po_no VARCHAR(100),
+                state VARCHAR(100),
+                pay_mode VARCHAR(50),
+                cash_sale TINYINT(1) DEFAULT 0,
+                items_json LONGTEXT,
+                sub_total DECIMAL(12,2) DEFAULT 0,
+                discount_total DECIMAL(12,2) DEFAULT 0,
+                gst_total DECIMAL(12,2) DEFAULT 0,
+                grand_total DECIMAL(12,2) DEFAULT 0,
+                amount_received DECIMAL(12,2) DEFAULT 0,
+                terms TEXT,
+                notes TEXT,
+                status ENUM('draft','active','cancelled') DEFAULT 'active',
+                created_by INT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX idx_inv_no (inv_no),
+                INDEX idx_date (date),
+                INDEX idx_type (inv_type),
+                INDEX idx_customer (customer)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+            "CREATE TABLE IF NOT EXISTS inv_settings (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                setting_key VARCHAR(100) UNIQUE NOT NULL,
+                setting_value LONGTEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
         );
 
         foreach ($migrations as $sql) {
