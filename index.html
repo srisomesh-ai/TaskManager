@@ -910,44 +910,64 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
       <div class="page" id="page-invoicing" style="padding-bottom:40px">
         <div class="breadcrumb">Home / <span>Invoicing</span></div>
 
-        <!-- Two-row tab bar wrapper -->
-        <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius) var(--radius) 0 0;overflow:hidden">
-
-          <!-- Row 1: Documents -->
-          <div style="display:flex;align-items:center;border-bottom:1px solid var(--border)">
-            <div style="padding:6px 14px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#fff;background:var(--accent);white-space:nowrap;align-self:stretch;display:flex;align-items:center;min-width:90px;justify-content:center">📄 Docs</div>
-            <div style="display:flex;flex:1;overflow-x:auto">
-              <div id="inv-tab-sale"       onclick="showInvPage('sale')"       class="inv-tab-btn">💰 Sale Invoices</div>
-              <div id="inv-tab-estimate"   onclick="showInvPage('estimate')"   class="inv-tab-btn">📄 Estimates</div>
-              <div id="inv-tab-proforma"   onclick="showInvPage('proforma')"   class="inv-tab-btn">📋 Proforma</div>
-              <div id="inv-tab-challan"    onclick="showInvPage('challan')"    class="inv-tab-btn">🚚 Challan</div>
-              <div id="inv-tab-parties"    onclick="showInvPage('parties')"    class="inv-tab-btn">👥 Parties</div>
-              <div id="inv-tab-items"      onclick="showInvPage('items')"      class="inv-tab-btn">📦 Items</div>
-              <div id="inv-tab-settings"   onclick="showInvPage('settings')"   class="inv-tab-btn">⚙️ Settings</div>
-            </div>
+        <!-- Sub-page selector — 2 cards -->
+        <div id="inv-subpage-selector" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
+          <div onclick="showInvSubpage('documents')" style="background:var(--surface);border:2px solid var(--border);border-radius:var(--radius);padding:28px 24px;cursor:pointer;transition:all .18s;text-align:center" onmouseenter="this.style.borderColor='var(--accent)';this.style.boxShadow='var(--shadow-md)'" onmouseleave="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
+            <div style="font-size:36px;margin-bottom:12px">📄</div>
+            <div style="font-size:17px;font-weight:800;color:var(--accent);margin-bottom:6px">Documents</div>
+            <div style="font-size:13px;color:var(--text3);line-height:1.6">Sale Invoices · Estimates · Proforma<br>Challan · Parties · Items · Settings</div>
           </div>
-
-          <!-- Row 2: Finance & Reports -->
-          <div style="display:flex;align-items:center;border-bottom:2px solid var(--accent)">
-            <div style="padding:6px 14px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#fff;background:var(--accent2);white-space:nowrap;align-self:stretch;display:flex;align-items:center;min-width:90px;justify-content:center">💳 Finance</div>
-            <div style="display:flex;flex:1;overflow-x:auto">
-              <div id="inv-tab-payin"      onclick="showInvPage('payin')"      class="inv-tab-btn">💳 Payment-In</div>
-              <div id="inv-tab-saleorder"  onclick="showInvPage('saleorder')"  class="inv-tab-btn">📝 Sale Order</div>
-              <div id="inv-tab-purbills"   onclick="showInvPage('purbills')"   class="inv-tab-btn">🛒 Purchase</div>
-              <div id="inv-tab-banks"      onclick="showInvPage('banks')"      class="inv-tab-btn">🏦 Banks</div>
-              <div id="inv-tab-invreports" onclick="showInvPage('invreports')" class="inv-tab-btn">📊 Reports</div>
-            </div>
-          </div>
-
-        </div>
-
-        <!-- Content area -->
-        <div id="inv-content" style="background:var(--surface);border:1.5px solid var(--border);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:20px;min-height:420px;position:relative">
-          <div style="text-align:center;padding:56px;color:var(--text3)">
-            <div style="font-size:40px;margin-bottom:12px">🧾</div>
-            <div style="font-size:15px;font-weight:700;color:var(--text2)">Select a tab to get started</div>
+          <div onclick="showInvSubpage('finance')" style="background:var(--surface);border:2px solid var(--border);border-radius:var(--radius);padding:28px 24px;cursor:pointer;transition:all .18s;text-align:center" onmouseenter="this.style.borderColor='var(--accent2)';this.style.boxShadow='var(--shadow-md)'" onmouseleave="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
+            <div style="font-size:36px;margin-bottom:12px">💳</div>
+            <div style="font-size:17px;font-weight:800;color:var(--accent2);margin-bottom:6px">Finance & Reports</div>
+            <div style="font-size:13px;color:var(--text3);line-height:1.6">Payment-In · Sale Order · Purchase<br>Banks · Reports</div>
           </div>
         </div>
+
+        <!-- Documents sub-page -->
+        <div id="inv-subpage-documents" style="display:none">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+            <button onclick="showInvSubpage(null)" style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:7px 14px;font-size:13px;font-weight:700;color:var(--text2);cursor:pointer">← Back</button>
+            <div style="font-size:18px;font-weight:800;color:var(--accent)">📄 Documents</div>
+          </div>
+          <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius) var(--radius) 0 0;display:flex;flex-wrap:wrap;border-bottom:none">
+            <div id="inv-tab-sale"       onclick="showInvPage('sale')"       class="inv-tab-btn">💰 Sale Invoices</div>
+            <div id="inv-tab-estimate"   onclick="showInvPage('estimate')"   class="inv-tab-btn">📄 Estimates</div>
+            <div id="inv-tab-proforma"   onclick="showInvPage('proforma')"   class="inv-tab-btn">📋 Proforma</div>
+            <div id="inv-tab-challan"    onclick="showInvPage('challan')"    class="inv-tab-btn">🚚 Challan</div>
+            <div id="inv-tab-parties"    onclick="showInvPage('parties')"    class="inv-tab-btn">👥 Parties</div>
+            <div id="inv-tab-items"      onclick="showInvPage('items')"      class="inv-tab-btn">📦 Items</div>
+            <div id="inv-tab-settings"   onclick="showInvPage('settings')"   class="inv-tab-btn">⚙️ Settings</div>
+          </div>
+          <div id="inv-content" style="background:var(--surface);border:1.5px solid var(--border);border-top:2px solid var(--accent);border-radius:0 0 var(--radius) var(--radius);padding:20px;min-height:420px;position:relative">
+            <div style="text-align:center;padding:56px;color:var(--text3)">
+              <div style="font-size:36px;margin-bottom:10px">📄</div>
+              <div style="font-size:15px;font-weight:700;color:var(--text2)">Select a tab above</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Finance sub-page -->
+        <div id="inv-subpage-finance" style="display:none">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+            <button onclick="showInvSubpage(null)" style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:7px 14px;font-size:13px;font-weight:700;color:var(--text2);cursor:pointer">← Back</button>
+            <div style="font-size:18px;font-weight:800;color:var(--accent2)">💳 Finance & Reports</div>
+          </div>
+          <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius) var(--radius) 0 0;display:flex;flex-wrap:wrap;border-bottom:none">
+            <div id="inv-tab-payin"      onclick="showInvPage('payin')"      class="inv-tab-btn">💳 Payment-In</div>
+            <div id="inv-tab-saleorder"  onclick="showInvPage('saleorder')"  class="inv-tab-btn">📝 Sale Order</div>
+            <div id="inv-tab-purbills"   onclick="showInvPage('purbills')"   class="inv-tab-btn">🛒 Purchase</div>
+            <div id="inv-tab-banks"      onclick="showInvPage('banks')"      class="inv-tab-btn">🏦 Banks</div>
+            <div id="inv-tab-invreports" onclick="showInvPage('invreports')" class="inv-tab-btn">📊 Reports</div>
+          </div>
+          <div id="inv-content-finance" style="background:var(--surface);border:1.5px solid var(--border);border-top:2px solid var(--accent2);border-radius:0 0 var(--radius) var(--radius);padding:20px;min-height:420px;position:relative">
+            <div style="text-align:center;padding:56px;color:var(--text3)">
+              <div style="font-size:36px;margin-bottom:10px">💳</div>
+              <div style="font-size:15px;font-weight:700;color:var(--text2)">Select a tab above</div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
 
@@ -4135,24 +4155,56 @@ function toggleInvoicingNav(){ showInvPage('sale'); }
 var currentInvPage='sale';
 var INV_PAGES=['sale','estimate','proforma','payin','saleorder','challan','purbills','parties','items','banks','invreports','settings'];
 
+// Which subpage is open: 'documents' | 'finance' | null
+var currentInvSubpage = null;
+
+function showInvSubpage(sub){
+  currentInvSubpage = sub;
+  var selector = document.getElementById('inv-subpage-selector');
+  var docPage  = document.getElementById('inv-subpage-documents');
+  var finPage  = document.getElementById('inv-subpage-finance');
+  if(!selector || !docPage || !finPage) return;
+  if(!sub){
+    selector.style.display = 'grid';
+    docPage.style.display  = 'none';
+    finPage.style.display  = 'none';
+  } else if(sub === 'documents'){
+    selector.style.display = 'none';
+    docPage.style.display  = 'block';
+    finPage.style.display  = 'none';
+  } else if(sub === 'finance'){
+    selector.style.display = 'none';
+    docPage.style.display  = 'none';
+    finPage.style.display  = 'block';
+  }
+}
+
+var FINANCE_TABS = ['payin','saleorder','purbills','banks','invreports'];
+
 function showInvPage(name){
-  // Show invoicing page directly
+  // Navigate to invoicing page
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
   var pg=document.getElementById('page-invoicing');
   if(pg) pg.classList.add('active');
   localStorage.setItem('bgps_last_page','invoicing');
   currentInvPage=name;
-  // Highlight single sidebar item
   document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active');});
   var head=document.getElementById('nav-invoicing-head');
   if(head) head.classList.add('active');
-  // Update tab active class only
+
+  // Open correct subpage based on tab group
+  var isFinance = FINANCE_TABS.includes(name);
+  showInvSubpage(isFinance ? 'finance' : 'documents');
+
+  // Highlight active tab
   INV_PAGES.forEach(function(p){
     var tab=document.getElementById('inv-tab-'+p);
     if(tab) tab.classList.toggle('active',p===name);
   });
-  // Render content with fade — prevents flicker from layout thrash
-  var el=document.getElementById('inv-content');
+
+  // Render into the right content div
+  var elId = isFinance ? 'inv-content-finance' : 'inv-content';
+  var el = document.getElementById(elId);
   if(!el) return;
   el.style.opacity='0';
   el.style.transition='opacity .1s ease';
@@ -4165,9 +4217,7 @@ function showInvPage(name){
   };
   var fn = R[name];
   if(fn){
-    Promise.resolve(fn(el)).then(function(){
-      el.style.opacity='1';
-    });
+    Promise.resolve(fn(el)).then(function(){ el.style.opacity='1'; });
   } else {
     el.style.opacity='1';
   }
