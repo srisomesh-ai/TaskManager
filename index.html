@@ -2182,6 +2182,8 @@ async function invManualGenerate(taskId){
   if(!confirm2) return;
   await invAutoGenerate(task, isSBGT);
 }
+
+async function adminUpdatePendingPayment(taskId, totalPrice){
   const amount = parseFloat(document.getElementById('pay-amount')?.value||0);
   const mode   = document.getElementById('pay-mode')?.value||'Cash';
   const ref    = document.getElementById('pay-ref')?.value||'';
