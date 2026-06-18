@@ -98,8 +98,9 @@ html,body{height:100%;font-family:'Calibri','Segoe UI',sans-serif;background:var
 
 /* CONTENT */
 .content{flex:1;overflow-y:auto;background:var(--bg);}
-.page{display:none;padding:20px;}
-.page.active{display:block;}
+.page{display:none;padding:20px;animation:none;}
+.page.active{display:block;animation:pgIn .12s ease;}
+@keyframes pgIn{from{opacity:.6;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 .breadcrumb{font-size:12px;color:var(--text3);margin-bottom:14px;}
 .breadcrumb span{color:var(--accent2);font-weight:600;}
 .page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;}
@@ -588,7 +589,7 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
           <div id="inv-tab-settings" onclick="showInvPage('settings')" class="inv-tab-btn">⚙️ Settings</div>
         </div>
         <!-- Content -->
-        <div id="inv-content" style="background:var(--surface);border:1.5px solid var(--border);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:16px;min-height:300px">
+        <div id="inv-content" style="background:var(--surface);border:1.5px solid var(--border);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:16px;min-height:420px;position:relative">
           <div style="text-align:center;padding:40px;color:var(--text3)"><div style="font-size:36px;margin-bottom:10px">🧾</div><div style="font-size:14px;font-weight:700">Click a tab above to open</div></div>
         </div>
       </div>
@@ -1883,8 +1884,9 @@ async function viewTask(dbId){
         +'</div>';
     }
     if(isStrictAdmin && (isClosed||isCancelled)){
-      adminActionHtml += '<div style="padding-top:12px;border-top:1.5px solid var(--border)">'
+      adminActionHtml += '<div style="padding-top:12px;border-top:1.5px solid var(--border);display:flex;gap:8px;flex-wrap:wrap">'
         +'<button class="btn btn-secondary btn-sm" onclick="adminForceStatus('+t.id+',\'Open\',\'Task re-opened by admin.\')">🔄 Re-Open Task</button>'
+        +(isClosed ? '<button class="btn btn-secondary btn-sm" style="background:var(--accent-light);color:var(--accent2);border-color:var(--accent2)" onclick="invManualGenerate('+t.id+')">🧾 Generate Invoice</button>' : '')
         +'</div>';
     }
 
@@ -2027,15 +2029,159 @@ async function adminForceStatus(taskId, status, autoRemark){
 async function adminApproveTask(taskId){
   if(!confirm('Approve and close this task? This action cannot be undone.')) return;
   const res = await api('approve_task',{},'POST',{id:taskId});
-  if(res.success){
-    showAlert('Task approved and closed! ✅','success');
-    closeById('detail-modal');
-    if(allTasks.length) loadTasks();
-    if(document.getElementById('stat-total')) loadDashboard();
-  } else showAlert(res.error||'Error','error');
+  if(!res.success){ showAlert(res.error||'Error','error'); return; }
+
+  showAlert('Task approved and closed! ✅','success');
+  closeById('detail-modal');
+  if(allTasks.length) loadTasks();
+  if(document.getElementById('stat-total')) loadDashboard();
+
+  // Auto-generate invoice for SBGT tasks (required for GST records)
+  // For BGPT tasks: ask the user
+  const task = allTasks.find(t=>t.id===taskId) || (await api('get_task',{id:taskId})).task;
+  if(!task) return;
+
+  const profile = task.profile || 'BGPT';
+  const isSBGT  = profile === 'SBGT';
+
+  if(isSBGT){
+    // SBGT — always auto-generate (GST registered, must have invoice record)
+    await invAutoGenerate(task, true);
+  } else {
+    // BGPT — ask if customer needs invoice
+    const want = confirm(
+      'Task closed ✅\n\n' +
+      'Does customer "' + task.customer_name + '" need a Sale Invoice?\n\n' +
+      '• OK = Generate invoice now\n' +
+      '• Cancel = Skip (can generate later from Invoice tab)'
+    );
+    if(want) await invAutoGenerate(task, false);
+  }
 }
 
-async function adminUpdatePendingPayment(taskId, totalPrice){
+async function invAutoGenerate(task, isSBGT){
+  try {
+    // Build invoice data from task
+    const totalPrice   = parseFloat(task.price_to_collect||0);
+    const gstAmount    = isSBGT ? parseFloat(task.gst_amount||+(totalPrice*18/118).toFixed(2)) : 0;
+    const basePrice    = isSBGT ? (totalPrice - gstAmount) : totalPrice;
+    const qty          = parseFloat(task.device_qty||1);
+    const unitPrice    = qty>0 ? +(basePrice/qty).toFixed(2) : basePrice;
+    const payReceived  = parseFloat(task.amount_collected||0);
+
+    // Get next invoice number
+    const invNo = await invGetNextNo();
+
+    // Build items from task
+    const items = [{
+      name:     (task.device_details||'GPS Installation') + (task.name_on_server?' ('+task.name_on_server+')':''),
+      qty:      qty,
+      unit:     'NOS',
+      price:    unitPrice,
+      disc:     0,
+      gst:      isSBGT ? 18 : 0,
+      discAmt:  0,
+      taxAmt:   gstAmount,
+      total:    isSBGT ? +(basePrice + gstAmount).toFixed(2) : totalPrice
+    }];
+
+    // Add subscription if any
+    if(task.subscription_amount && parseFloat(task.subscription_amount)>0){
+      items.push({
+        name:'GPS Subscription / SIM Charges',
+        qty:1, unit:'SVC',
+        price:parseFloat(task.subscription_amount),
+        disc:0, gst:isSBGT?18:0,
+        discAmt:0,
+        taxAmt:isSBGT?+(parseFloat(task.subscription_amount)*18/100).toFixed(2):0,
+        total:parseFloat(task.subscription_amount)
+      });
+    }
+
+    const state = task.state||'Andhra Pradesh';
+    const companyState = 'Andhra Pradesh';
+    const sameState = state.toLowerCase()===companyState.toLowerCase();
+
+    const invoiceData = {
+      id:               'INV-TASK-'+task.id+'-'+Date.now(),
+      inv_no:           invNo,
+      inv_type:         'sale',
+      date:             new Date().toISOString().split('T')[0],
+      customer:         task.customer_name||'',
+      billing_name:     task.customer_name||'',
+      po_no:            task.task_id||'',
+      gstin:            task.customer_gstin||'',
+      gst_type:         isSBGT ? 'Registered Regular' : 'Unregistered/Consumer',
+      state:            state,
+      billing_address:  task.location||'',
+      pay_mode:         task.payment_mode||'Cash',
+      cash_sale:        payReceived >= totalPrice,
+      gst_split:        isSBGT ? (sameState ? 'CGST_SGST' : 'IGST') : 'GST',
+      cgst:             (isSBGT && sameState) ? +(gstAmount/2).toFixed(2) : 0,
+      sgst:             (isSBGT && sameState) ? +(gstAmount/2).toFixed(2) : 0,
+      igst:             (isSBGT && !sameState) ? gstAmount : 0,
+      items,
+      sub_total:        basePrice,
+      discount_total:   0,
+      gst_total:        gstAmount,
+      grand_total:      totalPrice,
+      amount_received:  payReceived,
+      terms:            '1. Payments terms: 100% payments against delivery/installation.\n2. Warranty as per Bharat GPS Warranty Policy.\n3. All disputes subject to Visakhapatnam jurisdiction.',
+      notes:            'Task ID: '+(task.task_id||task.id)+' | Profile: '+( task.profile||'BGPT' ),
+      task_id_ref:      task.id,
+      created_at:       new Date().toISOString()
+    };
+
+    const saveRes = await api('inv_save_invoice',{},'POST', invoiceData);
+
+    if(saveRes && saveRes.success){
+      const label = isSBGT ? '🧾 SBGT Invoice auto-generated: ' : '🧾 Invoice created: ';
+      showAlert(label + invNo + '\nView in Invoicing → Sale Invoices', 'success');
+
+      // Offer to print immediately
+      setTimeout(function(){
+        if(confirm('Invoice '+invNo+' saved.\nPrint / view now?')){
+          showInvPage('sale');
+        }
+      }, 500);
+    } else {
+      showAlert('Task closed ✅ but invoice save failed: '+(saveRes?.error||'unknown'), 'error');
+    }
+  } catch(e){
+    console.error('Auto invoice error:', e);
+    showAlert('Task closed ✅ — invoice generation failed ('+e.message+')', 'error');
+  }
+}
+
+async function invManualGenerate(taskId){
+  // Find task
+  const task = allTasks.find(t=>t.id===taskId) || (await api('get_task',{id:taskId})).task;
+  if(!task){ showAlert('Task not found','error'); return; }
+  const profile = task.profile||'BGPT';
+  const isSBGT  = profile==='SBGT';
+
+  // Check if invoice already exists for this task
+  const existing = await api('inv_get_invoices',{type:'sale'});
+  if(existing.success){
+    const found = (existing.invoices||[]).find(function(inv){
+      return inv.task_id_ref==taskId || inv.notes?.includes('Task ID: '+(task.task_id||taskId));
+    });
+    if(found){
+      const view = confirm('An invoice ('+found.inv_no+') already exists for this task.\n\nOK = View/print it\nCancel = Generate a new one');
+      if(view){ closeById('detail-modal'); showInvPage('sale'); return; }
+    }
+  }
+
+  const confirm2 = confirm(
+    'Generate invoice for task '+task.task_id+'?\n\n'+
+    'Customer: '+task.customer_name+'\n'+
+    'Amount: ₹'+parseFloat(task.price_to_collect||0).toLocaleString('en-IN')+'\n'+
+    'Profile: '+profile+(isSBGT?' (GST invoice with 18%)':' (non-GST)')+'\n\n'+
+    'OK = Generate now'
+  );
+  if(!confirm2) return;
+  await invAutoGenerate(task, isSBGT);
+}
   const amount = parseFloat(document.getElementById('pay-amount')?.value||0);
   const mode   = document.getElementById('pay-mode')?.value||'Cash';
   const ref    = document.getElementById('pay-ref')?.value||'';
@@ -3495,9 +3641,11 @@ function showInvPage(name){
     var tab=document.getElementById('inv-tab-'+p);
     if(tab) tab.classList.toggle('active',p===name);
   });
-  // Render content
+  // Render content with fade — prevents flicker from layout thrash
   var el=document.getElementById('inv-content');
   if(!el) return;
+  el.style.opacity='0';
+  el.style.transition='opacity .1s ease';
   var R={
     sale:renderInvSale,estimate:renderInvEstimate,proforma:renderInvProforma,
     payin:renderInvPayin,saleorder:renderInvStub('Sale Order','📝'),
@@ -3505,7 +3653,14 @@ function showInvPage(name){
     parties:renderInvParties,items:renderInvItems,banks:renderInvBanks,
     invreports:renderInvReports,settings:renderInvSettings
   };
-  if(R[name]) R[name](el);
+  var fn = R[name];
+  if(fn){
+    Promise.resolve(fn(el)).then(function(){
+      el.style.opacity='1';
+    });
+  } else {
+    el.style.opacity='1';
+  }
 }
 
 
@@ -3601,7 +3756,9 @@ async function renderInvSale(el){
           : 'background:var(--red-bg);color:var(--red)';
       html += '<tr>'
         +'<td style="font-size:12px">'+invFmtDate(inv.date)+'</td>'
-        +'<td><span style="color:var(--blue);font-weight:700;font-size:12px;cursor:pointer" onclick="invView(\''+inv.id+'\')">'+inv.inv_no+'</span></td>'
+        +'<td><span style="color:var(--blue);font-weight:700;font-size:12px;cursor:pointer" onclick="invView(\''+inv.id+'\')">'+inv.inv_no+'</span>'
+        +(inv.task_id_ref ? '<span style="background:var(--accent-light);color:var(--accent2);font-size:9px;font-weight:800;padding:1px 5px;border-radius:8px;margin-left:4px">🔗 TASK</span>' : '')
+        +'</td>'
         +'<td style="font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+inv.customer+'</td>'
         +'<td style="font-size:12px;color:var(--text3)">'+( inv.cash_sale ? 'Cash' : (inv.pay_mode||'Credit') )+'</td>'
         +'<td style="text-align:right;font-weight:700">'+invFmt(inv.grand_total)+'</td>'
