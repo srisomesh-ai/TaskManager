@@ -405,14 +405,15 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
       <div class="nav-section strict-admin-only">Accounts</div>
       <div class="nav-item strict-admin-only" onclick="showPage('accounts')" id="nav-accounts"><span class="nav-icon">📊</span> P&amp;L Overview</div>
 
-      <!-- INVOICING — single nav item, no sub-items, tabs handle navigation -->
-      <div class="strict-admin-only" id="nav-exp-invoicing" style="display:none">
+      <!-- INVOICING — admin + assigner -->
+      <div class="admin-only" id="nav-exp-invoicing" style="display:none">
         <div class="nav-item" id="nav-invoicing-head" onclick="showInvPage('sale')" style="display:flex;align-items:center;justify-content:space-between;padding-right:12px">
           <span><span class="nav-icon">🧾</span> Invoicing</span>
         </div>
       </div>
-      <div class="nav-section admin-only">Administration</div>
-      <div class="nav-item admin-only" onclick="showPage('admin')" id="nav-admin"><span class="nav-icon">⚙️</span> Admin Panel</div>
+
+      <div class="nav-section strict-admin-only">Administration</div>
+      <div class="nav-item strict-admin-only" onclick="showPage('admin')" id="nav-admin"><span class="nav-icon">⚙️</span> Admin Panel</div>
     </div>
 
     <div class="content">
@@ -1184,13 +1185,10 @@ async function initApp(){
   document.getElementById('topbar-avatar').textContent=currentUser.name[0].toUpperCase();
   const isAdmin=['admin','assigner'].includes(currentUser.role);
   const isStrictAdmin = currentUser.role === 'admin';
-  // admin-only = admin + assigner (tasks, reports)
+  // admin-only = admin + assigner
   document.querySelectorAll('.admin-only').forEach(el=>el.style.display=isAdmin?'':'none');
-  // strict-admin-only = admin only (accounts, invoicing)
+  // strict-admin-only = admin only
   document.querySelectorAll('.strict-admin-only').forEach(el=>el.style.display=isStrictAdmin?'':'none');
-  // Show invoicing nav for admin
-  const invNav = document.getElementById('nav-exp-invoicing');
-  if(invNav) invNav.style.display = isStrictAdmin ? '' : 'none';
   const tRes=await api('get_users',{role:'technician'}); technicians=tRes.users||[];
   if(isAdmin) loadUrgentCount();
   startAutoRefresh(); // ← start polling
@@ -3514,27 +3512,49 @@ function showInvPage(name){
 // ═══════════════════════════════════════════════════
 // SALE INVOICES — localStorage persistence + full CRUD
 // ═══════════════════════════════════════════════════
-var INV_STORE_KEY = 'bgps_sale_invoices';
-var INV_COUNTER_KEY = 'bgps_inv_counter';
-var invEditingId = null;
-var invRowCount = 0;
+// ── INVOICING DATA LAYER — real-time MySQL via API ──────────────
+// localStorage used only as session cache; DB is source of truth
 
-function invGetAll(){ try{ return JSON.parse(localStorage.getItem(INV_STORE_KEY)||'[]'); }catch(e){ return []; } }
-function invSaveAll(arr){ localStorage.setItem(INV_STORE_KEY, JSON.stringify(arr)); }
-function invNextNo(){
+var INV_STORE_KEY   = 'bgps_inv_cache';   // session cache only
+var INV_COUNTER_KEY = 'bgps_inv_counter'; // fallback only
+
+// Invoice CRUD
+async function invGetAll(){
+  try{
+    var res = await api('inv_get_invoices',{type:'sale'});
+    if(res.success) return res.invoices||[];
+  }catch(e){}
+  return [];
+}
+async function invSaveOne(data){
+  return await api('inv_save_invoice',{},'POST',Object.assign({},data,{inv_type:'sale'}));
+}
+async function invDeleteOne(id){
+  return await api('inv_delete_invoice',{},'POST',{id});
+}
+async function invGetNextNo(){
+  try{
+    var res = await api('inv_increment_counter',{},'POST',{});
+    if(res.success) return 'FY26-27/'+res.counter;
+  }catch(e){}
+  // fallback
   var n = parseInt(localStorage.getItem(INV_COUNTER_KEY)||'116') + 1;
   localStorage.setItem(INV_COUNTER_KEY, n);
-  return 'FY26-27/' + n;
+  return 'FY26-27/'+n;
 }
 function invFmt(n){ return '₹' + parseFloat(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function invToday(){ return new Date().toISOString().split('T')[0]; }
-function invFmtDate(d){ if(!d) return '–'; var p=d.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
+function invFmtDate(d){ if(!d) return '–'; var p=d.split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d; }
 
-function renderInvSale(el){
-  var invoices = invGetAll();
-  var total = invoices.reduce(function(s,i){ return s + parseFloat(i.grand_total||0); }, 0);
-  var received = invoices.reduce(function(s,i){ return s + parseFloat(i.amount_received||0); }, 0);
-  var balance = total - received;
+var invEditingId = null;
+var invRowCount  = 0;
+
+async function renderInvSale(el){
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3)"><div style="font-size:28px;margin-bottom:8px">⏳</div>Loading invoices...</div>';
+  var invoices = await invGetAll();
+  var total    = invoices.reduce(function(s,i){ return s+parseFloat(i.grand_total||0); },0);
+  var received = invoices.reduce(function(s,i){ return s+parseFloat(i.amount_received||0); },0);
+  var balance  = total - received;
 
   var html = '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
@@ -3606,11 +3626,11 @@ function invFilterRender(val, type){
   renderInvSale(document.getElementById('inv-content'));
 }
 
-function invOpenNew(){
+async function invOpenNew(){
   invEditingId = null;
-  invRowCount = 0;
+  invRowCount  = 0;
   document.getElementById('inv-sale-modal-title').textContent = 'New Sale Invoice';
-  document.getElementById('inv-inv-no').value = invNextNo();
+  document.getElementById('inv-inv-no').value = await invGetNextNo();
   document.getElementById('inv-inv-date').value = invToday();
   document.getElementById('inv-due-date').value = '';
   document.getElementById('inv-customer').value = '';
@@ -3678,18 +3698,19 @@ function invTogglePayMode(){
   invCalcTotals();
 }
 
-function invAddRow(){
+async function invAddRow(){
   invRowCount++;
   var n = invRowCount;
   var tbody = document.getElementById('inv-items-body');
   if(!tbody) return;
-  var itemsList = (typeof invGetItemsForDropdown==='function') ? invGetItemsForDropdown() : [];
+  var itemsList = await invGetItemsForDropdown();
+  var unitList  = await unitsGetAll();
   var dlId = 'inv-items-dl-'+n;
   var dl = '<datalist id="'+dlId+'">'+itemsList.map(function(i){ return '<option value="'+i.name+'">'; }).join('')+'</datalist>';
+  var unitOpts = unitList.map(function(u){ return '<option>'+u+'</option>'; }).join('');
   var tr = document.createElement('tr');
   tr.id = 'inv-row-'+n;
   tr.style.borderBottom = '1px solid var(--border2)';
-  var unitOpts = (typeof unitsGetAll==='function') ? unitsGetAll().map(function(u){ return '<option>'+u+'</option>'; }).join('') : '<option>PCS</option><option>NOS</option><option>SVC</option>';
   tr.innerHTML = dl
     +'<td style="padding:6px 8px;font-size:12px;color:var(--text3)">'+n+'</td>'
     +'<td style="padding:6px 8px"><input type="text" list="'+dlId+'" placeholder="Item / Service name" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none;min-width:160px" id="inv-item-name-'+n+'" oninput="invItemSelected('+n+')"></td>'
@@ -3698,17 +3719,18 @@ function invAddRow(){
     +'<td style="padding:6px 8px"><input type="number" value="0" min="0" style="width:90px;padding:6px 8px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none;text-align:right" id="inv-item-price-'+n+'" oninput="invCalcRow('+n+')"></td>'
     +'<td style="padding:6px 8px"><input type="number" value="0" min="0" max="100" style="width:60px;padding:6px 8px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none;text-align:right" id="inv-item-disc-'+n+'" oninput="invCalcRow('+n+')"></td>'
     +'<td style="padding:6px 8px"><select style="width:72px;padding:6px 4px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none" id="inv-item-gst-'+n+'" onchange="invCalcRow('+n+')">'
-    +'<option value="0">None</option><option value="5">5%</option><option value="12">12%</option><option value="18">18%</option><option value="28">28%</option>'
+    +'<option value="0">None</option><option value="5">5%</option><option value="12">12%</option><option value="18" selected>18%</option><option value="28">28%</option>'
     +'</select></td>'
     +'<td style="padding:6px 8px;text-align:right;font-weight:700;font-size:13px" id="inv-item-amt-'+n+'">₹0.00</td>'
     +'<td style="padding:6px 4px;text-align:center"><button style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:0 4px;line-height:1" onclick="invRemoveRow('+n+')">✕</button></td>';
   tbody.appendChild(tr);
 }
 
-function invItemSelected(n){
+
+async function invItemSelected(n){
   var nameEl = document.getElementById('inv-item-name-'+n);
   if(!nameEl) return;
-  var items = (typeof invGetItemsForDropdown==='function') ? invGetItemsForDropdown() : [];
+  var items = await invGetItemsForDropdown();
   var found = items.find(function(i){ return i.name===nameEl.value; });
   if(found){
     var p=document.getElementById('inv-item-price-'+n); if(p) p.value=found.sale_price||0;
@@ -3817,91 +3839,82 @@ function invCollectData(){
   };
 }
 
-function invSaveSale(){
+async function invSaveSale(){
   var data = invCollectData();
   if(!data.customer){ showAlert('Please select a customer','error'); return; }
   if(!data.items.length){ showAlert('Please add at least one item','error'); return; }
-  var all = invGetAll();
-  if(invEditingId){
-    var idx = all.findIndex(function(i){ return i.id===invEditingId; });
-    if(idx>=0) all[idx]=data; else all.push(data);
-  } else {
-    all.push(data);
-  }
-  invSaveAll(all);
+  var btn = document.querySelector('#inv-sale-modal .modal-footer .btn-primary');
+  if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  var res = await invSaveOne(data);
+  if(btn){ btn.disabled=false; btn.textContent='💾 Save Invoice'; }
+  if(!res||!res.success){ showAlert(res?.error||'Save failed — check connection','error'); return; }
   closeById('inv-sale-modal');
   invEditingId = null;
   renderInvSale(document.getElementById('inv-content'));
-  showAlert('✅ Invoice '+data.inv_no+' saved!','success');
+  showAlert('✅ Invoice '+data.inv_no+' saved to database!','success');
 }
 
-function invSaveAndPrint(){
-  invSaveSale();
-  var all = invGetAll();
-  var last = all[all.length-1];
-  if(last) invPrintInvoice(last.id);
+async function invSaveAndPrint(){
+  var data = invCollectData();
+  if(!data.customer||!data.items.length){ await invSaveSale(); return; }
+  var res = await invSaveOne(data);
+  if(!res||!res.success){ showAlert(res&&res.error?res.error:'Save failed','error'); return; }
+  closeById('inv-sale-modal');
+  renderInvSale(document.getElementById('inv-content'));
+  showAlert('Invoice saved!','success');
+  invPrintInvoice(data.id);
 }
 
-function invView(id){
-  var inv = invGetAll().find(function(i){ return i.id===id; });
+async function invView(id){
+  var invoices = await invGetAll();
+  var inv = invoices.find(function(i){ return i.id===id; });
   if(!inv) return;
   window._viewingInvId = id;
-  document.getElementById('inv-view-subtitle').textContent = inv.inv_no + ' · ' + inv.customer;
-  var bal = parseFloat(inv.grand_total||0) - parseFloat(inv.amount_received||0);
-  var isPaid = bal <= 0;
+  document.getElementById('inv-view-subtitle').textContent = inv.inv_no + ' - ' + inv.customer;
   document.getElementById('inv-view-body').innerHTML = invBuildPrintHTML(inv, false);
   document.getElementById('inv-view-modal').style.display = 'flex';
 }
 
-function invEditInvoice(id){
+async function invEditInvoice(id){
   closeById('inv-view-modal');
-  var inv = invGetAll().find(function(i){ return i.id===id; });
+  var invoices = await invGetAll();
+  var inv = invoices.find(function(i){ return i.id===id; });
   if(!inv) return;
   invEditingId = id;
-  invOpenNew();
-  setTimeout(function(){
-    document.getElementById('inv-sale-modal-title').textContent = 'Edit Invoice';
-    document.getElementById('inv-inv-no').value = inv.inv_no;
-    document.getElementById('inv-inv-date').value = inv.date;
-    document.getElementById('inv-due-date').value = inv.due_date||'';
-    document.getElementById('inv-billing-name').value = inv.billing_name||'';
-    document.getElementById('inv-po-no').value = inv.po_no||'';
-    document.getElementById('inv-state').value = inv.state||'';
-    document.getElementById('inv-pay-mode').value = inv.pay_mode||'Cash';
-    document.getElementById('inv-terms').value = inv.terms||'';
-    document.getElementById('inv-notes').value = inv.notes||'';
-    document.getElementById('inv-cash').checked = inv.cash_sale||false;
-    invTogglePayMode();
-    if(inv.cash_sale) document.getElementById('inv-cash-received').value = inv.amount_received||0;
-    // Set customer
-    var sel = document.getElementById('inv-customer');
-    var opt = document.createElement('option');
-    opt.value = inv.customer; opt.textContent = inv.customer;
-    sel.insertBefore(opt, sel.lastChild);
-    sel.value = inv.customer;
-    // Rebuild rows
-    document.getElementById('inv-items-body').innerHTML = '';
-    invRowCount = 0;
-    inv.items.forEach(function(item){
-      invAddRow();
-      var n = invRowCount;
-      document.getElementById('inv-item-name-'+n).value = item.name;
-      document.getElementById('inv-item-qty-'+n).value  = item.qty;
-      document.getElementById('inv-item-unit-'+n).value = item.unit;
-      document.getElementById('inv-item-price-'+n).value= item.price;
-      document.getElementById('inv-item-disc-'+n).value = item.disc;
-      document.getElementById('inv-item-gst-'+n).value  = item.gst;
-      invCalcRow(n);
-    });
-  }, 100);
+  await invOpenNew();
+  document.getElementById('inv-sale-modal-title').textContent = 'Edit Invoice';
+  document.getElementById('inv-inv-no').value = inv.inv_no;
+  document.getElementById('inv-inv-date').value = inv.date;
+  document.getElementById('inv-due-date').value = inv.due_date||'';
+  document.getElementById('inv-billing-name').value = inv.billing_name||'';
+  document.getElementById('inv-po-no').value = inv.po_no||'';
+  document.getElementById('inv-state').value = inv.state||'';
+  document.getElementById('inv-pay-mode').value = inv.pay_mode||'Cash';
+  document.getElementById('inv-terms').value = inv.terms||'';
+  document.getElementById('inv-notes').value = inv.notes||'';
+  document.getElementById('inv-cash').checked = inv.cash_sale ? true : false;
+  invTogglePayMode();
+  if(inv.cash_sale) document.getElementById('inv-cash-received').value = inv.amount_received||0;
+  var sel=document.getElementById('inv-customer');
+  var opt=document.createElement('option'); opt.value=inv.customer; opt.textContent=inv.customer; opt.selected=true;
+  sel.insertBefore(opt,sel.lastChild); sel.value=inv.customer;
+  document.getElementById('inv-items-body').innerHTML=''; invRowCount=0;
+  (inv.items||[]).forEach(function(item){
+    invAddRow(); var n=invRowCount;
+    var f=function(eid,v){ var e=document.getElementById(eid); if(e)e.value=v; };
+    f('inv-item-name-'+n,item.name); f('inv-item-qty-'+n,item.qty); f('inv-item-unit-'+n,item.unit||'PCS');
+    f('inv-item-price-'+n,item.price); f('inv-item-disc-'+n,item.disc||0); f('inv-item-gst-'+n,item.gst||0);
+    invCalcRow(n);
+  });
 }
 
-function invDelete(id){
-  if(!confirm('Delete this invoice? This cannot be undone.')) return;
-  var all = invGetAll().filter(function(i){ return i.id!==id; });
-  invSaveAll(all);
+
+async function invDelete(id){
+  if(!confirm('Cancel this invoice? It will be marked as cancelled (never permanently deleted).')) return;
+  var res = await invDeleteOne(id);
+  if(!res||!res.success){ showAlert(res?.error||'Error','error'); return; }
   renderInvSale(document.getElementById('inv-content'));
-  showAlert('Invoice deleted','info');
+  showAlert('Invoice cancelled','info');
 }
 
 function invBuildPrintHTML(inv, forPrint){
@@ -4152,46 +4165,73 @@ function renderInvParties(el){
 // ═══════════════════════════════════════════════════════════
 // ITEMS — Products, Services, Category, Units — localStorage
 // ═══════════════════════════════════════════════════════════
-var ITEMS_KEY      = 'bgps_inv_items';
-var CATEGORIES_KEY = 'bgps_inv_categories';
-var UNITS_KEY      = 'bgps_inv_units';
+var ITEMS_KEY      = 'bgps_inv_items_cache';
+var CATEGORIES_KEY = 'bgps_inv_cats_cache';
+var UNITS_KEY      = 'bgps_inv_units_cache';
 var itemsActiveTab = 'products';
 var itemEditingId  = null;
 
-function itemsGetAll()  { try{ return JSON.parse(localStorage.getItem(ITEMS_KEY)||'[]'); }catch(e){ return []; } }
-function itemsSaveAll(a){ localStorage.setItem(ITEMS_KEY, JSON.stringify(a)); }
-function catsGetAll()   { try{ return JSON.parse(localStorage.getItem(CATEGORIES_KEY)||'["GPS Devices","Accessories","Services","Subscription","AMC","Other"]'); }catch(e){ return ['GPS Devices','Accessories','Services','Subscription','AMC','Other']; } }
-function catsSave(a)    { localStorage.setItem(CATEGORIES_KEY, JSON.stringify(a)); }
-function unitsGetAll()  { try{ return JSON.parse(localStorage.getItem(UNITS_KEY)||'["PCS","NOS","SET","KIT","SVC","MTH","YR","HRS"]'); }catch(e){ return ['PCS','NOS','SET','KIT','SVC','MTH','YR','HRS']; } }
-function unitsSave(a)   { localStorage.setItem(UNITS_KEY, JSON.stringify(a)); }
+// Items — real DB
+async function itemsGetAll(){
+  try{
+    var res = await api('inv_get_items');
+    if(res.success) return res.items||[];
+  }catch(e){}
+  return [];
+}
+async function itemsSaveOne(data){
+  return await api('inv_save_item',{},'POST',data);
+}
+async function itemDeleteById(id){
+  return await api('inv_delete_item',{},'POST',{id});
+}
 
-function renderInvItems(el){
+// Categories + Units — stored in inv_settings on DB
+async function catsGetAll(){
+  try{
+    var res = await api('inv_get_settings');
+    if(res.success && res.settings && res.settings.inv_categories) return JSON.parse(res.settings.inv_categories);
+  }catch(e){}
+  return ['GPS Devices','Accessories','Services','Subscription','AMC','Other'];
+}
+async function catsSave(arr){
+  await api('inv_save_setting',{},'POST',{key:'inv_categories',value:JSON.stringify(arr)});
+}
+async function unitsGetAll(){
+  try{
+    var res = await api('inv_get_settings');
+    if(res.success && res.settings && res.settings.inv_units) return JSON.parse(res.settings.inv_units);
+  }catch(e){}
+  return ['PCS','NOS','SET','KIT','SVC','MTH','YR','HRS'];
+}
+async function unitsSave(arr){
+  await api('inv_save_setting',{},'POST',{key:'inv_units',value:JSON.stringify(arr)});
+}
+
+async function renderInvItems(el){
   itemsRenderTab(el, itemsActiveTab);
 }
 
-function itemsRenderTab(el, tab){
+async function itemsRenderTab(el, tab){
   itemsActiveTab = tab;
-  var tabs = ['products','services','category','units'];
-  var labels = ['📦 Products','⚙️ Services','🏷 Category','📏 Units'];
-  var tabBar = '<div style="display:flex;gap:0;border-bottom:1.5px solid var(--border);margin-bottom:14px;background:var(--surface2);border-radius:var(--radius-sm) var(--radius-sm) 0 0">';
+  var tabs=['products','services','category','units'];
+  var labels=['📦 Products','⚙️ Services','🏷 Category','📏 Units'];
+  var tabBar='<div style="display:flex;gap:0;border-bottom:1.5px solid var(--border);margin-bottom:14px;background:var(--surface2);border-radius:var(--radius-sm) var(--radius-sm) 0 0">';
   tabs.forEach(function(t,i){
-    var active = t===tab;
-    tabBar += '<div onclick="itemsRenderTab(document.getElementById(\'inv-content\'),\''+t+'\')" '
-      +'style="padding:9px 16px;font-size:12px;font-weight:'+(active?'800':'600')+';cursor:pointer;'
-      +'color:'+(active?'var(--accent)':'var(--text3)')+';border-bottom:2.5px solid '+(active?'var(--accent)':'transparent')+';margin-bottom:-1.5px;white-space:nowrap;transition:all .15s">'
-      +labels[i]+'</div>';
+    var active=t===tab;
+    tabBar+='<div onclick="itemsRenderTab(document.getElementById(\'inv-content\'),\''+t+'\')" style="padding:9px 16px;font-size:12px;font-weight:'+(active?'800':'600')+';cursor:pointer;color:'+(active?'var(--accent)':'var(--text3)')+';border-bottom:2.5px solid '+(active?'var(--accent)':'transparent')+';margin-bottom:-1.5px;white-space:nowrap">'+labels[i]+'</div>';
   });
-  tabBar += '</div>';
-  el.innerHTML = tabBar + '<div id="items-tab-content"></div>';
-  var content = document.getElementById('items-tab-content');
-  if(tab==='products')  itemsRenderProducts(content, false);
-  if(tab==='services')  itemsRenderProducts(content, true);
-  if(tab==='category')  itemsRenderCategory(content);
-  if(tab==='units')     itemsRenderUnits(content);
+  tabBar+='</div>';
+  el.innerHTML=tabBar+'<div id="items-tab-content"><div style="text-align:center;padding:30px;color:var(--text3)">⏳ Loading...</div></div>';
+  var content=document.getElementById('items-tab-content');
+  if(tab==='products')  await itemsRenderProducts(content,false);
+  if(tab==='services')  await itemsRenderProducts(content,true);
+  if(tab==='category')  await itemsRenderCategory(content);
+  if(tab==='units')     await itemsRenderUnits(content);
 }
 
-function itemsRenderProducts(el, isService){
-  var all = itemsGetAll().filter(function(i){ return (i.is_service||false) === isService; });
+async function itemsRenderProducts(el, isService){
+  var all = (await itemsGetAll()).filter(function(i){ return (i.is_service==1||i.is_service===true) === isService; });
   var typeLabel = isService ? 'Service' : 'Product';
 
   // Search + action bar
@@ -4254,84 +4294,82 @@ function itemsRenderList(el, items, isService){
   el.innerHTML = html;
 }
 
-function itemDelete(id){
-  if(!confirm('Delete this item?')) return;
-  itemsSaveAll(itemsGetAll().filter(function(i){ return i.id!==id; }));
+async function itemDelete(id){
+  if(!confirm('Delete this item? This cannot be undone.')) return;
+  var res = await itemDeleteById(id);
+  if(!res||!res.success){ showAlert(res&&res.error?res.error:'Error','error'); return; }
   renderInvItems(document.getElementById('inv-content'));
   showAlert('Item deleted','info');
 }
 
-function itemsRenderCategory(el){
-  var cats = catsGetAll();
+async function itemsRenderCategory(el){
+  var cats = await catsGetAll();
   el.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
     +'<div style="font-size:13px;font-weight:700;color:var(--text2)">Item Categories</div>'
     +'<button class="btn btn-primary btn-sm" onclick="itemAddCategory()">➕ Add Category</button>'
     +'</div>'
-    +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px" id="cats-grid">'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">'
     +cats.map(function(c,i){
       return '<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:12px;display:flex;justify-content:space-between;align-items:center">'
         +'<span style="font-size:13px;font-weight:600">🏷 '+c+'</span>'
-        +'<button onclick="itemDeleteCategory('+i+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button>'
+        +'<button onclick="itemDeleteCategory(\''+c+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button>'
         +'</div>';
-    }).join('')
-    +'</div>';
+    }).join('')+'</div>';
 }
 
-function itemAddCategory(){
+async function itemAddCategory(){
   var name = prompt('Enter category name:');
   if(!name||!name.trim()) return;
-  var cats = catsGetAll();
+  var cats = await catsGetAll();
   cats.push(name.trim());
-  catsSave(cats);
-  itemsRenderTab(document.getElementById('inv-content'), 'category');
+  await catsSave(cats);
+  itemsRenderTab(document.getElementById('inv-content'),'category');
 }
 
-function itemDeleteCategory(idx){
-  if(!confirm('Delete this category?')) return;
-  var cats = catsGetAll();
-  cats.splice(idx,1);
-  catsSave(cats);
-  itemsRenderTab(document.getElementById('inv-content'), 'category');
+async function itemDeleteCategory(name){
+  if(!confirm('Delete category "'+name+'"?')) return;
+  var cats = (await catsGetAll()).filter(function(c){ return c!==name; });
+  await catsSave(cats);
+  itemsRenderTab(document.getElementById('inv-content'),'category');
 }
 
-function itemsRenderUnits(el){
-  var units = unitsGetAll();
+async function itemsRenderUnits(el){
+  var units = await unitsGetAll();
   el.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
     +'<div style="font-size:13px;font-weight:700;color:var(--text2)">Units of Measurement</div>'
     +'<button class="btn btn-primary btn-sm" onclick="itemAddUnit()">➕ Add Unit</button>'
     +'</div>'
     +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px">'
-    +units.map(function(u,i){
+    +units.map(function(u){
       return '<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:12px;display:flex;justify-content:space-between;align-items:center">'
         +'<span style="font-size:13px;font-weight:700">'+u+'</span>'
-        +'<button onclick="itemDeleteUnit('+i+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button>'
+        +'<button onclick="itemDeleteUnit(\''+u+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button>'
         +'</div>';
-    }).join('')
-    +'</div>';
+    }).join('')+'</div>';
 }
 
-function itemAddUnit(){
+async function itemAddUnit(){
   var name = prompt('Enter unit (e.g. PCS, KG, MTR):');
   if(!name||!name.trim()) return;
-  var units = unitsGetAll();
+  var units = await unitsGetAll();
   units.push(name.trim().toUpperCase());
-  unitsSave(units);
-  itemsRenderTab(document.getElementById('inv-content'), 'units');
+  await unitsSave(units);
+  itemsRenderTab(document.getElementById('inv-content'),'units');
 }
 
-function itemDeleteUnit(idx){
-  if(!confirm('Delete this unit?')) return;
-  var units = unitsGetAll();
-  units.splice(idx,1);
-  unitsSave(units);
-  itemsRenderTab(document.getElementById('inv-content'), 'units');
+async function itemDeleteUnit(name){
+  if(!confirm('Delete unit "'+name+'"?')) return;
+  var units = (await unitsGetAll()).filter(function(u){ return u!==name; });
+  await unitsSave(units);
+  itemsRenderTab(document.getElementById('inv-content'),'units');
 }
 
-function itemOpenModal(isService, editId){
+async function itemOpenModal(isService, editId){
   itemEditingId = editId;
-  var cats = catsGetAll();
-  var units = unitsGetAll();
-  var item = editId ? itemsGetAll().find(function(i){ return i.id===editId; }) : null;
+  var cats  = await catsGetAll();
+  var units = await unitsGetAll();
+  var items = editId ? await itemsGetAll() : [];
+  var item  = editId ? items.find(function(i){ return i.id===editId; }) : null;
 
   // Build modal HTML
   var html = '<div class="modal-overlay" id="item-modal" style="display:flex" onclick="if(event.target.id===\'item-modal\')closeById(\'item-modal\')">'
@@ -4422,43 +4460,38 @@ function itmCalcMargin(){
   }
 }
 
-function itemSave(isService, addAnother){
+async function itemSave(isService, addAnother){
   var name = document.getElementById('itm-name')?.value?.trim();
   if(!name){ showAlert('Item name is required','error'); return; }
   var salePrice = parseFloat(document.getElementById('itm-sale')?.value||0);
   if(!salePrice){ showAlert('Sale price is required','error'); return; }
 
   var item = {
-    id:          itemEditingId || ('ITEM-'+Date.now()),
+    id:             itemEditingId || ('ITEM-'+Date.now()),
     name,
-    hsn:         document.getElementById('itm-hsn')?.value?.trim()||'',
-    code:        document.getElementById('itm-code')?.value?.trim()||'',
-    unit:        document.getElementById('itm-unit')?.value||'PCS',
-    category:    document.getElementById('itm-category')?.value||'',
-    description: document.getElementById('itm-desc')?.value?.trim()||'',
-    mrp:         parseFloat(document.getElementById('itm-mrp')?.value||0),
-    sale_price:  salePrice,
+    hsn:            document.getElementById('itm-hsn')?.value?.trim()||'',
+    code:           document.getElementById('itm-code')?.value?.trim()||'',
+    unit:           document.getElementById('itm-unit')?.value||'PCS',
+    category:       document.getElementById('itm-category')?.value||'',
+    description:    document.getElementById('itm-desc')?.value?.trim()||'',
+    mrp:            parseFloat(document.getElementById('itm-mrp')?.value||0),
+    sale_price:     salePrice,
     purchase_price: parseFloat(document.getElementById('itm-purchase')?.value||0),
-    gst_rate:    parseFloat(document.getElementById('itm-gst')?.value||0),
-    opening_stock: parseInt(document.getElementById('itm-stock')?.value||0),
-    low_stock_alert: parseInt(document.getElementById('itm-low-stock')?.value||5),
-    location:    document.getElementById('itm-location')?.value?.trim()||'',
-    stock_in:    0,
-    stock_out:   0,
-    is_service:  isService,
-    created_at:  new Date().toISOString()
+    gst_rate:       parseFloat(document.getElementById('itm-gst')?.value||0),
+    opening_stock:  parseInt(document.getElementById('itm-stock')?.value||0),
+    low_stock_alert:parseInt(document.getElementById('itm-low-stock')?.value||5),
+    location:       document.getElementById('itm-location')?.value?.trim()||'',
+    is_service:     isService ? 1 : 0
   };
 
-  var all = itemsGetAll();
-  if(itemEditingId){
-    var idx = all.findIndex(function(i){ return i.id===itemEditingId; });
-    if(idx>=0) all[idx] = item; else all.push(item);
-  } else {
-    all.push(item);
-  }
-  itemsSaveAll(all);
+  var btn = document.querySelector('#item-modal .modal-footer .btn-primary');
+  if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  var res = await itemsSaveOne(item);
+  if(btn){ btn.disabled=false; btn.textContent='💾 Save '+(isService?'Service':'Product'); }
+  if(!res||!res.success){ showAlert(res&&res.error?res.error:'Save failed','error'); return; }
+
   closeById('item-modal');
-  showAlert('✅ '+item.name+' saved!','success');
+  showAlert('✅ '+item.name+' saved to database!','success');
 
   if(addAnother){
     setTimeout(function(){ itemOpenModal(isService, null); }, 100);
@@ -4468,8 +4501,9 @@ function itemSave(isService, addAnother){
 }
 
 // Helper: get items list for dropdowns in Sale Invoice / Estimate etc.
-function invGetItemsForDropdown(){
-  return itemsGetAll().map(function(i){
+async function invGetItemsForDropdown(){
+  var items = await itemsGetAll();
+  return items.map(function(i){
     return { id:i.id, name:i.name, sale_price:i.sale_price, gst_rate:i.gst_rate, unit:i.unit, hsn:i.hsn };
   });
 }
