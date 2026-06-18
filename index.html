@@ -241,7 +241,7 @@ html,body{height:100%;font-family:'Calibri','Segoe UI',sans-serif;background:var
 
 /* TABLE */
 .table-wrapper{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);}
-.table-scroll{overflow-x:auto;}
+.table-scroll{overflow-x:auto;width:100%;}
 table{width:100%;border-collapse:collapse;}
 thead th{padding:10px 12px;background:var(--accent);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.9);white-space:nowrap;text-align:left;}
 tbody tr{border-bottom:1px solid var(--border);transition:background .1s;cursor:pointer;}
@@ -249,7 +249,7 @@ tbody tr:last-child{border-bottom:none;}
 tbody tr:hover{background:var(--accent-light);}
 tbody tr:nth-child(even){background:var(--surface2);}
 tbody tr:nth-child(even):hover{background:var(--accent-light);}
-tbody td{padding:9px 12px;font-size:13px;vertical-align:middle;}
+tbody td{padding:9px 12px;font-size:13px;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 tbody td.nowrap{white-space:nowrap;}
 tbody tr{border-bottom:1px solid var(--border2);transition:background .12s;}
 tbody tr:hover{background:var(--surface2);}
@@ -960,11 +960,30 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
   </div>
   <div class="table-wrapper">
     <div class="table-scroll">
-      <table><thead><tr>
-        <th>#</th><th>Task ID</th><th>Customer</th><th>Contact</th><th>Location</th>
-        <th>Job Type</th><th>Assigned To</th><th>Lead Type</th><th>Price</th><th>Payment</th>
-        <th>Status</th><th>⭐ Rating</th><th>Age</th><th>Reminder</th><th>Created</th><th>Actions</th>
-      </tr></thead><tbody id="main-tbody"></tbody></table>
+      <table style="table-layout:fixed;min-width:1100px">
+        <colgroup>
+          <col style="width:40px">      <!-- # -->
+          <col style="width:90px">      <!-- Task ID -->
+          <col style="width:160px">     <!-- Customer -->
+          <col style="width:110px">     <!-- Contact -->
+          <col style="width:100px">     <!-- Location -->
+          <col style="width:130px">     <!-- Job Type -->
+          <col style="width:120px">     <!-- Assigned To -->
+          <col style="width:110px">     <!-- Lead Type -->
+          <col style="width:80px">      <!-- Price -->
+          <col style="width:80px">      <!-- Payment -->
+          <col style="width:110px">     <!-- Status -->
+          <col style="width:60px">      <!-- Rating -->
+          <col style="width:60px">      <!-- Age -->
+          <col style="width:70px">      <!-- Reminder -->
+          <col style="width:90px">      <!-- Created -->
+          <col style="width:70px">      <!-- Actions -->
+        </colgroup>
+        <thead><tr>
+          <th>#</th><th>Task ID</th><th>Customer</th><th>Contact</th><th>Location</th>
+          <th>Job Type</th><th>Assigned To</th><th>Lead Type</th><th>Price</th><th>Payment</th>
+          <th>Status</th><th>⭐ Rating</th><th>Age</th><th>Reminder</th><th>Created</th><th>Actions</th>
+        </tr></thead><tbody id="main-tbody"></tbody></table>
     </div>
     <div class="pagination">
       <div class="pagination-info" id="table-info">–</div>
@@ -1802,7 +1821,7 @@ function renderTable(){
     const em = emptyMap[statusSel] || (hasFilter
       ? {icon:'🔍', title:'No Results Found', sub:'No tasks match your current filters. Try clearing the search or changing the status.'}
       : {icon:'📋', title:'No Tasks Yet', sub:'Create your first lead to get started.'});
-    tbody.innerHTML=`<tr><td colspan="15"><div class="empty-state">
+    tbody.innerHTML=`<tr><td colspan="16" style="padding:0;border:none"><div class="empty-state" style="padding:56px 20px">
       <div class="empty-icon" style="font-size:48px;margin-bottom:14px">${em.icon}</div>
       <h3 style="font-size:17px;font-weight:800;color:var(--text2);margin-bottom:8px">${em.title}</h3>
       <p style="font-size:14px;color:var(--text3);max-width:340px;margin:0 auto">${em.sub}</p>
