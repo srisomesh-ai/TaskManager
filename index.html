@@ -100,17 +100,19 @@ html,body{height:100%;font-family:'Calibri','Segoe UI',sans-serif;background:var
 
 /* CONTENT */
 .content{flex:1;overflow-y:auto;background:var(--bg);}
-.page{display:none;padding:20px;}
+.page{display:none;padding:20px 24px;}
 .page.active{display:block;animation:pgFadeIn .15s ease forwards;}
+/* Consistent page inner wrapper */
+.page-body{width:100%;max-width:1400px;}
 @keyframes pgFadeIn{
   from{opacity:0;transform:translateY(3px)}
   to{opacity:1;transform:translateY(0)}
 }
-.breadcrumb{font-size:12px;color:var(--text3);margin-bottom:14px;}
+.breadcrumb{font-size:13px;color:var(--text3);margin-bottom:16px;}
 .breadcrumb span{color:var(--accent2);font-weight:600;}
-.page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;}
-.page-header-left h2{font-size:21px;font-weight:800;color:var(--accent);}
-.page-header-left p{color:var(--text3);font-size:13px;margin-top:3px;}
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px;padding-bottom:16px;border-bottom:1.5px solid var(--border);}
+.page-header-left h2{font-size:22px;font-weight:800;color:var(--accent);}
+.page-header-left p{color:var(--text3);font-size:13px;margin-top:4px;}
 .header-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
 
 /* STATS GRID */
@@ -221,13 +223,13 @@ html,body{height:100%;font-family:'Calibri','Segoe UI',sans-serif;background:var
 .task-card.card-outstation{border-color:#e07b00;border-width:2px;background:#fffbf5;}
 
 /* INVOICING TABS */
-.inv-tab-btn{padding:10px 16px;font-size:12px;font-weight:600;color:var(--text3);cursor:pointer;white-space:nowrap;border-right:1px solid var(--border);border-bottom:3px solid transparent;transition:all .15s;user-select:none}
+.inv-tab-btn{padding:12px 18px;font-size:13px;font-weight:600;color:var(--text3);cursor:pointer;white-space:nowrap;border-right:1px solid var(--border);border-bottom:3px solid transparent;transition:all .15s;user-select:none}
 .inv-tab-btn:hover{background:var(--surface2);color:var(--text2)}
 .inv-tab-btn.active{color:var(--accent);font-weight:800;border-bottom-color:var(--accent);background:var(--surface)}
 .field-label{display:block;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px}
 .inv-field{padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;outline:none;width:100%;background:var(--surface)}
 .inv-field:focus{border-color:var(--accent2);box-shadow:0 0 0 2px var(--accent-light)}
-.bs-tab{padding:10px 18px;background:none;border:none;font-family:inherit;font-size:13px;font-weight:700;color:var(--text3);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
+.bs-tab{padding:12px 20px;background:none;border:none;font-family:inherit;font-size:14px;font-weight:700;color:var(--text3);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
 .bs-tab.active{color:var(--accent);border-bottom-color:var(--accent);background:var(--surface)}
 .bs-tab:hover{color:var(--accent2);background:var(--surface2)}
 
@@ -350,7 +352,7 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
 
 /* TECHNICIAN DASHBOARD */
 .tech-stats-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px;}
-.tech-stat-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:12px 10px;text-align:center;box-shadow:var(--shadow);position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;}
+.tech-stat-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px 10px;text-align:center;box-shadow:var(--shadow);position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;}
 .tech-stat-card::before{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;}
 .tsc-open::before{background:var(--saffron);}
 .tsc-closed::before{background:var(--green);}
@@ -389,21 +391,22 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
 .ms-reached{opacity:.4;}
 
 /* TASK CARDS */
-.task-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px;cursor:pointer;transition:all .18s;box-shadow:var(--shadow);}
-.task-card:hover{border-color:var(--accent2);box-shadow:var(--shadow-md);}
+.task-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(480px,1fr));gap:14px;}
+.task-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:16px;cursor:pointer;transition:all .18s;box-shadow:var(--shadow);}
+.task-card:hover{border-color:var(--accent2);box-shadow:var(--shadow-md);transform:translateY(-1px);}
 .task-card.card-urgent{border-color:#ffc107;background:#fffdf0;}
 .task-card.card-enquiry{border-color:#1a7a3a;border-width:2px;animation:flashEnquiry 1.8s ease-in-out infinite;}
 .task-card.card-critical{border-color:var(--red);background:#fff8f8;animation:flashWarning 2s infinite;}
 .task-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
 .task-card-body{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
 .task-card-field{font-size:12px;}
-.task-card-field strong{font-size:13px;font-weight:700;color:var(--text);display:block;}
-.task-card-field span{color:var(--text3);}
+.task-card-field strong{font-size:14px;font-weight:700;color:var(--text);display:block;}
+.task-card-field span{color:var(--text3);font-size:12px;}
 
 /* ADMIN */
 .admin-section{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);margin-bottom:16px;box-shadow:var(--shadow);overflow:hidden;}
-.admin-section-header{background:var(--accent);color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;}
-.admin-section-header h3{font-size:14px;font-weight:800;}
+.admin-section-header{background:var(--accent);color:#fff;padding:13px 18px;display:flex;align-items:center;justify-content:space-between;}
+.admin-section-header h3{font-size:15px;font-weight:800;}
 .admin-section-body{padding:16px;}
 .users-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:11px;}
 .user-card{background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:13px;display:flex;align-items:center;gap:11px;transition:all .15s;}
@@ -422,9 +425,9 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
 
 /* REPORTS */
 .report-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:16px;}
-.summary-box{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:13px;text-align:center;box-shadow:var(--shadow);}
-.summary-box .val{font-size:26px;font-weight:800;font-family:'Consolas','Courier New',monospace;}
-.summary-box .lbl{font-size:11px;color:var(--text3);margin-top:3px;font-weight:700;text-transform:uppercase;}
+.summary-box{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center;box-shadow:var(--shadow);}
+.summary-box .val{font-size:28px;font-weight:800;font-family:'Consolas','Courier New',monospace;}
+.summary-box .lbl{font-size:12px;color:var(--text3);margin-top:4px;font-weight:700;text-transform:uppercase;}
 
 /* ALERTS */
 .alert{position:fixed;top:18px;right:18px;z-index:9999;padding:12px 15px;border-radius:var(--radius-sm);font-size:13px;font-weight:700;min-width:270px;box-shadow:var(--shadow-md);animation:slideIn .22s ease;display:flex;align-items:center;gap:8px;}
@@ -434,14 +437,14 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
 .alert-info{background:var(--blue-bg);border:1.5px solid rgba(26,86,160,.3);color:var(--blue);}
 
 /* MISC */
-.empty-state{text-align:center;padding:48px 20px;color:var(--text3);}
+.empty-state{text-align:center;padding:56px 20px;color:var(--text3);}
 .empty-icon{font-size:38px;margin-bottom:10px;opacity:.4;}
-.empty-state h3{font-size:16px;font-weight:700;color:var(--text2);margin-bottom:6px;}
+.empty-state h3{font-size:18px;font-weight:700;color:var(--text2);margin-bottom:8px;}
 .loading{display:flex;align-items:center;justify-content:center;padding:40px;}
 .spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .tabs{display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid var(--border);}
-.tab{padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;color:var(--text3);border-bottom:2px solid transparent;margin-bottom:-2px;}
+.tab{padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer;transition:all .15s;color:var(--text3);border-bottom:2px solid transparent;margin-bottom:-2px;}
 .tab.active{color:var(--accent);border-bottom-color:var(--accent);}
 .tab:hover:not(.active){color:var(--text2);}
 .wa-btn{background:#128c45;color:#fff;border:none;border-radius:var(--radius-sm);padding:7px 13px;font-family:inherit;font-weight:700;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s;}
@@ -799,8 +802,8 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
       <!-- MY TASKS (Technician) -->
       <div class="page" id="page-my-tasks">
         <div class="breadcrumb">Home / <span>My Tasks</span></div>
-        <div class="page-header" style="margin-bottom:0">
-          <div style="flex:1"></div>
+        <div class="page-header">
+          <div class="page-header-left"><h2>🙋 My Tasks</h2><p>Tasks assigned to you</p></div>
           <div class="header-actions admin-only">
             <button class="btn btn-primary" onclick="openCreateModal()">＋ Add New Lead</button>
           </div>
@@ -1903,7 +1906,7 @@ async function loadApprovalsPage(){
     container.innerHTML=`<div class="empty-state"><div class="empty-icon">✅</div><h3>No pending approvals</h3><p>All tasks are up to date!</p></div>`;
     return;
   }
-  container.innerHTML=tasks.map(t=>`
+  container.innerHTML='<div class="task-cards-grid">'+tasks.map(t=>`
     <div class="task-card" style="border-color:var(--green);background:#f8fff9" onclick="viewTask(${t.id})">
       <div class="task-card-header">
         <span class="task-id-cell">${t.task_id}</span>
@@ -1920,12 +1923,12 @@ async function loadApprovalsPage(){
         <div class="task-card-field"><strong style="color:var(--green)">₹${t.price_to_collect||0}</strong><span>Price</span></div>
         <div class="task-card-field"><strong style="color:var(--green)">₹${t.amount_collected||0}</strong><span>Collected</span></div>
       </div>
-      <div style="margin-top:10px;display:flex;gap:8px">
+      <div style="margin-top:12px;display:flex;gap:8px">
         ${currentUser.role==='admin'?`<button class="btn btn-success btn-sm" onclick="event.stopPropagation();adminApproveTask(${t.id})">✅ Approve & Close</button>`:''}
         <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();adminRejectTask(${t.id})">↩ Send Back</button>
         <button class="btn btn-secondary btn-sm" onclick="viewTask(${t.id})">👁 View Details</button>
       </div>
-    </div>`).join('');
+    </div>`).join('')+'</div>';
 }
 
 // URGENT PAGE
@@ -1944,12 +1947,12 @@ async function loadUrgentPage(){
   const warning=tasks.filter(t=>t.age_hours>=24&&t.age_hours<48);
   let html='';
   if(critical.length){
-    html+=`<div style="font-size:14px;font-weight:800;color:var(--red);margin-bottom:10px">🚨 CRITICAL — Open 48+ Hours (${critical.length})</div>`;
-    html+=critical.map(t=>urgentCard(t,'critical')).join('');
+    html+=`<div style="font-size:15px;font-weight:800;color:var(--red);margin-bottom:12px">🚨 CRITICAL — Open 48+ Hours (${critical.length})</div>`;
+    html+=`<div class="task-cards-grid" style="margin-bottom:20px">${critical.map(t=>urgentCard(t,'critical')).join('')}</div>`;
   }
   if(warning.length){
-    html+=`<div style="font-size:14px;font-weight:800;color:var(--saffron);margin:16px 0 10px">⚠️ WARNING — Open 24–48 Hours (${warning.length})</div>`;
-    html+=warning.map(t=>urgentCard(t,'warning')).join('');
+    html+=`<div style="font-size:15px;font-weight:800;color:var(--saffron);margin-bottom:12px">⚠️ WARNING — Open 24–48 Hours (${warning.length})</div>`;
+    html+=`<div class="task-cards-grid">${warning.map(t=>urgentCard(t,'warning')).join('')}</div>`;
   }
   if(!critical.length&&!warning.length){
     container.innerHTML=`<div class="empty-state"><div class="empty-icon">✅</div><h3>No urgent tasks!</h3><p>All tasks are within the 24-hour window.</p></div>`;
@@ -2012,11 +2015,6 @@ async function loadMyTasks(){
     const transferred = tasks.filter(t=>s(t)==='transferred' || (t.transferred_from && t.transferred_from==currentUser.id));
 
     container.innerHTML=`
-    <div class="page-header">
-      <div class="page-header-left"><h2>🙋 My Tasks</h2><p>Your assigned field tasks and targets</p></div>
-      ${isAdmin?`<div class="header-actions"><button class="btn btn-primary" onclick="openCreateModal()">＋ Add New Lead</button></div>`:''}
-    </div>
-
     <div class="tech-stats-grid">
       <div class="tech-stat-card tsc-open"><div class="tech-stat-icon">🔄</div><div class="tech-stat-val">${stats.open||0}</div><div class="tech-stat-lbl">Open</div></div>
       <div class="tech-stat-card tsc-pending"><div class="tech-stat-icon">⏳</div><div class="tech-stat-val">${stats.task_pending||0}</div><div class="tech-stat-lbl">Pending</div></div>
@@ -2078,24 +2076,20 @@ function renderTechCards(tasks, locked, tabType){
     const msgs={submitted:'No submitted tasks',completed:'No completed tasks',cancelled:'No cancelled tasks',transferred:'No transferred tasks'};
     return `<div class="empty-state"><div class="empty-icon">📭</div><h3>${msgs[tabType]||'No active tasks'}</h3></div>`;
   }
-  return tasks.map(t=>{
+  return '<div class="task-cards-grid">'+tasks.map(t=>{
     const status = (t.task_status||'').toLowerCase().trim();
     const age = ['open','in progress','task pending'].includes(status) ? getAgeHours(t.created_at) : 0;
     const isCritical = age>=48;
     const isUrgent   = age>=24 && age<48;
     const clickAction = `window.location.href='tech-task.php?id=${t.id}&token='+encodeURIComponent(authToken)`;
-
-    // Lock banner based on tab
     let lockColor='var(--purple-bg)', lockTextColor='var(--purple)', lockIcon='🔒', lockMsg='';
     if(status==='awaiting approval'){ lockMsg='Awaiting manager approval — view only'; }
     else if(status==='closed'){ lockColor='var(--green-bg)'; lockTextColor='var(--green)'; lockMsg='Closed by manager — view only'; }
     else if(status==='cancelled'){ lockColor='var(--red-bg)'; lockTextColor='var(--red)'; lockMsg='Cancelled — view only'; }
     else if(status==='transferred'){ lockColor='var(--orange-bg)'; lockTextColor='var(--orange)'; lockIcon='🔀'; lockMsg='Transferred to another technician'; }
-
     const lockBanner = locked
-      ? `<div style="display:flex;align-items:center;gap:6px;background:${lockColor};border-radius:5px;padding:6px 9px;margin-top:8px;font-size:11px;font-weight:700;color:${lockTextColor}">${lockIcon} ${lockMsg}</div>`
+      ? `<div style="display:flex;align-items:center;gap:6px;background:${lockColor};border-radius:5px;padding:6px 9px;margin-top:8px;font-size:12px;font-weight:700;color:${lockTextColor}">${lockIcon} ${lockMsg}</div>`
       : '';
-
     return `<div class="task-card ${isCritical?'card-critical':isUrgent?'card-urgent':''}" onclick="${clickAction}" style="${locked?'opacity:.9;':''}">
       <div class="task-card-header">
         <span class="task-id-cell">${t.task_id}</span>
@@ -2115,7 +2109,7 @@ function renderTechCards(tasks, locked, tabType){
       ${t.general_notes?`<div style="margin-top:8px;padding:6px 9px;background:var(--surface2);border-radius:5px;font-size:12px;color:var(--text2)">📝 ${t.general_notes}</div>`:''}
       ${lockBanner}
     </div>`;
-  }).join('');
+  }).join('')+'</div>';
 }
 
 function renderCards(tasks){
