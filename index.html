@@ -223,9 +223,9 @@ html,body{height:100%;font-family:'Calibri','Segoe UI',sans-serif;background:var
 .task-card.card-outstation{border-color:#e07b00;border-width:2px;background:#fffbf5;}
 
 /* INVOICING TABS */
-.inv-tab-btn{padding:11px 16px;font-size:13px;font-weight:600;color:var(--text3);cursor:pointer;white-space:nowrap;border-right:1px solid var(--border);border-bottom:3px solid transparent;transition:all .15s;user-select:none;flex-shrink:0}
-.inv-tab-btn:hover{background:var(--accent-light);color:var(--accent2)}
-.inv-tab-btn.active{color:var(--accent);font-weight:800;border-bottom-color:var(--accent);background:#fff}
+.inv-tab-btn{padding:13px 17px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;white-space:nowrap;border-bottom:3px solid transparent;border-right:1px solid transparent;transition:all .15s;user-select:none;flex-shrink:0}
+.inv-tab-btn:hover{color:var(--accent);background:var(--accent-light)}
+.inv-tab-btn.active{color:var(--accent);font-weight:800;border-bottom:3px solid var(--accent);background:var(--accent-light)}
 .field-label{display:block;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px}
 .inv-field{padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;outline:none;width:100%;background:var(--surface)}
 .inv-field:focus{border-color:var(--accent2);box-shadow:0 0 0 2px var(--accent-light)}
@@ -910,38 +910,39 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
       <div class="page" id="page-invoicing" style="padding-bottom:40px">
         <div class="breadcrumb">Home / <span>Invoicing</span></div>
 
-        <!-- GROUP 1: Documents -->
-        <div style="margin-bottom:-1px">
-          <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);padding:0 4px 5px">📄 Documents</div>
-          <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius) var(--radius) 0 0;border-bottom:none;display:flex;flex-wrap:wrap;gap:0">
-            <div id="inv-tab-sale"        onclick="showInvPage('sale')"        class="inv-tab-btn">💰 Sale Invoices</div>
-            <div id="inv-tab-estimate"    onclick="showInvPage('estimate')"    class="inv-tab-btn">📄 Estimates</div>
-            <div id="inv-tab-proforma"    onclick="showInvPage('proforma')"    class="inv-tab-btn">📋 Proforma</div>
-            <div id="inv-tab-challan"     onclick="showInvPage('challan')"     class="inv-tab-btn">🚚 Challan</div>
-            <div id="inv-tab-parties"     onclick="showInvPage('parties')"     class="inv-tab-btn">👥 Parties</div>
-            <div id="inv-tab-items"       onclick="showInvPage('items')"       class="inv-tab-btn">📦 Items</div>
-            <div id="inv-tab-settings"    onclick="showInvPage('settings')"    class="inv-tab-btn">⚙️ Settings</div>
-          </div>
+        <!-- Single professional tab bar with divider between groups -->
+        <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius) var(--radius) 0 0;border-bottom:none;display:flex;align-items:stretch;overflow-x:auto">
+
+          <!-- Group 1: Documents -->
+          <div id="inv-tab-sale"       onclick="showInvPage('sale')"       class="inv-tab-btn">💰 Sale Invoices</div>
+          <div id="inv-tab-estimate"   onclick="showInvPage('estimate')"   class="inv-tab-btn">📄 Estimates</div>
+          <div id="inv-tab-proforma"   onclick="showInvPage('proforma')"   class="inv-tab-btn">📋 Proforma</div>
+          <div id="inv-tab-challan"    onclick="showInvPage('challan')"    class="inv-tab-btn">🚚 Challan</div>
+          <div id="inv-tab-parties"    onclick="showInvPage('parties')"    class="inv-tab-btn">👥 Parties</div>
+          <div id="inv-tab-items"      onclick="showInvPage('items')"      class="inv-tab-btn">📦 Items</div>
+          <div id="inv-tab-settings"   onclick="showInvPage('settings')"   class="inv-tab-btn">⚙️ Settings</div>
+
+          <!-- Visual divider -->
+          <div style="width:1px;background:var(--border);margin:8px 4px;flex-shrink:0"></div>
+
+          <!-- Group 2: Finance -->
+          <div id="inv-tab-payin"      onclick="showInvPage('payin')"      class="inv-tab-btn">💳 Payment-In</div>
+          <div id="inv-tab-saleorder"  onclick="showInvPage('saleorder')"  class="inv-tab-btn">📝 Sale Order</div>
+          <div id="inv-tab-purbills"   onclick="showInvPage('purbills')"   class="inv-tab-btn">🛒 Purchase</div>
+          <div id="inv-tab-banks"      onclick="showInvPage('banks')"      class="inv-tab-btn">🏦 Banks</div>
+          <div id="inv-tab-invreports" onclick="showInvPage('invreports')" class="inv-tab-btn">📊 Reports</div>
+
         </div>
 
-        <!-- GROUP 2: Finance -->
-        <div style="margin-bottom:0">
-          <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);padding:10px 4px 5px">💳 Finance & Reports</div>
-          <div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius) var(--radius) 0 0;border-bottom:none;display:flex;flex-wrap:wrap;gap:0">
-            <div id="inv-tab-payin"       onclick="showInvPage('payin')"       class="inv-tab-btn">💳 Payment-In</div>
-            <div id="inv-tab-saleorder"   onclick="showInvPage('saleorder')"   class="inv-tab-btn">📝 Sale Order</div>
-            <div id="inv-tab-purbills"    onclick="showInvPage('purbills')"    class="inv-tab-btn">🛒 Purchase</div>
-            <div id="inv-tab-banks"       onclick="showInvPage('banks')"       class="inv-tab-btn">🏦 Banks</div>
-            <div id="inv-tab-invreports"  onclick="showInvPage('invreports')"  class="inv-tab-btn">📊 Reports</div>
-          </div>
-        </div>
+        <!-- Bottom border line below tabs -->
+        <div style="border-bottom:2px solid var(--accent);margin-bottom:0"></div>
 
         <!-- Content area -->
-        <div id="inv-content" style="background:var(--surface);border:1.5px solid var(--border);border-top:2px solid var(--accent);border-radius:0 0 var(--radius) var(--radius);padding:20px;min-height:420px;position:relative">
-          <div style="text-align:center;padding:48px;color:var(--text3)">
+        <div id="inv-content" style="background:var(--surface);border:1.5px solid var(--border);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:20px;min-height:420px;position:relative">
+          <div style="text-align:center;padding:56px;color:var(--text3)">
             <div style="font-size:40px;margin-bottom:12px">🧾</div>
-            <div style="font-size:15px;font-weight:700;color:var(--text2)">Select a tab above</div>
-            <div style="font-size:13px;margin-top:4px">Choose from Documents or Finance & Reports</div>
+            <div style="font-size:15px;font-weight:700;color:var(--text2)">Select a tab to get started</div>
+            <div style="font-size:13px;margin-top:4px">Documents · Finance & Reports</div>
           </div>
         </div>
       </div>
