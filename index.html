@@ -4653,12 +4653,20 @@ function renderInvParties(el){
 }
 
 // ═══════════════════════════════════════════════════════════
-// ITEMS — Products, Services, Category, Units — localStorage
+// ITEMS — Products, Services, Category, Units
+// Category-based routing: items go under their category group
 // ═══════════════════════════════════════════════════════════
+
+// Product categories (hardware / software items)
+var PRODUCT_CATS = ['GPS Devices','Accessories','Software','Tools','Spare Parts','Other Products'];
+// Service categories (labour / subscription / support)
+var SERVICE_CATS = ['Installation','AMC','Renewal','Subscription','Troubleshoot','Site Visit','Other Services'];
+
 var ITEMS_KEY      = 'bgps_inv_items_cache';
 var CATEGORIES_KEY = 'bgps_inv_cats_cache';
 var UNITS_KEY      = 'bgps_inv_units_cache';
 var itemsActiveTab = 'products';
+var itemsActiveCat = '';
 var itemEditingId  = null;
 
 // Items — real DB
@@ -4676,13 +4684,13 @@ async function itemDeleteById(id){
   return await api('inv_delete_item',{},'POST',{id});
 }
 
-// Categories + Units — stored in inv_settings on DB
+// Categories + Units — stored in inv_settings
 async function catsGetAll(){
   try{
     var res = await api('inv_get_settings');
     if(res.success && res.settings && res.settings.inv_categories) return JSON.parse(res.settings.inv_categories);
   }catch(e){}
-  return ['GPS Devices','Accessories','Services','Subscription','AMC','Other'];
+  return [...PRODUCT_CATS, ...SERVICE_CATS];
 }
 async function catsSave(arr){
   await api('inv_save_setting',{},'POST',{key:'inv_categories',value:JSON.stringify(arr)});
@@ -4704,146 +4712,262 @@ async function renderInvItems(el){
 
 async function itemsRenderTab(el, tab){
   itemsActiveTab = tab;
-  var tabs=['products','services','category','units'];
-  var labels=['📦 Products','⚙️ Services','🏷 Category','📏 Units'];
-  var tabBar='<div style="display:flex;gap:0;border-bottom:1.5px solid var(--border);margin-bottom:14px;background:var(--surface2);border-radius:var(--radius-sm) var(--radius-sm) 0 0">';
+  var tabs   = ['products','services','category','units'];
+  var labels = ['📦 Products','⚙️ Services','🏷 Categories','📏 Units'];
+  var tabBar = '<div style="display:flex;gap:0;border-bottom:1.5px solid var(--border);background:var(--surface2);border-radius:var(--radius-sm) var(--radius-sm) 0 0">';
   tabs.forEach(function(t,i){
-    var active=t===tab;
-    tabBar+='<div onclick="itemsRenderTab(document.getElementById(\'inv-content\'),\''+t+'\')" style="padding:9px 16px;font-size:12px;font-weight:'+(active?'800':'600')+';cursor:pointer;color:'+(active?'var(--accent)':'var(--text3)')+';border-bottom:2.5px solid '+(active?'var(--accent)':'transparent')+';margin-bottom:-1.5px;white-space:nowrap">'+labels[i]+'</div>';
+    var active = t===tab;
+    tabBar += '<div onclick="itemsRenderTab(document.getElementById(\'inv-content\'),\''+t+'\')" '
+      +'style="padding:9px 16px;font-size:12px;font-weight:'+(active?'800':'600')+';cursor:pointer;'
+      +'color:'+(active?'var(--accent)':'var(--text3)')+';border-bottom:2.5px solid '+(active?'var(--accent)':'transparent')+';margin-bottom:-1.5px;white-space:nowrap">'+labels[i]+'</div>';
   });
-  tabBar+='</div>';
-  el.innerHTML=tabBar+'<div id="items-tab-content"><div style="text-align:center;padding:30px;color:var(--text3)">⏳ Loading...</div></div>';
-  var content=document.getElementById('items-tab-content');
-  if(tab==='products')  await itemsRenderProducts(content,false);
-  if(tab==='services')  await itemsRenderProducts(content,true);
+  tabBar += '</div>';
+  el.innerHTML = tabBar+'<div id="items-tab-content"><div style="text-align:center;padding:30px;color:var(--text3)">⏳ Loading...</div></div>';
+  var content = document.getElementById('items-tab-content');
+  if(tab==='products')  await itemsRenderByType(content, false);
+  if(tab==='services')  await itemsRenderByType(content, true);
   if(tab==='category')  await itemsRenderCategory(content);
   if(tab==='units')     await itemsRenderUnits(content);
 }
 
-async function itemsRenderProducts(el, isService){
-  var all = (await itemsGetAll()).filter(function(i){ return (i.is_service==1||i.is_service===true) === isService; });
+// ── Products / Services — grouped by category ──────────────
+async function itemsRenderByType(el, isService){
+  var allItems = await itemsGetAll();
+  var items    = allItems.filter(function(i){ return (i.is_service==1||i.is_service===true) === isService; });
   var typeLabel = isService ? 'Service' : 'Product';
+  var catGroups = isService ? SERVICE_CATS : PRODUCT_CATS;
 
+  // Group items by category
+  var grouped = {};
+  catGroups.forEach(function(c){ grouped[c] = []; });
+  grouped['__other__'] = [];
+  items.forEach(function(item){
+    var cat = item.category||'';
+    if(grouped[cat]) grouped[cat].push(item);
+    else grouped['__other__'].push(item);
+  });
+
+  // Build toolbar
   el.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">'
     +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
     +'<div style="position:relative">'
     +'<span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px">🔍</span>'
-    +'<input type="text" id="items-search" placeholder="Search '+(isService?'services':'products')+'..." oninput="itemsSearchAsync(this.value,'+(isService?'true':'false')+')" '
+    +'<input type="text" id="items-search" placeholder="Search '+(isService?'services':'products')+'..." '
+    +'oninput="itemsFilterSearch(this.value,'+(isService?'true':'false')+')" '
     +'style="padding:7px 12px 7px 30px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-family:inherit;outline:none;width:220px;background:var(--surface)">'
     +'</div>'
-    +'<span style="font-size:12px;color:var(--text3);font-weight:600">'+all.length+' '+(isService?'service':'product')+(all.length===1?'':'s')+'</span>'
+    +'<span style="font-size:12px;color:var(--text3);font-weight:600">'+items.length+' '+(isService?'service':'product')+(items.length===1?'':'s')+'</span>'
     +'</div>'
     +'<button class="btn btn-primary btn-sm" onclick="itemOpenModal('+(isService?'true':'false')+',null)">➕ Add '+typeLabel+'</button>'
     +'</div>'
-    +'<div id="items-list-wrap"></div>';
+    +'<div id="items-cat-groups"></div>';
 
-  itemsRenderList(document.getElementById('items-list-wrap'), all, isService);
+  itemsRenderCatGroups(document.getElementById('items-cat-groups'), grouped, catGroups, isService);
 }
 
-async function itemsSearchAsync(q, isService){
-  var all = (await itemsGetAll()).filter(function(i){
-    var matchType = (i.is_service==1||i.is_service===true) === isService;
-    var matchQ = !q || i.name.toLowerCase().includes(q.toLowerCase())
-      || (i.hsn||'').includes(q)
-      || (i.category||'').toLowerCase().includes(q.toLowerCase());
-    return matchType && matchQ;
-  });
-  itemsRenderList(document.getElementById('items-list-wrap'), all, isService);
-}
-
-function itemsRenderList(el, items, isService){
+function itemsRenderCatGroups(el, grouped, catGroups, isService){
   if(!el) return;
-  if(!items.length){
+  var hasAny = catGroups.some(function(c){ return grouped[c] && grouped[c].length>0; });
+  var otherItems = grouped['__other__']||[];
+
+  if(!hasAny && !otherItems.length){
     el.innerHTML = '<div style="text-align:center;padding:56px 20px;color:var(--text3)">'
       +'<div style="font-size:48px;margin-bottom:14px">'+(isService?'⚙️':'📦')+'</div>'
       +'<div style="font-size:15px;font-weight:700;color:var(--text2);margin-bottom:8px">No '+(isService?'Services':'Products')+' Yet</div>'
-      +'<div style="font-size:12px;margin-bottom:20px;color:var(--text3)">'+(isService?'Add GPS installation, AMC and other services.':'Add GPS devices, accessories and products.')+'</div>'
+      +'<div style="font-size:12px;margin-bottom:20px;color:var(--text3)">'+(isService?'Add GPS installation, AMC and other services here.':'Add GPS devices, accessories and products here.')+'</div>'
       +'<button class="btn btn-primary" onclick="itemOpenModal('+(isService?'true':'false')+',null)">➕ Add '+(isService?'Service':'Product')+'</button>'
       +'</div>';
     return;
   }
 
-  var html = '<div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)">'
-    +'<table class="items-table" style="width:100%;border-collapse:collapse;table-layout:fixed">'
-    +'<colgroup>'
-    +'<col style="width:32%">'    // Name
-    +'<col style="width:8%">'     // HSN
-    +'<col style="width:11%">'    // Category
-    +'<col style="width:6%">'     // Unit
-    +'<col style="width:10%">'    // Sale Price
-    +'<col style="width:10%">'    // Purchase Price
-    +'<col style="width:7%">'     // GST
-    +(isService?'':'<col style="width:7%">')+  // Stock
-    +'<col style="width:9%">'     // Actions
-    +'</colgroup>'
-    +'<thead><tr>'
-    +'<th style="padding:10px 12px">Item Name</th>'
-    +'<th style="padding:10px 8px;text-align:center">HSN/SAC</th>'
-    +'<th style="padding:10px 8px">Category</th>'
-    +'<th style="padding:10px 8px;text-align:center">Unit</th>'
-    +'<th style="padding:10px 10px;text-align:right">Sale Price</th>'
-    +'<th style="padding:10px 10px;text-align:right">Purchase</th>'
-    +'<th style="padding:10px 8px;text-align:center">GST</th>'
-    +(isService?'':'<th style="padding:10px 8px;text-align:center">Stock</th>')
-    +'<th style="padding:10px 8px;text-align:center">Actions</th>'
-    +'</tr></thead>'
-    +'<tbody>';
+  var html = '';
+  catGroups.forEach(function(cat){
+    var catItems = grouped[cat]||[];
+    if(!catItems.length) return;
+    html += itemsBuildCatSection(cat, catItems, isService);
+  });
+  if(otherItems.length) html += itemsBuildCatSection('Uncategorised', otherItems, isService);
+  el.innerHTML = html;
+}
+
+function itemsBuildCatSection(cat, items, isService){
+  var html = '<div style="margin-bottom:16px">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm) var(--radius-sm) 0 0">'
+    +'<div style="font-size:12px;font-weight:800;color:var(--accent);display:flex;align-items:center;gap:6px">'
+    +'<span style="background:var(--accent-light);color:var(--accent);padding:2px 8px;border-radius:10px;font-size:11px">'+cat+'</span>'
+    +'<span style="font-size:11px;color:var(--text3);font-weight:600">'+items.length+' item'+(items.length===1?'':'s')+'</span>'
+    +'</div>'
+    +'</div>'
+    +'<div style="background:var(--surface);border:1.5px solid var(--border);border-top:none;border-radius:0 0 var(--radius-sm) var(--radius-sm);overflow:hidden">'
+    +'<table style="width:100%;border-collapse:collapse;table-layout:fixed">'
+    +'<colgroup><col style="width:32%"><col style="width:8%"><col style="width:6%"><col style="width:11%"><col style="width:11%"><col style="width:7%">'
+    +(isService?'':'<col style="width:8%">')
+    +'<col style="width:17%"></colgroup>'
+    +'<thead><tr style="background:var(--accent)">'
+    +'<th style="padding:8px 12px;font-size:10px;font-weight:700;color:rgba(255,255,255,.9);text-align:left;text-transform:uppercase">Item Name</th>'
+    +'<th style="padding:8px 8px;font-size:10px;font-weight:700;color:rgba(255,255,255,.9);text-align:center;text-transform:uppercase">HSN</th>'
+    +'<th style="padding:8px 8px;font-size:10px;font-weight:700;color:rgba(255,255,255,.9);text-align:center;text-transform:uppercase">Unit</th>'
+    +'<th style="padding:8px 10px;font-size:10px;font-weight:700;color:rgba(255,255,255,.9);text-align:right;text-transform:uppercase">Sale Price</th>'
+    +'<th style="padding:8px 10px;font-size:10px;font-weight:700;color:rgba(255,255,255,.9);text-align:right;text-transform:uppercase">Purchase</th>'
+    +'<th style="padding:8px 8px;font-size:10px;font-weight:700;color:rgba(255,255,255,.9);text-align:center;text-transform:uppercase">GST</th>'
+    +(isService?'':'<th style="padding:8px 8px;font-size:10px;font-weight:700;color:rgba(255,255,255,.9);text-align:center;text-transform:uppercase">Stock</th>')
+    +'<th style="padding:8px 8px;font-size:10px;font-weight:700;color:rgba(255,255,255,.9);text-align:center;text-transform:uppercase">Actions</th>'
+    +'</tr></thead><tbody>';
 
   items.forEach(function(item, idx){
-    var bal = parseInt(item.opening_stock||0) + parseInt(item.stock_in||0) - parseInt(item.stock_out||0);
-    var stockBg = bal < 0 ? 'var(--red-bg)' : bal === 0 ? 'var(--surface2)' : 'var(--green-bg)';
-    var stockColor = bal < 0 ? 'var(--red)' : bal === 0 ? 'var(--text3)' : 'var(--green)';
-    var rowBg = idx%2===0 ? '#fff' : 'var(--surface2)';
+    var bal = parseInt(item.opening_stock||0)+parseInt(item.stock_in||0)-parseInt(item.stock_out||0);
+    var stockBg = bal<0?'var(--red-bg)':bal===0?'var(--surface2)':'var(--green-bg)';
+    var stockColor = bal<0?'var(--red)':bal===0?'var(--text3)':'var(--green)';
+    var rowBg = idx%2===0?'#fff':'var(--surface2)';
+    // Truncate description
+    var descSnippet = item.description ? (item.description.length>60 ? item.description.substring(0,60)+'…' : item.description) : '';
 
-    // Truncate long names for display
-    var dispName = item.name;
-    var dispDesc = item.description || '';
-
-    html += '<tr style="background:'+rowBg+';border-bottom:1px solid var(--border2)">'
-      // Name + description
+    html += '<tr style="background:'+rowBg+';border-bottom:1px solid var(--border2);cursor:pointer" onclick="itemViewModal(\''+item.id+'\')" onmouseenter="this.style.background=\'var(--accent-light)\'" onmouseleave="this.style.background=\''+rowBg+'\'">'
+      // Name + description snippet
       +'<td style="padding:9px 12px">'
-        +'<div style="font-size:13px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+item.name+'">'+dispName+'</div>'
-        +(dispDesc?'<div style="font-size:10px;color:var(--text3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+dispDesc+'">'+dispDesc+'</div>':'')
+        +'<div style="font-size:13px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+item.name+'">'+item.name+'</div>'
+        +(descSnippet?'<div style="font-size:10px;color:var(--text3);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+descSnippet+'</div>':'')
       +'</td>'
       // HSN
       +'<td style="padding:9px 8px;text-align:center">'
-        +'<span style="font-size:11px;font-family:monospace;background:var(--surface2);border:1px solid var(--border);padding:2px 6px;border-radius:4px;color:var(--text2)">'+(item.hsn||'–')+'</span>'
-      +'</td>'
-      // Category
-      +'<td style="padding:9px 8px">'
-        +(item.category?'<span style="font-size:11px;background:var(--accent-light);color:var(--accent2);padding:2px 7px;border-radius:10px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:100%">'+item.category+'</span>':'<span style="color:var(--text3);font-size:12px">–</span>')
+        +(item.hsn?'<span style="font-size:10px;font-family:monospace;background:var(--surface2);border:1px solid var(--border);padding:1px 5px;border-radius:4px">'+item.hsn+'</span>':'<span style="color:var(--text3);font-size:11px">–</span>')
       +'</td>'
       // Unit
       +'<td style="padding:9px 8px;text-align:center;font-size:11px;font-weight:700;color:var(--text2)">'+(item.unit||'PCS')+'</td>'
       // Sale Price
       +'<td style="padding:9px 10px;text-align:right;font-weight:800;font-size:13px;color:var(--accent)">'+(item.sale_price?'₹'+parseFloat(item.sale_price).toLocaleString('en-IN',{minimumFractionDigits:0}):'–')+'</td>'
-      // Purchase Price
+      // Purchase
       +'<td style="padding:9px 10px;text-align:right;font-size:12px;color:var(--text3)">'+(item.purchase_price&&parseFloat(item.purchase_price)>0?'₹'+parseFloat(item.purchase_price).toLocaleString('en-IN',{minimumFractionDigits:0}):'–')+'</td>'
-      // GST rate
+      // GST
       +'<td style="padding:9px 8px;text-align:center">'
-        +(item.gst_rate>0?'<span style="font-size:11px;font-weight:700;background:var(--saffron-bg);color:var(--saffron);padding:2px 7px;border-radius:10px">'+item.gst_rate+'%</span>':'<span style="color:var(--text3);font-size:11px">0%</span>')
+        +(item.gst_rate>0?'<span style="font-size:11px;font-weight:700;background:var(--saffron-bg);color:var(--saffron);padding:2px 6px;border-radius:10px">'+item.gst_rate+'%</span>':'<span style="color:var(--text3);font-size:11px">0%</span>')
       +'</td>'
-      // Stock (products only)
-      +(!isService?'<td style="padding:9px 8px;text-align:center"><span style="font-size:12px;font-weight:800;background:'+stockBg+';color:'+stockColor+';padding:2px 8px;border-radius:10px;display:inline-block;min-width:28px">'+bal+'</span></td>':'')
-      // Actions
-      +'<td style="padding:9px 8px;text-align:center">'
+      // Stock
+      +(!isService?'<td style="padding:9px 8px;text-align:center"><span style="font-size:12px;font-weight:800;background:'+stockBg+';color:'+stockColor+';padding:2px 7px;border-radius:10px;display:inline-block;min-width:26px">'+bal+'</span></td>':'')
+      // Actions — stop propagation so clicking edit doesn't open view
+      +'<td style="padding:9px 8px;text-align:center" onclick="event.stopPropagation()">'
         +'<div style="display:flex;gap:4px;justify-content:center">'
-        +'<button class="action-btn edit" onclick="itemOpenModal('+(isService?'true':'false')+',\''+item.id+'\')" title="Edit" style="padding:4px 8px">✏️</button>'
-        +'<button class="action-btn" style="background:var(--red-bg);color:var(--red);padding:4px 8px" onclick="itemDelete(\''+item.id+'\')" title="Delete">🗑</button>'
+        +'<button class="action-btn edit" onclick="itemOpenModal('+(isService?'true':'false')+',\''+item.id+'\')" title="Edit" style="font-size:12px;padding:4px 8px">✏️</button>'
+        +'<button class="action-btn" style="background:var(--red-bg);color:var(--red);font-size:12px;padding:4px 8px" onclick="itemDelete(\''+item.id+'\')" title="Delete">🗑</button>'
         +'</div>'
       +'</td>'
       +'</tr>';
   });
-
-  html += '</tbody>'
-    +'<tfoot><tr style="background:var(--surface2);border-top:1.5px solid var(--border)">'
-    +'<td colspan="'+(isService?8:9)+'" style="padding:8px 12px;font-size:12px;color:var(--text3)">'+items.length+' '+(isService?'service':'product')+(items.length===1?'':'s')+'</td>'
-    +'</tr></tfoot>'
-    +'</table></div>';
-
-  el.innerHTML = html;
+  html += '</tbody></table></div></div>';
+  return html;
 }
 
+// ── Search filter ──────────────────────────────────────────
+async function itemsFilterSearch(q, isService){
+  var allItems = await itemsGetAll();
+  var items = allItems.filter(function(i){
+    var matchType = (i.is_service==1||i.is_service===true) === isService;
+    var matchQ = !q || i.name.toLowerCase().includes(q.toLowerCase())
+      || (i.hsn||'').includes(q)
+      || (i.category||'').toLowerCase().includes(q.toLowerCase())
+      || (i.description||'').toLowerCase().includes(q.toLowerCase());
+    return matchType && matchQ;
+  });
+  var catGroups = isService ? SERVICE_CATS : PRODUCT_CATS;
+  var grouped = {};
+  catGroups.forEach(function(c){ grouped[c] = []; });
+  grouped['__other__'] = [];
+  items.forEach(function(item){
+    var cat = item.category||'';
+    if(grouped[cat]) grouped[cat].push(item);
+    else grouped['__other__'].push(item);
+  });
+  itemsRenderCatGroups(document.getElementById('items-cat-groups'), grouped, catGroups, isService);
+}
+
+// ── View modal — full item details ────────────────────────
+async function itemViewModal(id){
+  var items = await itemsGetAll();
+  var item  = items.find(function(i){ return i.id===id; });
+  if(!item) return;
+  var isService = item.is_service==1||item.is_service===true;
+  var bal = parseInt(item.opening_stock||0)+parseInt(item.stock_in||0)-parseInt(item.stock_out||0);
+  var margin = item.sale_price&&item.purchase_price&&parseFloat(item.purchase_price)>0
+    ? Math.round((parseFloat(item.sale_price)-parseFloat(item.purchase_price))/parseFloat(item.sale_price)*100)
+    : null;
+
+  var old = document.getElementById('item-view-modal');
+  if(old) old.remove();
+
+  var html = '<div class="modal-overlay" id="item-view-modal" style="display:flex" onclick="if(event.target.id===\'item-view-modal\')closeById(\'item-view-modal\')">'
+    +'<div class="modal" style="width:640px;max-width:calc(100vw - 24px)">'
+    +'<div class="modal-header">'
+      +'<div class="modal-header-left">'
+        +'<h3 style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:380px" title="'+item.name+'">'+item.name+'</h3>'
+        +'<p>'+(item.category||'No category')+' · '+(isService?'⚙️ Service':'📦 Product')+(item.code?' · Code: '+item.code:'')+'</p>'
+      +'</div>'
+      +'<div style="display:flex;gap:8px;align-items:center">'
+        +'<button class="btn btn-secondary" style="font-size:12px;padding:6px 12px" onclick="closeById(\'item-view-modal\');itemOpenModal('+(isService?'true':'false')+',\''+item.id+'\')">✏️ Edit</button>'
+        +'<button class="modal-close" onclick="closeById(\'item-view-modal\')">✕</button>'
+      +'</div>'
+    +'</div>'
+    +'<div class="modal-body" style="padding:0">'
+    // Top info bar
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr'+(isService?'':' 1fr')+';border-bottom:1.5px solid var(--border)">'
+      +'<div style="padding:14px 16px;border-right:1px solid var(--border)">'
+        +'<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Sale Price</div>'
+        +'<div style="font-size:20px;font-weight:900;color:var(--accent)">₹'+parseFloat(item.sale_price||0).toLocaleString('en-IN')+'</div>'
+        +(margin!==null?'<div style="font-size:10px;color:var(--green);font-weight:700;margin-top:2px">'+margin+'% margin</div>':'')
+      +'</div>'
+      +'<div style="padding:14px 16px;border-right:1px solid var(--border)">'
+        +'<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Purchase Price</div>'
+        +'<div style="font-size:16px;font-weight:700;color:var(--text2)">'+( item.purchase_price&&parseFloat(item.purchase_price)>0 ? '₹'+parseFloat(item.purchase_price).toLocaleString('en-IN') : '–' )+'</div>'
+      +'</div>'
+      +'<div style="padding:14px 16px'+(isService?'':';border-right:1px solid var(--border)')+'">'
+        +'<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">GST Rate</div>'
+        +'<div style="font-size:16px;font-weight:700;color:var(--saffron)">'+(item.gst_rate?item.gst_rate+'%':'0% / Exempt')+'</div>'
+      +'</div>'
+      +(!isService?
+        '<div style="padding:14px 16px">'
+          +'<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Stock</div>'
+          +'<div style="font-size:16px;font-weight:700;color:'+(bal<0?'var(--red)':bal===0?'var(--text3)':'var(--green)')+'">'+bal+' '+( item.unit||'pcs' )+'</div>'
+          +(parseInt(item.low_stock_alert||0)>0&&bal<=parseInt(item.low_stock_alert||0)?'<div style="font-size:10px;color:var(--red);font-weight:700;margin-top:2px">⚠ Low stock alert</div>':'')
+        +'</div>':'')
+    +'</div>'
+    // Details grid
+    +'<div style="padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px">'
+      // Left
+      +'<div>'
+        +'<div style="margin-bottom:12px">'
+          +'<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">HSN / SAC Code</div>'
+          +'<div style="font-size:13px;font-weight:600;font-family:monospace;background:var(--surface2);border:1px solid var(--border);padding:6px 10px;border-radius:5px;display:inline-block">'+(item.hsn||'Not set')+'</div>'
+        +'</div>'
+        +'<div style="margin-bottom:12px">'
+          +'<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Unit of Measure</div>'
+          +'<div style="font-size:13px;font-weight:600">'+(item.unit||'PCS')+'</div>'
+        +'</div>'
+        +(item.code?'<div style="margin-bottom:12px"><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Item Code</div><div style="font-size:13px;font-weight:600">'+item.code+'</div></div>':'')
+        +(!isService&&item.location?'<div><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Location</div><div style="font-size:13px">'+item.location+'</div></div>':'')
+      +'</div>'
+      // Right
+      +'<div>'
+        +(item.mrp&&parseFloat(item.mrp)>0?'<div style="margin-bottom:12px"><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">MRP</div><div style="font-size:13px;font-weight:600;text-decoration:line-through;color:var(--text3)">₹'+parseFloat(item.mrp).toLocaleString('en-IN')+'</div></div>':'')
+        +(!isService?'<div style="margin-bottom:12px"><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Opening Stock</div><div style="font-size:13px;font-weight:600">'+(item.opening_stock||0)+' units</div></div>':'')
+        +(!isService?'<div style="margin-bottom:12px"><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Low Stock Alert</div><div style="font-size:13px;font-weight:600">'+(item.low_stock_alert||5)+' units</div></div>':'')
+      +'</div>'
+    +'</div>'
+    // Description (full, scrollable if long)
+    +(item.description?
+      '<div style="padding:0 16px 16px">'
+        +'<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:6px">Description</div>'
+        +'<div style="font-size:12px;color:var(--text2);line-height:1.7;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;max-height:120px;overflow-y:auto;white-space:pre-wrap">'+item.description+'</div>'
+      +'</div>':'')
+    +'</div>'
+    +'<div class="modal-footer">'
+      +'<button class="btn btn-secondary" onclick="closeById(\'item-view-modal\')">Close</button>'
+      +'<button class="btn btn-primary" onclick="closeById(\'item-view-modal\');itemOpenModal('+(isService?'true':'false')+',\''+item.id+'\')">✏️ Edit Item</button>'
+    +'</div>'
+    +'</div></div>';
+
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+// ── Delete ──────────────────────────────────────────────────
 async function itemDelete(id){
   if(!confirm('Delete this item? This cannot be undone.')) return;
   var res = await itemDeleteById(id);
@@ -4852,56 +4976,82 @@ async function itemDelete(id){
   showAlert('Item deleted','info');
 }
 
+// ── Category tab ────────────────────────────────────────────
 async function itemsRenderCategory(el){
-  var cats = await catsGetAll();
-  el.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
-    +'<div style="font-size:13px;font-weight:700;color:var(--text2)">Item Categories</div>'
-    +'<button class="btn btn-primary btn-sm" onclick="itemAddCategory()">➕ Add Category</button>'
+  el.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">'
+    // Products column
+    +'<div>'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+        +'<div style="font-size:13px;font-weight:800;color:var(--text2)">📦 Product Categories</div>'
+        +'<button class="btn btn-primary btn-sm" onclick="itemAddCategory(false)">➕ Add</button>'
+      +'</div>'
+      +'<div id="cats-product-grid"></div>'
     +'</div>'
-    +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">'
-    +cats.map(function(c,i){
-      return '<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:12px;display:flex;justify-content:space-between;align-items:center">'
-        +'<span style="font-size:13px;font-weight:600">🏷 '+c+'</span>'
-        +'<button onclick="itemDeleteCategory(\''+c+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button>'
+    // Services column
+    +'<div>'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+        +'<div style="font-size:13px;font-weight:800;color:var(--text2)">⚙️ Service Categories</div>'
+        +'<button class="btn btn-primary btn-sm" onclick="itemAddCategory(true)">➕ Add</button>'
+      +'</div>'
+      +'<div id="cats-service-grid"></div>'
+    +'</div>'
+  +'</div>';
+
+  var renderGrid = function(gridId, cats, isService){
+    var grid = document.getElementById(gridId);
+    if(!grid) return;
+    grid.innerHTML = cats.map(function(c){
+      return '<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:10px 12px;display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+        +'<span style="font-size:13px;font-weight:600">'+(isService?'⚙️':'📦')+' '+c+'</span>'
+        +'<button onclick="itemDeleteCategory(\''+c+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:2px 6px;border-radius:4px" title="Delete">✕</button>'
         +'</div>';
-    }).join('')+'</div>';
+    }).join('');
+  };
+
+  renderGrid('cats-product-grid', PRODUCT_CATS, false);
+  renderGrid('cats-service-grid', SERVICE_CATS, true);
 }
 
-async function itemAddCategory(){
-  var name = prompt('Enter category name:');
+async function itemAddCategory(isService){
+  var name = prompt((isService?'Service':'Product')+' category name:');
   if(!name||!name.trim()) return;
-  var cats = await catsGetAll();
-  cats.push(name.trim());
-  await catsSave(cats);
+  if(isService) SERVICE_CATS.push(name.trim());
+  else PRODUCT_CATS.push(name.trim());
+  await catsSave([...PRODUCT_CATS, ...SERVICE_CATS]);
   itemsRenderTab(document.getElementById('inv-content'),'category');
 }
 
 async function itemDeleteCategory(name){
-  if(!confirm('Delete category "'+name+'"?')) return;
-  var cats = (await catsGetAll()).filter(function(c){ return c!==name; });
-  await catsSave(cats);
+  if(!confirm('Delete category "'+name+'"?\nItems with this category will become uncategorised.')) return;
+  var pi = PRODUCT_CATS.indexOf(name);
+  var si = SERVICE_CATS.indexOf(name);
+  if(pi>=0) PRODUCT_CATS.splice(pi,1);
+  if(si>=0) SERVICE_CATS.splice(si,1);
+  await catsSave([...PRODUCT_CATS, ...SERVICE_CATS]);
   itemsRenderTab(document.getElementById('inv-content'),'category');
 }
 
+// ── Units tab ───────────────────────────────────────────────
 async function itemsRenderUnits(el){
   var units = await unitsGetAll();
   el.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
     +'<div style="font-size:13px;font-weight:700;color:var(--text2)">Units of Measurement</div>'
     +'<button class="btn btn-primary btn-sm" onclick="itemAddUnit()">➕ Add Unit</button>'
     +'</div>'
-    +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px">'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px">'
     +units.map(function(u){
-      return '<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:12px;display:flex;justify-content:space-between;align-items:center">'
+      return '<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:10px 12px;display:flex;justify-content:space-between;align-items:center">'
         +'<span style="font-size:13px;font-weight:700">'+u+'</span>'
-        +'<button onclick="itemDeleteUnit(\''+u+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button>'
+        +'<button onclick="itemDeleteUnit(\''+u+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:2px">✕</button>'
         +'</div>';
     }).join('')+'</div>';
 }
 
 async function itemAddUnit(){
-  var name = prompt('Enter unit (e.g. PCS, KG, MTR):');
+  var name = prompt('Unit name (e.g. PCS, KG, MTR):');
   if(!name||!name.trim()) return;
   var units = await unitsGetAll();
+  if(units.includes(name.trim().toUpperCase())){ showAlert('Unit already exists','error'); return; }
   units.push(name.trim().toUpperCase());
   await unitsSave(units);
   itemsRenderTab(document.getElementById('inv-content'),'units');
@@ -4914,67 +5064,68 @@ async function itemDeleteUnit(name){
   itemsRenderTab(document.getElementById('inv-content'),'units');
 }
 
+// ── Add / Edit modal ─────────────────────────────────────────
 async function itemOpenModal(isService, editId){
   itemEditingId = editId;
-  var cats  = await catsGetAll();
   var units = await unitsGetAll();
-  var items = editId ? await itemsGetAll() : [];
-  var item  = editId ? items.find(function(i){ return i.id===editId; }) : null;
+  var allItems = editId ? await itemsGetAll() : [];
+  var item  = editId ? allItems.find(function(i){ return i.id===editId; }) : null;
+  var catList = isService ? SERVICE_CATS : PRODUCT_CATS;
 
-  // Build modal HTML
+  var old = document.getElementById('item-modal');
+  if(old) old.remove();
+
+  // Close view modal if open
+  var vm = document.getElementById('item-view-modal');
+  if(vm) vm.remove();
+
+  var catOpts = catList.map(function(c){
+    return '<option'+(item&&item.category===c?' selected':'')+'>'+c+'</option>';
+  }).join('');
+  var unitOpts = units.map(function(u){
+    return '<option'+(item&&item.unit===u?' selected':u==='PCS'&&!item?' selected':'')+'>'+u+'</option>';
+  }).join('');
+
   var html = '<div class="modal-overlay" id="item-modal" style="display:flex" onclick="if(event.target.id===\'item-modal\')closeById(\'item-modal\')">'
     +'<div class="modal" style="width:700px;max-width:calc(100vw - 24px)">'
     +'<div class="modal-header">'
-    +'<div class="modal-header-left">'
-    +'<h3>'+(editId?'Edit':'Add')+' '+(isService?'Service':'Product')+'</h3>'
-    +'<p>'+(isService?'Service item (no stock tracking)':'Product with stock tracking')+'</p>'
-    +'</div>'
+    +'<div class="modal-header-left"><h3>'+(editId?'Edit':'Add')+' '+(isService?'Service':'Product')+'</h3>'
+    +'<p>'+(isService?'Service item — no stock tracking':'Product — with stock tracking')+'</p></div>'
     +'<button class="modal-close" onclick="closeById(\'item-modal\')">✕</button>'
     +'</div>'
     +'<div class="modal-body">'
-    // Row 1
-    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr 120px;gap:10px;margin-bottom:12px;align-items:end">'
+    // Row 1 — Name / HSN / Code / Unit
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr 110px;gap:10px;margin-bottom:12px;align-items:end">'
     +'<div><label class="field-label">Item Name *</label><input id="itm-name" class="inv-field" type="text" value="'+(item?item.name:'')+'" placeholder="e.g. Engine Cut GPS"></div>'
     +'<div><label class="field-label">HSN / SAC Code</label><input id="itm-hsn" class="inv-field" type="text" value="'+(item?item.hsn||'':'')+'" placeholder="e.g. 8526"></div>'
-    +'<div><label class="field-label">Item Code</label><input id="itm-code" class="inv-field" type="text" value="'+(item?item.code||'':'')+'" placeholder="Optional code"></div>'
-    +'<div><label class="field-label">Unit</label>'
-    +'<select id="itm-unit" class="inv-field">'
-    +units.map(function(u){ return '<option'+(item&&item.unit===u?' selected':u==='PCS'&&!item?' selected':'')+'>'+u+'</option>'; }).join('')
-    +'</select></div>'
+    +'<div><label class="field-label">Item Code (optional)</label><input id="itm-code" class="inv-field" type="text" value="'+(item?item.code||'':'')+'" placeholder="SKU / Code"></div>'
+    +'<div><label class="field-label">Unit</label><select id="itm-unit" class="inv-field">'+unitOpts+'</select></div>'
     +'</div>'
-    // Row 2
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">'
-    +'<div><label class="field-label">Category</label>'
-    +'<select id="itm-category" class="inv-field">'
-    +'<option value="">None</option>'
-    +cats.map(function(c){ return '<option'+(item&&item.category===c?' selected':'')+'>'+c+'</option>'; }).join('')
-    +'</select></div>'
-    +'<div><label class="field-label">Description</label><input id="itm-desc" class="inv-field" type="text" value="'+(item?item.description||'':'')+'" placeholder="Optional description"></div>'
+    // Row 2 — Category / Description
+    +'<div style="display:grid;grid-template-columns:160px 1fr;gap:10px;margin-bottom:14px">'
+    +'<div><label class="field-label">Category</label><select id="itm-category" class="inv-field"><option value="">None</option>'+catOpts+'</select></div>'
+    +'<div><label class="field-label">Description</label><textarea id="itm-desc" class="inv-field" rows="2" style="resize:none;font-size:12px" placeholder="Full description of item (features, specs, notes)...">'+(item?item.description||'':'')+'</textarea></div>'
     +'</div>'
-    // Pricing box
+    // Pricing
     +'<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:'+(isService?'0':'12px')+'">'
     +'<div style="font-size:12px;font-weight:800;color:var(--text2);margin-bottom:10px">💰 Pricing</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">'
     +'<div><label class="field-label">MRP (₹)</label><input id="itm-mrp" class="inv-field" type="number" min="0" value="'+(item?item.mrp||'':'')+'" placeholder="0.00"></div>'
     +'<div><label class="field-label">Sale Price (₹) *</label><input id="itm-sale" class="inv-field" type="number" min="0" value="'+(item?item.sale_price||'':'')+'" placeholder="0.00" oninput="itmCalcMargin()"></div>'
     +'<div><label class="field-label">Purchase Price (₹)</label><input id="itm-purchase" class="inv-field" type="number" min="0" value="'+(item?item.purchase_price||'':'')+'" placeholder="0.00" oninput="itmCalcMargin()"></div>'
-    +'<div><label class="field-label">GST Rate</label>'
-    +'<select id="itm-gst" class="inv-field">'
-    +['0','5','12','18','28'].map(function(g){ return '<option value="'+g+'"'+(item&&item.gst_rate==g?' selected':g==='18'&&!item?' selected':'')+'>'+g+'%</option>'; }).join('')
-    +'</select></div>'
+    +'<div><label class="field-label">GST Rate</label><select id="itm-gst" class="inv-field">'+['0','5','12','18','28'].map(function(g){ return '<option value="'+g+'"'+(item&&item.gst_rate==g?' selected':g==='18'&&!item?' selected':'')+'>'+g+'%</option>'; }).join('')+'</select></div>'
     +'</div>'
     +'<div style="margin-top:8px;font-size:12px;color:var(--text3)" id="itm-margin-line"></div>'
     +'</div>';
 
   if(!isService){
     html += '<div style="background:var(--blue-bg);border:1.5px solid var(--blue);border-radius:var(--radius);padding:14px">'
-      +'<div style="font-size:12px;font-weight:800;color:var(--blue);margin-bottom:10px">📦 Stock</div>'
-      +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'
-      +'<div><label class="field-label">Opening Stock (Qty)</label><input id="itm-stock" class="inv-field" type="number" min="0" value="'+(item?item.opening_stock||'0':'0')+'" placeholder="0"></div>'
-      +'<div><label class="field-label">Low Stock Alert at</label><input id="itm-low-stock" class="inv-field" type="number" min="0" value="'+(item?item.low_stock_alert||'5':'5')+'" placeholder="5"></div>'
-      +'<div><label class="field-label">Stock Location</label><input id="itm-location" class="inv-field" type="text" value="'+(item?item.location||'':'')+'" placeholder="e.g. Warehouse, Office"></div>'
-      +'</div>'
-      +'</div>';
+    +'<div style="font-size:12px;font-weight:800;color:var(--blue);margin-bottom:10px">📦 Stock</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'
+    +'<div><label class="field-label">Opening Stock (Qty)</label><input id="itm-stock" class="inv-field" type="number" min="0" value="'+(item?item.opening_stock||'0':'0')+'" placeholder="0"></div>'
+    +'<div><label class="field-label">Low Stock Alert at</label><input id="itm-low-stock" class="inv-field" type="number" min="0" value="'+(item?item.low_stock_alert||'5':'5')+'" placeholder="5"></div>'
+    +'<div><label class="field-label">Storage Location</label><input id="itm-location" class="inv-field" type="text" value="'+(item?item.location||'':'')+'" placeholder="e.g. Office, Warehouse"></div>'
+    +'</div></div>';
   } else {
     html += '<input type="hidden" id="itm-stock" value="0"><input type="hidden" id="itm-low-stock" value="0"><input type="hidden" id="itm-location" value="">';
   }
@@ -4984,14 +5135,9 @@ async function itemOpenModal(isService, editId){
     +'<button class="btn btn-secondary" onclick="closeById(\'item-modal\')">Cancel</button>'
     +'<button class="btn btn-secondary" onclick="itemSave('+(isService?'true':'false')+',true)">💾 Save & Add Another</button>'
     +'<button class="btn btn-primary" onclick="itemSave('+(isService?'true':'false')+',false)">💾 Save '+(isService?'Service':'Product')+'</button>'
-    +'</div>'
-    +'</div></div>';
+    +'</div></div></div>';
 
-  // Remove existing modal if any
-  var old = document.getElementById('item-modal');
-  if(old) old.remove();
   document.body.insertAdjacentHTML('beforeend', html);
-  // Focus name field
   setTimeout(function(){ document.getElementById('itm-name')?.focus(); }, 100);
 }
 
@@ -5004,10 +5150,8 @@ function itmCalcMargin(){
     var margin = ((sale-pur)/sale*100).toFixed(1);
     var profit = (sale-pur).toFixed(2);
     el.textContent = 'Margin: '+margin+'% — Profit per unit: ₹'+profit;
-    el.style.color = parseFloat(margin) > 0 ? 'var(--green)' : 'var(--red)';
-  } else {
-    el.textContent = '';
-  }
+    el.style.color = parseFloat(margin)>0?'var(--green)':'var(--red)';
+  } else { el.textContent=''; }
 }
 
 async function itemSave(isService, addAnother){
@@ -5016,18 +5160,13 @@ async function itemSave(isService, addAnother){
   var salePrice = parseFloat(document.getElementById('itm-sale')?.value||0);
   if(!salePrice){ showAlert('Sale price is required','error'); return; }
 
-  // ── Duplicate name check ──────────────────────────
+  // Duplicate check
   var existing = await itemsGetAll();
-  var duplicate = existing.find(function(i){
-    return i.name.toLowerCase() === name.toLowerCase() && i.id !== itemEditingId;
-  });
-  if(duplicate){
-    showAlert('An item named "'+name+'" already exists. Please use a different name.','error');
-    return;
-  }
+  var dup = existing.find(function(i){ return i.name.toLowerCase()===name.toLowerCase()&&i.id!==itemEditingId; });
+  if(dup){ showAlert('An item named "'+name+'" already exists.','error'); return; }
 
   var item = {
-    id:             itemEditingId || ('ITEM-'+Date.now()),
+    id:             itemEditingId||('ITEM-'+Date.now()),
     name,
     hsn:            document.getElementById('itm-hsn')?.value?.trim()||'',
     code:           document.getElementById('itm-code')?.value?.trim()||'',
@@ -5041,7 +5180,7 @@ async function itemSave(isService, addAnother){
     opening_stock:  parseInt(document.getElementById('itm-stock')?.value||0),
     low_stock_alert:parseInt(document.getElementById('itm-low-stock')?.value||5),
     location:       document.getElementById('itm-location')?.value?.trim()||'',
-    is_service:     isService ? 1 : 0
+    is_service:     isService?1:0
   };
 
   var btn = document.querySelector('#item-modal .modal-footer .btn-primary');
@@ -5051,14 +5190,11 @@ async function itemSave(isService, addAnother){
   if(!res||!res.success){ showAlert(res&&res.error?res.error:'Save failed','error'); return; }
 
   closeById('item-modal');
-  showAlert('✅ '+item.name+' saved to database!','success');
-
-  if(addAnother){
-    setTimeout(function(){ itemOpenModal(isService, null); }, 100);
-  } else {
-    renderInvItems(document.getElementById('inv-content'));
-  }
+  showAlert('✅ '+item.name+' saved!','success');
+  if(addAnother){ setTimeout(function(){ itemOpenModal(isService,null); },100); }
+  else { renderInvItems(document.getElementById('inv-content')); }
 }
+
 
 // Helper: get items list for dropdowns in Sale Invoice / Estimate etc.
 async function invGetItemsForDropdown(){
