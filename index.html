@@ -141,6 +141,11 @@ html,body{height:100%;font-family:'Calibri','Segoe UI',sans-serif;background:var
 .row-outstation td{background:#fff8f0!important;}
 .badge-outstation{background:#fff3e0;color:#e07b00;border:1px solid rgba(224,123,0,.4);font-weight:800;}
 .task-card.card-outstation{border-color:#e07b00;border-width:2px;background:#fffbf5;}
+
+/* INVOICING TABS */
+.inv-tab-btn{padding:10px 16px;font-size:12px;font-weight:600;color:var(--text3);cursor:pointer;white-space:nowrap;border-right:1px solid var(--border);border-bottom:3px solid transparent;transition:all .15s;user-select:none}
+.inv-tab-btn:hover{background:var(--surface2);color:var(--text2)}
+.inv-tab-btn.active{color:var(--accent);font-weight:800;border-bottom-color:var(--accent);background:var(--surface)}
 .bs-tab{padding:10px 18px;background:none;border:none;font-family:inherit;font-size:13px;font-weight:700;color:var(--text3);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
 .bs-tab.active{color:var(--accent);border-bottom-color:var(--accent);background:var(--surface)}
 .bs-tab:hover{color:var(--accent2);background:var(--surface2)}
@@ -578,28 +583,33 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
 
       <div class="page" id="page-invoicing">
         <div class="breadcrumb">Home / <span>Invoicing</span></div>
-        <!-- Invoicing sub-navigation tabs -->
-        <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:14px;overflow-x:auto;flex-shrink:0">
-          <div class="inv-tab active" id="inv-tab-sale" onclick="showInvPage('sale')" style="padding:9px 16px;font-size:12px;font-weight:700;color:var(--accent);border-bottom:2.5px solid var(--accent);margin-bottom:-2px;cursor:pointer;white-space:nowrap">💰 Sale Invoices</div>
-          <div class="inv-tab" id="inv-tab-estimate" onclick="showInvPage('estimate')" style="padding:9px 16px;font-size:12px;font-weight:600;color:var(--text3);border-bottom:2.5px solid transparent;margin-bottom:-2px;cursor:pointer;white-space:nowrap">📄 Estimates</div>
-          <div class="inv-tab" id="inv-tab-proforma" onclick="showInvPage('proforma')" style="padding:9px 16px;font-size:12px;font-weight:600;color:var(--text3);border-bottom:2.5px solid transparent;margin-bottom:-2px;cursor:pointer;white-space:nowrap">📋 Proforma</div>
-          <div class="inv-tab" id="inv-tab-payin" onclick="showInvPage('payin')" style="padding:9px 16px;font-size:12px;font-weight:600;color:var(--text3);border-bottom:2.5px solid transparent;margin-bottom:-2px;cursor:pointer;white-space:nowrap">💳 Payment-In</div>
-          <div class="inv-tab" id="inv-tab-saleorder" onclick="showInvPage('saleorder')" style="padding:9px 16px;font-size:12px;font-weight:600;color:var(--text3);border-bottom:2.5px solid transparent;margin-bottom:-2px;cursor:pointer;white-space:nowrap">📝 Sale Order</div>
-          <div class="inv-tab" id="inv-tab-challan" onclick="showInvPage('challan')" style="padding:9px 16px;font-size:12px;font-weight:600;color:var(--text3);border-bottom:2.5px solid transparent;margin-bottom:-2px;cursor:pointer;white-space:nowrap">🚚 Challan</div>
-          <div class="inv-tab" id="inv-tab-purbills" onclick="showInvPage('purbills')" style="padding:9px 16px;font-size:12px;font-weight:600;color:var(--text3);border-bottom:2.5px solid transparent;margin-bottom:-2px;cursor:pointer;white-space:nowrap">🛒 Purchase</div>
-          <div class="inv-tab" id="inv-tab-parties" onclick="showInvPage('parties')" style="padding:9px 16px;font-size:12px;font-weight:600;color:var(--text3);border-bottom:2.5px solid transparent;margin-bottom:-2px;cursor:pointer;white-space:nowrap">👥 Parties</div>
-          <div class="inv-tab" id="inv-tab-items" onclick="showInvPage('items')" style="padding:9px 16px;font-size:12px;font-weight:600;color:var(--text3);border-bottom:2.5px solid transparent;margin-bottom:-2px;cursor:pointer;white-space:nowrap">📦 Items</div>
-          <div class="inv-tab" id="inv-tab-banks" onclick="showInvPage('banks')" style="padding:9px 16px;font-size:12px;font-weight:600;color:var(--text3);border-bottom:2.5px solid transparent;margin-bottom:-2px;cursor:pointer;white-space:nowrap">🏦 Banks</div>
-          <div class="inv-tab" id="inv-tab-invreports" onclick="showInvPage('invreports')" style="padding:9px 16px;font-size:12px;font-weight:600;color:var(--text3);border-bottom:2.5px solid transparent;margin-bottom:-2px;cursor:pointer;white-space:nowrap">📊 Reports</div>
-          <div class="inv-tab" id="inv-tab-settings" onclick="showInvPage('settings')" style="padding:9px 16px;font-size:12px;font-weight:600;color:var(--text3);border-bottom:2.5px solid transparent;margin-bottom:-2px;cursor:pointer;white-space:nowrap">⚙️ Settings</div>
+        <div class="page-header">
+          <div class="page-header-left"><h2>🧾 Invoicing</h2><p>Manage invoices, parties, items, banks & reports</p></div>
         </div>
-        <!-- Invoicing sub-pages rendered here -->
-        <div id="inv-content"></div>
+        <!-- Invoicing sub-navigation tabs -->
+        <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius) var(--radius) 0 0;border-bottom:none;overflow-x:auto;display:flex;gap:0">
+          <div id="inv-tab-sale" onclick="showInvPage('sale')" class="inv-tab-btn">💰 Sale Invoices</div>
+          <div id="inv-tab-estimate" onclick="showInvPage('estimate')" class="inv-tab-btn">📄 Estimates</div>
+          <div id="inv-tab-proforma" onclick="showInvPage('proforma')" class="inv-tab-btn">📋 Proforma</div>
+          <div id="inv-tab-payin" onclick="showInvPage('payin')" class="inv-tab-btn">💳 Payment-In</div>
+          <div id="inv-tab-saleorder" onclick="showInvPage('saleorder')" class="inv-tab-btn">📝 Sale Order</div>
+          <div id="inv-tab-challan" onclick="showInvPage('challan')" class="inv-tab-btn">🚚 Challan</div>
+          <div id="inv-tab-purbills" onclick="showInvPage('purbills')" class="inv-tab-btn">🛒 Purchase</div>
+          <div id="inv-tab-parties" onclick="showInvPage('parties')" class="inv-tab-btn">👥 Parties</div>
+          <div id="inv-tab-items" onclick="showInvPage('items')" class="inv-tab-btn">📦 Items</div>
+          <div id="inv-tab-banks" onclick="showInvPage('banks')" class="inv-tab-btn">🏦 Banks</div>
+          <div id="inv-tab-invreports" onclick="showInvPage('invreports')" class="inv-tab-btn">📊 Reports</div>
+          <div id="inv-tab-settings" onclick="showInvPage('settings')" class="inv-tab-btn">⚙️ Settings</div>
+        </div>
+        <!-- Content area -->
+        <div id="inv-content" style="background:var(--surface);border:1.5px solid var(--border);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:16px;min-height:300px">
+          <div style="text-align:center;padding:40px;color:var(--text3)">
+            <div style="font-size:36px;margin-bottom:10px">🧾</div>
+            <div style="font-size:14px;font-weight:700">Select a tab above to get started</div>
+          </div>
+        </div>
       </div>
 
-    </div>
-  </div>
-</div>
 
 <!-- TASK TABLE TEMPLATE -->
 <template id="task-table-tpl">
@@ -1218,7 +1228,7 @@ function showPage(name){
   document.getElementById('page-'+name)?.classList.add('active');
   document.getElementById('nav-'+name)?.classList.add('active');
   localStorage.setItem('bgps_last_page', name); // Fix 7: save current page
-  const map={dashboard:loadDashboard,tasks:loadTasksPage,'my-tasks':loadMyTasks,urgent:loadUrgentPage,approvals:loadApprovalsPage,'daily-report':loadDailyReport,'balance-sheet':loadBalanceSheet,admin:loadAdminPanel,accounts:loadAccounts,invoicing:function(){showInvPage('sale');}};
+  const map={dashboard:loadDashboard,tasks:loadTasksPage,'my-tasks':loadMyTasks,urgent:loadUrgentPage,approvals:loadApprovalsPage,'daily-report':loadDailyReport,'balance-sheet':loadBalanceSheet,admin:loadAdminPanel,accounts:loadAccounts};
   if(map[name])map[name]();
 }
 
@@ -3497,18 +3507,50 @@ var currentInvPage='sale';
 var INV_PAGES=['sale','estimate','proforma','payin','saleorder','challan','purbills','parties','items','banks','invreports','settings'];
 
 function showInvPage(name){
-  showPage('invoicing');
+  // Directly show the invoicing page without going through showPage (prevents circular call)
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
+  document.getElementById('page-invoicing')?.classList.add('active');
+  localStorage.setItem('bgps_last_page','invoicing');
+
   currentInvPage=name;
+
+  // Update sidebar nav active state — invoicing head
+  document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active');});
+  var head=document.getElementById('nav-invoicing-head');
+  if(head)head.classList.add('active');
+
+  // Open the dropdown if not already
+  var kids=document.getElementById('inv-nav-kids');
+  var arrow=document.getElementById('inv-nav-arrow');
+  if(kids)kids.style.display='block';
+  if(arrow)arrow.style.transform='rotate(180deg)';
+
+  // Update tab styles using CSS class
   INV_PAGES.forEach(function(p){
     var tab=document.getElementById('inv-tab-'+p);
     if(!tab)return;
-    if(p===name){tab.style.color='var(--accent)';tab.style.borderBottomColor='var(--accent)';tab.style.fontWeight='700';}
-    else{tab.style.color='var(--text3)';tab.style.borderBottomColor='transparent';tab.style.fontWeight='600';}
+    tab.classList.toggle('active', p===name);
     var ni=document.getElementById('inv-ni-'+p);
-    if(ni)ni.classList.toggle('active',p===name);
+    if(ni) ni.classList.toggle('active',p===name);
   });
-  var el=document.getElementById('inv-content');if(!el)return;
-  var renderers={sale:renderInvSale,estimate:renderInvEstimate,proforma:renderInvProforma,payin:renderInvPayin,saleorder:renderInvStub('Sale Order','📝'),challan:renderInvStub('Delivery Challan','🚚'),purbills:renderInvPurchase,parties:renderInvParties,items:renderInvItems,banks:renderInvBanks,invreports:renderInvReports,settings:renderInvSettings};
+
+  // Render content
+  var el=document.getElementById('inv-content');
+  if(!el)return;
+  var renderers={
+    sale:renderInvSale,
+    estimate:renderInvEstimate,
+    proforma:renderInvProforma,
+    payin:renderInvPayin,
+    saleorder:renderInvStub('Sale Order','📝'),
+    challan:renderInvStub('Delivery Challan','🚚'),
+    purbills:renderInvPurchase,
+    parties:renderInvParties,
+    items:renderInvItems,
+    banks:renderInvBanks,
+    invreports:renderInvReports,
+    settings:renderInvSettings
+  };
   if(renderers[name])renderers[name](el);
 }
 
