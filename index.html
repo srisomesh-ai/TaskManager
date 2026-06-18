@@ -3508,31 +3508,524 @@ function showInvPage(name){
 }
 
 
-function renderInvSale(el){
-  el.innerHTML =
-    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">'
-    +'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
-    +'<select class="toolbar-select"><option>All Sale Invoices</option><option>Paid</option><option>Unpaid</option></select>'
-    +'<select class="toolbar-select"><option>📅 This Month</option><option>Last Month</option><option>This Year</option><option>Custom</option></select>'
-    +'<select class="toolbar-select"><option>All Firms</option><option>BGPT</option><option>SBGT</option></select>'
-    +'<select class="toolbar-select"><option>All Users</option></select>'
-    +'</div>'
-    +'<button class="btn btn-primary btn-sm">➕ Add Sale</button>'
-    +'</div>'
-    +'<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:14px;display:flex;gap:28px;align-items:center;flex-wrap:wrap">'
-    +'<div><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">Total Sales Amount</div><div style="font-size:22px;font-weight:800">₹0.00</div></div>'
-    +'<div style="width:1px;height:32px;background:var(--border)"></div>'
-    +'<div><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">Received</div><div style="font-size:17px;font-weight:800;color:var(--green)">₹0.00</div></div>'
-    +'<div style="width:1px;height:32px;background:var(--border)"></div>'
-    +'<div><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">Balance</div><div style="font-size:17px;font-weight:800;color:var(--red)">₹0.00</div></div>'
-    +'</div>'
-    +'<div style="text-align:center;padding:48px 20px;color:var(--text3)">'
-    +'<div style="font-size:44px;margin-bottom:12px">📄</div>'
-    +'<div style="font-size:15px;font-weight:700;margin-bottom:6px">No Sale Invoices</div>'
-    +'<div style="font-size:12px;margin-bottom:16px">Create your first sale invoice to get started.</div>'
-    +'<button class="btn btn-primary btn-sm">➕ Add Sale Invoice</button>'
-    +'</div>';
+// ═══════════════════════════════════════════════════
+// SALE INVOICES — localStorage persistence + full CRUD
+// ═══════════════════════════════════════════════════
+var INV_STORE_KEY = 'bgps_sale_invoices';
+var INV_COUNTER_KEY = 'bgps_inv_counter';
+var invEditingId = null;
+var invRowCount = 0;
+
+function invGetAll(){ try{ return JSON.parse(localStorage.getItem(INV_STORE_KEY)||'[]'); }catch(e){ return []; } }
+function invSaveAll(arr){ localStorage.setItem(INV_STORE_KEY, JSON.stringify(arr)); }
+function invNextNo(){
+  var n = parseInt(localStorage.getItem(INV_COUNTER_KEY)||'116') + 1;
+  localStorage.setItem(INV_COUNTER_KEY, n);
+  return 'FY26-27/' + n;
 }
+function invFmt(n){ return '₹' + parseFloat(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function invToday(){ return new Date().toISOString().split('T')[0]; }
+function invFmtDate(d){ if(!d) return '–'; var p=d.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
+
+function renderInvSale(el){
+  var invoices = invGetAll();
+  var total = invoices.reduce(function(s,i){ return s + parseFloat(i.grand_total||0); }, 0);
+  var received = invoices.reduce(function(s,i){ return s + parseFloat(i.amount_received||0); }, 0);
+  var balance = total - received;
+
+  var html = '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
+    +'<select class="toolbar-select" onchange="invFilterRender(this.value,\'status\')" id="inv-filter-status"><option value="">All Sale Invoices</option><option value="Paid">Paid</option><option value="Unpaid">Unpaid</option><option value="Partial">Partial</option></select>'
+    +'<select class="toolbar-select" onchange="invFilterRender(this.value,\'month\')" id="inv-filter-month"><option value="">All Time</option><option value="this">This Month</option><option value="last">Last Month</option></select>'
+    +'</div>'
+    +'<div style="display:flex;gap:6px">'
+    +'<button class="btn-icon-sq" title="Export CSV" onclick="invExportCSV()">📊</button>'
+    +'<button class="btn-icon-sq" title="Print List" onclick="window.print()">🖨</button>'
+    +'<button class="btn btn-primary btn-sm" onclick="invOpenNew()">➕ Add Sale</button>'
+    +'</div></div>'
+    // Summary
+    +'<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:14px;display:flex;gap:32px;align-items:center;flex-wrap:wrap">'
+    +'<div><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">Total Sales Amount</div><div style="font-size:22px;font-weight:800">'+invFmt(total)+'</div></div>'
+    +'<div style="width:1px;height:34px;background:var(--border)"></div>'
+    +'<div><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">Received</div><div style="font-size:18px;font-weight:800;color:var(--green)">'+invFmt(received)+'</div></div>'
+    +'<div style="width:1px;height:34px;background:var(--border)"></div>'
+    +'<div><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">Balance</div><div style="font-size:18px;font-weight:800;color:var(--red)">'+invFmt(balance)+'</div></div>'
+    +'</div>';
+
+  if(invoices.length === 0){
+    html += '<div style="text-align:center;padding:56px 20px;color:var(--text3)">'
+      +'<div style="font-size:48px;margin-bottom:14px">📄</div>'
+      +'<div style="font-size:15px;font-weight:700;color:var(--text2);margin-bottom:8px">No Sale Invoices Yet</div>'
+      +'<div style="font-size:13px;margin-bottom:20px">Create your first invoice to get started.</div>'
+      +'<button class="btn btn-primary" onclick="invOpenNew()">➕ Create First Invoice</button>'
+      +'</div>';
+  } else {
+    html += '<div class="table-wrapper"><div class="table-scroll"><table>'
+      +'<thead><tr>'
+      +'<th>Date</th><th>Invoice No.</th><th>Customer</th><th>Payment Mode</th>'
+      +'<th style="text-align:right">Amount</th><th style="text-align:right">Received</th><th style="text-align:right">Balance</th>'
+      +'<th>Status</th><th>Actions</th>'
+      +'</tr></thead><tbody>';
+    invoices.slice().reverse().forEach(function(inv){
+      var bal = parseFloat(inv.grand_total||0) - parseFloat(inv.amount_received||0);
+      var isPaid = bal <= 0;
+      var isPartial = !isPaid && parseFloat(inv.amount_received||0) > 0;
+      var statusLabel = isPaid ? 'Paid' : (isPartial ? 'Partial' : 'Unpaid');
+      var statusStyle = isPaid
+        ? 'background:var(--green-bg);color:var(--green)'
+        : isPartial
+          ? 'background:var(--saffron-bg);color:var(--saffron)'
+          : 'background:var(--red-bg);color:var(--red)';
+      html += '<tr>'
+        +'<td style="font-size:12px">'+invFmtDate(inv.date)+'</td>'
+        +'<td><span style="color:var(--blue);font-weight:700;font-size:12px;cursor:pointer" onclick="invView(\''+inv.id+'\')">'+inv.inv_no+'</span></td>'
+        +'<td style="font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+inv.customer+'</td>'
+        +'<td style="font-size:12px;color:var(--text3)">'+( inv.cash_sale ? 'Cash' : (inv.pay_mode||'Credit') )+'</td>'
+        +'<td style="text-align:right;font-weight:700">'+invFmt(inv.grand_total)+'</td>'
+        +'<td style="text-align:right;color:var(--green);font-weight:600">'+invFmt(inv.amount_received)+'</td>'
+        +'<td style="text-align:right;font-weight:700;color:'+(bal>0?'var(--red)':'var(--green)')+'">'+invFmt(bal)+'</td>'
+        +'<td><span style="'+statusStyle+';padding:3px 9px;border-radius:10px;font-size:11px;font-weight:700">'+statusLabel+'</span></td>'
+        +'<td><div style="display:flex;gap:4px">'
+        +'<button class="action-btn view" onclick="invView(\''+inv.id+'\')" title="View">👁</button>'
+        +'<button class="action-btn edit" onclick="invEditInvoice(\''+inv.id+'\')" title="Edit">✏️</button>'
+        +'<button class="action-btn" style="background:var(--surface2)" onclick="invPrintInvoice(\''+inv.id+'\')" title="Print">🖨</button>'
+        +'<button class="action-btn" style="background:var(--red-bg);color:var(--red)" onclick="invDelete(\''+inv.id+'\')" title="Delete">🗑</button>'
+        +'</div></td>'
+        +'</tr>';
+    });
+    html += '</tbody></table></div></div>';
+  }
+  el.innerHTML = html;
+}
+
+function invFilterRender(val, type){
+  // Re-render with filter applied (simple client-side filter)
+  renderInvSale(document.getElementById('inv-content'));
+}
+
+function invOpenNew(){
+  invEditingId = null;
+  invRowCount = 0;
+  document.getElementById('inv-sale-modal-title').textContent = 'New Sale Invoice';
+  document.getElementById('inv-inv-no').value = invNextNo();
+  document.getElementById('inv-inv-date').value = invToday();
+  document.getElementById('inv-due-date').value = '';
+  document.getElementById('inv-customer').value = '';
+  document.getElementById('inv-billing-name').value = '';
+  document.getElementById('inv-po-no').value = '';
+  document.getElementById('inv-state').value = '';
+  document.getElementById('inv-pay-mode').value = 'Cash';
+  document.getElementById('inv-terms').value = '1. Payments terms: 100% payments against delivery/installation.\n2. Warranty as per Bharat GPS Warranty Policy.\n3. All disputes subject to Visakhapatnam jurisdiction.';
+  document.getElementById('inv-notes').value = '';
+  document.getElementById('inv-cash').checked = false;
+  document.getElementById('inv-cash-received').value = '0';
+  invTogglePayMode();
+  // Load customers from tasks
+  invLoadCustomers();
+  // Reset items
+  document.getElementById('inv-items-body').innerHTML = '';
+  invAddRow();
+  invAddRow();
+  invCalcTotals();
+  document.getElementById('inv-sale-modal').style.display = 'flex';
+}
+
+function invLoadCustomers(){
+  var sel = document.getElementById('inv-customer');
+  sel.innerHTML = '<option value="">Select Customer</option>';
+  // Try to get from tasks if available
+  if(typeof allTasks !== 'undefined' && allTasks.length){
+    var seen = {};
+    allTasks.forEach(function(t){
+      if(t.customer_name && !seen[t.customer_name]){
+        seen[t.customer_name] = true;
+        var o = document.createElement('option');
+        o.value = t.customer_name;
+        o.textContent = t.customer_name + (t.contact_number?' ('+t.contact_number+')':'');
+        sel.appendChild(o);
+      }
+    });
+  }
+  // Also allow manual entry
+  var o = document.createElement('option');
+  o.value = '__manual__';
+  o.textContent = '+ Type customer name manually';
+  sel.appendChild(o);
+}
+
+function invCustomerChange(){
+  var sel = document.getElementById('inv-customer');
+  if(sel.value === '__manual__'){
+    var name = prompt('Enter customer name:');
+    if(name){
+      var o = document.createElement('option');
+      o.value = name; o.textContent = name; o.selected = true;
+      sel.insertBefore(o, sel.lastChild);
+      sel.value = name;
+    } else { sel.value = ''; }
+  }
+}
+
+function invTogglePayMode(){
+  var cash = document.getElementById('inv-cash').checked;
+  var pmRow = document.getElementById('inv-payment-mode-row');
+  var recRow = document.getElementById('inv-cash-received-row');
+  pmRow.style.display = cash ? 'none' : '';
+  recRow.style.display = cash ? 'block' : 'none';
+  invCalcTotals();
+}
+
+function invAddRow(){
+  invRowCount++;
+  var n = invRowCount;
+  var tbody = document.getElementById('inv-items-body');
+  var tr = document.createElement('tr');
+  tr.id = 'inv-row-'+n;
+  tr.style.borderBottom = '1px solid var(--border2)';
+  tr.innerHTML = '<td style="padding:6px 8px;font-size:12px;color:var(--text3)">'+n+'</td>'
+    +'<td style="padding:6px 8px"><input type="text" placeholder="Item / Service name" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none;min-width:160px" id="inv-item-name-'+n+'"></td>'
+    +'<td style="padding:6px 8px"><input type="number" value="1" min="0" style="width:56px;padding:6px 8px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none;text-align:right" id="inv-item-qty-'+n+'" oninput="invCalcRow('+n+')"></td>'
+    +'<td style="padding:6px 8px"><select style="width:65px;padding:6px 6px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none" id="inv-item-unit-'+n+'"><option>PCS</option><option>NOS</option><option>SET</option><option>KIT</option><option>SVC</option></select></td>'
+    +'<td style="padding:6px 8px"><input type="number" value="0" min="0" style="width:90px;padding:6px 8px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none;text-align:right" id="inv-item-price-'+n+'" oninput="invCalcRow('+n+')"></td>'
+    +'<td style="padding:6px 8px"><input type="number" value="0" min="0" max="100" style="width:60px;padding:6px 8px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none;text-align:right" id="inv-item-disc-'+n+'" oninput="invCalcRow('+n+')"></td>'
+    +'<td style="padding:6px 8px"><select style="width:72px;padding:6px 4px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none" id="inv-item-gst-'+n+'" onchange="invCalcRow('+n+')">'
+    +'<option value="0">None</option><option value="5">5%</option><option value="12">12%</option><option value="18">18%</option><option value="28">28%</option>'
+    +'</select></td>'
+    +'<td style="padding:6px 8px;text-align:right;font-weight:700;font-size:13px" id="inv-item-amt-'+n+'">₹0.00</td>'
+    +'<td style="padding:6px 4px;text-align:center"><button style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:0 4px;line-height:1" onclick="invRemoveRow('+n+')">✕</button></td>';
+  tbody.appendChild(tr);
+}
+
+function invRemoveRow(n){
+  var row = document.getElementById('inv-row-'+n);
+  if(row){ row.remove(); invCalcTotals(); }
+}
+
+function invCalcRow(n){
+  var qty   = parseFloat(document.getElementById('inv-item-qty-'+n)?.value||0);
+  var price = parseFloat(document.getElementById('inv-item-price-'+n)?.value||0);
+  var disc  = parseFloat(document.getElementById('inv-item-disc-'+n)?.value||0);
+  var gst   = parseFloat(document.getElementById('inv-item-gst-'+n)?.value||0);
+  var base  = qty * price * (1 - disc/100);
+  var tax   = base * gst / 100;
+  var total = base + tax;
+  var amtEl = document.getElementById('inv-item-amt-'+n);
+  if(amtEl) amtEl.textContent = invFmt(total);
+  invCalcTotals();
+}
+
+function invCalcTotals(){
+  var rows = document.getElementById('inv-items-body')?.querySelectorAll('tr') || [];
+  var subTotal=0, discTotal=0, gstTotal=0;
+  rows.forEach(function(row){
+    var n = row.id.replace('inv-row-','');
+    if(!n) return;
+    var qty   = parseFloat(document.getElementById('inv-item-qty-'+n)?.value||0);
+    var price = parseFloat(document.getElementById('inv-item-price-'+n)?.value||0);
+    var disc  = parseFloat(document.getElementById('inv-item-disc-'+n)?.value||0);
+    var gst   = parseFloat(document.getElementById('inv-item-gst-'+n)?.value||0);
+    var gross = qty * price;
+    var discAmt = gross * disc / 100;
+    var base  = gross - discAmt;
+    var taxAmt = base * gst / 100;
+    subTotal += gross;
+    discTotal += discAmt;
+    gstTotal += taxAmt;
+  });
+  var grand = subTotal - discTotal + gstTotal;
+  var el = function(id){ return document.getElementById(id); };
+  if(el('inv-sub-total'))    el('inv-sub-total').textContent    = invFmt(subTotal);
+  if(el('inv-discount-total'))el('inv-discount-total').textContent = '-'+invFmt(discTotal);
+  if(el('inv-gst-total'))    el('inv-gst-total').textContent    = invFmt(gstTotal);
+  if(el('inv-grand-total'))  el('inv-grand-total').textContent  = invFmt(grand);
+  var cash = document.getElementById('inv-cash')?.checked;
+  if(cash){
+    var rec = parseFloat(el('inv-cash-received')?.value||0);
+    var bal = Math.max(0, grand - rec);
+    if(el('inv-balance-due')) el('inv-balance-due').textContent = invFmt(bal);
+  }
+}
+
+function invCollectData(){
+  var rows = document.getElementById('inv-items-body')?.querySelectorAll('tr') || [];
+  var items = [];
+  var subTotal=0, discTotal=0, gstTotal=0;
+  rows.forEach(function(row){
+    var n = row.id.replace('inv-row-','');
+    if(!n) return;
+    var name  = document.getElementById('inv-item-name-'+n)?.value||'';
+    if(!name.trim()) return;
+    var qty   = parseFloat(document.getElementById('inv-item-qty-'+n)?.value||0);
+    var unit  = document.getElementById('inv-item-unit-'+n)?.value||'PCS';
+    var price = parseFloat(document.getElementById('inv-item-price-'+n)?.value||0);
+    var disc  = parseFloat(document.getElementById('inv-item-disc-'+n)?.value||0);
+    var gst   = parseFloat(document.getElementById('inv-item-gst-'+n)?.value||0);
+    var gross = qty * price;
+    var discAmt = gross * disc / 100;
+    var base  = gross - discAmt;
+    var taxAmt = base * gst / 100;
+    var total = base + taxAmt;
+    subTotal += gross; discTotal += discAmt; gstTotal += taxAmt;
+    items.push({name,qty,unit,price,disc,gst,discAmt,taxAmt,total});
+  });
+  var grand = subTotal - discTotal + gstTotal;
+  var cashSale = document.getElementById('inv-cash')?.checked;
+  var rec = cashSale ? parseFloat(document.getElementById('inv-cash-received')?.value||0) : 0;
+  return {
+    id: invEditingId || ('INV-'+Date.now()),
+    inv_no: document.getElementById('inv-inv-no').value,
+    date: document.getElementById('inv-inv-date').value,
+    due_date: document.getElementById('inv-due-date').value,
+    customer: document.getElementById('inv-customer').value,
+    billing_name: document.getElementById('inv-billing-name').value,
+    po_no: document.getElementById('inv-po-no').value,
+    state: document.getElementById('inv-state').value,
+    pay_mode: document.getElementById('inv-pay-mode').value,
+    cash_sale: cashSale,
+    items,
+    sub_total: subTotal,
+    discount_total: discTotal,
+    gst_total: gstTotal,
+    grand_total: grand,
+    amount_received: cashSale ? Math.min(rec, grand) : 0,
+    terms: document.getElementById('inv-terms').value,
+    notes: document.getElementById('inv-notes').value,
+    created_at: new Date().toISOString()
+  };
+}
+
+function invSaveSale(){
+  var data = invCollectData();
+  if(!data.customer){ showAlert('Please select a customer','error'); return; }
+  if(!data.items.length){ showAlert('Please add at least one item','error'); return; }
+  var all = invGetAll();
+  if(invEditingId){
+    var idx = all.findIndex(function(i){ return i.id===invEditingId; });
+    if(idx>=0) all[idx]=data; else all.push(data);
+  } else {
+    all.push(data);
+  }
+  invSaveAll(all);
+  closeById('inv-sale-modal');
+  invEditingId = null;
+  renderInvSale(document.getElementById('inv-content'));
+  showAlert('✅ Invoice '+data.inv_no+' saved!','success');
+}
+
+function invSaveAndPrint(){
+  invSaveSale();
+  var all = invGetAll();
+  var last = all[all.length-1];
+  if(last) invPrintInvoice(last.id);
+}
+
+function invView(id){
+  var inv = invGetAll().find(function(i){ return i.id===id; });
+  if(!inv) return;
+  window._viewingInvId = id;
+  document.getElementById('inv-view-subtitle').textContent = inv.inv_no + ' · ' + inv.customer;
+  var bal = parseFloat(inv.grand_total||0) - parseFloat(inv.amount_received||0);
+  var isPaid = bal <= 0;
+  document.getElementById('inv-view-body').innerHTML = invBuildPrintHTML(inv, false);
+  document.getElementById('inv-view-modal').style.display = 'flex';
+}
+
+function invEditInvoice(id){
+  closeById('inv-view-modal');
+  var inv = invGetAll().find(function(i){ return i.id===id; });
+  if(!inv) return;
+  invEditingId = id;
+  invOpenNew();
+  setTimeout(function(){
+    document.getElementById('inv-sale-modal-title').textContent = 'Edit Invoice';
+    document.getElementById('inv-inv-no').value = inv.inv_no;
+    document.getElementById('inv-inv-date').value = inv.date;
+    document.getElementById('inv-due-date').value = inv.due_date||'';
+    document.getElementById('inv-billing-name').value = inv.billing_name||'';
+    document.getElementById('inv-po-no').value = inv.po_no||'';
+    document.getElementById('inv-state').value = inv.state||'';
+    document.getElementById('inv-pay-mode').value = inv.pay_mode||'Cash';
+    document.getElementById('inv-terms').value = inv.terms||'';
+    document.getElementById('inv-notes').value = inv.notes||'';
+    document.getElementById('inv-cash').checked = inv.cash_sale||false;
+    invTogglePayMode();
+    if(inv.cash_sale) document.getElementById('inv-cash-received').value = inv.amount_received||0;
+    // Set customer
+    var sel = document.getElementById('inv-customer');
+    var opt = document.createElement('option');
+    opt.value = inv.customer; opt.textContent = inv.customer;
+    sel.insertBefore(opt, sel.lastChild);
+    sel.value = inv.customer;
+    // Rebuild rows
+    document.getElementById('inv-items-body').innerHTML = '';
+    invRowCount = 0;
+    inv.items.forEach(function(item){
+      invAddRow();
+      var n = invRowCount;
+      document.getElementById('inv-item-name-'+n).value = item.name;
+      document.getElementById('inv-item-qty-'+n).value  = item.qty;
+      document.getElementById('inv-item-unit-'+n).value = item.unit;
+      document.getElementById('inv-item-price-'+n).value= item.price;
+      document.getElementById('inv-item-disc-'+n).value = item.disc;
+      document.getElementById('inv-item-gst-'+n).value  = item.gst;
+      invCalcRow(n);
+    });
+  }, 100);
+}
+
+function invDelete(id){
+  if(!confirm('Delete this invoice? This cannot be undone.')) return;
+  var all = invGetAll().filter(function(i){ return i.id!==id; });
+  invSaveAll(all);
+  renderInvSale(document.getElementById('inv-content'));
+  showAlert('Invoice deleted','info');
+}
+
+function invBuildPrintHTML(inv, forPrint){
+  var bal = parseFloat(inv.grand_total||0) - parseFloat(inv.amount_received||0);
+  var isPaid = bal <= 0;
+  var s = [
+    '<div style="font-family:Arial,sans-serif;font-size:13px;max-width:760px;margin:auto;padding:16px">',
+    // Header
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:12px;border-bottom:2.5px solid #1a3a6b;margin-bottom:12px">',
+    '<div>',
+    '<div style="font-size:18px;font-weight:800;color:#1a3a6b">Sri Bharat GPS Tracker Private Limited</div>',
+    '<div style="font-size:11px;color:#555;margin-top:4px;line-height:1.6">',
+    '301, 3rd Floor, SL Ajay Arcade, Sheela Nagar, Visakhapatnam<br>',
+    'Phone: 9849849824, 8448448929 &nbsp;|&nbsp; Email: sales@bharatgps.com<br>',
+    'GSTIN: 37ABFCS5100E1ZP &nbsp;|&nbsp; State: Andhra Pradesh',
+    '</div></div>',
+    '<div style="text-align:right">',
+    '<div style="font-size:16px;font-weight:800;color:#c0392b;text-transform:uppercase">SALE</div>',
+    '<div style="font-size:12px;color:#555;margin-top:4px">Invoice No: <strong>'+inv.inv_no+'</strong></div>',
+    '<div style="font-size:12px;color:#555">Date: <strong>'+invFmtDate(inv.date)+'</strong></div>',
+    inv.due_date ? '<div style="font-size:12px;color:#555">Due: <strong>'+invFmtDate(inv.due_date)+'</strong></div>' : '',
+    '</div></div>',
+    // Bill to
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">',
+    '<div style="background:#f7f8fa;border:1px solid #e0e0e0;border-radius:6px;padding:10px">',
+    '<div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;margin-bottom:4px">Bill To</div>',
+    '<div style="font-weight:700;font-size:14px;color:#1a1f2e">'+(inv.billing_name||inv.customer)+'</div>',
+    inv.state ? '<div style="font-size:12px;color:#555;margin-top:2px">State: '+inv.state+'</div>' : '',
+    inv.po_no ? '<div style="font-size:12px;color:#555">PO Ref: '+inv.po_no+'</div>' : '',
+    '</div>',
+    '<div style="background:#f7f8fa;border:1px solid #e0e0e0;border-radius:6px;padding:10px">',
+    '<div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;margin-bottom:4px">Payment</div>',
+    '<div style="font-size:12px;color:#555">Mode: <strong>'+(inv.cash_sale?'Cash':inv.pay_mode)+'</strong></div>',
+    '<div style="font-size:12px;color:#555;margin-top:2px">Status: <strong style="color:'+(isPaid?'#1a7a3a':'#c0392b')+'">'+(isPaid?'Paid':'Balance Due')+'</strong></div>',
+    '</div></div>',
+    // Items table
+    '<table style="width:100%;border-collapse:collapse;margin-bottom:10px">',
+    '<thead><tr style="background:#1a3a6b;color:#fff">',
+    '<th style="padding:8px 10px;font-size:11px;text-align:left">#</th>',
+    '<th style="padding:8px 10px;font-size:11px;text-align:left">Item Name</th>',
+    '<th style="padding:8px 10px;font-size:11px;text-align:center">Qty</th>',
+    '<th style="padding:8px 10px;font-size:11px;text-align:center">Unit</th>',
+    '<th style="padding:8px 10px;font-size:11px;text-align:right">Price/Unit</th>',
+    '<th style="padding:8px 10px;font-size:11px;text-align:right">Discount</th>',
+    '<th style="padding:8px 10px;font-size:11px;text-align:right">GST</th>',
+    '<th style="padding:8px 10px;font-size:11px;text-align:right">Amount</th>',
+    '</tr></thead><tbody>'
+  ];
+  inv.items.forEach(function(item, i){
+    var bg = i%2===0 ? '#fff' : '#f9fafb';
+    s.push('<tr style="background:'+bg+';border-bottom:1px solid #eee">',
+      '<td style="padding:7px 10px;font-size:12px">'+(i+1)+'</td>',
+      '<td style="padding:7px 10px;font-size:12px;font-weight:600">'+item.name+'</td>',
+      '<td style="padding:7px 10px;font-size:12px;text-align:center">'+item.qty+'</td>',
+      '<td style="padding:7px 10px;font-size:12px;text-align:center">'+item.unit+'</td>',
+      '<td style="padding:7px 10px;font-size:12px;text-align:right">'+invFmt(item.price)+'</td>',
+      '<td style="padding:7px 10px;font-size:12px;text-align:right;color:#1a7a3a">'+(item.disc>0?'-'+invFmt(item.discAmt):'–')+'</td>',
+      '<td style="padding:7px 10px;font-size:12px;text-align:right">'+(item.gst>0?invFmt(item.taxAmt)+' ('+item.gst+'%)':'–')+'</td>',
+      '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:700">'+invFmt(item.total)+'</td>',
+      '</tr>');
+  });
+  s.push('</tbody><tfoot>',
+    '<tr style="background:#f0f2f5">',
+    '<td colspan="4" style="padding:8px 10px"></td>',
+    '<td colspan="3" style="padding:8px 10px;font-size:12px;text-align:right;color:#555">Sub Total</td>',
+    '<td style="padding:8px 10px;font-size:12px;text-align:right;font-weight:700">'+invFmt(inv.sub_total)+'</td>',
+    '</tr>');
+  if(inv.discount_total>0) s.push('<tr style="background:#f0f2f5"><td colspan="7" style="padding:4px 10px;font-size:12px;text-align:right;color:#1a7a3a">Discount</td><td style="padding:4px 10px;font-size:12px;text-align:right;color:#1a7a3a;font-weight:700">-'+invFmt(inv.discount_total)+'</td></tr>');
+  if(inv.gst_total>0) s.push('<tr style="background:#f0f2f5"><td colspan="7" style="padding:4px 10px;font-size:12px;text-align:right;color:#555">GST / Tax</td><td style="padding:4px 10px;font-size:12px;text-align:right;font-weight:700">'+invFmt(inv.gst_total)+'</td></tr>');
+  s.push(
+    '<tr style="background:#1a3a6b;color:#fff">',
+    '<td colspan="7" style="padding:9px 10px;font-size:13px;font-weight:800;text-align:right">TOTAL</td>',
+    '<td style="padding:9px 10px;font-size:14px;font-weight:800;text-align:right">'+invFmt(inv.grand_total)+'</td>',
+    '</tr></tfoot></table>',
+    // Received/Balance
+    '<div style="display:flex;justify-content:flex-end;gap:24px;margin-bottom:12px;padding:10px;background:#f7f8fa;border-radius:6px">',
+    '<div style="font-size:12px;color:#555">Received: <strong style="color:#1a7a3a">'+invFmt(inv.amount_received)+'</strong></div>',
+    '<div style="font-size:12px;color:#555">Balance: <strong style="color:'+(bal>0?'#c0392b':'#1a7a3a')+'">'+invFmt(bal)+'</strong></div>',
+    '</div>',
+    // Amount in words
+    '<div style="background:#fff3e0;border:1px solid #e07b00;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">',
+    '<strong>Invoice Amount In Words:</strong> '+invAmountWords(inv.grand_total),
+    '</div>'
+  );
+  if(inv.terms){
+    s.push('<div style="margin-bottom:12px;padding:10px;background:#f7f8fa;border:1px solid #e0e0e0;border-radius:6px">',
+      '<div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;margin-bottom:4px">Terms & Conditions</div>',
+      '<div style="font-size:11px;color:#555;white-space:pre-line">'+inv.terms+'</div>',
+      '</div>');
+  }
+  s.push(
+    '<div style="display:flex;justify-content:flex-end;margin-top:20px;padding-top:12px;border-top:1px solid #e0e0e0">',
+    '<div style="text-align:center">',
+    '<div style="height:48px"></div>',
+    '<div style="font-size:12px;color:#555;border-top:1px solid #555;padding-top:4px;min-width:160px">Authorized Signatory</div>',
+    '<div style="font-size:11px;color:#888">Sri Bharat GPS Tracker Pvt Ltd</div>',
+    '</div></div>',
+    '</div>'
+  );
+  return s.join('');
+}
+
+function invAmountWords(n){
+  n = Math.round(parseFloat(n||0));
+  if(n===0) return 'Zero Rupees Only';
+  var ones=['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
+  var tens=['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+  function toWords(num){
+    if(num===0) return '';
+    if(num<20) return ones[num]+' ';
+    if(num<100) return tens[Math.floor(num/10)]+' '+(num%10?ones[num%10]+' ':'');
+    if(num<1000) return ones[Math.floor(num/100)]+' Hundred '+(num%100?toWords(num%100):'');
+    if(num<100000) return toWords(Math.floor(num/1000))+' Thousand '+(num%1000?toWords(num%1000):'');
+    if(num<10000000) return toWords(Math.floor(num/100000))+' Lakh '+(num%100000?toWords(num%100000):'');
+    return toWords(Math.floor(num/10000000))+' Crore '+(num%10000000?toWords(num%10000000):'');
+  }
+  return toWords(n).trim()+' Rupees Only';
+}
+
+function invPrintInvoice(id){
+  var inv = invGetAll().find(function(i){ return i.id===id; });
+  if(!inv) return;
+  var html = '<!DOCTYPE html><html><head><title>Invoice '+inv.inv_no+'</title>'
+    +'<style>body{margin:0;padding:16px;font-family:Arial,sans-serif}@media print{body{padding:0}}</style>'
+    +'</head><body>'+invBuildPrintHTML(inv,true)+'</body></html>';
+  var w = window.open('','_blank','width=900,height=700');
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(function(){ w.print(); }, 400);
+}
+
+function invExportCSV(){
+  var all = invGetAll();
+  if(!all.length){ showAlert('No invoices to export','info'); return; }
+  var rows = [['Invoice No','Date','Customer','Grand Total','Received','Balance','Status']];
+  all.forEach(function(inv){
+    var bal = parseFloat(inv.grand_total||0)-parseFloat(inv.amount_received||0);
+    rows.push([inv.inv_no,invFmtDate(inv.date),inv.customer,inv.grand_total,inv.amount_received,bal.toFixed(2),bal<=0?'Paid':'Unpaid']);
+  });
+  var csv = rows.map(function(r){ return r.map(function(c){ return '"'+c+'"'; }).join(','); }).join('\n');
+  var a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download = 'sale_invoices.csv';
+  a.click();
+}
+
 
 function renderInvEstimate(el){
   el.innerHTML =
@@ -3759,5 +4252,140 @@ function renderInvSettings(el){
   }
 })();
 </script>
+<!-- ═══════════════════ SALE INVOICE MODAL ═══════════════════ -->
+<div class="modal-overlay" id="inv-sale-modal" style="display:none" onclick="closeModal(event,'inv-sale-modal')">
+  <div class="modal modal-lg" style="width:960px">
+    <div class="modal-header">
+      <div class="modal-header-left">
+        <h3 id="inv-sale-modal-title">New Sale Invoice</h3>
+        <p>Sri Bharat GPS Tracker Pvt Ltd</p>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text2)">
+          <input type="checkbox" id="inv-cash" onchange="invTogglePayMode()"> Cash Sale
+        </label>
+        <button class="modal-close" onclick="closeById('inv-sale-modal')">✕</button>
+      </div>
+    </div>
+    <div class="modal-body">
+      <!-- Row 1: Customer + Invoice details -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 140px 140px;gap:10px;margin-bottom:12px">
+        <div>
+          <label class="field-label">Customer <span style="color:var(--red)">*</span></label>
+          <select id="inv-customer" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;outline:none" onchange="invCustomerChange()">
+            <option value="">Select Customer</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Billing Name (Optional)</label>
+          <input type="text" id="inv-billing-name" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;outline:none" placeholder="Override billing name">
+        </div>
+        <div>
+          <label class="field-label">PO Number</label>
+          <input type="text" id="inv-po-no" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;outline:none" placeholder="PO / Reference No.">
+        </div>
+        <div>
+          <label class="field-label">Invoice No.</label>
+          <input type="text" id="inv-inv-no" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;outline:none">
+        </div>
+        <div>
+          <label class="field-label">Invoice Date</label>
+          <input type="date" id="inv-inv-date" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;outline:none">
+        </div>
+      </div>
+      <!-- Row 2: State of supply + Due date -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+        <div>
+          <label class="field-label">State of Supply</label>
+          <select id="inv-state" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;outline:none">
+            <option value="">Select State</option>
+            <option>Andhra Pradesh</option><option>Telangana</option><option>Tamil Nadu</option>
+            <option>Karnataka</option><option>Maharashtra</option><option>Delhi</option>
+            <option>Gujarat</option><option>Rajasthan</option><option>Uttar Pradesh</option>
+            <option>West Bengal</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Due Date</label>
+          <input type="date" id="inv-due-date" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;outline:none">
+        </div>
+        <div id="inv-payment-mode-row">
+          <label class="field-label">Payment Mode</label>
+          <select id="inv-pay-mode" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;outline:none">
+            <option>Cash</option><option>UPI</option><option>Bank Transfer</option><option>Cheque</option><option>Credit Card</option><option>Other</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Items table -->
+      <div style="overflow-x:auto;margin-bottom:8px">
+        <table style="width:100%;border-collapse:collapse;min-width:700px">
+          <thead>
+            <tr style="background:var(--surface2);border-bottom:1.5px solid var(--border)">
+              <th style="padding:8px 10px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left;width:32px">#</th>
+              <th style="padding:8px 10px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left">Item Name</th>
+              <th style="padding:8px 10px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left;width:60px">Qty</th>
+              <th style="padding:8px 10px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left;width:70px">Unit</th>
+              <th style="padding:8px 10px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:right;width:100px">Price/Unit (₹)</th>
+              <th style="padding:8px 10px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:right;width:80px">Disc (%)</th>
+              <th style="padding:8px 10px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left;width:80px">GST</th>
+              <th style="padding:8px 10px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:right;width:90px">Amount (₹)</th>
+              <th style="padding:8px 6px;width:28px"></th>
+            </tr>
+          </thead>
+          <tbody id="inv-items-body"></tbody>
+        </table>
+      </div>
+      <button onclick="invAddRow()" style="background:none;border:none;color:var(--blue);font-size:12px;font-weight:700;cursor:pointer;padding:4px 0;margin-bottom:14px">+ ADD ROW</button>
+
+      <!-- Bottom: terms + summary -->
+      <div style="display:grid;grid-template-columns:1fr 260px;gap:16px">
+        <div>
+          <label class="field-label">Terms & Conditions</label>
+          <textarea id="inv-terms" rows="3" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-family:inherit;outline:none;resize:vertical;margin-top:4px" placeholder="1. Payments terms: 100% payments against delivery/installation.&#10;2. Warranty as per Bharat GPS Warranty Policy.&#10;3. All disputes subject to Visakhapatnam jurisdiction."></textarea>
+          <div style="margin-top:8px">
+            <label class="field-label">Description / Notes</label>
+            <textarea id="inv-notes" rows="2" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-family:inherit;outline:none;resize:vertical;margin-top:4px" placeholder="Additional notes..."></textarea>
+          </div>
+        </div>
+        <div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid var(--border2)"><span style="color:var(--text2)">Sub Total</span><span id="inv-sub-total" style="font-weight:600">₹0.00</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid var(--border2)"><span style="color:var(--text2)">Discount</span><span id="inv-discount-total" style="font-weight:600;color:var(--green)">-₹0.00</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid var(--border2)"><span style="color:var(--text2)">GST / Tax</span><span id="inv-gst-total" style="font-weight:600">₹0.00</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:15px;padding:8px 0 4px;font-weight:800"><span>Total</span><span id="inv-grand-total" style="color:var(--accent)">₹0.00</span></div>
+          <div id="inv-cash-received-row" style="display:none;border-top:1px solid var(--border2);padding-top:8px;margin-top:4px">
+            <label class="field-label">Amount Received (₹)</label>
+            <input type="number" id="inv-cash-received" value="0" min="0" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;outline:none;margin-top:4px" oninput="invCalcTotals()">
+            <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;margin-top:4px"><span style="color:var(--text2)">Balance Due</span><span id="inv-balance-due" style="font-weight:700;color:var(--red)">₹0.00</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeById('inv-sale-modal')">Cancel</button>
+      <button class="btn btn-secondary" onclick="invSaveAndPrint()">🖨 Save & Print</button>
+      <button class="btn btn-primary" onclick="invSaveSale()">💾 Save Invoice</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ VIEW INVOICE MODAL ═══════════════════ -->
+<div class="modal-overlay" id="inv-view-modal" style="display:none" onclick="closeModal(event,'inv-view-modal')">
+  <div class="modal modal-lg" style="width:860px">
+    <div class="modal-header">
+      <div class="modal-header-left"><h3>Invoice</h3><p id="inv-view-subtitle"></p></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" onclick="invPrintInvoice(window._viewingInvId)" style="font-size:12px;padding:6px 12px">🖨 Print</button>
+        <button class="btn btn-secondary" onclick="invEditInvoice(window._viewingInvId)" style="font-size:12px;padding:6px 12px">✏️ Edit</button>
+        <button class="modal-close" onclick="closeById('inv-view-modal')">✕</button>
+      </div>
+    </div>
+    <div class="modal-body" id="inv-view-body"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════ PRINT FRAME ═══════════════════ -->
+<iframe id="inv-print-frame" style="display:none"></iframe>
+
 </body>
 </html>
