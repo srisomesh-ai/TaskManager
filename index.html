@@ -4011,17 +4011,44 @@ async function invAddRow(){
   tr.id = 'inv-row-'+n;
   tr.style.borderBottom = '1px solid var(--border2)';
   tr.innerHTML = dl
-    +'<td style="padding:6px 8px;font-size:12px;color:var(--text3)">'+n+'</td>'
-    +'<td style="padding:6px 8px"><input type="text" list="'+dlId+'" placeholder="Item / Service name" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none;min-width:160px" id="inv-item-name-'+n+'" oninput="invItemSelected('+n+')"></td>'
-    +'<td style="padding:6px 8px"><input type="number" value="1" min="0" style="width:56px;padding:6px 8px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none;text-align:right" id="inv-item-qty-'+n+'" oninput="invCalcRow('+n+')"></td>'
-    +'<td style="padding:6px 8px"><select style="width:65px;padding:6px 4px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none" id="inv-item-unit-'+n+'">'+unitOpts+'</select></td>'
-    +'<td style="padding:6px 8px"><input type="number" value="0" min="0" style="width:90px;padding:6px 8px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none;text-align:right" id="inv-item-price-'+n+'" oninput="invCalcRow('+n+')"></td>'
-    +'<td style="padding:6px 8px"><input type="number" value="0" min="0" max="100" style="width:60px;padding:6px 8px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none;text-align:right" id="inv-item-disc-'+n+'" oninput="invCalcRow('+n+')"></td>'
-    +'<td style="padding:6px 8px"><select style="width:72px;padding:6px 4px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none" id="inv-item-gst-'+n+'" onchange="invCalcRow('+n+')">'
-    +'<option value="0">None</option><option value="5">5%</option><option value="12">12%</option><option value="18" selected>18%</option><option value="28">28%</option>'
+    // # 
+    +'<td style="padding:5px 6px;font-size:11px;color:var(--text3);text-align:center">'+n+'</td>'
+    // Item name + description stacked
+    +'<td style="padding:5px 6px">'
+      +'<input type="text" list="'+dlId+'" placeholder="Item / Service name" '
+      +'style="width:100%;padding:5px 7px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none;min-width:150px;margin-bottom:3px" '
+      +'id="inv-item-name-'+n+'" oninput="invItemSelected('+n+')">'
+      +'<input type="text" placeholder="Description (optional)" '
+      +'style="width:100%;padding:4px 7px;border:1px solid var(--border);border-radius:4px;font-size:10px;font-family:inherit;outline:none;color:var(--text3)" '
+      +'id="inv-item-desc-'+n+'">'
+    +'</td>'
+    // HSN/SAC
+    +'<td style="padding:5px 6px"><input type="text" placeholder="HSN" '
+    +'style="width:66px;padding:5px 6px;border:1.5px solid var(--border);border-radius:4px;font-size:11px;font-family:inherit;outline:none;text-align:center" '
+    +'id="inv-item-hsn-'+n+'"></td>'
+    // Qty
+    +'<td style="padding:5px 6px"><input type="number" value="1" min="0" '
+    +'style="width:52px;padding:5px 6px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none;text-align:right" '
+    +'id="inv-item-qty-'+n+'" oninput="invCalcRow('+n+')"></td>'
+    // Unit
+    +'<td style="padding:5px 6px"><select style="width:62px;padding:5px 4px;border:1.5px solid var(--border);border-radius:4px;font-size:11px;font-family:inherit;outline:none" id="inv-item-unit-'+n+'">'+unitOpts+'</select></td>'
+    // Price
+    +'<td style="padding:5px 6px"><input type="number" value="0" min="0" '
+    +'style="width:85px;padding:5px 6px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none;text-align:right" '
+    +'id="inv-item-price-'+n+'" oninput="invCalcRow('+n+')"></td>'
+    // Disc %
+    +'<td style="padding:5px 6px"><input type="number" value="0" min="0" max="100" '
+    +'style="width:55px;padding:5px 6px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none;text-align:right" '
+    +'id="inv-item-disc-'+n+'" oninput="invCalcRow('+n+')"></td>'
+    // GST
+    +'<td style="padding:5px 6px"><select style="width:70px;padding:5px 4px;border:1.5px solid var(--border);border-radius:4px;font-size:11px;font-family:inherit;outline:none" '
+    +'id="inv-item-gst-'+n+'" onchange="invCalcRow('+n+')">'
+    +'<option value="0">0%</option><option value="5">5%</option><option value="12">12%</option><option value="18" selected>18%</option><option value="28">28%</option>'
     +'</select></td>'
-    +'<td style="padding:6px 8px;text-align:right;font-weight:700;font-size:13px" id="inv-item-amt-'+n+'">₹0.00</td>'
-    +'<td style="padding:6px 4px;text-align:center"><button style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:0 4px;line-height:1" onclick="invRemoveRow('+n+')">✕</button></td>';
+    // Amount
+    +'<td style="padding:5px 6px;text-align:right;font-weight:700;font-size:12px;white-space:nowrap" id="inv-item-amt-'+n+'">₹0.00</td>'
+    // Remove
+    +'<td style="padding:5px 4px;text-align:center"><button style="background:none;border:none;color:var(--red);cursor:pointer;font-size:15px;padding:0;line-height:1" onclick="invRemoveRow('+n+')">✕</button></td>';
   tbody.appendChild(tr);
 }
 
@@ -4033,8 +4060,9 @@ async function invItemSelected(n){
   var found = items.find(function(i){ return i.name===nameEl.value; });
   if(found){
     var p=document.getElementById('inv-item-price-'+n); if(p) p.value=found.sale_price||0;
-    var g=document.getElementById('inv-item-gst-'+n);   if(g) g.value=found.gst_rate||0;
+    var g=document.getElementById('inv-item-gst-'+n);   if(g) g.value=found.gst_rate||18;
     var u=document.getElementById('inv-item-unit-'+n);  if(u) u.value=found.unit||'PCS';
+    var h=document.getElementById('inv-item-hsn-'+n);   if(h&&found.hsn) h.value=found.hsn;
     invCalcRow(n);
   }
 }
@@ -4142,27 +4170,34 @@ function invCollectData(){
     var price = parseFloat(document.getElementById('inv-item-price-'+n)?.value||0);
     var disc  = parseFloat(document.getElementById('inv-item-disc-'+n)?.value||0);
     var gst   = parseFloat(document.getElementById('inv-item-gst-'+n)?.value||0);
+    var hsn   = document.getElementById('inv-item-hsn-'+n)?.value||'';
+    var desc  = document.getElementById('inv-item-desc-'+n)?.value||'';
     var gross = qty * price;
     var discAmt = gross * disc / 100;
     var base  = gross - discAmt;
-    var taxAmt = base * gst / 100;
-    var total = base + taxAmt;
+    var taxAmt = +(base * gst / 100).toFixed(2);
+    var total  = +(base + taxAmt).toFixed(2);
     subTotal += gross; discTotal += discAmt; gstTotal += taxAmt;
-    items.push({name,qty,unit,price,disc,gst,discAmt,taxAmt,total});
+    items.push({name, hsn, description:desc, qty, unit, price, disc, gst, discAmt, taxAmt, total});
   });
-  var grand = subTotal - discTotal + gstTotal;
-  var cashSale = document.getElementById('inv-cash')?.checked;
-  var rec = cashSale ? parseFloat(document.getElementById('inv-cash-received')?.value||0) : 0;
-  var state = document.getElementById('inv-state')?.value||'';
-  var companyState = 'Andhra Pradesh';
-  var sameState = state.toLowerCase()===companyState.toLowerCase();
+  var grand     = +((subTotal - discTotal + gstTotal).toFixed(2));
+  var cashSale  = document.getElementById('inv-cash')?.checked;
+  var rec       = cashSale ? parseFloat(document.getElementById('inv-cash-received')?.value||0) : 0;
+  var state     = document.getElementById('inv-state')?.value||'';
+  var sameState = state.toLowerCase()==='andhra pradesh';
+  // Get customer phone from selected option
+  var sel = document.getElementById('inv-customer');
+  var custPhone = '';
+  if(sel && sel.selectedIndex>=0) custPhone = sel.options[sel.selectedIndex]?.dataset?.phone||'';
   return {
-    id: invEditingId || ('INV-'+Date.now()),
+    id:               invEditingId || ('INV-'+Date.now()),
+    inv_type:         'sale',
     inv_no:           document.getElementById('inv-inv-no').value,
     date:             document.getElementById('inv-inv-date').value,
     due_date:         document.getElementById('inv-due-date').value,
     customer:         document.getElementById('inv-customer').value,
     billing_name:     document.getElementById('inv-billing-name').value || document.getElementById('inv-customer').value,
+    customer_phone:   custPhone,
     po_no:            document.getElementById('inv-po-no').value,
     gstin:            document.getElementById('inv-gstin')?.value||'',
     gst_type:         document.getElementById('inv-gst-type')?.value||'',
@@ -4171,13 +4206,13 @@ function invCollectData(){
     pay_mode:         document.getElementById('inv-pay-mode').value,
     cash_sale:        cashSale,
     gst_split:        state ? (sameState ? 'CGST_SGST' : 'IGST') : 'GST',
-    cgst:             (state && sameState) ? gstTotal/2 : 0,
-    sgst:             (state && sameState) ? gstTotal/2 : 0,
-    igst:             (state && !sameState) ? gstTotal : 0,
+    cgst:             (state && sameState) ? +(gstTotal/2).toFixed(2) : 0,
+    sgst:             (state && sameState) ? +(gstTotal/2).toFixed(2) : 0,
+    igst:             (state && !sameState) ? +gstTotal.toFixed(2) : 0,
     items,
-    sub_total:        subTotal,
-    discount_total:   discTotal,
-    gst_total:        gstTotal,
+    sub_total:        +subTotal.toFixed(2),
+    discount_total:   +discTotal.toFixed(2),
+    gst_total:        +gstTotal.toFixed(2),
     grand_total:      grand,
     amount_received:  cashSale ? Math.min(rec, grand) : 0,
     terms:            document.getElementById('inv-terms').value,
@@ -4266,114 +4301,183 @@ async function invDelete(id){
 }
 
 function invBuildPrintHTML(inv, forPrint){
-  var bal = parseFloat(inv.grand_total||0) - parseFloat(inv.amount_received||0);
-  var isPaid = bal <= 0;
-  var s = [
-    '<div style="font-family:Arial,sans-serif;font-size:13px;max-width:760px;margin:auto;padding:16px">',
-    // Header
-    '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:12px;border-bottom:2.5px solid #1a3a6b;margin-bottom:12px">',
-    '<div>',
-    '<div style="font-size:18px;font-weight:800;color:#1a3a6b">Sri Bharat GPS Tracker Private Limited</div>',
-    '<div style="font-size:11px;color:#555;margin-top:4px;line-height:1.6">',
-    '301, 3rd Floor, SL Ajay Arcade, Sheela Nagar, Visakhapatnam<br>',
-    'Phone: 9849849824, 8448448929 &nbsp;|&nbsp; Email: sales@bharatgps.com<br>',
-    'GSTIN: 37ABFCS5100E1ZP &nbsp;|&nbsp; State: Andhra Pradesh',
-    '</div></div>',
-    '<div style="text-align:right">',
-    '<div style="font-size:16px;font-weight:800;color:#c0392b;text-transform:uppercase">SALE</div>',
-    '<div style="font-size:12px;color:#555;margin-top:4px">Invoice No: <strong>'+inv.inv_no+'</strong></div>',
-    '<div style="font-size:12px;color:#555">Date: <strong>'+invFmtDate(inv.date)+'</strong></div>',
-    inv.due_date ? '<div style="font-size:12px;color:#555">Due: <strong>'+invFmtDate(inv.due_date)+'</strong></div>' : '',
-    '</div></div>',
-    // Bill to
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">',
-    '<div style="background:#f7f8fa;border:1px solid #e0e0e0;border-radius:6px;padding:10px">',
-    '<div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;margin-bottom:4px">Bill To</div>',
-    '<div style="font-weight:700;font-size:14px;color:#1a1f2e">'+(inv.billing_name||inv.customer)+'</div>',
-    inv.state ? '<div style="font-size:12px;color:#555;margin-top:2px">State: '+inv.state+'</div>' : '',
-    inv.po_no ? '<div style="font-size:12px;color:#555">PO Ref: '+inv.po_no+'</div>' : '',
+  var bal      = parseFloat(inv.grand_total||0) - parseFloat(inv.amount_received||0);
+  var isPaid   = bal <= 0;
+  var half     = parseFloat(inv.gst_total||0) / 2;
+  var isCGST   = inv.gst_split === 'CGST_SGST';
+  var isIGST   = inv.gst_split === 'IGST';
+  var gstRate  = 0;
+  if(inv.items && inv.items.length) gstRate = parseFloat(inv.items[0].gst||0);
+  var isEstimate = inv.inv_type === 'estimate';
+  var title    = isEstimate ? 'Estimate / Quotation' : 'Sales Invoice';
+  var accentColor = '#c0392b';
+
+  // ── LOGO (base64 placeholder — use company logo if available) ──
+  var logoHtml = '<div style="width:60px;height:60px;background:#1a3a6b;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:800;text-align:center;line-height:1.2">Bharat<br>GPS</div>';
+
+  var html = [
+    '<div id="invoice-root" style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#222;max-width:780px;margin:0 auto;padding:20px;background:#fff">',
+
+    // ── COMPANY HEADER ──────────────────────────────────────────
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">',
+      '<div>',
+        '<div style="font-size:17px;font-weight:900;color:#1a1f2e">Sri Bharat GPS Tracker Private Limited</div>',
+        '<div style="font-size:11px;color:#555;margin-top:4px;line-height:1.7">',
+          '301, 3rd Floor, SL Ajay Arcade, Sheela Nagar, Visakhapatnam<br>',
+          'Phone no. : 9849849824, 8448448929<br>',
+          'Email : sales@bharatgps.com<br>',
+          'GSTIN : 37ABFCS5100E1ZP<br>',
+          'State: 37-Andhra Pradesh',
+        '</div>',
+      '</div>',
+      logoHtml,
     '</div>',
-    '<div style="background:#f7f8fa;border:1px solid #e0e0e0;border-radius:6px;padding:10px">',
-    '<div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;margin-bottom:4px">Payment</div>',
-    '<div style="font-size:12px;color:#555">Mode: <strong>'+(inv.cash_sale?'Cash':inv.pay_mode)+'</strong></div>',
-    '<div style="font-size:12px;color:#555;margin-top:2px">Status: <strong style="color:'+(isPaid?'#1a7a3a':'#c0392b')+'">'+(isPaid?'Paid':'Balance Due')+'</strong></div>',
-    '</div></div>',
-    // Items table
-    '<table style="width:100%;border-collapse:collapse;margin-bottom:10px">',
-    '<thead><tr style="background:#1a3a6b;color:#fff">',
-    '<th style="padding:8px 10px;font-size:11px;text-align:left">#</th>',
-    '<th style="padding:8px 10px;font-size:11px;text-align:left">Item Name</th>',
-    '<th style="padding:8px 10px;font-size:11px;text-align:center">Qty</th>',
-    '<th style="padding:8px 10px;font-size:11px;text-align:center">Unit</th>',
-    '<th style="padding:8px 10px;font-size:11px;text-align:right">Price/Unit</th>',
-    '<th style="padding:8px 10px;font-size:11px;text-align:right">Discount</th>',
-    '<th style="padding:8px 10px;font-size:11px;text-align:right">GST</th>',
-    '<th style="padding:8px 10px;font-size:11px;text-align:right">Amount</th>',
-    '</tr></thead><tbody>'
-  ];
-  inv.items.forEach(function(item, i){
-    var bg = i%2===0 ? '#fff' : '#f9fafb';
-    s.push('<tr style="background:'+bg+';border-bottom:1px solid #eee">',
-      '<td style="padding:7px 10px;font-size:12px">'+(i+1)+'</td>',
-      '<td style="padding:7px 10px;font-size:12px;font-weight:600">'+item.name+'</td>',
-      '<td style="padding:7px 10px;font-size:12px;text-align:center">'+item.qty+'</td>',
-      '<td style="padding:7px 10px;font-size:12px;text-align:center">'+item.unit+'</td>',
-      '<td style="padding:7px 10px;font-size:12px;text-align:right">'+invFmt(item.price)+'</td>',
-      '<td style="padding:7px 10px;font-size:12px;text-align:right;color:#1a7a3a">'+(item.disc>0?'-'+invFmt(item.discAmt):'–')+'</td>',
-      '<td style="padding:7px 10px;font-size:12px;text-align:right">'+(item.gst>0?invFmt(item.taxAmt)+' ('+item.gst+'%)':'–')+'</td>',
-      '<td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:700">'+invFmt(item.total)+'</td>',
-      '</tr>');
+
+    // ── RED DIVIDER LINE ──────────────────────────────────────────
+    '<div style="border-top:2px solid '+accentColor+';margin-bottom:8px"></div>',
+
+    // ── INVOICE TITLE ──────────────────────────────────────────
+    '<div style="text-align:center;font-size:15px;font-weight:800;color:'+accentColor+';margin-bottom:10px">'+title+'</div>',
+
+    // ── BILL TO + INVOICE DETAILS ──────────────────────────────────
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid #ddd;margin-bottom:0">',
+      '<div style="padding:10px 12px;border-right:1px solid #ddd">',
+        '<div style="font-size:10px;font-weight:700;color:#555;margin-bottom:4px">Bill To</div>',
+        '<div style="font-size:13px;font-weight:900;color:#1a1f2e">'+(inv.billing_name||inv.customer||'–')+'</div>',
+        (inv.billing_address ? '<div style="font-size:11px;color:#444;margin-top:3px;line-height:1.5">'+inv.billing_address.replace(/\n/g,'<br>')+'</div>' : ''),
+        (inv.customer_phone ? '<div style="font-size:11px;color:#555;margin-top:2px">Contact No. : '+inv.customer_phone+'</div>' : ''),
+        (inv.gstin ? '<div style="font-size:11px;color:#555">GSTIN : '+inv.gstin+'</div>' : ''),
+        (inv.state ? '<div style="font-size:11px;color:#555">State: '+inv.state+'</div>' : ''),
+      '</div>',
+      '<div style="padding:10px 12px">',
+        '<div style="font-size:10px;font-weight:700;color:#555;margin-bottom:4px;text-align:right">Invoice Details</div>',
+        '<div style="font-size:11px;color:#555;text-align:right;line-height:1.8">',
+          'Invoice No. : <strong>'+inv.inv_no+'</strong><br>',
+          'Date : <strong>'+invFmtDate(inv.date)+'</strong><br>',
+          (inv.state ? 'Place of supply: <strong>'+inv.state+'</strong>' : ''),
+          (inv.due_date ? '<br>Due Date : <strong>'+invFmtDate(inv.due_date)+'</strong>' : ''),
+          (inv.po_no ? '<br>PO Ref : <strong>'+inv.po_no+'</strong>' : ''),
+        '</div>',
+      '</div>',
+    '</div>',
+
+    // ── ITEMS TABLE ──────────────────────────────────────────────
+    '<table style="width:100%;border-collapse:collapse;margin-bottom:0;border:1px solid #ddd;border-top:none">',
+      '<thead>',
+        '<tr style="background:'+accentColor+';color:#fff">',
+          '<th style="padding:7px 8px;font-size:11px;text-align:center;width:28px;border-right:1px solid rgba(255,255,255,.2)">#</th>',
+          '<th style="padding:7px 8px;font-size:11px;text-align:left;border-right:1px solid rgba(255,255,255,.2)">Item name</th>',
+          '<th style="padding:7px 8px;font-size:11px;text-align:center;width:70px;border-right:1px solid rgba(255,255,255,.2)">HSN/ SAC</th>',
+          '<th style="padding:7px 8px;font-size:11px;text-align:center;width:55px;border-right:1px solid rgba(255,255,255,.2)">Quantity</th>',
+          '<th style="padding:7px 8px;font-size:11px;text-align:center;width:45px;border-right:1px solid rgba(255,255,255,.2)">Unit</th>',
+          '<th style="padding:7px 8px;font-size:11px;text-align:right;width:75px;border-right:1px solid rgba(255,255,255,.2)">Price/ Unit</th>',
+          '<th style="padding:7px 8px;font-size:11px;text-align:right;width:85px;border-right:1px solid rgba(255,255,255,.2)">GST</th>',
+          '<th style="padding:7px 8px;font-size:11px;text-align:right;width:70px">Amount</th>',
+        '</tr>',
+      '</thead>',
+      '<tbody>'
+  ].join('');
+
+  (inv.items||[]).forEach(function(item, i){
+    html += '<tr style="border-bottom:1px solid #eee">'
+      +'<td style="padding:8px 8px;font-size:11px;text-align:center;border-right:1px solid #eee;vertical-align:top">'+(i+1)+'</td>'
+      +'<td style="padding:8px 8px;border-right:1px solid #eee">'
+        +'<div style="font-size:12px;font-weight:700;color:#1a1f2e">'+item.name+'</div>'
+        +(item.description?'<div style="font-size:10px;color:#888;margin-top:2px">'+item.description+'</div>':'')
+      +'</td>'
+      +'<td style="padding:8px 8px;font-size:11px;text-align:center;border-right:1px solid #eee;color:#555">'+(item.hsn||'–')+'</td>'
+      +'<td style="padding:8px 8px;font-size:11px;text-align:center;border-right:1px solid #eee">'+(item.qty)+'</td>'
+      +'<td style="padding:8px 8px;font-size:11px;text-align:center;border-right:1px solid #eee">'+(item.unit||'PCS')+'</td>'
+      +'<td style="padding:8px 8px;font-size:11px;text-align:right;border-right:1px solid #eee">'+invFmt(item.price)+'</td>'
+      +'<td style="padding:8px 8px;font-size:11px;text-align:right;border-right:1px solid #eee">'+(item.gst>0?invFmt(item.taxAmt)+' ('+item.gst+'%)':'–')+'</td>'
+      +'<td style="padding:8px 8px;font-size:11px;text-align:right;font-weight:700">'+invFmt(item.total)+'</td>'
+      +'</tr>';
   });
-  s.push('</tbody><tfoot>',
-    '<tr style="background:#f0f2f5">',
-    '<td colspan="4" style="padding:8px 10px"></td>',
-    '<td colspan="3" style="padding:8px 10px;font-size:12px;text-align:right;color:#555">Sub Total</td>',
-    '<td style="padding:8px 10px;font-size:12px;text-align:right;font-weight:700">'+invFmt(inv.sub_total)+'</td>',
-    '</tr>');
-  if(inv.discount_total>0) s.push('<tr style="background:#f0f2f5"><td colspan="7" style="padding:4px 10px;font-size:12px;text-align:right;color:#1a7a3a">Discount</td><td style="padding:4px 10px;font-size:12px;text-align:right;color:#1a7a3a;font-weight:700">-'+invFmt(inv.discount_total)+'</td></tr>');
-  if(inv.gst_total>0){
-    if(inv.gst_split==='CGST_SGST'){
-      var half=inv.gst_total/2;
-      s.push('<tr style="background:#f0f2f5"><td colspan="7" style="padding:4px 10px;font-size:12px;text-align:right;color:#555">CGST</td><td style="padding:4px 10px;font-size:12px;text-align:right;font-weight:700">'+invFmt(half)+'</td></tr>');
-      s.push('<tr style="background:#f0f2f5"><td colspan="7" style="padding:4px 10px;font-size:12px;text-align:right;color:#555">SGST</td><td style="padding:4px 10px;font-size:12px;text-align:right;font-weight:700">'+invFmt(half)+'</td></tr>');
-    } else if(inv.gst_split==='IGST'){
-      s.push('<tr style="background:#f0f2f5"><td colspan="7" style="padding:4px 10px;font-size:12px;text-align:right;color:#555">IGST</td><td style="padding:4px 10px;font-size:12px;text-align:right;font-weight:700">'+invFmt(inv.gst_total)+'</td></tr>');
-    } else {
-      s.push('<tr style="background:#f0f2f5"><td colspan="7" style="padding:4px 10px;font-size:12px;text-align:right;color:#555">GST / Tax</td><td style="padding:4px 10px;font-size:12px;text-align:right;font-weight:700">'+invFmt(inv.gst_total)+'</td></tr>');
-    }
+
+  // Total row in table
+  var totalTax = (inv.items||[]).reduce(function(s,i){ return s+parseFloat(i.taxAmt||0); },0);
+  html += '<tr style="border-top:1.5px solid #ccc;font-weight:700">'
+    +'<td colspan="2" style="padding:7px 8px;font-size:12px;font-weight:800;border-right:1px solid #eee">Total</td>'
+    +'<td style="border-right:1px solid #eee"></td>'
+    +'<td style="padding:7px 8px;font-size:11px;text-align:center;border-right:1px solid #eee">'+((inv.items||[]).reduce(function(s,i){return s+parseFloat(i.qty||0);},0))+'</td>'
+    +'<td style="border-right:1px solid #eee"></td>'
+    +'<td style="border-right:1px solid #eee"></td>'
+    +'<td style="padding:7px 8px;font-size:11px;text-align:right;border-right:1px solid #eee;font-weight:700">'+invFmt(totalTax)+'</td>'
+    +'<td style="padding:7px 8px;font-size:11px;text-align:right;font-weight:700">'+invFmt(inv.sub_total)+'</td>'
+    +'</tr>';
+
+  html += '</tbody></table>';
+
+  // ── BOTTOM SECTION: left description / right totals ──────────
+  html += '<div style="display:grid;grid-template-columns:1fr 220px;border:1px solid #ddd;border-top:none">';
+
+  // LEFT: Description + Amount in words + Terms + Bank
+  html += '<div style="padding:12px;border-right:1px solid #ddd">';
+  if(inv.notes){
+    html += '<div style="font-size:11px;font-weight:700;margin-bottom:4px">Description</div>'
+      +'<div style="font-size:11px;color:#444;margin-bottom:10px;white-space:pre-line">'+inv.notes+'</div>';
   }
-  s.push(
-    '<tr style="background:#1a3a6b;color:#fff">',
-    '<td colspan="7" style="padding:9px 10px;font-size:13px;font-weight:800;text-align:right">TOTAL</td>',
-    '<td style="padding:9px 10px;font-size:14px;font-weight:800;text-align:right">'+invFmt(inv.grand_total)+'</td>',
-    '</tr></tfoot></table>',
-    // Received/Balance
-    '<div style="display:flex;justify-content:flex-end;gap:24px;margin-bottom:12px;padding:10px;background:#f7f8fa;border-radius:6px">',
-    '<div style="font-size:12px;color:#555">Received: <strong style="color:#1a7a3a">'+invFmt(inv.amount_received)+'</strong></div>',
-    '<div style="font-size:12px;color:#555">Balance: <strong style="color:'+(bal>0?'#c0392b':'#1a7a3a')+'">'+invFmt(bal)+'</strong></div>',
-    '</div>',
-    // Amount in words
-    '<div style="background:#fff3e0;border:1px solid #e07b00;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:12px">',
-    '<strong>Invoice Amount In Words:</strong> '+invAmountWords(inv.grand_total),
-    '</div>'
-  );
+  html += '<div style="font-size:11px;font-weight:700;margin-bottom:3px">Invoice Amount In Words</div>'
+    +'<div style="font-size:11px;color:#444;margin-bottom:10px">'+invAmountWords(inv.grand_total)+'</div>';
   if(inv.terms){
-    s.push('<div style="margin-bottom:12px;padding:10px;background:#f7f8fa;border:1px solid #e0e0e0;border-radius:6px">',
-      '<div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;margin-bottom:4px">Terms & Conditions</div>',
-      '<div style="font-size:11px;color:#555;white-space:pre-line">'+inv.terms+'</div>',
-      '</div>');
+    html += '<div style="font-size:11px;font-weight:700;margin-bottom:3px">Terms and Conditions</div>'
+      +'<div style="font-size:10px;color:#555;line-height:1.6;margin-bottom:10px;white-space:pre-line">'+inv.terms+'</div>';
   }
-  s.push(
-    '<div style="display:flex;justify-content:flex-end;margin-top:20px;padding-top:12px;border-top:1px solid #e0e0e0">',
-    '<div style="text-align:center">',
-    '<div style="height:48px"></div>',
-    '<div style="font-size:12px;color:#555;border-top:1px solid #555;padding-top:4px;min-width:160px">Authorized Signatory</div>',
-    '<div style="font-size:11px;color:#888">Sri Bharat GPS Tracker Pvt Ltd</div>',
-    '</div></div>',
-    '</div>'
-  );
-  return s.join('');
+  // Bank details
+  html += '<div style="display:flex;gap:10px;align-items:flex-start;margin-top:8px;padding-top:8px;border-top:1px solid #eee">'
+    +'<div style="flex-shrink:0;width:56px;height:56px;background:#f0f0f0;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;font-size:9px;color:#888;text-align:center">UPI<br>QR</div>'
+    +'<div>'
+      +'<div style="font-size:11px;font-weight:700;margin-bottom:3px">Pay To :</div>'
+      +'<div style="font-size:11px;color:#444;line-height:1.7">'
+        +'Bank Name : ICICI BANK LIMITED, GAJUWAKA, VISAKHAPATNAM<br>'
+        +'Bank Account No. : 777705984984<br>'
+        +'Bank IFSC code : ICIC0001108'
+      +'</div>'
+    +'</div>'
+  +'</div>';
+  html += '</div>';
+
+  // RIGHT: Totals
+  html += '<div style="padding:0">';
+  var tRow = function(label, val, bold, highlight){
+    var bg = highlight ? accentColor : 'transparent';
+    var color = highlight ? '#fff' : '#222';
+    var fw = (bold||highlight) ? '700' : '400';
+    return '<div style="display:flex;justify-content:space-between;padding:5px 10px;border-bottom:1px solid #eee;background:'+bg+';color:'+color+';font-weight:'+fw+';font-size:11px">'
+      +'<span>'+label+'</span><span>'+val+'</span></div>';
+  };
+  html += tRow('Sub Total', invFmt(inv.sub_total));
+  if(isCGST){
+    html += tRow('SGST@'+Math.round(gstRate/2)+'%', invFmt(half));
+    html += tRow('CGST@'+Math.round(gstRate/2)+'%', invFmt(half));
+  } else if(isIGST){
+    html += tRow('IGST@'+gstRate+'%', invFmt(parseFloat(inv.gst_total||0)));
+  } else if(parseFloat(inv.gst_total||0)>0){
+    html += tRow('GST@'+gstRate+'%', invFmt(parseFloat(inv.gst_total||0)));
+  }
+  html += tRow('Total', invFmt(inv.grand_total), true, true);
+  html += tRow('Received', invFmt(inv.amount_received));
+  html += tRow('Balance', invFmt(bal), false, false);
+  html += tRow('Payment mode', (inv.cash_sale?'Cash':(inv.pay_mode||'Credit')));
+  html += tRow('Previous Balance', invFmt(0));
+  html += tRow('Current Balance', invFmt(bal), true);
+  html += '</div>';
+
+  html += '</div>';
+
+  // ── SIGNATORY ──────────────────────────────────────────────────
+  html += '<div style="display:flex;justify-content:flex-end;margin-top:16px;padding-top:12px">'
+    +'<div style="text-align:center">'
+      +'<div style="font-size:11px;color:#555;margin-bottom:4px">For :Sri Bharat GPS Tracker Private Limited</div>'
+      +'<div style="height:36px;font-family:cursive;font-size:18px;color:#333;line-height:36px">G. Raghumesh</div>'
+      +'<div style="border-top:1.5px solid #333;padding-top:4px;font-size:11px;font-weight:700;min-width:160px">Authorized Signatory</div>'
+    +'</div>'
+  +'</div>';
+
+  html += '</div>'; // invoice-root
+  return html;
 }
+
 
 function invAmountWords(n){
   n = Math.round(parseFloat(n||0));
@@ -4392,21 +4496,36 @@ function invAmountWords(n){
   return toWords(n).trim()+' Rupees Only';
 }
 
-function invPrintInvoice(id){
-  var inv = invGetAll().find(function(i){ return i.id===id; });
-  if(!inv) return;
-  var html = '<!DOCTYPE html><html><head><title>Invoice '+inv.inv_no+'</title>'
-    +'<style>body{margin:0;padding:16px;font-family:Arial,sans-serif}@media print{body{padding:0}}</style>'
-    +'</head><body>'+invBuildPrintHTML(inv,true)+'</body></html>';
-  var w = window.open('','_blank','width=900,height=700');
+async function invPrintInvoice(id){
+  var invoices = await invGetAll();
+  var inv = invoices.find(function(i){ return i.id===id; });
+  if(!inv){ showAlert('Invoice not found','error'); return; }
+  var css = [
+    'body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;background:#fff}',
+    '#invoice-root{max-width:780px;margin:0 auto;padding:16px}',
+    '@media print{',
+      'body{padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}',
+      '.no-print{display:none!important}',
+      'tr{page-break-inside:avoid}',
+    '}'
+  ].join('');
+  var printBtn = '<div class="no-print" style="text-align:center;padding:12px;background:#f0f0f0;margin-bottom:12px">'
+    +'<button onclick="window.print()" style="background:#c0392b;color:#fff;border:none;padding:10px 24px;font-size:14px;font-weight:700;border-radius:5px;cursor:pointer;margin-right:8px">🖨 Print Invoice</button>'
+    +'<button onclick="window.close()" style="background:#555;color:#fff;border:none;padding:10px 16px;font-size:14px;border-radius:5px;cursor:pointer">✕ Close</button>'
+    +'</div>';
+  var html = '<!DOCTYPE html><html><head>'
+    +'<meta charset="UTF-8"><title>Invoice '+inv.inv_no+' - '+inv.customer+'</title>'
+    +'<style>'+css+'</style>'
+    +'</head><body>'+printBtn+invBuildPrintHTML(inv,true)+'</body></html>';
+  var w = window.open('','_blank','width=900,height=750,scrollbars=yes');
+  if(!w){ showAlert('Please allow popups to print','error'); return; }
   w.document.write(html);
   w.document.close();
   w.focus();
-  setTimeout(function(){ w.print(); }, 400);
 }
 
-function invExportCSV(){
-  var all = invGetAll();
+async function invExportCSV(){
+  var all = await invGetAll();
   if(!all.length){ showAlert('No invoices to export','info'); return; }
   var rows = [['Invoice No','Date','Customer','Grand Total','Received','Balance','Status']];
   all.forEach(function(inv){
@@ -5068,9 +5187,10 @@ function renderInvSettings(el){
             <tr style="background:var(--accent);color:#fff">
               <th style="padding:8px 8px;font-size:10px;font-weight:700;text-align:center;width:28px">#</th>
               <th style="padding:8px 8px;font-size:10px;font-weight:700;text-align:left">Item / Description</th>
+              <th style="padding:8px 8px;font-size:10px;font-weight:700;text-align:center;width:70px">HSN/SAC</th>
               <th style="padding:8px 8px;font-size:10px;font-weight:700;text-align:center;width:55px">Qty</th>
               <th style="padding:8px 8px;font-size:10px;font-weight:700;text-align:center;width:60px">Unit</th>
-              <th style="padding:8px 8px;font-size:10px;font-weight:700;text-align:right;width:95px">Price (₹)</th>
+              <th style="padding:8px 8px;font-size:10px;font-weight:700;text-align:right;width:90px">Price (₹)</th>
               <th style="padding:8px 8px;font-size:10px;font-weight:700;text-align:right;width:60px">Disc %</th>
               <th style="padding:8px 8px;font-size:10px;font-weight:700;text-align:center;width:70px">GST %</th>
               <th style="padding:8px 8px;font-size:10px;font-weight:700;text-align:right;width:90px">Amount (₹)</th>
