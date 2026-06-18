@@ -402,25 +402,10 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
       <div class="nav-section strict-admin-only">Accounts</div>
       <div class="nav-item strict-admin-only" onclick="showPage('accounts')" id="nav-accounts"><span class="nav-icon">📊</span> P&amp;L Overview</div>
 
-      <!-- INVOICING EXPANDABLE -->
+      <!-- INVOICING — single nav item, no sub-items, tabs handle navigation -->
       <div class="strict-admin-only" id="nav-exp-invoicing" style="display:none">
-        <div class="nav-item" id="nav-invoicing-head" onclick="toggleInvoicingNav()" style="display:flex;align-items:center;justify-content:space-between;padding-right:12px">
+        <div class="nav-item" id="nav-invoicing-head" onclick="showInvPage('sale')" style="display:flex;align-items:center;justify-content:space-between;padding-right:12px">
           <span><span class="nav-icon">🧾</span> Invoicing</span>
-          <span id="inv-nav-arrow" style="font-size:10px;color:var(--text3);transition:transform .2s">▼</span>
-        </div>
-        <div id="inv-nav-kids" style="display:none">
-          <div class="nav-item" style="padding-left:32px;font-size:12px" onclick="showInvPage('sale')" id="inv-ni-sale">💰 Sale Invoices</div>
-          <div class="nav-item" style="padding-left:32px;font-size:12px" onclick="showInvPage('estimate')" id="inv-ni-estimate">📄 Estimate / Quotation</div>
-          <div class="nav-item" style="padding-left:32px;font-size:12px" onclick="showInvPage('proforma')" id="inv-ni-proforma">📋 Proforma Invoice</div>
-          <div class="nav-item" style="padding-left:32px;font-size:12px" onclick="showInvPage('payin')" id="inv-ni-payin">💳 Payment-In</div>
-          <div class="nav-item" style="padding-left:32px;font-size:12px" onclick="showInvPage('saleorder')" id="inv-ni-saleorder">📝 Sale Order</div>
-          <div class="nav-item" style="padding-left:32px;font-size:12px" onclick="showInvPage('challan')" id="inv-ni-challan">🚚 Delivery Challan</div>
-          <div class="nav-item" style="padding-left:32px;font-size:12px" onclick="showInvPage('purbills')" id="inv-ni-purbills">🛒 Purchase Bills</div>
-          <div class="nav-item" style="padding-left:32px;font-size:12px" onclick="showInvPage('parties')" id="inv-ni-parties">👥 Parties</div>
-          <div class="nav-item" style="padding-left:32px;font-size:12px" onclick="showInvPage('items')" id="inv-ni-items">📦 Items</div>
-          <div class="nav-item" style="padding-left:32px;font-size:12px" onclick="showInvPage('banks')" id="inv-ni-banks">🏦 Banks</div>
-          <div class="nav-item" style="padding-left:32px;font-size:12px" onclick="showInvPage('invreports')" id="inv-ni-invreports">📊 Reports</div>
-          <div class="nav-item" style="padding-left:32px;font-size:12px" onclick="showInvPage('settings')" id="inv-ni-settings">⚙️ Settings</div>
         </div>
       </div>
       <div class="nav-section admin-only">Administration</div>
@@ -3488,65 +3473,40 @@ async function deleteSupplier(id){if(!confirm('Remove?'))return;const res=await 
 // ============================================================
 // INVOICING — embedded in same page, tab navigation
 // ============================================================
-function toggleInvoicingNav(){
-  var kids=document.getElementById('inv-nav-kids');
-  var arrow=document.getElementById('inv-nav-arrow');
-  if(!kids) return;
-  var vis=kids.style.display!=='none';
-  kids.style.display=vis?'none':'block';
-  if(arrow)arrow.style.transform=vis?'':'rotate(180deg)';
-}
+function toggleInvoicingNav(){ showInvPage('sale'); }
 
 var currentInvPage='sale';
 var INV_PAGES=['sale','estimate','proforma','payin','saleorder','challan','purbills','parties','items','banks','invreports','settings'];
 
 function showInvPage(name){
-  // Directly show the invoicing page without going through showPage (prevents circular call)
+  // Show invoicing page directly
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
-  document.getElementById('page-invoicing')?.classList.add('active');
+  var pg=document.getElementById('page-invoicing');
+  if(pg) pg.classList.add('active');
   localStorage.setItem('bgps_last_page','invoicing');
-
   currentInvPage=name;
-
-  // Update sidebar nav active state — invoicing head
+  // Highlight single sidebar item
   document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active');});
   var head=document.getElementById('nav-invoicing-head');
-  if(head)head.classList.add('active');
-
-  // Open the dropdown if not already
-  var kids=document.getElementById('inv-nav-kids');
-  var arrow=document.getElementById('inv-nav-arrow');
-  if(kids)kids.style.display='block';
-  if(arrow)arrow.style.transform='rotate(180deg)';
-
-  // Update tab styles using CSS class
+  if(head) head.classList.add('active');
+  // Update tab active class only
   INV_PAGES.forEach(function(p){
     var tab=document.getElementById('inv-tab-'+p);
-    if(!tab)return;
-    tab.classList.toggle('active', p===name);
-    var ni=document.getElementById('inv-ni-'+p);
-    if(ni) ni.classList.toggle('active',p===name);
+    if(tab) tab.classList.toggle('active',p===name);
   });
-
   // Render content
   var el=document.getElementById('inv-content');
-  if(!el)return;
-  var renderers={
-    sale:renderInvSale,
-    estimate:renderInvEstimate,
-    proforma:renderInvProforma,
-    payin:renderInvPayin,
-    saleorder:renderInvStub('Sale Order','📝'),
-    challan:renderInvStub('Delivery Challan','🚚'),
-    purbills:renderInvPurchase,
-    parties:renderInvParties,
-    items:renderInvItems,
-    banks:renderInvBanks,
-    invreports:renderInvReports,
-    settings:renderInvSettings
+  if(!el) return;
+  var R={
+    sale:renderInvSale,estimate:renderInvEstimate,proforma:renderInvProforma,
+    payin:renderInvPayin,saleorder:renderInvStub('Sale Order','📝'),
+    challan:renderInvStub('Delivery Challan','🚚'),purbills:renderInvPurchase,
+    parties:renderInvParties,items:renderInvItems,banks:renderInvBanks,
+    invreports:renderInvReports,settings:renderInvSettings
   };
-  if(renderers[name])renderers[name](el);
+  if(R[name]) R[name](el);
 }
+
 
 function renderInvSale(el){
   el.innerHTML =
