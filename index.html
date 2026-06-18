@@ -444,7 +444,147 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
 .tab:hover:not(.active){color:var(--text2);}
 .wa-btn{background:#128c45;color:#fff;border:none;border-radius:var(--radius-sm);padding:7px 13px;font-family:inherit;font-weight:700;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s;}
 .wa-btn:hover{background:#0e7038;}
-@media(max-width:768px){.sidebar{display:none;}.stats-grid{grid-template-columns:repeat(2,1fr);}.form-grid{grid-template-columns:1fr;}.form-grid .span-2{grid-column:span 1;}.detail-grid{grid-template-columns:1fr;}.report-summary{grid-template-columns:repeat(2,1fr);}.modal{width:calc(100vw - 24px) !important;max-width:calc(100vw - 24px) !important;}.modal-lg{width:calc(100vw - 24px) !important;}.doc-grid{grid-template-columns:1fr;}.tech-stats-grid{grid-template-columns:repeat(3,1fr);}}
+/* ═══════════════════════════════════════════════════════
+   MOBILE / TABLET RESPONSIVE — phones first
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Mobile hamburger button ───────────────────────── */
+.mob-nav-toggle{
+  display:none;
+  position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+  z-index:999;
+  background:var(--accent);color:#fff;
+  border:none;border-radius:30px;
+  padding:11px 22px;font-size:14px;font-weight:700;
+  box-shadow:0 4px 16px rgba(0,0,0,0.25);
+  cursor:pointer;gap:8px;align-items:center;
+  white-space:nowrap;
+}
+.mob-overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;
+}
+.mob-overlay.open{display:block;}
+
+@media(max-width:900px){
+  /* Allow vertical scroll on body */
+  html,body{overflow:auto;}
+  
+  /* App wrapper stacks instead of side-by-side */
+  #app{flex-direction:column !important;}
+  .main-layout{flex-direction:column;overflow:visible;}
+
+  /* Sidebar becomes a slide-in drawer */
+  .sidebar{
+    position:fixed;left:-260px;top:0;bottom:0;z-index:300;
+    width:260px !important;
+    transition:left .25s ease;
+    box-shadow:4px 0 20px rgba(0,0,0,.2);
+    overflow-y:auto;
+  }
+  .sidebar.mob-open{left:0;}
+
+  /* Content takes full width */
+  .content{width:100%;overflow-y:auto;}
+  .page{padding:14px 12px !important;}
+
+  /* Show hamburger */
+  .mob-nav-toggle{display:flex;}
+
+  /* ── Stats grid: 3 cols on tablet, 2 on phone ── */
+  .stats-grid{grid-template-columns:repeat(3,1fr) !important;gap:8px !important;}
+
+  /* ── Dashboard panels: single column ── */
+  #page-dashboard > div[style*="grid-template-columns:1fr 1fr 1fr"],
+  #page-dashboard > div[style*="grid"]{
+    display:flex !important;flex-direction:column !important;gap:10px !important;
+  }
+
+  /* ── Stat card sizing ── */
+  .stat-card{padding:12px 10px 10px !important;}
+  .stat-value{font-size:22px !important;}
+  .stat-label{font-size:10px !important;}
+  .stat-sub{font-size:10px !important;}
+  .stat-icon{font-size:16px !important;}
+
+  /* ── Tables: scroll horizontally ── */
+  .table-wrapper,.dtask-table,.task-table-wrap{
+    overflow-x:auto;-webkit-overflow-scrolling:touch;
+  }
+  table{min-width:560px;}
+
+  /* ── Forms ── */
+  .form-grid{grid-template-columns:1fr !important;}
+  .form-grid .span-2{grid-column:span 1 !important;}
+
+  /* ── Modals: full width ── */
+  .modal,.modal-lg{
+    width:calc(100vw - 16px) !important;
+    max-width:calc(100vw - 16px) !important;
+    margin:8px;
+    max-height:94vh;
+    overflow-y:auto;
+  }
+  .modal-overlay{align-items:flex-start !important;padding-top:8px;}
+
+  /* ── Detail/report grids ── */
+  .detail-grid{grid-template-columns:1fr !important;}
+  .report-summary{grid-template-columns:repeat(2,1fr) !important;}
+  .doc-grid{grid-template-columns:1fr !important;}
+  .tech-stats-grid{grid-template-columns:repeat(2,1fr) !important;}
+
+  /* ── Nav topbar for mobile ── */
+  .page-header{flex-direction:column;gap:8px;}
+  .header-actions{width:100%;justify-content:flex-start;}
+  .header-actions .btn{font-size:13px !important;padding:8px 14px !important;}
+}
+
+/* ── Phones only (≤480px) ─────────────────────────── */
+@media(max-width:480px){
+  .stats-grid{grid-template-columns:repeat(2,1fr) !important;gap:6px !important;}
+  .stat-value{font-size:20px !important;}
+  .page{padding:10px 8px !important;}
+
+  /* Dashboard 3-col panels → single col */
+  .dash-grid,
+  [style*="grid-template-columns:1fr 1fr 1fr"],
+  [style*="grid-template-columns:1fr 330px"]{
+    display:flex !important;flex-direction:column !important;gap:10px !important;
+  }
+
+  /* Task table scroll */
+  .table-wrapper{overflow-x:auto;}
+  table{min-width:480px;}
+
+  /* Approval / urgent / tech items — larger touch targets */
+  .appr-item,.urg-item,.tech-item{padding:12px 14px !important;}
+  .appr-name,.urg-name,.tech-name{font-size:13px !important;}
+  .appr-meta,.urg-time,.tech-meta{font-size:11px !important;}
+  .appr-amt{font-size:13px !important;}
+
+  /* Quick action buttons — bigger */
+  .qa-btn{padding:16px 8px !important;font-size:12px !important;}
+  .qa-btn .qi{font-size:22px !important;}
+
+  /* Dash card titles */
+  .dash-card-title{font-size:14px !important;}
+  .dash-card-btn{font-size:12px !important;padding:6px 12px !important;}
+
+  /* Alert banners */
+  .dash-alert{font-size:13px !important;padding:11px 14px !important;}
+  .dal-btn{font-size:11px !important;padding:6px 12px !important;}
+
+  /* Buttons */
+  .btn{font-size:13px !important;padding:8px 14px !important;}
+  .btn-sm{font-size:12px !important;padding:6px 12px !important;}
+
+  /* Modals */
+  .modal,.modal-lg{
+    width:100vw !important;max-width:100vw !important;
+    margin:0 !important;border-radius:12px 12px 0 0 !important;
+    position:fixed !important;bottom:0 !important;
+  }
+  .modal-overlay{align-items:flex-end !important;padding:0 !important;}
+}
 </style>
 </head>
 <body>
@@ -5507,6 +5647,36 @@ function renderInvSettings(el){
     document.getElementById('login-screen').style.display='flex';
   }
 })();
+
+// ── Mobile nav toggle ─────────────────────────────────────────────────────
+function toggleMobNav(){
+  var sb = document.querySelector('.sidebar');
+  var ov = document.getElementById('mob-overlay');
+  var btn = document.getElementById('mob-nav-toggle');
+  if(!sb) return;
+  var isOpen = sb.classList.toggle('mob-open');
+  ov.classList.toggle('open', isOpen);
+  btn.textContent = isOpen ? '✕ Close' : '☰ Menu';
+}
+function closeMobNav(){
+  var sb = document.querySelector('.sidebar');
+  var ov = document.getElementById('mob-overlay');
+  var btn = document.getElementById('mob-nav-toggle');
+  if(sb) sb.classList.remove('mob-open');
+  if(ov) ov.classList.remove('open');
+  if(btn) btn.textContent = '☰ Menu';
+}
+// Close nav when a page is selected on mobile
+var _origShowPage = typeof showPage !== 'undefined' ? showPage : null;
+document.addEventListener('DOMContentLoaded', function(){
+  var navItems = document.querySelectorAll('.nav-item');
+  navItems.forEach(function(item){
+    item.addEventListener('click', function(){
+      if(window.innerWidth <= 900) closeMobNav();
+    });
+  });
+});
+
 </script>
 <!-- ═══════════════════ SALE INVOICE MODAL ═══════════════════ -->
 <div class="modal-overlay" id="inv-sale-modal" style="display:none" onclick="closeModal(event,'inv-sale-modal')">
@@ -5652,6 +5822,10 @@ function renderInvSettings(el){
 
 <!-- ═══════════════════ PRINT FRAME ═══════════════════ -->
 <iframe id="inv-print-frame" style="display:none"></iframe>
+
+  <!-- Mobile nav overlay + toggle -->
+  <div class="mob-overlay" id="mob-overlay" onclick="closeMobNav()"></div>
+  <button class="mob-nav-toggle" id="mob-nav-toggle" onclick="toggleMobNav()">☰ Menu</button>
 
 </body>
 </html>
