@@ -773,6 +773,146 @@ case 'get_accounts_summary':
     $gp=floatval($inc['ts']??0)-floatval($pur['tp']??0);
     echo json_encode(['income'=>['total_sales'=>$inc['ts']??0,'total_received'=>$inc['tr']??0,'total_pending'=>$inc['tp']??0,'sales_income'=>$inc['si']??0,'license_income'=>$inc['li']??0,'devices_sold'=>$inc['ds']??0,'total_entries'=>$inc['tc']??0],'purchases'=>['total_po'=>$pur['tp']??0,'po_count'=>$pur['pc']??0],'expenses_by_category'=>$cats,'total_expenses'=>$tex,'gross_profit'=>$gp,'net_profit'=>$gp-$tex,'monthly'=>$monthly]);break;
 
+// ════════════════════════════════════════════════════
+// INVOICING API — Items, Parties, Invoices, Settings
+// ════════════════════════════════════════════════════
+
+// ── INV ITEMS ────────────────────────────────────────
+case 'inv_get_items':
+    $stmt = $pdo->prepare("SELECT * FROM inv_items ORDER BY name ASC");
+    $stmt->execute();
+    echo json_encode(['success'=>true,'items'=>$stmt->fetchAll()]);
+    break;
+
+case 'inv_save_item':
+    if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    $id = $body['id'] ?? ('ITEM-'.time().'-'.rand(100,999));
+    $existing = $pdo->prepare("SELECT id FROM inv_items WHERE id=?"); $existing->execute([$id]);
+    $data = [
+        'id'=>$id, 'name'=>$body['name']??'', 'hsn'=>$body['hsn']??'',
+        'code'=>$body['code']??'', 'unit'=>$body['unit']??'PCS',
+        'category'=>$body['category']??'', 'description'=>$body['description']??'',
+        'mrp'=>floatval($body['mrp']??0), 'sale_price'=>floatval($body['sale_price']??0),
+        'purchase_price'=>floatval($body['purchase_price']??0), 'gst_rate'=>floatval($body['gst_rate']??18),
+        'opening_stock'=>intval($body['opening_stock']??0), 'low_stock_alert'=>intval($body['low_stock_alert']??5),
+        'location'=>$body['location']??'', 'is_service'=>intval($body['is_service']??0),
+        'created_by'=>$userId
+    ];
+    if($existing->fetch()){
+        $pdo->prepare("UPDATE inv_items SET name=?,hsn=?,code=?,unit=?,category=?,description=?,mrp=?,sale_price=?,purchase_price=?,gst_rate=?,opening_stock=?,low_stock_alert=?,location=?,is_service=? WHERE id=?")
+            ->execute(array_values(array_slice(array_values($data),1,14))+[$id]);
+    } else {
+        $pdo->prepare("INSERT INTO inv_items (id,name,hsn,code,unit,category,description,mrp,sale_price,purchase_price,gst_rate,opening_stock,low_stock_alert,location,is_service,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+            ->execute([$id,$data['name'],$data['hsn'],$data['code'],$data['unit'],$data['category'],$data['description'],$data['mrp'],$data['sale_price'],$data['purchase_price'],$data['gst_rate'],$data['opening_stock'],$data['low_stock_alert'],$data['location'],$data['is_service'],$userId]);
+    }
+    echo json_encode(['success'=>true,'id'=>$id]);
+    break;
+
+case 'inv_delete_item':
+    if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    $id = $body['id']??'';
+    $pdo->prepare("DELETE FROM inv_items WHERE id=?")->execute([$id]);
+    echo json_encode(['success'=>true]);
+    break;
+
+// ── INV PARTIES ──────────────────────────────────────
+case 'inv_get_parties':
+    $stmt = $pdo->prepare("SELECT * FROM inv_parties ORDER BY name ASC");
+    $stmt->execute();
+    echo json_encode(['success'=>true,'parties'=>$stmt->fetchAll()]);
+    break;
+
+case 'inv_save_party':
+    if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    $id = $body['id'] ?? ('PARTY-'.time().'-'.rand(100,999));
+    $existing = $pdo->prepare("SELECT id FROM inv_parties WHERE id=?"); $existing->execute([$id]);
+    if($existing->fetch()){
+        $pdo->prepare("UPDATE inv_parties SET name=?,phone=?,email=?,gstin=?,gst_type=?,billing_address=?,state=?,opening_balance=?,balance_type=? WHERE id=?")
+            ->execute([$body['name']??'',$body['phone']??'',$body['email']??'',$body['gstin']??'',$body['gst_type']??'Unregistered/Consumer',$body['billing_address']??'',$body['state']??'',floatval($body['opening_balance']??0),$body['balance_type']??'receivable',$id]);
+    } else {
+        $pdo->prepare("INSERT INTO inv_parties (id,name,phone,email,gstin,gst_type,billing_address,state,opening_balance,balance_type,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?)")
+            ->execute([$id,$body['name']??'',$body['phone']??'',$body['email']??'',$body['gstin']??'',$body['gst_type']??'Unregistered/Consumer',$body['billing_address']??'',$body['state']??'',floatval($body['opening_balance']??0),$body['balance_type']??'receivable',$userId]);
+    }
+    echo json_encode(['success'=>true,'id'=>$id]);
+    break;
+
+case 'inv_delete_party':
+    if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    $pdo->prepare("DELETE FROM inv_parties WHERE id=?")->execute([$body['id']??'']);
+    echo json_encode(['success'=>true]);
+    break;
+
+// ── INV INVOICES ─────────────────────────────────────
+case 'inv_get_invoices':
+    $type = $_GET['type'] ?? 'sale';
+    $stmt = $pdo->prepare("SELECT * FROM inv_invoices WHERE inv_type=? AND status!='cancelled' ORDER BY date DESC, created_at DESC");
+    $stmt->execute([$type]);
+    $rows = $stmt->fetchAll();
+    // decode items_json
+    foreach($rows as &$r){ $r['items'] = json_decode($r['items_json']??'[]',true); }
+    echo json_encode(['success'=>true,'invoices'=>$rows]);
+    break;
+
+case 'inv_save_invoice':
+    if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    $id = $body['id'] ?? ('INV-'.time().'-'.rand(100,999));
+    $existing = $pdo->prepare("SELECT id FROM inv_invoices WHERE id=?"); $existing->execute([$id]);
+    $itemsJson = json_encode($body['items']??[]);
+    $data = [
+        'inv_no'=>$body['inv_no']??'', 'inv_type'=>$body['inv_type']??'sale',
+        'date'=>$body['date']??date('Y-m-d'), 'due_date'=>$body['due_date']??null,
+        'party_id'=>$body['party_id']??null, 'customer'=>$body['customer']??'',
+        'billing_name'=>$body['billing_name']??'', 'po_no'=>$body['po_no']??'',
+        'state'=>$body['state']??'', 'pay_mode'=>$body['pay_mode']??'',
+        'cash_sale'=>intval($body['cash_sale']??0),
+        'items_json'=>$itemsJson,
+        'sub_total'=>floatval($body['sub_total']??0), 'discount_total'=>floatval($body['discount_total']??0),
+        'gst_total'=>floatval($body['gst_total']??0), 'grand_total'=>floatval($body['grand_total']??0),
+        'amount_received'=>floatval($body['amount_received']??0),
+        'terms'=>$body['terms']??'', 'notes'=>$body['notes']??'',
+    ];
+    if($existing->fetch()){
+        $pdo->prepare("UPDATE inv_invoices SET inv_no=?,inv_type=?,date=?,due_date=?,party_id=?,customer=?,billing_name=?,po_no=?,state=?,pay_mode=?,cash_sale=?,items_json=?,sub_total=?,discount_total=?,gst_total=?,grand_total=?,amount_received=?,terms=?,notes=? WHERE id=?")
+            ->execute(array_merge(array_values($data),[$id]));
+    } else {
+        $pdo->prepare("INSERT INTO inv_invoices (id,inv_no,inv_type,date,due_date,party_id,customer,billing_name,po_no,state,pay_mode,cash_sale,items_json,sub_total,discount_total,gst_total,grand_total,amount_received,terms,notes,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+            ->execute(array_merge([$id],array_values($data),[$userId]));
+    }
+    echo json_encode(['success'=>true,'id'=>$id]);
+    break;
+
+case 'inv_delete_invoice':
+    if($userRole!=='admin'){ http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
+    // Soft-delete only — never hard delete
+    $pdo->prepare("UPDATE inv_invoices SET status='cancelled' WHERE id=?")->execute([$body['id']??'']);
+    echo json_encode(['success'=>true]);
+    break;
+
+case 'inv_get_counter':
+    $stmt = $pdo->prepare("SELECT setting_value FROM inv_settings WHERE setting_key='inv_counter'");
+    $stmt->execute();
+    $row = $stmt->fetch();
+    echo json_encode(['success'=>true,'counter'=>intval($row['setting_value']??116)]);
+    break;
+
+case 'inv_increment_counter':
+    $pdo->exec("INSERT INTO inv_settings (setting_key,setting_value) VALUES ('inv_counter','117') ON DUPLICATE KEY UPDATE setting_value=CAST(setting_value AS UNSIGNED)+1");
+    $stmt = $pdo->prepare("SELECT setting_value FROM inv_settings WHERE setting_key='inv_counter'"); $stmt->execute();
+    echo json_encode(['success'=>true,'counter'=>intval($stmt->fetch()['setting_value']??117)]);
+    break;
+
+case 'inv_save_setting':
+    $pdo->prepare("INSERT INTO inv_settings (setting_key,setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=?")
+        ->execute([$body['key']??'',$body['value']??'',$body['value']??'']);
+    echo json_encode(['success'=>true]);
+    break;
+
+case 'inv_get_settings':
+    $stmt=$pdo->query("SELECT setting_key,setting_value FROM inv_settings"); $rows=$stmt->fetchAll();
+    $out=[];foreach($rows as $r)$out[$r['setting_key']]=$r['setting_value'];
+    echo json_encode(['success'=>true,'settings'=>$out]);
+    break;
+
 default:
     http_response_code(404);
     echo json_encode(['error'=>'Unknown action: '.$action]);
