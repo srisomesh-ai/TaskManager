@@ -98,9 +98,12 @@ html,body{height:100%;font-family:'Calibri','Segoe UI',sans-serif;background:var
 
 /* CONTENT */
 .content{flex:1;overflow-y:auto;background:var(--bg);}
-.page{display:none;padding:20px;animation:none;}
-.page.active{display:block;animation:pgIn .12s ease;}
-@keyframes pgIn{from{opacity:.6;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.page{display:none;padding:20px;}
+.page.active{display:block;animation:pgFadeIn .15s ease forwards;}
+@keyframes pgFadeIn{
+  from{opacity:0;transform:translateY(3px)}
+  to{opacity:1;transform:translateY(0)}
+}
 .breadcrumb{font-size:12px;color:var(--text3);margin-bottom:14px;}
 .breadcrumb span{color:var(--accent2);font-weight:600;}
 .page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;}
@@ -109,7 +112,7 @@ html,body{height:100%;font-family:'Calibri','Segoe UI',sans-serif;background:var
 .header-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
 
 /* STATS GRID */
-.stats-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:11px;margin-bottom:18px;}
+.stats-grid{display:grid;grid-template-columns:repeat(9,1fr);gap:10px;margin-bottom:18px;}
 .stat-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px 16px;position:relative;overflow:hidden;transition:all .2s;cursor:default;box-shadow:var(--shadow);}
 .stat-card:hover{box-shadow:var(--shadow-md);transform:translateY(-2px);}
 .stat-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;}
@@ -431,15 +434,46 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
           </div>
         </div>
         <div id="urgent-banners"></div>
-        <div class="stats-grid">
-          <div class="stat-card sc-total"><div class="stat-label">Total Tasks</div><div class="stat-value" id="stat-total">–</div><div class="stat-icon">📊</div></div>
-          <div class="stat-card sc-open"><div class="stat-label">Open</div><div class="stat-value" id="stat-open">–</div><div class="stat-icon">🔄</div></div>
-          <div class="stat-card sc-closed"><div class="stat-label">Closed</div><div class="stat-value" id="stat-closed">–</div><div class="stat-icon">✅</div></div>
-          <div class="stat-card sc-cancelled"><div class="stat-label">Cancelled</div><div class="stat-value" id="stat-cancelled">–</div><div class="stat-icon">⚠️</div></div>
-          <div class="stat-card sc-demo"><div class="stat-label">Demos Sent</div><div class="stat-value" id="stat-demo">–</div><div class="stat-icon">📤</div></div>
-          <div class="stat-card sc-devices"><div class="stat-label">Devices Installed</div><div class="stat-value" id="stat-devices">–</div><div class="stat-icon">📡</div></div>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid" id="stats-grid">
+          <div class="stat-card sc-total" style="cursor:pointer" onclick="showPage('tasks')">
+            <div class="stat-label">Total Tasks</div><div class="stat-value" id="stat-total">–</div><div class="stat-icon">📊</div>
+          </div>
+          <div class="stat-card sc-open" style="cursor:pointer" onclick="showPage('tasks')">
+            <div class="stat-label">Active / Open</div><div class="stat-value" id="stat-open">–</div><div class="stat-icon">🔄</div>
+          </div>
+          <div class="stat-card sc-closed" style="cursor:pointer" onclick="showPage('tasks')">
+            <div class="stat-label">Closed</div><div class="stat-value" id="stat-closed">–</div><div class="stat-icon">✅</div>
+          </div>
+          <div class="stat-card sc-cancelled" style="cursor:pointer" onclick="showPage('tasks')">
+            <div class="stat-label">Cancelled</div><div class="stat-value" id="stat-cancelled">–</div><div class="stat-icon">⚠️</div>
+          </div>
+          <div class="stat-card sc-demo" style="cursor:pointer" onclick="showPage('tasks')">
+            <div class="stat-label">Demo Sent</div><div class="stat-value" id="stat-demo">–</div><div class="stat-icon">📤</div>
+          </div>
+          <div class="stat-card sc-devices">
+            <div class="stat-label">Devices Installed</div><div class="stat-value" id="stat-devices">–</div><div class="stat-icon">📡</div>
+          </div>
+          <div class="stat-card" style="background:var(--saffron-bg);border-color:var(--saffron);cursor:pointer" onclick="showPage('approvals')">
+            <div class="stat-label" style="color:var(--saffron)">Awaiting Approval</div><div class="stat-value" id="stat-awaiting" style="color:var(--saffron)">–</div><div class="stat-icon">⏳</div>
+          </div>
+          <div class="stat-card" style="background:var(--red-bg);border-color:var(--red)">
+            <div class="stat-label" style="color:var(--red)">Payment Pending</div><div class="stat-value" id="stat-payment-pending" style="color:var(--red)">–</div><div class="stat-icon">💳</div>
+          </div>
+          <div class="stat-card" style="background:var(--blue-bg);border-color:var(--blue)">
+            <div class="stat-label" style="color:var(--blue)">Troubleshoot Done</div><div class="stat-value" id="stat-troubleshoot" style="color:var(--blue)">–</div><div class="stat-icon">🔧</div>
+          </div>
         </div>
-        <div id="dashboard-table"></div>
+
+        <!-- Recent Tasks (last 10 only, no filter toolbar) -->
+        <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)">
+          <div style="padding:12px 16px;border-bottom:1.5px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+            <div style="font-size:14px;font-weight:800;color:var(--text)">🕐 Recent Tasks</div>
+            <button class="btn btn-secondary btn-sm" onclick="showPage('tasks')">View All Tasks →</button>
+          </div>
+          <div id="dashboard-recent"></div>
+        </div>
       </div>
 
       <!-- ALL TASKS -->
@@ -1215,43 +1249,99 @@ function showPage(name){
 
 // DASHBOARD
 async function loadDashboard(){
-  const [statsRes,urgentRes]=await Promise.all([api('get_stats'),api('get_urgent_tasks')]);
-  const stats=statsRes.stats||{};
-  document.getElementById('stat-total').textContent=stats.total||0;
-  document.getElementById('stat-open').textContent=stats.open||0;
-  document.getElementById('stat-closed').textContent=stats.closed||0;
-  document.getElementById('stat-cancelled').textContent=stats.cancelled||0;
-  document.getElementById('stat-demo').textContent=stats.demo_sent||0;
-  document.getElementById('stat-devices').textContent=stats.devices_installed||0;
+  const [statsRes, urgentRes, recentRes] = await Promise.all([
+    api('get_stats'),
+    api('get_urgent_tasks'),
+    api('get_tasks', {limit:10, sort:'newest'})
+  ]);
+  const stats = statsRes.stats || {};
 
-  // Approval badge
-  const approvalBadge=document.getElementById('approval-count');
+  // Stats cards
+  const sv = function(id, val){ const el=document.getElementById(id); if(el) el.textContent=(val||0); };
+  sv('stat-total',           stats.total);
+  sv('stat-open',            stats.open);
+  sv('stat-closed',          stats.closed);
+  sv('stat-cancelled',       stats.cancelled);
+  sv('stat-demo',            stats.demo_sent);
+  sv('stat-devices',         stats.devices_installed);
+  sv('stat-awaiting',        stats.awaiting_approval);
+  sv('stat-payment-pending', stats.payment_pending);
+  sv('stat-troubleshoot',    stats.troubleshoot_done);
+
+  // Approval badge in sidebar
+  const approvalBadge = document.getElementById('approval-count');
   if(approvalBadge){
-    const ac=parseInt(stats.awaiting_approval||0);
-    approvalBadge.textContent=ac;
-    approvalBadge.style.display=ac>0?'':'none';
+    const ac = parseInt(stats.awaiting_approval||0);
+    approvalBadge.textContent = ac;
+    approvalBadge.style.display = ac > 0 ? '' : 'none';
   }
 
   // Urgent banners
-  const urgentTasks=urgentRes.tasks||[];
-  const critical=urgentTasks.filter(t=>t.age_hours>=48);
-  const warning=urgentTasks.filter(t=>t.age_hours>=24&&t.age_hours<48);
-  const banners=document.getElementById('urgent-banners');
-  banners.innerHTML='';
-  const ac2=parseInt(stats.awaiting_approval||0);
-  if(ac2>0) banners.innerHTML+=`<div class="urgent-banner" style="background:#e8f8ef;border:1.5px solid var(--green);color:var(--green);margin-bottom:10px">✅ ${ac2} task${ac2>1?'s':''} awaiting your approval! <button class="btn btn-sm btn-success" onclick="showPage('approvals')" style="margin-left:auto">Review Now →</button></div>`;
-  if(critical.length) banners.innerHTML+=`<div class="urgent-banner danger flash-critical">🚨 CRITICAL: ${critical.length} task${critical.length>1?'s':''} open 48+ hours! <button class="btn btn-sm btn-danger" onclick="showPage('urgent')" style="margin-left:auto">View →</button></div>`;
-  if(warning.length) banners.innerHTML+=`<div class="urgent-banner warning flash-warning">⚠️ ${warning.length} task${warning.length>1?'s':''} open 24+ hours. <button class="btn btn-sm btn-warn" onclick="showPage('urgent')" style="margin-left:auto">View →</button></div>`;
+  const urgentTasks = urgentRes.tasks || [];
+  const critical = urgentTasks.filter(t=>t.age_hours>=48);
+  const warning  = urgentTasks.filter(t=>t.age_hours>=24 && t.age_hours<48);
+  const banners  = document.getElementById('urgent-banners');
+  if(banners){
+    banners.innerHTML = '';
+    const ac2 = parseInt(stats.awaiting_approval||0);
+    if(ac2>0) banners.innerHTML += `<div class="urgent-banner" style="background:#e8f8ef;border:1.5px solid var(--green);color:var(--green);margin-bottom:10px">✅ ${ac2} task${ac2>1?'s':''} awaiting your approval! <button class="btn btn-sm btn-success" onclick="showPage('approvals')" style="margin-left:auto">Review Now →</button></div>`;
+    if(critical.length) banners.innerHTML += `<div class="urgent-banner danger flash-critical">🚨 ${critical.length} task${critical.length>1?'s':''} open 48+ hours! <button class="btn btn-sm btn-danger" onclick="showPage('urgent')" style="margin-left:auto">View →</button></div>`;
+    if(warning.length)  banners.innerHTML += `<div class="urgent-banner warning flash-warning">⚠️ ${warning.length} task${warning.length>1?'s':''} open 24+ hours. <button class="btn btn-sm btn-warn" onclick="showPage('urgent')" style="margin-left:auto">View →</button></div>`;
+  }
 
-  const container=document.getElementById('dashboard-table');
-  container.innerHTML=document.getElementById('task-table-tpl').innerHTML;
-  await populateTechFilter(); await loadTasks();
+  // Recent tasks — compact table, no filters
+  const recent = (recentRes.tasks || []).slice(0, 10);
+  const rc = document.getElementById('dashboard-recent');
+  if(!rc) return;
+  if(!recent.length){
+    rc.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text3)"><div style="font-size:32px;margin-bottom:8px">📋</div><div style="font-size:14px;font-weight:600">No tasks yet</div><div style="font-size:12px;margin-top:4px">Create your first lead to get started.</div></div>';
+    return;
+  }
+  const statusColor = {
+    'Open':'var(--blue)','In Progress':'var(--saffron)','Task Pending':'var(--orange)',
+    'Awaiting Approval':'var(--purple)','Closed':'var(--green)','Cancelled':'var(--text3)',
+    'Demo Sent':'var(--blue)'
+  };
+  let html = '<table style="width:100%;border-collapse:collapse">';
+  html += '<thead><tr style="background:var(--surface2)">'
+    + '<th style="padding:9px 14px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left">Task ID</th>'
+    + '<th style="padding:9px 14px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left">Customer</th>'
+    + '<th style="padding:9px 14px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left">Job Type</th>'
+    + '<th style="padding:9px 14px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left">Technician</th>'
+    + '<th style="padding:9px 14px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:right">Amount</th>'
+    + '<th style="padding:9px 14px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left">Status</th>'
+    + '<th style="padding:9px 14px;width:50px"></th>'
+    + '</tr></thead><tbody>';
+  recent.forEach(function(t){
+    const col = statusColor[t.task_status] || 'var(--text3)';
+    const bal = parseFloat(t.price_to_collect||0) - parseFloat(t.amount_collected||0);
+    html += `<tr style="border-bottom:1px solid var(--border2)" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''">
+      <td style="padding:10px 14px;font-size:12px;font-weight:700;color:var(--accent2)">${t.task_id||'–'}</td>
+      <td style="padding:10px 14px;font-size:13px;font-weight:600">${t.customer_name||'–'}<div style="font-size:11px;color:var(--text3);font-weight:400">${t.contact_number||''}</div></td>
+      <td style="padding:10px 14px;font-size:12px;color:var(--text2)">${t.device_details||'–'} ${t.device_qty>0?'× '+t.device_qty:''}</td>
+      <td style="padding:10px 14px;font-size:12px;color:var(--text2)">${t.tech_name||'Unassigned'}</td>
+      <td style="padding:10px 14px;text-align:right">
+        <div style="font-size:13px;font-weight:700">₹${parseFloat(t.price_to_collect||0).toLocaleString('en-IN')}</div>
+        ${bal>0?`<div style="font-size:10px;color:var(--red)">₹${bal.toLocaleString('en-IN')} pending</div>`:''}
+      </td>
+      <td style="padding:10px 14px">
+        <span style="background:${col}18;color:${col};padding:3px 9px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap">${t.task_status}</span>
+      </td>
+      <td style="padding:10px 8px;text-align:center">
+        <button class="action-btn view" onclick="viewTask(${t.id})" title="View">👁</button>
+      </td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  rc.innerHTML = html;
 }
 
 async function loadTasksPage(){
-  const container=document.getElementById('tasks-table-container');
-  container.innerHTML=document.getElementById('task-table-tpl').innerHTML;
-  await populateTechFilter(); await loadTasks();
+  const container = document.getElementById('tasks-table-container');
+  if(!container) return;
+  container.innerHTML = document.getElementById('task-table-tpl').innerHTML;
+  await populateTechFilter();
+  await loadTasks();
 }
 
 async function populateTechFilter(){
