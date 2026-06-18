@@ -146,6 +146,9 @@ html,body{height:100%;font-family:'Calibri','Segoe UI',sans-serif;background:var
 .inv-tab-btn{padding:10px 16px;font-size:12px;font-weight:600;color:var(--text3);cursor:pointer;white-space:nowrap;border-right:1px solid var(--border);border-bottom:3px solid transparent;transition:all .15s;user-select:none}
 .inv-tab-btn:hover{background:var(--surface2);color:var(--text2)}
 .inv-tab-btn.active{color:var(--accent);font-weight:800;border-bottom-color:var(--accent);background:var(--surface)}
+.field-label{display:block;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px}
+.inv-field{padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;outline:none;width:100%;background:var(--surface)}
+.inv-field:focus{border-color:var(--accent2);box-shadow:0 0 0 2px var(--accent-light)}
 .bs-tab{padding:10px 18px;background:none;border:none;font-family:inherit;font-size:13px;font-weight:700;color:var(--text3);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
 .bs-tab.active{color:var(--accent);border-bottom-color:var(--accent);background:var(--surface)}
 .bs-tab:hover{color:var(--accent2);background:var(--surface2)}
@@ -3679,13 +3682,19 @@ function invAddRow(){
   invRowCount++;
   var n = invRowCount;
   var tbody = document.getElementById('inv-items-body');
+  if(!tbody) return;
+  var itemsList = (typeof invGetItemsForDropdown==='function') ? invGetItemsForDropdown() : [];
+  var dlId = 'inv-items-dl-'+n;
+  var dl = '<datalist id="'+dlId+'">'+itemsList.map(function(i){ return '<option value="'+i.name+'">'; }).join('')+'</datalist>';
   var tr = document.createElement('tr');
   tr.id = 'inv-row-'+n;
   tr.style.borderBottom = '1px solid var(--border2)';
-  tr.innerHTML = '<td style="padding:6px 8px;font-size:12px;color:var(--text3)">'+n+'</td>'
-    +'<td style="padding:6px 8px"><input type="text" placeholder="Item / Service name" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none;min-width:160px" id="inv-item-name-'+n+'"></td>'
+  var unitOpts = (typeof unitsGetAll==='function') ? unitsGetAll().map(function(u){ return '<option>'+u+'</option>'; }).join('') : '<option>PCS</option><option>NOS</option><option>SVC</option>';
+  tr.innerHTML = dl
+    +'<td style="padding:6px 8px;font-size:12px;color:var(--text3)">'+n+'</td>'
+    +'<td style="padding:6px 8px"><input type="text" list="'+dlId+'" placeholder="Item / Service name" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none;min-width:160px" id="inv-item-name-'+n+'" oninput="invItemSelected('+n+')"></td>'
     +'<td style="padding:6px 8px"><input type="number" value="1" min="0" style="width:56px;padding:6px 8px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none;text-align:right" id="inv-item-qty-'+n+'" oninput="invCalcRow('+n+')"></td>'
-    +'<td style="padding:6px 8px"><select style="width:65px;padding:6px 6px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none" id="inv-item-unit-'+n+'"><option>PCS</option><option>NOS</option><option>SET</option><option>KIT</option><option>SVC</option></select></td>'
+    +'<td style="padding:6px 8px"><select style="width:65px;padding:6px 4px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none" id="inv-item-unit-'+n+'">'+unitOpts+'</select></td>'
     +'<td style="padding:6px 8px"><input type="number" value="0" min="0" style="width:90px;padding:6px 8px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none;text-align:right" id="inv-item-price-'+n+'" oninput="invCalcRow('+n+')"></td>'
     +'<td style="padding:6px 8px"><input type="number" value="0" min="0" max="100" style="width:60px;padding:6px 8px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none;text-align:right" id="inv-item-disc-'+n+'" oninput="invCalcRow('+n+')"></td>'
     +'<td style="padding:6px 8px"><select style="width:72px;padding:6px 4px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none" id="inv-item-gst-'+n+'" onchange="invCalcRow('+n+')">'
@@ -3695,6 +3704,20 @@ function invAddRow(){
     +'<td style="padding:6px 4px;text-align:center"><button style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:0 4px;line-height:1" onclick="invRemoveRow('+n+')">✕</button></td>';
   tbody.appendChild(tr);
 }
+
+function invItemSelected(n){
+  var nameEl = document.getElementById('inv-item-name-'+n);
+  if(!nameEl) return;
+  var items = (typeof invGetItemsForDropdown==='function') ? invGetItemsForDropdown() : [];
+  var found = items.find(function(i){ return i.name===nameEl.value; });
+  if(found){
+    var p=document.getElementById('inv-item-price-'+n); if(p) p.value=found.sale_price||0;
+    var g=document.getElementById('inv-item-gst-'+n);   if(g) g.value=found.gst_rate||0;
+    var u=document.getElementById('inv-item-unit-'+n);  if(u) u.value=found.unit||'PCS';
+    invCalcRow(n);
+  }
+}
+
 
 function invRemoveRow(n){
   var row = document.getElementById('inv-row-'+n);
@@ -4126,22 +4149,331 @@ function renderInvParties(el){
     +'</div>';
 }
 
+// ═══════════════════════════════════════════════════════════
+// ITEMS — Products, Services, Category, Units — localStorage
+// ═══════════════════════════════════════════════════════════
+var ITEMS_KEY      = 'bgps_inv_items';
+var CATEGORIES_KEY = 'bgps_inv_categories';
+var UNITS_KEY      = 'bgps_inv_units';
+var itemsActiveTab = 'products';
+var itemEditingId  = null;
+
+function itemsGetAll()  { try{ return JSON.parse(localStorage.getItem(ITEMS_KEY)||'[]'); }catch(e){ return []; } }
+function itemsSaveAll(a){ localStorage.setItem(ITEMS_KEY, JSON.stringify(a)); }
+function catsGetAll()   { try{ return JSON.parse(localStorage.getItem(CATEGORIES_KEY)||'["GPS Devices","Accessories","Services","Subscription","AMC","Other"]'); }catch(e){ return ['GPS Devices','Accessories','Services','Subscription','AMC','Other']; } }
+function catsSave(a)    { localStorage.setItem(CATEGORIES_KEY, JSON.stringify(a)); }
+function unitsGetAll()  { try{ return JSON.parse(localStorage.getItem(UNITS_KEY)||'["PCS","NOS","SET","KIT","SVC","MTH","YR","HRS"]'); }catch(e){ return ['PCS','NOS','SET','KIT','SVC','MTH','YR','HRS']; } }
+function unitsSave(a)   { localStorage.setItem(UNITS_KEY, JSON.stringify(a)); }
+
 function renderInvItems(el){
-  el.innerHTML =
-    '<div style="display:flex;gap:0;border-bottom:1.5px solid var(--border);margin-bottom:14px">'
-    +'<div style="padding:8px 16px;font-size:12px;font-weight:700;color:var(--accent);border-bottom:2px solid var(--accent);margin-bottom:-1.5px;cursor:pointer">Products</div>'
-    +'<div style="padding:8px 16px;font-size:12px;font-weight:600;color:var(--text3);cursor:pointer">Services</div>'
-    +'<div style="padding:8px 16px;font-size:12px;font-weight:600;color:var(--text3);cursor:pointer">Category</div>'
-    +'<div style="padding:8px 16px;font-size:12px;font-weight:600;color:var(--text3);cursor:pointer">Units</div>'
-    +'<div style="margin-left:auto;padding:4px"><button class="btn btn-primary btn-sm">➕ Add Item</button></div>'
+  itemsRenderTab(el, itemsActiveTab);
+}
+
+function itemsRenderTab(el, tab){
+  itemsActiveTab = tab;
+  var tabs = ['products','services','category','units'];
+  var labels = ['📦 Products','⚙️ Services','🏷 Category','📏 Units'];
+  var tabBar = '<div style="display:flex;gap:0;border-bottom:1.5px solid var(--border);margin-bottom:14px;background:var(--surface2);border-radius:var(--radius-sm) var(--radius-sm) 0 0">';
+  tabs.forEach(function(t,i){
+    var active = t===tab;
+    tabBar += '<div onclick="itemsRenderTab(document.getElementById(\'inv-content\'),\''+t+'\')" '
+      +'style="padding:9px 16px;font-size:12px;font-weight:'+(active?'800':'600')+';cursor:pointer;'
+      +'color:'+(active?'var(--accent)':'var(--text3)')+';border-bottom:2.5px solid '+(active?'var(--accent)':'transparent')+';margin-bottom:-1.5px;white-space:nowrap;transition:all .15s">'
+      +labels[i]+'</div>';
+  });
+  tabBar += '</div>';
+  el.innerHTML = tabBar + '<div id="items-tab-content"></div>';
+  var content = document.getElementById('items-tab-content');
+  if(tab==='products')  itemsRenderProducts(content, false);
+  if(tab==='services')  itemsRenderProducts(content, true);
+  if(tab==='category')  itemsRenderCategory(content);
+  if(tab==='units')     itemsRenderUnits(content);
+}
+
+function itemsRenderProducts(el, isService){
+  var all = itemsGetAll().filter(function(i){ return (i.is_service||false) === isService; });
+  var typeLabel = isService ? 'Service' : 'Product';
+
+  // Search + action bar
+  el.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">'
+    +'<input type="text" id="items-search" placeholder="🔍 Search '+typeLabel.toLowerCase()+'..." oninput="itemsSearch(this.value,'+(isService?'true':'false')+')" '
+    +'style="padding:7px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-family:inherit;outline:none;min-width:200px">'
+    +'<button class="btn btn-primary btn-sm" onclick="itemOpenModal('+(isService?'true':'false')+',null)">➕ Add '+typeLabel+'</button>'
     +'</div>'
-    +'<div style="text-align:center;padding:48px 20px;color:var(--text3)">'
-    +'<div style="font-size:44px;margin-bottom:12px">📦</div>'
-    +'<div style="font-size:15px;font-weight:700;margin-bottom:6px">No Items</div>'
-    +'<div style="font-size:12px;margin-bottom:16px">Add GPS devices and services as inventory items.</div>'
-    +'<button class="btn btn-primary btn-sm">➕ Add Item</button>'
+    +'<div id="items-list-wrap"></div>';
+
+  itemsRenderList(document.getElementById('items-list-wrap'), all, isService);
+}
+
+function itemsSearch(q, isService){
+  var all = itemsGetAll().filter(function(i){
+    return (i.is_service||false)===isService && (i.name.toLowerCase().includes(q.toLowerCase()) || (i.hsn||'').toLowerCase().includes(q.toLowerCase()));
+  });
+  itemsRenderList(document.getElementById('items-list-wrap'), all, isService);
+}
+
+function itemsRenderList(el, items, isService){
+  if(!el) return;
+  if(!items.length){
+    el.innerHTML = '<div style="text-align:center;padding:56px 20px;color:var(--text3)">'
+      +'<div style="font-size:48px;margin-bottom:14px">'+(isService?'⚙️':'📦')+'</div>'
+      +'<div style="font-size:15px;font-weight:700;color:var(--text2);margin-bottom:8px">No '+(isService?'Services':'Products')+' Yet</div>'
+      +'<div style="font-size:13px;margin-bottom:20px">'+(isService?'Add GPS installation, AMC and other services.':'Add GPS devices, accessories and products.')+'</div>'
+      +'<button class="btn btn-primary" onclick="itemOpenModal('+(isService?'true':'false')+',null)">➕ Add '+(isService?'Service':'Product')+'</button>'
+      +'</div>';
+    return;
+  }
+  var html = '<div class="table-wrapper"><div class="table-scroll"><table>'
+    +'<thead><tr>'
+    +'<th>Item Name</th><th>HSN/SAC</th><th>Category</th><th>Unit</th>'
+    +'<th style="text-align:right">Sale Price</th><th style="text-align:right">Purchase Price</th>'
+    +'<th style="text-align:right">Tax</th><th style="text-align:right">Stock Qty</th>'
+    +'<th>Actions</th>'
+    +'</tr></thead><tbody>';
+  items.forEach(function(item){
+    var bal = parseInt(item.opening_stock||0) + parseInt(item.stock_in||0) - parseInt(item.stock_out||0);
+    var stockColor = bal < 0 ? 'var(--red)' : bal === 0 ? 'var(--text3)' : 'var(--green)';
+    html += '<tr>'
+      +'<td><div style="font-weight:700;font-size:13px">'+item.name+'</div>'
+      +(item.description?'<div style="font-size:11px;color:var(--text3)">'+item.description+'</div>':'')
+      +'</td>'
+      +'<td style="font-size:12px;color:var(--text3)">'+( item.hsn||'–' )+'</td>'
+      +'<td style="font-size:12px">'+( item.category||'–' )+'</td>'
+      +'<td style="font-size:12px">'+( item.unit||'PCS' )+'</td>'
+      +'<td style="text-align:right;font-weight:700">'+( item.sale_price ? '₹'+parseFloat(item.sale_price).toLocaleString('en-IN') : '₹0' )+'</td>'
+      +'<td style="text-align:right;color:var(--text3)">'+( item.purchase_price ? '₹'+parseFloat(item.purchase_price).toLocaleString('en-IN') : '–' )+'</td>'
+      +'<td style="text-align:right;font-size:12px">'+( item.gst_rate ? item.gst_rate+'%' : '–' )+'</td>'
+      +(!isService ? '<td style="text-align:right;font-weight:700;color:'+stockColor+'">'+bal+'</td>' : '<td style="text-align:right;color:var(--text3)">–</td>')
+      +'<td><div style="display:flex;gap:4px">'
+      +'<button class="action-btn edit" onclick="itemOpenModal('+(isService?'true':'false')+',\''+item.id+'\')" title="Edit">✏️</button>'
+      +'<button class="action-btn" style="background:var(--red-bg);color:var(--red)" onclick="itemDelete(\''+item.id+'\')" title="Delete">🗑</button>'
+      +'</div></td>'
+      +'</tr>';
+  });
+  html += '</tbody></table></div></div>';
+  el.innerHTML = html;
+}
+
+function itemDelete(id){
+  if(!confirm('Delete this item?')) return;
+  itemsSaveAll(itemsGetAll().filter(function(i){ return i.id!==id; }));
+  renderInvItems(document.getElementById('inv-content'));
+  showAlert('Item deleted','info');
+}
+
+function itemsRenderCategory(el){
+  var cats = catsGetAll();
+  el.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
+    +'<div style="font-size:13px;font-weight:700;color:var(--text2)">Item Categories</div>'
+    +'<button class="btn btn-primary btn-sm" onclick="itemAddCategory()">➕ Add Category</button>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px" id="cats-grid">'
+    +cats.map(function(c,i){
+      return '<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:12px;display:flex;justify-content:space-between;align-items:center">'
+        +'<span style="font-size:13px;font-weight:600">🏷 '+c+'</span>'
+        +'<button onclick="itemDeleteCategory('+i+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button>'
+        +'</div>';
+    }).join('')
     +'</div>';
 }
+
+function itemAddCategory(){
+  var name = prompt('Enter category name:');
+  if(!name||!name.trim()) return;
+  var cats = catsGetAll();
+  cats.push(name.trim());
+  catsSave(cats);
+  itemsRenderTab(document.getElementById('inv-content'), 'category');
+}
+
+function itemDeleteCategory(idx){
+  if(!confirm('Delete this category?')) return;
+  var cats = catsGetAll();
+  cats.splice(idx,1);
+  catsSave(cats);
+  itemsRenderTab(document.getElementById('inv-content'), 'category');
+}
+
+function itemsRenderUnits(el){
+  var units = unitsGetAll();
+  el.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
+    +'<div style="font-size:13px;font-weight:700;color:var(--text2)">Units of Measurement</div>'
+    +'<button class="btn btn-primary btn-sm" onclick="itemAddUnit()">➕ Add Unit</button>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px">'
+    +units.map(function(u,i){
+      return '<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:12px;display:flex;justify-content:space-between;align-items:center">'
+        +'<span style="font-size:13px;font-weight:700">'+u+'</span>'
+        +'<button onclick="itemDeleteUnit('+i+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button>'
+        +'</div>';
+    }).join('')
+    +'</div>';
+}
+
+function itemAddUnit(){
+  var name = prompt('Enter unit (e.g. PCS, KG, MTR):');
+  if(!name||!name.trim()) return;
+  var units = unitsGetAll();
+  units.push(name.trim().toUpperCase());
+  unitsSave(units);
+  itemsRenderTab(document.getElementById('inv-content'), 'units');
+}
+
+function itemDeleteUnit(idx){
+  if(!confirm('Delete this unit?')) return;
+  var units = unitsGetAll();
+  units.splice(idx,1);
+  unitsSave(units);
+  itemsRenderTab(document.getElementById('inv-content'), 'units');
+}
+
+function itemOpenModal(isService, editId){
+  itemEditingId = editId;
+  var cats = catsGetAll();
+  var units = unitsGetAll();
+  var item = editId ? itemsGetAll().find(function(i){ return i.id===editId; }) : null;
+
+  // Build modal HTML
+  var html = '<div class="modal-overlay" id="item-modal" style="display:flex" onclick="if(event.target.id===\'item-modal\')closeById(\'item-modal\')">'
+    +'<div class="modal" style="width:700px;max-width:calc(100vw - 24px)">'
+    +'<div class="modal-header">'
+    +'<div class="modal-header-left">'
+    +'<h3>'+(editId?'Edit':'Add')+' '+(isService?'Service':'Product')+'</h3>'
+    +'<p>'+(isService?'Service item (no stock tracking)':'Product with stock tracking')+'</p>'
+    +'</div>'
+    +'<button class="modal-close" onclick="closeById(\'item-modal\')">✕</button>'
+    +'</div>'
+    +'<div class="modal-body">'
+    // Row 1
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr 120px;gap:10px;margin-bottom:12px;align-items:end">'
+    +'<div><label class="field-label">Item Name *</label><input id="itm-name" class="inv-field" type="text" value="'+(item?item.name:'')+'" placeholder="e.g. Engine Cut GPS"></div>'
+    +'<div><label class="field-label">HSN / SAC Code</label><input id="itm-hsn" class="inv-field" type="text" value="'+(item?item.hsn||'':'')+'" placeholder="e.g. 8526"></div>'
+    +'<div><label class="field-label">Item Code</label><input id="itm-code" class="inv-field" type="text" value="'+(item?item.code||'':'')+'" placeholder="Optional code"></div>'
+    +'<div><label class="field-label">Unit</label>'
+    +'<select id="itm-unit" class="inv-field">'
+    +units.map(function(u){ return '<option'+(item&&item.unit===u?' selected':u==='PCS'&&!item?' selected':'')+'>'+u+'</option>'; }).join('')
+    +'</select></div>'
+    +'</div>'
+    // Row 2
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">'
+    +'<div><label class="field-label">Category</label>'
+    +'<select id="itm-category" class="inv-field">'
+    +'<option value="">None</option>'
+    +cats.map(function(c){ return '<option'+(item&&item.category===c?' selected':'')+'>'+c+'</option>'; }).join('')
+    +'</select></div>'
+    +'<div><label class="field-label">Description</label><input id="itm-desc" class="inv-field" type="text" value="'+(item?item.description||'':'')+'" placeholder="Optional description"></div>'
+    +'</div>'
+    // Pricing box
+    +'<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:'+(isService?'0':'12px')+'">'
+    +'<div style="font-size:12px;font-weight:800;color:var(--text2);margin-bottom:10px">💰 Pricing</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">'
+    +'<div><label class="field-label">MRP (₹)</label><input id="itm-mrp" class="inv-field" type="number" min="0" value="'+(item?item.mrp||'':'')+'" placeholder="0.00"></div>'
+    +'<div><label class="field-label">Sale Price (₹) *</label><input id="itm-sale" class="inv-field" type="number" min="0" value="'+(item?item.sale_price||'':'')+'" placeholder="0.00" oninput="itmCalcMargin()"></div>'
+    +'<div><label class="field-label">Purchase Price (₹)</label><input id="itm-purchase" class="inv-field" type="number" min="0" value="'+(item?item.purchase_price||'':'')+'" placeholder="0.00" oninput="itmCalcMargin()"></div>'
+    +'<div><label class="field-label">GST Rate</label>'
+    +'<select id="itm-gst" class="inv-field">'
+    +['0','5','12','18','28'].map(function(g){ return '<option value="'+g+'"'+(item&&item.gst_rate==g?' selected':g==='18'&&!item?' selected':'')+'>'+g+'%</option>'; }).join('')
+    +'</select></div>'
+    +'</div>'
+    +'<div style="margin-top:8px;font-size:12px;color:var(--text3)" id="itm-margin-line"></div>'
+    +'</div>';
+
+  if(!isService){
+    html += '<div style="background:var(--blue-bg);border:1.5px solid var(--blue);border-radius:var(--radius);padding:14px">'
+      +'<div style="font-size:12px;font-weight:800;color:var(--blue);margin-bottom:10px">📦 Stock</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'
+      +'<div><label class="field-label">Opening Stock (Qty)</label><input id="itm-stock" class="inv-field" type="number" min="0" value="'+(item?item.opening_stock||'0':'0')+'" placeholder="0"></div>'
+      +'<div><label class="field-label">Low Stock Alert at</label><input id="itm-low-stock" class="inv-field" type="number" min="0" value="'+(item?item.low_stock_alert||'5':'5')+'" placeholder="5"></div>'
+      +'<div><label class="field-label">Stock Location</label><input id="itm-location" class="inv-field" type="text" value="'+(item?item.location||'':'')+'" placeholder="e.g. Warehouse, Office"></div>'
+      +'</div>'
+      +'</div>';
+  } else {
+    html += '<input type="hidden" id="itm-stock" value="0"><input type="hidden" id="itm-low-stock" value="0"><input type="hidden" id="itm-location" value="">';
+  }
+
+  html += '</div>'
+    +'<div class="modal-footer">'
+    +'<button class="btn btn-secondary" onclick="closeById(\'item-modal\')">Cancel</button>'
+    +'<button class="btn btn-secondary" onclick="itemSave('+(isService?'true':'false')+',true)">💾 Save & Add Another</button>'
+    +'<button class="btn btn-primary" onclick="itemSave('+(isService?'true':'false')+',false)">💾 Save '+(isService?'Service':'Product')+'</button>'
+    +'</div>'
+    +'</div></div>';
+
+  // Remove existing modal if any
+  var old = document.getElementById('item-modal');
+  if(old) old.remove();
+  document.body.insertAdjacentHTML('beforeend', html);
+  // Focus name field
+  setTimeout(function(){ document.getElementById('itm-name')?.focus(); }, 100);
+}
+
+function itmCalcMargin(){
+  var sale = parseFloat(document.getElementById('itm-sale')?.value||0);
+  var pur  = parseFloat(document.getElementById('itm-purchase')?.value||0);
+  var el   = document.getElementById('itm-margin-line');
+  if(!el) return;
+  if(sale>0 && pur>0){
+    var margin = ((sale-pur)/sale*100).toFixed(1);
+    var profit = (sale-pur).toFixed(2);
+    el.textContent = 'Margin: '+margin+'% — Profit per unit: ₹'+profit;
+    el.style.color = parseFloat(margin) > 0 ? 'var(--green)' : 'var(--red)';
+  } else {
+    el.textContent = '';
+  }
+}
+
+function itemSave(isService, addAnother){
+  var name = document.getElementById('itm-name')?.value?.trim();
+  if(!name){ showAlert('Item name is required','error'); return; }
+  var salePrice = parseFloat(document.getElementById('itm-sale')?.value||0);
+  if(!salePrice){ showAlert('Sale price is required','error'); return; }
+
+  var item = {
+    id:          itemEditingId || ('ITEM-'+Date.now()),
+    name,
+    hsn:         document.getElementById('itm-hsn')?.value?.trim()||'',
+    code:        document.getElementById('itm-code')?.value?.trim()||'',
+    unit:        document.getElementById('itm-unit')?.value||'PCS',
+    category:    document.getElementById('itm-category')?.value||'',
+    description: document.getElementById('itm-desc')?.value?.trim()||'',
+    mrp:         parseFloat(document.getElementById('itm-mrp')?.value||0),
+    sale_price:  salePrice,
+    purchase_price: parseFloat(document.getElementById('itm-purchase')?.value||0),
+    gst_rate:    parseFloat(document.getElementById('itm-gst')?.value||0),
+    opening_stock: parseInt(document.getElementById('itm-stock')?.value||0),
+    low_stock_alert: parseInt(document.getElementById('itm-low-stock')?.value||5),
+    location:    document.getElementById('itm-location')?.value?.trim()||'',
+    stock_in:    0,
+    stock_out:   0,
+    is_service:  isService,
+    created_at:  new Date().toISOString()
+  };
+
+  var all = itemsGetAll();
+  if(itemEditingId){
+    var idx = all.findIndex(function(i){ return i.id===itemEditingId; });
+    if(idx>=0) all[idx] = item; else all.push(item);
+  } else {
+    all.push(item);
+  }
+  itemsSaveAll(all);
+  closeById('item-modal');
+  showAlert('✅ '+item.name+' saved!','success');
+
+  if(addAnother){
+    setTimeout(function(){ itemOpenModal(isService, null); }, 100);
+  } else {
+    renderInvItems(document.getElementById('inv-content'));
+  }
+}
+
+// Helper: get items list for dropdowns in Sale Invoice / Estimate etc.
+function invGetItemsForDropdown(){
+  return itemsGetAll().map(function(i){
+    return { id:i.id, name:i.name, sale_price:i.sale_price, gst_rate:i.gst_rate, unit:i.unit, hsn:i.hsn };
+  });
+}
+
 
 function renderInvBanks(el){
   el.innerHTML =
