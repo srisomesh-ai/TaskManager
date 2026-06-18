@@ -471,14 +471,7 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
 .mob-overlay.open{display:block;}
 
 @media(max-width:900px){
-  /* Allow vertical scroll on body */
-  html,body{overflow:auto;}
-  
-  /* App wrapper stacks instead of side-by-side */
-  #app{flex-direction:column !important;}
-  .main-layout{flex-direction:column;overflow:visible;}
-
-  /* Sidebar becomes a slide-in drawer */
+  /* Sidebar: slide-in drawer */
   .sidebar{
     position:fixed;left:-260px;top:0;bottom:0;z-index:300;
     width:260px !important;
@@ -488,17 +481,16 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
   }
   .sidebar.mob-open{left:0;}
 
-  /* Content takes full width */
-  .content{width:100%;overflow-y:auto;}
+  /* Content stays flex:1, just gets full width visually since sidebar is off-screen */
   .page{padding:14px 12px !important;}
 
   /* Show hamburger */
   .mob-nav-toggle{display:flex;}
 
-  /* ── Stats grid: 3 cols on tablet, 2 on phone ── */
+  /* Stats grid: 3 cols on tablet */
   .stats-grid{grid-template-columns:repeat(3,1fr) !important;gap:8px !important;}
 
-  /* ── Dashboard panels: single column ── */
+  /* Dashboard panels: single column */
   #page-dashboard > div[style*="grid-template-columns:1fr 1fr 1fr"],
   #page-dashboard > div[style*="grid"]{
     display:flex !important;flex-direction:column !important;gap:10px !important;
