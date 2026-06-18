@@ -112,25 +112,97 @@ html,body{height:100%;font-family:'Calibri','Segoe UI',sans-serif;background:var
 .header-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
 
 /* STATS GRID */
+/* ── Dashboard stat grid ──────────────────────────────────── */
 .stats-grid{display:grid;grid-template-columns:repeat(9,1fr);gap:10px;margin-bottom:18px;}
-.stat-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px 16px;position:relative;overflow:hidden;transition:all .2s;cursor:default;box-shadow:var(--shadow);}
-.stat-card:hover{box-shadow:var(--shadow-md);transform:translateY(-2px);}
-.stat-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;}
+.stat-card{
+  background:var(--surface);border:1.5px solid var(--border);
+  border-radius:var(--radius);padding:13px 12px 11px;
+  position:relative;overflow:hidden;
+  transition:transform .15s,box-shadow .15s;cursor:pointer;
+  box-shadow:var(--shadow);
+}
+.stat-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);}
+.stat-card::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:3px;
+  border-radius:0 0 var(--radius) var(--radius);
+}
 .sc-total::after{background:var(--accent);}
-.sc-open::after{background:var(--saffron);}
+.sc-open::after{background:var(--blue);}
 .sc-closed::after{background:var(--green);}
-.sc-cancelled::after{background:var(--red);}
+.sc-cancelled::after{background:var(--text3);}
 .sc-demo::after{background:var(--purple);}
-.sc-devices::after{background:var(--blue);}
-.stat-label{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px;}
-.stat-value{font-size:28px;font-weight:800;font-family:'Consolas','Courier New',monospace;}
-.stat-icon{position:absolute;right:12px;top:12px;font-size:18px;opacity:.25;}
-.sc-total .stat-value{color:var(--accent);}
-.sc-open .stat-value{color:var(--saffron);}
-.sc-closed .stat-value{color:var(--green);}
-.sc-cancelled .stat-value{color:var(--red);}
-.sc-demo .stat-value{color:var(--purple);}
-.sc-devices .stat-value{color:var(--blue);}
+.sc-devices::after{background:#0d7377;}
+.sc-approve::after{background:var(--saffron);}
+.sc-payment::after{background:var(--red);}
+.sc-troubleshoot::after{background:var(--blue);}
+.stat-label{font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;line-height:1.3;}
+.stat-value{font-size:24px;font-weight:900;color:var(--text);line-height:1;}
+.stat-sub{font-size:9px;color:var(--text3);margin-top:4px;font-weight:500;}
+.stat-icon{position:absolute;right:10px;top:10px;font-size:17px;opacity:.12;}
+.sc-approve .stat-value{color:var(--saffron);}
+.sc-payment .stat-value{color:var(--red);}
+.sc-devices .stat-value{color:#0d7377;}
+/* ── Dashboard grid ─────────────────────────────────────── */
+.dash-grid{display:grid;grid-template-columns:1fr 330px;gap:16px;}
+.dash-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;}
+.dash-card-header{padding:11px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.dash-card-title{font-size:13px;font-weight:800;color:var(--text);display:flex;align-items:center;gap:7px;}
+.dash-card-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block;}
+.dash-card-btn{font-size:11px;color:var(--accent2);font-weight:700;cursor:pointer;background:var(--accent-light);padding:4px 10px;border-radius:6px;border:none;transition:all .13s;}
+.dash-card-btn:hover{background:var(--accent2);color:#fff;}
+/* ── Alert banners ──────────────────────────────────────── */
+.dash-alert{display:flex;align-items:center;gap:10px;padding:9px 14px;border-radius:8px;margin-bottom:8px;font-size:12px;font-weight:600;animation:pgFadeIn .2s ease;}
+.dash-alert-danger{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;}
+.dash-alert-warning{background:#fef9c3;color:#92400e;border:1px solid #fde68a;}
+.dash-alert-success{background:#dcfce7;color:#14532d;border:1px solid #86efac;}
+.dash-alert .dal-btn{margin-left:auto;background:rgba(0,0,0,.12);color:inherit;padding:4px 10px;border-radius:6px;font-size:10px;font-weight:800;cursor:pointer;border:none;white-space:nowrap;}
+.dash-alert .dal-btn:hover{background:rgba(0,0,0,.2);}
+/* ── Quick actions ──────────────────────────────────────── */
+.qa-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px;}
+.qa-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:13px 6px;border:1.5px solid var(--border);border-radius:8px;background:var(--surface2);cursor:pointer;transition:all .15s;font-size:10px;font-weight:700;color:var(--text2);text-align:center;}
+.qa-btn:hover{background:var(--accent-light);border-color:var(--accent2);color:var(--accent);}
+.qa-btn .qi{font-size:20px;line-height:1;}
+/* ── Approval list ──────────────────────────────────────── */
+.appr-item{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
+.appr-item:last-child{border-bottom:none;}
+.appr-av{width:30px;height:30px;border-radius:7px;background:var(--accent-light);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--accent2);flex-shrink:0;}
+.appr-name{font-size:12px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.appr-meta{font-size:10px;color:var(--text3);margin-top:1px;}
+.appr-amt{font-size:12px;font-weight:800;color:var(--green);margin-left:auto;white-space:nowrap;padding-left:6px;}
+.appr-go{background:var(--accent);color:#fff;border:none;padding:4px 9px;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;margin-left:6px;flex-shrink:0;transition:background .13s;}
+.appr-go:hover{background:var(--accent2);}
+/* ── Urgent list ─────────────────────────────────────────── */
+.urg-item{padding:9px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
+.urg-item:last-child{border-bottom:none;}
+.urg-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.urg-dot.critical{background:#ef4444;box-shadow:0 0 0 3px #fee2e2;}
+.urg-dot.warning{background:var(--saffron);box-shadow:0 0 0 3px var(--saffron-bg);}
+.urg-name{font-size:12px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.urg-time{font-size:10px;font-weight:600;margin-top:1px;}
+.urg-age{margin-left:auto;font-size:11px;font-weight:800;white-space:nowrap;padding-left:6px;}
+/* ── Tech list ───────────────────────────────────────────── */
+.tech-item{padding:9px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
+.tech-item:last-child{border-bottom:none;}
+.tech-av{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--purple),#818cf8);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;flex-shrink:0;}
+.tech-name{font-size:12px;font-weight:700;color:var(--text);}
+.tech-meta{font-size:10px;color:var(--text3);margin-top:1px;}
+.tech-cnt{margin-left:auto;background:var(--accent-light);color:var(--accent2);padding:2px 9px;border-radius:8px;font-size:11px;font-weight:800;white-space:nowrap;}
+.tech-cnt.busy{background:var(--saffron-bg);color:var(--saffron);}
+/* ── Dashboard task table ────────────────────────────────── */
+.dtask-table{width:100%;border-collapse:collapse;}
+.dtask-table th{padding:8px 12px;font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;background:var(--surface2);border-bottom:1px solid var(--border);text-align:left;white-space:nowrap;}
+.dtask-table td{padding:9px 12px;font-size:12px;border-bottom:1px solid #f1f5f9;vertical-align:middle;}
+.dtask-table tr:last-child td{border-bottom:none;}
+.dtask-table tbody tr{cursor:pointer;transition:background .1s;}
+.dtask-table tbody tr:hover td{background:#fafbff;}
+/* ── Status tags ─────────────────────────────────────────── */
+.tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;white-space:nowrap;}
+.tag-open{background:var(--blue-bg);color:var(--blue);}
+.tag-progress{background:var(--saffron-bg);color:var(--saffron);}
+.tag-closed{background:var(--green-bg);color:var(--green);}
+.tag-awaiting{background:var(--purple-bg);color:var(--purple);}
+.tag-cancelled{background:var(--surface3);color:var(--text3);}
+.tag-demo{background:#d5f2f2;color:#0d7377;}
 
 /* URGENT BANNER */
 .urgent-banner{border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;font-size:13px;font-weight:700;}
@@ -437,57 +509,153 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
 
       <!-- DASHBOARD -->
       <div class="page active" id="page-dashboard">
-        <div class="breadcrumb">Home / <span>Dashboard</span></div>
-        <div class="page-header">
-          <div class="page-header-left"><h2>📊 Operations Dashboard</h2><p>Live overview of all tasks and field operations</p></div>
-          <div class="header-actions">
-            <button class="btn btn-secondary btn-sm" onclick="exportCSV()">⬇ CSV</button>
-            <button class="btn btn-secondary btn-sm" onclick="exportText()">⬇ Text</button>
-            <button class="btn btn-primary admin-only" onclick="openCreateModal()" id="add-task-btn">＋ Add New Lead</button>
-          </div>
-        </div>
-        <div id="urgent-banners"></div>
+        <div id="urgent-banners" style="margin-bottom:0"></div>
 
         <!-- Stats Grid -->
         <div class="stats-grid" id="stats-grid">
-          <div class="stat-card sc-total" style="cursor:pointer" onclick="showPage('tasks')">
-            <div class="stat-label">Total Tasks</div><div class="stat-value" id="stat-total">–</div><div class="stat-icon">📊</div>
+          <div class="stat-card sc-total" onclick="showPage('tasks')">
+            <div class="stat-icon">📊</div>
+            <div class="stat-label">Total Tasks</div>
+            <div class="stat-value" id="stat-total">–</div>
+            <div class="stat-sub">All time</div>
           </div>
-          <div class="stat-card sc-open" style="cursor:pointer" onclick="showPage('tasks')">
-            <div class="stat-label">Active / Open</div><div class="stat-value" id="stat-open">–</div><div class="stat-icon">🔄</div>
+          <div class="stat-card sc-open" onclick="showPage('tasks')">
+            <div class="stat-icon">🔄</div>
+            <div class="stat-label">Active / Open</div>
+            <div class="stat-value" id="stat-open">–</div>
+            <div class="stat-sub">In progress</div>
           </div>
-          <div class="stat-card sc-closed" style="cursor:pointer" onclick="showPage('tasks')">
-            <div class="stat-label">Closed</div><div class="stat-value" id="stat-closed">–</div><div class="stat-icon">✅</div>
+          <div class="stat-card sc-closed" onclick="showPage('tasks')">
+            <div class="stat-icon">✅</div>
+            <div class="stat-label">Closed</div>
+            <div class="stat-value" id="stat-closed">–</div>
+            <div class="stat-sub">Completed</div>
           </div>
-          <div class="stat-card sc-cancelled" style="cursor:pointer" onclick="showPage('tasks')">
-            <div class="stat-label">Cancelled</div><div class="stat-value" id="stat-cancelled">–</div><div class="stat-icon">⚠️</div>
+          <div class="stat-card sc-cancelled" onclick="showPage('tasks')">
+            <div class="stat-icon">⚠️</div>
+            <div class="stat-label">Cancelled</div>
+            <div class="stat-value" id="stat-cancelled">–</div>
+            <div class="stat-sub">Dropped</div>
           </div>
-          <div class="stat-card sc-demo" style="cursor:pointer" onclick="showPage('tasks')">
-            <div class="stat-label">Demo Sent</div><div class="stat-value" id="stat-demo">–</div><div class="stat-icon">📤</div>
+          <div class="stat-card sc-demo" onclick="showPage('tasks')">
+            <div class="stat-icon">📤</div>
+            <div class="stat-label">Demo Sent</div>
+            <div class="stat-value" id="stat-demo">–</div>
+            <div class="stat-sub">Awaiting reply</div>
           </div>
           <div class="stat-card sc-devices">
-            <div class="stat-label">Devices Installed</div><div class="stat-value" id="stat-devices">–</div><div class="stat-icon">📡</div>
+            <div class="stat-icon">📡</div>
+            <div class="stat-label">Devices Installed</div>
+            <div class="stat-value" id="stat-devices">–</div>
+            <div class="stat-sub">GPS units live</div>
           </div>
-          <div class="stat-card" style="background:var(--saffron-bg);border-color:var(--saffron);cursor:pointer" onclick="showPage('approvals')">
-            <div class="stat-label" style="color:var(--saffron)">Awaiting Approval</div><div class="stat-value" id="stat-awaiting" style="color:var(--saffron)">–</div><div class="stat-icon">⏳</div>
+          <div class="stat-card sc-approve" onclick="showPage('approvals')">
+            <div class="stat-icon">⏳</div>
+            <div class="stat-label">Awaiting Approval</div>
+            <div class="stat-value" id="stat-awaiting">–</div>
+            <div class="stat-sub">Pending sign-off</div>
           </div>
-          <div class="stat-card" style="background:var(--red-bg);border-color:var(--red)">
-            <div class="stat-label" style="color:var(--red)">Payment Pending</div><div class="stat-value" id="stat-payment-pending" style="color:var(--red)">–</div><div class="stat-icon">💳</div>
+          <div class="stat-card sc-payment">
+            <div class="stat-icon">💳</div>
+            <div class="stat-label">Payment Pending</div>
+            <div class="stat-value" id="stat-payment-pending">–</div>
+            <div class="stat-sub">Balance due</div>
           </div>
-          <div class="stat-card" style="background:var(--blue-bg);border-color:var(--blue)">
-            <div class="stat-label" style="color:var(--blue)">Troubleshoot Done</div><div class="stat-value" id="stat-troubleshoot" style="color:var(--blue)">–</div><div class="stat-icon">🔧</div>
+          <div class="stat-card sc-troubleshoot">
+            <div class="stat-icon">🔧</div>
+            <div class="stat-label">Troubleshoot Done</div>
+            <div class="stat-value" id="stat-troubleshoot">–</div>
+            <div class="stat-sub">This month</div>
           </div>
         </div>
 
-        <!-- Recent Tasks (last 10 only, no filter toolbar) -->
-        <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)">
-          <div style="padding:12px 16px;border-bottom:1.5px solid var(--border);display:flex;align-items:center;justify-content:space-between">
-            <div style="font-size:14px;font-weight:800;color:var(--text)">🕐 Recent Tasks</div>
-            <button class="btn btn-secondary btn-sm" onclick="showPage('tasks')">View All Tasks →</button>
+        <!-- Two-column layout -->
+        <div class="dash-grid">
+
+          <!-- LEFT: Recent Tasks table -->
+          <div class="dash-card">
+            <div class="dash-card-header">
+              <div class="dash-card-title">
+                <span class="dash-card-dot"></span>
+                Recent Tasks
+                <span style="font-size:11px;font-weight:500;color:var(--text3)">Last 10</span>
+              </div>
+              <button class="dash-card-btn" onclick="showPage('tasks')">View All →</button>
+            </div>
+            <div id="dashboard-recent"></div>
           </div>
-          <div id="dashboard-recent"></div>
-        </div>
+
+          <!-- RIGHT column -->
+          <div style="display:flex;flex-direction:column;gap:12px">
+
+            <!-- Quick Actions -->
+            <div class="dash-card">
+              <div class="dash-card-header">
+                <div class="dash-card-title"><span class="dash-card-dot"></span> Quick Actions</div>
+              </div>
+              <div class="qa-grid">
+                <div class="qa-btn admin-only" onclick="openCreateModal()">
+                  <span class="qi">➕</span>New Lead
+                </div>
+                <div class="qa-btn admin-only" onclick="showInvPage('sale')">
+                  <span class="qi">🧾</span>New Invoice
+                </div>
+                <div class="qa-btn" onclick="showPage('daily-report')">
+                  <span class="qi">📅</span>Daily Report
+                </div>
+                <div class="qa-btn" onclick="showPage('tasks')">
+                  <span class="qi">📋</span>All Tasks
+                </div>
+              </div>
+            </div>
+
+            <!-- Pending Approvals -->
+            <div class="dash-card">
+              <div class="dash-card-header">
+                <div class="dash-card-title">
+                  <span class="dash-card-dot" style="background:var(--saffron)"></span>
+                  Pending Approvals
+                  <span id="dash-approve-badge" style="background:var(--saffron-bg);color:var(--saffron);padding:1px 7px;border-radius:8px;font-size:10px;font-weight:800;display:none">0</span>
+                </div>
+                <button class="dash-card-btn" onclick="showPage('approvals')">See All →</button>
+              </div>
+              <div id="dash-approvals-list">
+                <div style="text-align:center;padding:18px;color:var(--text3);font-size:12px">⏳ Loading...</div>
+              </div>
+            </div>
+
+            <!-- Overdue Tasks -->
+            <div class="dash-card">
+              <div class="dash-card-header">
+                <div class="dash-card-title">
+                  <span class="dash-card-dot" style="background:var(--red)"></span>
+                  Overdue Tasks
+                  <span id="dash-urgent-badge" style="background:var(--red-bg);color:var(--red);padding:1px 7px;border-radius:8px;font-size:10px;font-weight:800;display:none">0</span>
+                </div>
+                <button class="dash-card-btn" onclick="showPage('urgent')">View →</button>
+              </div>
+              <div id="dash-urgent-list">
+                <div style="text-align:center;padding:18px;color:var(--text3);font-size:12px">⏳ Loading...</div>
+              </div>
+            </div>
+
+            <!-- Field Technicians -->
+            <div class="dash-card">
+              <div class="dash-card-header">
+                <div class="dash-card-title">
+                  <span class="dash-card-dot" style="background:var(--purple)"></span>
+                  Field Technicians
+                </div>
+              </div>
+              <div id="dash-tech-list">
+                <div style="text-align:center;padding:18px;color:var(--text3);font-size:12px">⏳ Loading...</div>
+              </div>
+            </div>
+
+          </div><!-- /right col -->
+        </div><!-- /dash-grid -->
       </div>
+
 
       <!-- ALL TASKS -->
       <div class="page" id="page-tasks">
@@ -1262,15 +1430,18 @@ function showPage(name){
 
 // DASHBOARD
 async function loadDashboard(){
-  const [statsRes, urgentRes, recentRes] = await Promise.all([
+  // All 5 API calls in parallel
+  const [statsRes, urgentRes, recentRes, approvalsRes, techRes] = await Promise.all([
     api('get_stats'),
     api('get_urgent_tasks'),
-    api('get_tasks', {limit:10, sort:'newest'})
+    api('get_tasks', {limit:10, sort:'newest'}),
+    api('get_approvals'),
+    api('get_users', {role:'technician'})
   ]);
   const stats = statsRes.stats || {};
 
-  // Stats cards
-  const sv = function(id, val){ const el=document.getElementById(id); if(el) el.textContent=(val||0); };
+  // ── Stat cards ────────────────────────────────────────────────────────
+  const sv = (id,val) => { const e=document.getElementById(id); if(e) e.textContent=(val||0); };
   sv('stat-total',           stats.total);
   sv('stat-open',            stats.open);
   sv('stat-closed',          stats.closed);
@@ -1281,72 +1452,164 @@ async function loadDashboard(){
   sv('stat-payment-pending', stats.payment_pending);
   sv('stat-troubleshoot',    stats.troubleshoot_done);
 
-  // Approval badge in sidebar
-  const approvalBadge = document.getElementById('approval-count');
-  if(approvalBadge){
+  // Sidebar approval badge
+  const sideApprBadge = document.getElementById('approval-count');
+  if(sideApprBadge){
     const ac = parseInt(stats.awaiting_approval||0);
-    approvalBadge.textContent = ac;
-    approvalBadge.style.display = ac > 0 ? '' : 'none';
+    sideApprBadge.textContent = ac;
+    sideApprBadge.style.display = ac > 0 ? '' : 'none';
   }
 
-  // Urgent banners
+  // ── Alert banners ─────────────────────────────────────────────────────
   const urgentTasks = urgentRes.tasks || [];
-  const critical = urgentTasks.filter(t=>t.age_hours>=48);
-  const warning  = urgentTasks.filter(t=>t.age_hours>=24 && t.age_hours<48);
-  const banners  = document.getElementById('urgent-banners');
-  if(banners){
-    banners.innerHTML = '';
+  const critical = urgentTasks.filter(t => parseInt(t.age_hours||0) >= 48);
+  const warning  = urgentTasks.filter(t => parseInt(t.age_hours||0) >= 24 && parseInt(t.age_hours||0) < 48);
+  const bannerEl = document.getElementById('urgent-banners');
+  if(bannerEl){
     const ac2 = parseInt(stats.awaiting_approval||0);
-    if(ac2>0) banners.innerHTML += `<div class="urgent-banner" style="background:#e8f8ef;border:1.5px solid var(--green);color:var(--green);margin-bottom:10px">✅ ${ac2} task${ac2>1?'s':''} awaiting your approval! <button class="btn btn-sm btn-success" onclick="showPage('approvals')" style="margin-left:auto">Review Now →</button></div>`;
-    if(critical.length) banners.innerHTML += `<div class="urgent-banner danger flash-critical">🚨 ${critical.length} task${critical.length>1?'s':''} open 48+ hours! <button class="btn btn-sm btn-danger" onclick="showPage('urgent')" style="margin-left:auto">View →</button></div>`;
-    if(warning.length)  banners.innerHTML += `<div class="urgent-banner warning flash-warning">⚠️ ${warning.length} task${warning.length>1?'s':''} open 24+ hours. <button class="btn btn-sm btn-warn" onclick="showPage('urgent')" style="margin-left:auto">View →</button></div>`;
+    let bhtml = '';
+    if(critical.length) bhtml += `<div class="dash-alert dash-alert-danger"><span style="font-size:15px;flex-shrink:0">🚨</span><span><strong>${critical.length} task${critical.length>1?'s':''}</strong> open 48+ hours — needs immediate attention.</span><button class="dal-btn" onclick="showPage('urgent')">View →</button></div>`;
+    if(warning.length)  bhtml += `<div class="dash-alert dash-alert-warning"><span style="font-size:15px;flex-shrink:0">⚠️</span><span><strong>${warning.length} task${warning.length>1?'s':''}</strong> open 24+ hours without action.</span><button class="dal-btn" onclick="showPage('urgent')">View →</button></div>`;
+    if(ac2>0)           bhtml += `<div class="dash-alert dash-alert-success"><span style="font-size:15px;flex-shrink:0">✅</span><span><strong>${ac2} task${ac2>1?'s':''}</strong> waiting for your approval to close.</span><button class="dal-btn" onclick="showPage('approvals')">Review →</button></div>`;
+    bannerEl.innerHTML = bhtml ? `<div style="margin-bottom:14px">${bhtml}</div>` : '';
   }
 
-  // Recent tasks — compact table, no filters
-  const recent = (recentRes.tasks || []).slice(0, 10);
-  const rc = document.getElementById('dashboard-recent');
-  if(!rc) return;
-  if(!recent.length){
-    rc.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text3)"><div style="font-size:32px;margin-bottom:8px">📋</div><div style="font-size:14px;font-weight:600">No tasks yet</div><div style="font-size:12px;margin-top:4px">Create your first lead to get started.</div></div>';
-    return;
+  // ── Recent Tasks table ────────────────────────────────────────────────
+  const recent = (recentRes.tasks || []).slice(0,10);
+  const rcEl = document.getElementById('dashboard-recent');
+  if(rcEl){
+    if(!recent.length){
+      rcEl.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3)"><div style="font-size:36px;margin-bottom:10px">📋</div><div style="font-size:13px;font-weight:600;color:var(--text2)">No tasks yet. Create your first lead.</div></div>';
+    } else {
+      const statusTag = s => {
+        const m = {
+          'Open':              'tag-open|● Open',
+          'In Progress':       'tag-progress|↻ In Progress',
+          'Task Pending':      'tag-progress|⏸ Task Pending',
+          'Awaiting Approval': 'tag-awaiting|⏳ Approval',
+          'Closed':            'tag-closed|✓ Closed',
+          'Cancelled':         'tag-cancelled|✕ Cancelled',
+          'Demo Sent':         'tag-demo|📤 Demo Sent',
+        };
+        const [cls,lbl] = (m[s]||'tag-cancelled|'+s).split('|');
+        return `<span class="tag ${cls}">${lbl}</span>`;
+      };
+      let t = `<table class="dtask-table">
+        <thead><tr>
+          <th>Task ID</th><th>Customer</th><th>Job Type</th>
+          <th>Technician</th><th style="text-align:right">Amount</th>
+          <th>Status</th><th style="width:44px"></th>
+        </tr></thead><tbody>`;
+      recent.forEach(r => {
+        const bal = parseFloat(r.price_to_collect||0) - parseFloat(r.amount_collected||0);
+        const techCell = r.tech_name
+          ? `<div style="font-size:12px;font-weight:600">${r.tech_name}</div><div style="font-size:10px;color:var(--text3)">${r.profile||''}</div>`
+          : `<span style="font-size:11px;color:var(--text3);font-style:italic">Unassigned</span>`;
+        t += `<tr onclick="viewTask(${r.id})">
+          <td><span style="font-size:11px;font-weight:700;color:var(--accent2)">${r.task_id||'–'}</span></td>
+          <td>
+            <div style="font-size:12px;font-weight:700">${r.customer_name||'–'}</div>
+            <div style="font-size:10px;color:var(--text3)">${r.contact_number||''}</div>
+          </td>
+          <td>
+            <div style="font-size:11px;color:var(--text2)">${r.device_details||'–'}</div>
+            ${r.device_qty>0?`<div style="font-size:10px;color:var(--text3)">${r.device_qty} unit${r.device_qty>1?'s':''}</div>`:''}
+          </td>
+          <td>${techCell}</td>
+          <td style="text-align:right">
+            <div style="font-size:12px;font-weight:700">₹${parseFloat(r.price_to_collect||0).toLocaleString('en-IN')}</div>
+            ${bal>0?`<div style="font-size:10px;color:var(--red);font-weight:600">₹${bal.toLocaleString('en-IN')} due</div>`:''}
+          </td>
+          <td>${statusTag(r.task_status)}</td>
+          <td><button class="action-btn view" onclick="event.stopPropagation();viewTask(${r.id})" title="View">👁</button></td>
+        </tr>`;
+      });
+      t += '</tbody></table>';
+      rcEl.innerHTML = t;
+    }
   }
-  const statusColor = {
-    'Open':'var(--blue)','In Progress':'var(--saffron)','Task Pending':'var(--orange)',
-    'Awaiting Approval':'var(--purple)','Closed':'var(--green)','Cancelled':'var(--text3)',
-    'Demo Sent':'var(--blue)'
-  };
-  let html = '<table style="width:100%;border-collapse:collapse">';
-  html += '<thead><tr style="background:var(--surface2)">'
-    + '<th style="padding:9px 14px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left">Task ID</th>'
-    + '<th style="padding:9px 14px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left">Customer</th>'
-    + '<th style="padding:9px 14px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left">Job Type</th>'
-    + '<th style="padding:9px 14px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left">Technician</th>'
-    + '<th style="padding:9px 14px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:right">Amount</th>'
-    + '<th style="padding:9px 14px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left">Status</th>'
-    + '<th style="padding:9px 14px;width:50px"></th>'
-    + '</tr></thead><tbody>';
-  recent.forEach(function(t){
-    const col = statusColor[t.task_status] || 'var(--text3)';
-    const bal = parseFloat(t.price_to_collect||0) - parseFloat(t.amount_collected||0);
-    html += `<tr style="border-bottom:1px solid var(--border2)" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''">
-      <td style="padding:10px 14px;font-size:12px;font-weight:700;color:var(--accent2)">${t.task_id||'–'}</td>
-      <td style="padding:10px 14px;font-size:13px;font-weight:600">${t.customer_name||'–'}<div style="font-size:11px;color:var(--text3);font-weight:400">${t.contact_number||''}</div></td>
-      <td style="padding:10px 14px;font-size:12px;color:var(--text2)">${t.device_details||'–'} ${t.device_qty>0?'× '+t.device_qty:''}</td>
-      <td style="padding:10px 14px;font-size:12px;color:var(--text2)">${t.tech_name||'Unassigned'}</td>
-      <td style="padding:10px 14px;text-align:right">
-        <div style="font-size:13px;font-weight:700">₹${parseFloat(t.price_to_collect||0).toLocaleString('en-IN')}</div>
-        ${bal>0?`<div style="font-size:10px;color:var(--red)">₹${bal.toLocaleString('en-IN')} pending</div>`:''}
-      </td>
-      <td style="padding:10px 14px">
-        <span style="background:${col}18;color:${col};padding:3px 9px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap">${t.task_status}</span>
-      </td>
-      <td style="padding:10px 8px;text-align:center">
-        <button class="action-btn view" onclick="viewTask(${t.id})" title="View">👁</button>
-      </td>
-    </tr>`;
+
+  // ── Pending Approvals panel ───────────────────────────────────────────
+  const approvals = (approvalsRes.tasks || []).slice(0,5);
+  const apprListEl = document.getElementById('dash-approvals-list');
+  const apprBadge  = document.getElementById('dash-approve-badge');
+  if(apprBadge){ apprBadge.textContent=approvals.length; apprBadge.style.display=approvals.length?'':'none'; }
+  if(apprListEl){
+    if(!approvals.length){
+      apprListEl.innerHTML = '<div style="padding:14px;font-size:12px;color:var(--text3);text-align:center">✅ No tasks awaiting approval</div>';
+    } else {
+      apprListEl.innerHTML = approvals.map(t => {
+        const initials = (t.customer_name||'?').split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'?';
+        const bal = parseFloat(t.price_to_collect||0) - parseFloat(t.amount_collected||0);
+        return `<div class="appr-item">
+          <div class="appr-av">${initials}</div>
+          <div style="flex:1;min-width:0">
+            <div class="appr-name">${t.customer_name||'–'}</div>
+            <div class="appr-meta">${t.task_id||''} · ${t.tech_name||'Unassigned'}</div>
+          </div>
+          <div class="appr-amt">₹${parseFloat(t.price_to_collect||0).toLocaleString('en-IN')}</div>
+          <button class="appr-go" onclick="viewTask(${t.id})">Review</button>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // ── Overdue / Urgent panel ────────────────────────────────────────────
+  const overdueAll = [...critical, ...warning];
+  const urgListEl  = document.getElementById('dash-urgent-list');
+  const urgBadge   = document.getElementById('dash-urgent-badge');
+  if(urgBadge){ urgBadge.textContent=overdueAll.length; urgBadge.style.display=overdueAll.length?'':'none'; }
+  if(urgListEl){
+    if(!overdueAll.length){
+      urgListEl.innerHTML = '<div style="padding:14px;font-size:12px;color:var(--text3);text-align:center">🎉 No overdue tasks right now</div>';
+    } else {
+      urgListEl.innerHTML = overdueAll.slice(0,5).map(t => {
+        const hrs = parseInt(t.age_hours||0);
+        const isCrit = hrs >= 48;
+        const col = isCrit ? 'var(--red)' : 'var(--saffron)';
+        return `<div class="urg-item">
+          <div class="urg-dot ${isCrit?'critical':'warning'}"></div>
+          <div style="flex:1;min-width:0">
+            <div class="urg-name">${t.customer_name||'–'}</div>
+            <div class="urg-time" style="color:${col}">${isCrit?'🚨 Critical':'⚠️ Warning'} · ${t.task_id||''}</div>
+          </div>
+          <div class="urg-age" style="color:${col}">${hrs}h</div>
+          <button class="action-btn view" style="margin-left:6px;flex-shrink:0" onclick="viewTask(${t.id})" title="View">👁</button>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // ── Field Technicians panel ───────────────────────────────────────────
+  const techs   = techRes.users || [];
+  const techEl  = document.getElementById('dash-tech-list');
+  // Build open-task count per technician from ALL tasks we fetched
+  const openByTech = {};
+  [...(recentRes.tasks||[]), ...(approvalsRes.tasks||[]), ...urgentTasks].forEach(t => {
+    if(t.assigned_to && ['Open','In Progress','Task Pending','Awaiting Approval'].includes(t.task_status)){
+      openByTech[String(t.assigned_to)] = (openByTech[String(t.assigned_to)]||0) + 1;
+    }
   });
-  html += '</tbody></table>';
-  rc.innerHTML = html;
+  const avatarColors = ['#1a3a6b,#2451a3','#0d7377,#14b8a6','#5b2d8e,#818cf8','#1a7a3a,#22c55e','#d97706,#f59e0b','#c0392b,#ef4444'];
+  if(techEl){
+    if(!techs.length){
+      techEl.innerHTML = '<div style="padding:14px;font-size:12px;color:var(--text3);text-align:center">No technicians found</div>';
+    } else {
+      techEl.innerHTML = techs.slice(0,6).map((t,i) => {
+        const initials = (t.name||'?').split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'?';
+        const openCount = openByTech[String(t.id)] || 0;
+        const [c1,c2] = avatarColors[i % avatarColors.length].split(',');
+        return `<div class="tech-item">
+          <div class="tech-av" style="background:linear-gradient(135deg,${c1},${c2})">${initials}</div>
+          <div style="flex:1;min-width:0">
+            <div class="tech-name">${t.name||'–'}</div>
+            <div class="tech-meta">${t.email||'Technician'}</div>
+          </div>
+          <div class="tech-cnt ${openCount>=3?'busy':''}">${openCount} open</div>
+        </div>`;
+      }).join('');
+    }
+  }
 }
 
 async function loadTasksPage(){
