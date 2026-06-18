@@ -3549,68 +3549,215 @@ function showInvPage(name){
 }
 
 function renderInvSale(el){
-  el.innerHTML = [
-    // Action bar
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">',
-      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">',
-        '<select class="toolbar-select"><option>All Sale Invoices</option><option>Paid</option><option>Unpaid</option><option>Partially Paid</option></select>',
-        '<select class="toolbar-select"><option>📅 Pick a date</option><option>This Month</option><option>Last Month</option><option>This Year</option></select>',
-        '<select class="toolbar-select"><option>All Firms</option><option>BGPT</option><option>SBGT</option></select>',
-        '<select class="toolbar-select"><option>All Users</option></select>',
-        '<button class="btn-icon-sq" title="Export Excel">📊</button>',
-        '<button class="btn-icon-sq" title="Print">🖨</button>',
-      '</div>',
-      '<button class="btn btn-primary btn-sm" onclick="showAlert(\'Add Sale Invoice — feature coming soon\',\'info\')">➕ Add Sale</button>',
-    '</div>',
-    // Summary card
-    '<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:14px;display:flex;gap:24px;align-items:center;flex-wrap:wrap">',
-      '<div><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">Total Sales Amount</div><div style="font-size:22px;font-weight:800">₹8,97,404</div></div>',
-      '<div style="width:1px;height:36px;background:var(--border)"></div>',
-      '<div><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">Received</div><div style="font-size:16px;font-weight:800;color:var(--green)">₹5,85,736</div></div>',
-      '<div style="width:1px;height:36px;background:var(--border)"></div>',
-      '<div><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">Balance</div><div style="font-size:16px;font-weight:800;color:var(--red)">₹3,11,668</div></div>',
-    '</div>',
-    // Table
-    '<div class="table-wrapper"><div class="table-scroll"><table>',
-    '<thead><tr>',
-      '<th>Date</th><th>Invoice No.</th><th>Party Name</th>',
-      '<th>Transaction</th><th>Payment Type</th>',
-      '<th style="text-align:right">Amount</th><th style="text-align:right">Balance</th>',
-      '<th>Status</th><th>Actions</th>',
-    '</tr></thead>',
-    '<tbody>',
-      '<tr><td>15/06/2026</td><td style="color:var(--blue);font-weight:700;font-size:12px">FY26-27/116</td><td style="font-weight:600">Samskar International School</td><td>Sale</td><td style="font-size:11px;color:var(--text3)">Sri Bharat G…</td><td style="font-weight:700;text-align:right">₹56,050</td><td style="color:var(--red);text-align:right">₹56,050</td><td><span style="background:#fdecea;color:var(--red);padding:3px 8px;border-radius:10px;font-size:11px;font-weight:700">Unpaid</span></td><td><div style="display:flex;gap:4px"><button class="action-btn view">🖨</button><button class="action-btn edit">✏️</button><button class="action-btn" style="background:var(--surface2)">⋮</button></div></td></tr>',
-      '<tr><td>13/06/2026</td><td style="color:var(--blue);font-weight:700;font-size:12px">FY26-27/115</td><td style="font-weight:600">M/S SRI VIJAYA VISAKHA</td><td>Sale</td><td style="font-size:11px;color:var(--text3)">Sri Bharat G…</td><td style="font-weight:700;text-align:right">₹590</td><td style="color:var(--red);text-align:right">₹590</td><td><span style="background:#fdecea;color:var(--red);padding:3px 8px;border-radius:10px;font-size:11px;font-weight:700">Unpaid</span></td><td><div style="display:flex;gap:4px"><button class="action-btn view">🖨</button><button class="action-btn edit">✏️</button><button class="action-btn" style="background:var(--surface2)">⋮</button></div></td></tr>',
-      '<tr><td>13/06/2026</td><td style="color:var(--blue);font-weight:700;font-size:12px">FY26-27/114</td><td style="font-weight:600">Kadapa Public School</td><td>Sale</td><td style="font-size:11px;color:var(--text3)">Sri Bharat G…</td><td style="font-weight:700;text-align:right">₹4,130</td><td style="color:var(--red);text-align:right">₹4,130</td><td><span style="background:#fdecea;color:var(--red);padding:3px 8px;border-radius:10px;font-size:11px;font-weight:700">Unpaid</span></td><td><div style="display:flex;gap:4px"><button class="action-btn view">🖨</button><button class="action-btn edit">✏️</button><button class="action-btn" style="background:var(--surface2)">⋮</button></div></td></tr>',
-      '<tr><td>13/06/2026</td><td style="color:var(--blue);font-weight:700;font-size:12px">FY26-27/113</td><td style="font-weight:600">M/S SRI VIJAYA VISAKHA</td><td>Sale</td><td style="font-size:11px;color:var(--text3)">Sri Bharat G…</td><td style="font-weight:700;text-align:right">₹590</td><td style="color:var(--red);text-align:right">₹590</td><td><span style="background:#fdecea;color:var(--red);padding:3px 8px;border-radius:10px;font-size:11px;font-weight:700">Unpaid</span></td><td><div style="display:flex;gap:4px"><button class="action-btn view">🖨</button><button class="action-btn edit">✏️</button><button class="action-btn" style="background:var(--surface2)">⋮</button></div></td></tr>',
-      '<tr><td>10/06/2026</td><td style="color:var(--blue);font-weight:700;font-size:12px">FY26-27/112</td><td style="font-weight:600">Dress Circle Kurnool</td><td>Sale</td><td style="font-size:11px;color:var(--text3)">Sri Bharat G…</td><td style="font-weight:700;text-align:right">₹4,130</td><td style="color:var(--green);text-align:right">₹0</td><td><span style="background:var(--green-bg);color:var(--green);padding:3px 8px;border-radius:10px;font-size:11px;font-weight:700">Paid</span></td><td><div style="display:flex;gap:4px"><button class="action-btn view">🖨</button><button class="action-btn edit">✏️</button><button class="action-btn" style="background:var(--surface2)">⋮</button></div></td></tr>',
-    '</tbody></table></div></div>'
-  ].join('');
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
+    +'<select class="toolbar-select"><option>All Sale Invoices</option><option>Paid</option><option>Unpaid</option></select>'
+    +'<select class="toolbar-select"><option>📅 This Month</option><option>Last Month</option><option>This Year</option><option>Custom</option></select>'
+    +'<select class="toolbar-select"><option>All Firms</option><option>BGPT</option><option>SBGT</option></select>'
+    +'<select class="toolbar-select"><option>All Users</option></select>'
+    +'</div>'
+    +'<button class="btn btn-primary btn-sm">➕ Add Sale</button>'
+    +'</div>'
+    +'<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:14px;display:flex;gap:28px;align-items:center;flex-wrap:wrap">'
+    +'<div><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">Total Sales Amount</div><div style="font-size:22px;font-weight:800">₹0.00</div></div>'
+    +'<div style="width:1px;height:32px;background:var(--border)"></div>'
+    +'<div><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">Received</div><div style="font-size:17px;font-weight:800;color:var(--green)">₹0.00</div></div>'
+    +'<div style="width:1px;height:32px;background:var(--border)"></div>'
+    +'<div><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">Balance</div><div style="font-size:17px;font-weight:800;color:var(--red)">₹0.00</div></div>'
+    +'</div>'
+    +'<div style="text-align:center;padding:48px 20px;color:var(--text3)">'
+    +'<div style="font-size:44px;margin-bottom:12px">📄</div>'
+    +'<div style="font-size:15px;font-weight:700;margin-bottom:6px">No Sale Invoices</div>'
+    +'<div style="font-size:12px;margin-bottom:16px">Create your first sale invoice to get started.</div>'
+    +'<button class="btn btn-primary btn-sm">➕ Add Sale Invoice</button>'
+    +'</div>';
 }
-function renderInvEstimate(el){el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><h2 style="font-size:16px;font-weight:800">Estimate / Quotation</h2><button class="btn btn-primary btn-sm">➕ Add Estimate</button></div><div style="text-align:center;padding:40px 20px;color:var(--text3)"><div style="font-size:40px;margin-bottom:10px">📄</div><div style="font-size:14px;font-weight:700;margin-bottom:6px">No Estimates</div><button class="btn btn-primary btn-sm">➕ Add Estimate</button></div>';}
-function renderInvProforma(el){el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><h2 style="font-size:16px;font-weight:800">Proforma Invoice</h2><button class="btn btn-primary btn-sm">➕ Add Proforma</button></div><div style="text-align:center;padding:40px 20px;color:var(--text3)"><div style="font-size:40px;margin-bottom:10px">📋</div><div style="font-size:14px;font-weight:700;margin-bottom:6px">No Proforma Invoices</div><button class="btn btn-primary btn-sm">➕ Add Proforma</button></div>';}
-function renderInvPayin(el){el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><h2 style="font-size:16px;font-weight:800">Payment-In</h2><button class="btn btn-primary btn-sm">➕ Add Payment-In</button></div><div style="text-align:center;padding:40px 20px;color:var(--text3)"><div style="font-size:40px;margin-bottom:10px">💳</div><div style="font-size:14px;font-weight:700;margin-bottom:6px">No Payments In</div><button class="btn btn-primary btn-sm">➕ Add Payment-In</button></div>';}
-function renderInvStub(title,icon){return function(el){el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><h2 style="font-size:16px;font-weight:800">'+title+'</h2><button class="btn btn-primary btn-sm">➕ Add</button></div><div style="text-align:center;padding:40px 20px;color:var(--text3)"><div style="font-size:40px;margin-bottom:10px">'+icon+'</div><div style="font-size:14px;font-weight:700;margin-bottom:6px">No '+title+'</div><button class="btn btn-primary btn-sm">➕ Add</button></div>';};}
-function renderInvPurchase(el){el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><h2 style="font-size:16px;font-weight:800">Purchase Bills</h2><button class="btn btn-primary btn-sm">➕ Add Purchase</button></div><div style="text-align:center;padding:40px 20px;color:var(--text3)"><div style="font-size:40px;margin-bottom:10px">🛒</div><div style="font-size:14px;font-weight:700;margin-bottom:6px">No Purchase Invoices</div><button class="btn btn-primary btn-sm">➕ Add First Purchase</button></div>';}
-function renderInvParties(el){el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><h2 style="font-size:16px;font-weight:800">Parties</h2><button class="btn btn-primary btn-sm">➕ Add Party</button></div><div class="table-wrapper"><div class="table-scroll"><table><thead><tr><th>Party Name</th><th>Phone</th><th>Email</th><th>Balance</th></tr></thead><tbody><tr><td>Amar</td><td>9848297297</td><td>info@capcocapacitor.com</td><td style="color:var(--green);font-weight:700">₹0</td></tr><tr><td>Dress Circle-Kurnool</td><td>–</td><td>–</td><td style="color:var(--red);font-weight:700">₹4,130</td></tr><tr><td>Samskar International School</td><td>–</td><td>–</td><td style="color:var(--red);font-weight:700">₹56,050</td></tr></tbody></table></div></div>';}
-function renderInvItems(el){el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><h2 style="font-size:16px;font-weight:800">Items</h2><button class="btn btn-primary btn-sm">➕ Add Item</button></div><div class="table-wrapper"><div class="table-scroll"><table><thead><tr><th>Item Name</th><th>Sale Price</th><th>Stock Qty</th><th>Stock Value</th></tr></thead><tbody><tr><td>BGT - AC GPS</td><td>₹0</td><td style="color:var(--green);font-weight:700">8</td><td>₹64,000</td></tr><tr><td>BGT - Magnet GPS</td><td>₹5,500</td><td style="color:var(--green);font-weight:700">115</td><td>–</td></tr><tr><td>BGT - Engine Cut</td><td>₹4,500</td><td style="color:var(--red);font-weight:700">-25</td><td>–</td></tr></tbody></table></div></div>';}
-function renderInvBanks(el){el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><h2 style="font-size:16px;font-weight:800">Banks</h2><button class="btn btn-primary btn-sm">➕ Add Bank</button></div><div class="table-wrapper"><div class="table-scroll"><table><thead><tr><th>Account Name</th><th>Balance</th></tr></thead><tbody><tr><td>Cash Deposite</td><td style="color:var(--green);font-weight:700">₹4,41,316</td></tr><tr><td>Google Pay</td><td style="color:var(--green);font-weight:700">₹2,67,651</td></tr><tr><td>ICICI Bank Limited</td><td style="color:var(--green);font-weight:700">₹30,14,369</td></tr><tr><td>Phone Pe</td><td style="color:var(--green);font-weight:700">₹26,36,771</td></tr><tr><td>Pending</td><td style="color:var(--saffron);font-weight:700">₹9,85,492</td></tr></tbody></table></div></div>';}
+
+function renderInvEstimate(el){
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+    +'<select class="toolbar-select"><option>📅 This Month</option><option>Last Month</option><option>This Year</option></select>'
+    +'<select class="toolbar-select"><option>All Firms</option><option>BGPT</option><option>SBGT</option></select>'
+    +'</div>'
+    +'<button class="btn btn-primary btn-sm">➕ Add Estimate</button>'
+    +'</div>'
+    +'<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:14px">'
+    +'<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">Total Quotations</div>'
+    +'<div style="font-size:22px;font-weight:800">₹0.00</div>'
+    +'<div style="font-size:12px;color:var(--text3);margin-top:3px">Converted: ₹0.00 &nbsp;|&nbsp; Open: ₹0.00</div>'
+    +'</div>'
+    +'<div style="text-align:center;padding:48px 20px;color:var(--text3)">'
+    +'<div style="font-size:44px;margin-bottom:12px">📋</div>'
+    +'<div style="font-size:15px;font-weight:700;margin-bottom:6px">No Estimates</div>'
+    +'<div style="font-size:12px;margin-bottom:16px">Create estimates and send to customers for approval.</div>'
+    +'<button class="btn btn-primary btn-sm">➕ Add Estimate</button>'
+    +'</div>';
+}
+
+function renderInvProforma(el){
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">'
+    +'<div style="display:flex;gap:6px"><select class="toolbar-select"><option>📅 This Month</option><option>Last Month</option></select></div>'
+    +'<button class="btn btn-primary btn-sm">➕ Add Proforma</button>'
+    +'</div>'
+    +'<div style="text-align:center;padding:48px 20px;color:var(--text3)">'
+    +'<div style="font-size:44px;margin-bottom:12px">📄</div>'
+    +'<div style="font-size:15px;font-weight:700;margin-bottom:6px">No Proforma Invoices</div>'
+    +'<div style="font-size:12px;margin-bottom:16px">Create proforma invoices before finalising sales.</div>'
+    +'<button class="btn btn-primary btn-sm">➕ Add Proforma</button>'
+    +'</div>';
+}
+
+function renderInvPayin(el){
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">'
+    +'<div style="display:flex;gap:6px"><select class="toolbar-select"><option>📅 This Month</option><option>Last Month</option></select></div>'
+    +'<button class="btn btn-primary btn-sm">➕ Add Payment-In</button>'
+    +'</div>'
+    +'<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:14px">'
+    +'<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">Total Amount</div>'
+    +'<div style="font-size:22px;font-weight:800">₹0</div>'
+    +'<div style="font-size:12px;color:var(--text3);margin-top:3px">Received: ₹0</div>'
+    +'</div>'
+    +'<div style="text-align:center;padding:48px 20px;color:var(--text3)">'
+    +'<div style="font-size:44px;margin-bottom:12px">💳</div>'
+    +'<div style="font-size:15px;font-weight:700;margin-bottom:6px">No Payment-In Records</div>'
+    +'<div style="font-size:12px;margin-bottom:16px">Record payments received from customers.</div>'
+    +'<button class="btn btn-primary btn-sm">➕ Add Payment-In</button>'
+    +'</div>';
+}
+
+function renderInvStub(title,icon){
+  return function(el){
+    el.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">'
+      +'<div></div>'
+      +'<button class="btn btn-primary btn-sm">➕ Add '+title+'</button>'
+      +'</div>'
+      +'<div style="text-align:center;padding:48px 20px;color:var(--text3)">'
+      +'<div style="font-size:44px;margin-bottom:12px">'+icon+'</div>'
+      +'<div style="font-size:15px;font-weight:700;margin-bottom:6px">No '+title+'</div>'
+      +'<div style="font-size:12px;margin-bottom:16px">No records yet.</div>'
+      +'<button class="btn btn-primary btn-sm">➕ Add '+title+'</button>'
+      +'</div>';
+  };
+}
+
+function renderInvPurchase(el){
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">'
+    +'<div style="display:flex;gap:6px"><select class="toolbar-select"><option>📅 This Month</option><option>Last Month</option></select><select class="toolbar-select"><option>All Firms</option><option>BGPT</option><option>SBGT</option></select></div>'
+    +'<button class="btn btn-primary btn-sm">➕ Add Purchase</button>'
+    +'</div>'
+    +'<div style="text-align:center;padding:48px 20px;color:var(--text3)">'
+    +'<div style="font-size:44px;margin-bottom:12px">🛒</div>'
+    +'<div style="font-size:15px;font-weight:700;margin-bottom:6px">No Purchase Bills</div>'
+    +'<div style="font-size:12px;margin-bottom:16px">Add your first purchase invoice.</div>'
+    +'<button class="btn btn-primary btn-sm">➕ Add Purchase</button>'
+    +'</div>';
+}
+
+function renderInvParties(el){
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">'
+    +'<input type="text" placeholder="🔍 Search party name..." style="padding:7px 12px;border:1.5px solid var(--border);border-radius:5px;font-size:12px;font-family:inherit;outline:none;min-width:220px">'
+    +'<button class="btn btn-primary btn-sm">➕ Add Party</button>'
+    +'</div>'
+    +'<div style="text-align:center;padding:48px 20px;color:var(--text3)">'
+    +'<div style="font-size:44px;margin-bottom:12px">👥</div>'
+    +'<div style="font-size:15px;font-weight:700;margin-bottom:6px">No Parties</div>'
+    +'<div style="font-size:12px;margin-bottom:16px">Add customers and suppliers to get started.</div>'
+    +'<button class="btn btn-primary btn-sm">➕ Add Party</button>'
+    +'</div>';
+}
+
+function renderInvItems(el){
+  el.innerHTML =
+    '<div style="display:flex;gap:0;border-bottom:1.5px solid var(--border);margin-bottom:14px">'
+    +'<div style="padding:8px 16px;font-size:12px;font-weight:700;color:var(--accent);border-bottom:2px solid var(--accent);margin-bottom:-1.5px;cursor:pointer">Products</div>'
+    +'<div style="padding:8px 16px;font-size:12px;font-weight:600;color:var(--text3);cursor:pointer">Services</div>'
+    +'<div style="padding:8px 16px;font-size:12px;font-weight:600;color:var(--text3);cursor:pointer">Category</div>'
+    +'<div style="padding:8px 16px;font-size:12px;font-weight:600;color:var(--text3);cursor:pointer">Units</div>'
+    +'<div style="margin-left:auto;padding:4px"><button class="btn btn-primary btn-sm">➕ Add Item</button></div>'
+    +'</div>'
+    +'<div style="text-align:center;padding:48px 20px;color:var(--text3)">'
+    +'<div style="font-size:44px;margin-bottom:12px">📦</div>'
+    +'<div style="font-size:15px;font-weight:700;margin-bottom:6px">No Items</div>'
+    +'<div style="font-size:12px;margin-bottom:16px">Add GPS devices and services as inventory items.</div>'
+    +'<button class="btn btn-primary btn-sm">➕ Add Item</button>'
+    +'</div>';
+}
+
+function renderInvBanks(el){
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">'
+    +'<div style="font-size:13px;font-weight:700;color:var(--text2)">Your Bank Accounts</div>'
+    +'<button class="btn btn-primary btn-sm">➕ Add Bank</button>'
+    +'</div>'
+    +'<div style="text-align:center;padding:48px 20px;color:var(--text3)">'
+    +'<div style="font-size:44px;margin-bottom:12px">🏦</div>'
+    +'<div style="font-size:15px;font-weight:700;margin-bottom:6px">No Bank Accounts</div>'
+    +'<div style="font-size:12px;margin-bottom:16px">Add cash, bank & payment gateway accounts.</div>'
+    +'<button class="btn btn-primary btn-sm">➕ Add Bank Account</button>'
+    +'</div>';
+}
+
 function renderInvReports(el){
-  var rpts=[['📈','Sale Report','Total sales, received & balance'],['🛒','Purchase Report','All purchase bills'],['📖','Day Book','Daily transactions'],['📋','All Transactions','Complete history'],['💹','Profit & Loss','Income vs expenses'],['📊','Bill Wise Profit','Profit per invoice'],['💰','Cash Flow','Cash in & out'],['📑','Trial Balance','Accounting trial balance'],['🏦','Balance Sheet','Assets vs liabilities'],['👥','Party Statement','Party-wise outstanding'],['📌','Party wise P&L','Per-party profitability'],['📦','Stock Summary','Stock levels & value']];
-  var html='<h2 style="font-size:16px;font-weight:800;margin-bottom:14px">Reports</h2><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">';
+  var rpts=[
+    ['📈','Sale Report','Total sales, received & balance'],
+    ['🛒','Purchase Report','All purchase bills'],
+    ['📖','Day Book','Daily transactions overview'],
+    ['📋','All Transactions','Complete transaction history'],
+    ['💹','Profit & Loss','Income vs expenses analysis'],
+    ['📊','Bill Wise Profit','Profit per invoice'],
+    ['💰','Cash Flow','Cash in & out overview'],
+    ['📑','Trial Balance','Accounting trial balance'],
+    ['🏦','Balance Sheet','Assets vs liabilities'],
+    ['👥','Party Statement','Party-wise outstanding'],
+    ['📌','Party wise P&L','Profitability per party'],
+    ['📦','Stock Summary','Stock levels & value']
+  ];
+  var html='<div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:14px">Reports</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">';
   rpts.forEach(function(r){
-    html+='<div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:12px;cursor:pointer">';
-    html+='<div style="font-size:20px;margin-bottom:6px">'+r[0]+'</div>';
-    html+='<div style="font-size:12px;font-weight:700;margin-bottom:3px">'+r[1]+'</div>';
-    html+='<div style="font-size:11px;color:var(--text3)">'+r[2]+'</div>';
-    html+='</div>';
+    html+='<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px;cursor:pointer;transition:border-color .15s" onclick="showAlert(''+r[1]+' — coming soon','info')">'
+      +'<div style="font-size:22px;margin-bottom:8px">'+r[0]+'</div>'
+      +'<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">'+r[1]+'</div>'
+      +'<div style="font-size:11px;color:var(--text3)">'+r[2]+'</div>'
+      +'</div>';
   });
   html+='</div>';
   el.innerHTML=html;
 }
+
 function renderInvSettings(el){
-  el.innerHTML='<h2 style="font-size:16px;font-weight:800;margin-bottom:14px">Settings</h2><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px"><div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px"><h4 style="font-size:13px;font-weight:800;margin-bottom:10px">General</h4><label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:8px;cursor:pointer"><input type="checkbox" checked> Enable Passcode</label><label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:8px;cursor:pointer"><input type="checkbox" checked> GSTIN Number</label><label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer"><input type="checkbox" checked> Auto Backup</label></div><div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px"><h4 style="font-size:13px;font-weight:800;margin-bottom:10px">GST Settings</h4><label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:8px;cursor:pointer"><input type="checkbox" checked> Enable GST</label><label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:8px;cursor:pointer"><input type="checkbox" checked> Enable HSN/SAC Code</label><label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer"><input type="checkbox" checked> Enable Place of Supply</label></div><div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px"><h4 style="font-size:13px;font-weight:800;margin-bottom:10px">Transaction Prefixes</h4><div style="margin-bottom:8px"><label style="font-size:10px;font-weight:700;color:var(--text3);display:block;margin-bottom:3px">SALE</label><input type="text" value="FY26-27/" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none;width:100%"></div><div><label style="font-size:10px;font-weight:700;color:var(--text3);display:block;margin-bottom:3px">ESTIMATE</label><input type="text" value="FY26-27/" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none;width:100%"></div></div></div>';
+  el.innerHTML=
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">'
+    +'<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:16px">'
+    +'<div style="font-size:13px;font-weight:800;margin-bottom:12px">General</div>'
+    +'<label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:10px;cursor:pointer"><input type="checkbox" checked> Enable Passcode</label>'
+    +'<label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:10px;cursor:pointer"><input type="checkbox" checked> GSTIN Number</label>'
+    +'<label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:10px;cursor:pointer"><input type="checkbox"> Stop Sale on Negative Stock</label>'
+    +'<label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer"><input type="checkbox" checked> Auto Backup</label>'
+    +'</div>'
+    +'<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:16px">'
+    +'<div style="font-size:13px;font-weight:800;margin-bottom:12px">GST Settings</div>'
+    +'<label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:10px;cursor:pointer"><input type="checkbox" checked> Enable GST</label>'
+    +'<label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:10px;cursor:pointer"><input type="checkbox" checked> Enable HSN/SAC Code</label>'
+    +'<label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:10px;cursor:pointer"><input type="checkbox" checked> Enable Place of Supply</label>'
+    +'<label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer"><input type="checkbox" checked> Enable TCS / TDS</label>'
+    +'</div>'
+    +'<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:16px">'
+    +'<div style="font-size:13px;font-weight:800;margin-bottom:12px">Transaction Prefixes</div>'
+    +'<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Sale</div><input type="text" value="FY26-27/" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none;width:100%"></div>'
+    +'<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Estimate</div><input type="text" value="FY26-27/" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none;width:100%"></div>'
+    +'<div><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Purchase</div><input type="text" value="FY26-27/" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit;outline:none;width:100%"></div>'
+    +'</div>'
+    +'</div>';
 }
+
 
 // ---- SESSION RESTORE ON REFRESH ----
 (async()=>{
