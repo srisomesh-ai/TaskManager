@@ -302,7 +302,7 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
 
 /* MODAL */
 .modal-overlay{position:fixed;inset:0;background:rgba(15,37,80,.65);backdrop-filter:blur(3px);z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding:12px;overflow-y:auto;}
-.modal{background:var(--surface);border:1.5px solid var(--border);border-radius:12px;width:700px;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px);display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.25);animation:modalIn .18s ease;margin:auto;}
+.modal,.modal-box{background:var(--surface);border:1.5px solid var(--border);border-radius:12px;width:700px;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px);display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.25);animation:modalIn .18s ease;margin:auto;}
 .modal-lg{width:860px;max-width:calc(100vw - 24px);}
 .modal-sm{width:460px;max-width:calc(100vw - 24px);}
 @keyframes modalIn{from{opacity:0;transform:scale(.97) translateY(10px);}}
@@ -661,25 +661,25 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
             <div class="stat-value" id="stat-total">–</div>
             <div class="stat-sub">All time</div>
           </div>
-          <div class="stat-card sc-open" onclick="showPage('tasks')">
+          <div class="stat-card sc-open" onclick="showPage('tasks',{status:'Open'})">
             <div class="stat-icon">🔄</div>
             <div class="stat-label">Active / Open</div>
             <div class="stat-value" id="stat-open">–</div>
             <div class="stat-sub">In progress</div>
           </div>
-          <div class="stat-card sc-closed" onclick="showPage('tasks')">
+          <div class="stat-card sc-closed" onclick="showPage('tasks',{status:'Closed'})">
             <div class="stat-icon">✅</div>
             <div class="stat-label">Closed</div>
             <div class="stat-value" id="stat-closed">–</div>
             <div class="stat-sub">Completed</div>
           </div>
-          <div class="stat-card sc-cancelled" onclick="showPage('tasks')">
+          <div class="stat-card sc-cancelled" onclick="showPage('tasks',{status:'Cancelled'})">
             <div class="stat-icon">⚠️</div>
             <div class="stat-label">Cancelled</div>
             <div class="stat-value" id="stat-cancelled">–</div>
             <div class="stat-sub">Dropped</div>
           </div>
-          <div class="stat-card sc-demo" onclick="showPage('tasks')">
+          <div class="stat-card sc-demo" onclick="showPage('tasks',{status:'Demo Sent'})">
             <div class="stat-icon">📤</div>
             <div class="stat-label">Demo Sent</div>
             <div class="stat-value" id="stat-demo">–</div>
@@ -1547,24 +1547,27 @@ async function loadUrgentCount(){
   try{const res=await api('get_urgent_tasks');const tasks=res.tasks||[];const badge=document.getElementById('urgent-count');if(badge){badge.textContent=tasks.length;badge.style.display=tasks.length?'':'none';}}catch(e){}
 }
 
-function showPage(name){
+function showPage(name, opts){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+name)?.classList.add('active');
   document.getElementById('nav-'+name)?.classList.add('active');
-  localStorage.setItem('bgps_last_page', name); // Fix 7: save current page
+  localStorage.setItem('bgps_last_page', name);
+  // Store filter to apply after page loads
+  if(opts && opts.status) window._pendingTaskFilter = opts.status;
   const map={dashboard:loadDashboard,tasks:loadTasksPage,'my-tasks':loadMyTasks,urgent:loadUrgentPage,approvals:loadApprovalsPage,'daily-report':loadDailyReport,'balance-sheet':loadBalanceSheet,admin:loadAdminPanel,accounts:loadAccounts};
   if(map[name])map[name]();
 }
 
 // DASHBOARD
 async function loadDashboard(){
-  // All 5 API calls in parallel
-  const [statsRes, urgentRes, approvalsRes, techRes] = await Promise.all([
+  // All API calls in parallel — including open tasks for accurate tech counts
+  const [statsRes, urgentRes, approvalsRes, techRes, openTasksRes] = await Promise.all([
     api('get_stats'),
     api('get_urgent_tasks'),
     api('get_approvals'),
-    api('get_users', {role:'technician'})
+    api('get_users', {role:'technician'}),
+    api('get_tasks', {status_group:'active', limit:1000})
   ]);
   const stats = statsRes.stats || {};
 
@@ -1656,9 +1659,9 @@ async function loadDashboard(){
   // ── Field Technicians panel (full-width horizontal grid) ─────────────
   const techs  = techRes.users || [];
   const techEl = document.getElementById('dash-tech-list');
-  // Count open tasks per tech from all fetched data
+  // Use all active tasks for accurate per-tech open count
   const openByTech = {};
-  [...(approvalsRes.tasks||[]), ...urgentTasks].forEach(t => {
+  (openTasksRes.tasks||[]).forEach(t => {
     if(t.assigned_to && ['Open','In Progress','Task Pending','Awaiting Approval'].includes(t.task_status)){
       openByTech[String(t.assigned_to)] = (openByTech[String(t.assigned_to)]||0) + 1;
     }
@@ -1666,22 +1669,27 @@ async function loadDashboard(){
   const avatarColors = ['#1a3a6b,#2451a3','#0d7377,#14b8a6','#5b2d8e,#818cf8','#1a7a3a,#22c55e','#d97706,#f59e0b','#c0392b,#ef4444'];
   if(techEl){
     if(!techs.length){
-      techEl.innerHTML = '<div style="padding:20px;font-size:12px;color:var(--text3);text-align:center;grid-column:1/-1">No technicians added yet</div>';
+      techEl.innerHTML = '<div style="padding:24px;font-size:14px;color:var(--text3);text-align:center;grid-column:1/-1">No technicians added yet</div>';
     } else {
       techEl.innerHTML = techs.map((t,i) => {
         const initials  = (t.name||'?').split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'?';
         const openCount = openByTech[String(t.id)] || 0;
         const [c1,c2]   = avatarColors[i % avatarColors.length].split(',');
-        const statusDot = openCount >= 3
-          ? `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--saffron);box-shadow:0 0 0 2px var(--saffron-bg);margin-right:5px"></span>`
-          : `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 2px var(--green-bg);margin-right:5px"></span>`;
-        return `<div style="padding:14px 16px;border-right:1px solid var(--border);display:flex;align-items:center;gap:12px">
-          <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,${c1},${c2});display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;flex-shrink:0">${initials}</div>
+        const isBusy    = openCount >= 3;
+        const dotColor  = isBusy ? 'var(--saffron)' : 'var(--green)';
+        const dotBg     = isBusy ? 'var(--saffron-bg)' : 'var(--green-bg)';
+        const cntBg     = isBusy ? 'var(--saffron-bg)' : 'var(--accent-light)';
+        const cntColor  = isBusy ? 'var(--saffron)' : 'var(--accent2)';
+        return `<div style="padding:16px 18px;border-right:1px solid var(--border);display:flex;align-items:center;gap:14px;cursor:pointer" onclick="showPage('tasks',{status:'active_tech_${t.id}'})">
+          <div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,${c1},${c2});display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0">${initials}</div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:12px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.name||'–'}</div>
-            <div style="font-size:10px;color:var(--text3);margin-top:2px">${statusDot}<span style="font-weight:600;color:${openCount>=3?'var(--saffron)':'var(--green)'}">${openCount} open task${openCount===1?'':'s'}</span></div>
+            <div style="font-size:14px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.name||'–'}</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:3px;display:flex;align-items:center;gap:5px">
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dotColor};box-shadow:0 0 0 2px ${dotBg}"></span>
+              <span style="font-weight:600;color:${dotColor}">${openCount} open task${openCount===1?'':'s'}</span>
+            </div>
           </div>
-          <div style="background:${openCount>=3?'var(--saffron-bg)':'var(--accent-light)'};color:${openCount>=3?'var(--saffron)':'var(--accent2)'};padding:4px 10px;border-radius:8px;font-size:11px;font-weight:800;flex-shrink:0">${openCount}</div>
+          <div style="background:${cntBg};color:${cntColor};padding:5px 13px;border-radius:20px;font-size:15px;font-weight:900;flex-shrink:0;min-width:36px;text-align:center">${openCount}</div>
         </div>`;
       }).join('');
     }
@@ -1693,7 +1701,20 @@ async function loadTasksPage(){
   if(!container) return;
   container.innerHTML = document.getElementById('task-table-tpl').innerHTML;
   await populateTechFilter();
+  // Apply pre-set filter from stat card click
+  if(window._pendingTaskFilter){
+    const sel = document.getElementById('ts-status');
+    if(sel) sel.value = window._pendingTaskFilter;
+    window._pendingTaskFilter = null;
+  }
   await loadTasks();
+}
+
+function clearTaskFilters(){
+  ['ts-search','ts-status','ts-tech','ts-lead','ts-from','ts-to'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  filterTasks();
 }
 
 async function populateTechFilter(){
@@ -1766,7 +1787,27 @@ function renderTable(){
   const isAdmin=['admin','assigner'].includes(currentUser.role);
   const openStatuses=['Open','In Progress','Task Pending'];
   if(!slice.length){
-    tbody.innerHTML=`<tr><td colspan="15"><div class="empty-state"><div class="empty-icon">📭</div><h3>No tasks found</h3><p>Try adjusting your filters</p></div></td></tr>`;
+    const statusSel = document.getElementById('ts-status')?.value||'';
+    const searchVal = document.getElementById('ts-search')?.value?.trim()||'';
+    const hasFilter = statusSel || searchVal;
+    const emptyMap = {
+      'Open':              {icon:'🔄', title:'No Open Tasks',        sub:'All open tasks have been actioned — great work!'},
+      'In Progress':       {icon:'⚙️', title:'Nothing In Progress',   sub:'No tasks are currently in progress.'},
+      'Closed':            {icon:'✅', title:'No Closed Tasks Yet',   sub:'Completed tasks will appear here once closed.'},
+      'Cancelled':         {icon:'🚫', title:'No Cancelled Tasks',    sub:'No tasks have been cancelled.'},
+      'Demo Sent':         {icon:'📤', title:'No Demos Sent',         sub:'Tasks with demo devices sent will appear here.'},
+      'Awaiting Approval': {icon:'⏳', title:'Nothing Awaiting Approval', sub:'No tasks are pending your sign-off right now.'},
+      'Task Pending':      {icon:'⏸️', title:'No Pending Tasks',      sub:'No tasks are in the pending state.'},
+    };
+    const em = emptyMap[statusSel] || (hasFilter
+      ? {icon:'🔍', title:'No Results Found', sub:'No tasks match your current filters. Try clearing the search or changing the status.'}
+      : {icon:'📋', title:'No Tasks Yet', sub:'Create your first lead to get started.'});
+    tbody.innerHTML=`<tr><td colspan="15"><div class="empty-state">
+      <div class="empty-icon" style="font-size:48px;margin-bottom:14px">${em.icon}</div>
+      <h3 style="font-size:17px;font-weight:800;color:var(--text2);margin-bottom:8px">${em.title}</h3>
+      <p style="font-size:14px;color:var(--text3);max-width:340px;margin:0 auto">${em.sub}</p>
+      ${hasFilter ? `<button class="btn btn-secondary" style="margin-top:18px;font-size:13px" onclick="clearTaskFilters()">✕ Clear Filters</button>` : ''}
+    </div></td></tr>`;
   }else{
     tbody.innerHTML=slice.map((t,i)=>{
       const age=openStatuses.includes(t.task_status)?getAgeHours(t.created_at):0;
