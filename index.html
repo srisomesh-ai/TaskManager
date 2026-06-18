@@ -58,8 +58,10 @@ html,body{height:100%;font-family:'Calibri','Segoe UI',sans-serif;background:var
 .btn-primary:hover{background:var(--accent-hover);box-shadow:var(--shadow-md);transform:translateY(-1px);}
 .btn-secondary{background:var(--surface2);color:var(--text);border:1.5px solid var(--border);}
 .btn-secondary:hover{background:var(--surface3);border-color:var(--border2);}
-.btn-danger{background:var(--red-bg);color:var(--red);border:1.5px solid rgba(192,57,43,.25);}
-.btn-success{background:var(--green-bg);color:var(--green);border:1.5px solid rgba(26,122,58,.25);}
+.btn-danger{background:var(--red);color:#fff;border:1.5px solid var(--red);}
+.btn-danger:hover{background:#a02e22;box-shadow:var(--shadow-md);transform:translateY(-1px);}
+.btn-success{background:var(--green);color:#fff;border:1.5px solid var(--green);}
+.btn-success:hover{background:#145f2d;box-shadow:var(--shadow-md);transform:translateY(-1px);}
 .btn-full{width:100%;justify-content:center;padding:12px;font-size:15px;}
 .btn-sm{padding:6px 12px;font-size:12px;}
 .btn-icon{padding:6px;width:30px;height:30px;justify-content:center;}
@@ -977,32 +979,35 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
 <!-- CREATE/EDIT MODAL -->
 <!-- QUICK TASK MODAL -->
 <div class="modal-overlay" id="quick-task-modal" style="display:none" onclick="closeModal(event,'quick-task-modal')">
-  <div class="modal-box" style="max-width:400px">
+  <div class="modal-box" style="max-width:420px">
     <div class="modal-header">
-      <div><h3>⚡ Quick Task</h3><p>Send booking link to customer via WhatsApp</p></div>
+      <div class="modal-header-left">
+        <h3>⚡ Quick Task</h3>
+        <p>Send booking link to customer via WhatsApp</p>
+      </div>
       <button class="modal-close" onclick="closeById('quick-task-modal')">✕</button>
     </div>
-    <div style="padding:20px">
+    <div style="padding:22px">
       <div class="field">
         <label>Customer Name *</label>
-        <input type="text" id="qt-name" placeholder="e.g. Ravi Kumar">
+        <input type="text" id="qt-name" placeholder="e.g. Ravi Kumar" style="font-size:15px;padding:11px 13px">
       </div>
       <div class="field">
         <label>WhatsApp Number *</label>
-        <input type="tel" id="qt-phone" placeholder="91XXXXXXXXXX" maxlength="12">
+        <input type="tel" id="qt-phone" placeholder="91XXXXXXXXXX" maxlength="12" style="font-size:15px;padding:11px 13px">
       </div>
       <div class="field">
         <label>Special Discount (₹)</label>
         <div style="display:flex;gap:8px;align-items:center">
-          <input type="number" id="qt-discount" placeholder="e.g. 500" min="0" max="5000" value="100" style="flex:1">
-          <div style="font-size:11px;color:var(--text3);white-space:nowrap">per device</div>
+          <input type="number" id="qt-discount" placeholder="e.g. 500" min="0" max="5000" value="100" style="flex:1;font-size:15px;padding:11px 13px">
+          <div style="font-size:13px;color:var(--text3);white-space:nowrap">per device</div>
         </div>
-        <div style="font-size:11px;color:var(--text3);margin-top:4px">Customer will see this discount on the booking form</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:5px">Customer will see this discount on the booking form</div>
       </div>
-      <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px;margin-bottom:16px;font-size:12px;color:var(--text2)">
+      <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:13px 15px;margin-bottom:18px;font-size:13px;color:var(--text2);line-height:1.5">
         📲 Opens WhatsApp with a personalised booking link. Customer fills the form and it auto-creates a task.
       </div>
-      <button class="btn btn-success" style="width:100%;font-size:15px;padding:14px" onclick="sendQuickTask()">
+      <button class="btn btn-success" style="width:100%;font-size:16px;padding:15px;justify-content:center;border-radius:var(--radius-sm)" onclick="sendQuickTask()">
         💬 Send on WhatsApp →
       </button>
     </div>
