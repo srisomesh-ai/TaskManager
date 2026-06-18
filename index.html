@@ -583,11 +583,8 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
 
       <div class="page" id="page-invoicing">
         <div class="breadcrumb">Home / <span>Invoicing</span></div>
-        <div class="page-header">
-          <div class="page-header-left"><h2>🧾 Invoicing</h2><p>Manage invoices, parties, items, banks & reports</p></div>
-        </div>
-        <!-- Invoicing sub-navigation tabs -->
-        <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius) var(--radius) 0 0;border-bottom:none;overflow-x:auto;display:flex;gap:0">
+        <!-- Tab bar -->
+        <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius) var(--radius) 0 0;border-bottom:2px solid var(--border);overflow-x:auto;display:flex;gap:0">
           <div id="inv-tab-sale" onclick="showInvPage('sale')" class="inv-tab-btn">💰 Sale Invoices</div>
           <div id="inv-tab-estimate" onclick="showInvPage('estimate')" class="inv-tab-btn">📄 Estimates</div>
           <div id="inv-tab-proforma" onclick="showInvPage('proforma')" class="inv-tab-btn">📋 Proforma</div>
@@ -601,12 +598,9 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
           <div id="inv-tab-invreports" onclick="showInvPage('invreports')" class="inv-tab-btn">📊 Reports</div>
           <div id="inv-tab-settings" onclick="showInvPage('settings')" class="inv-tab-btn">⚙️ Settings</div>
         </div>
-        <!-- Content area -->
+        <!-- Content -->
         <div id="inv-content" style="background:var(--surface);border:1.5px solid var(--border);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:16px;min-height:300px">
-          <div style="text-align:center;padding:40px;color:var(--text3)">
-            <div style="font-size:36px;margin-bottom:10px">🧾</div>
-            <div style="font-size:14px;font-weight:700">Select a tab above to get started</div>
-          </div>
+          <div style="text-align:center;padding:40px;color:var(--text3)"><div style="font-size:36px;margin-bottom:10px">🧾</div><div style="font-size:14px;font-weight:700">Click a tab above to open</div></div>
         </div>
       </div>
 
@@ -3555,7 +3549,43 @@ function showInvPage(name){
 }
 
 function renderInvSale(el){
-  el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><h2 style="font-size:16px;font-weight:800">Sale Invoices</h2><button class="btn btn-primary btn-sm">➕ Add Sale</button></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><select class="toolbar-select"><option>All Sale Invoices</option><option>Paid</option><option>Unpaid</option></select><select class="toolbar-select"><option>All Firms</option><option>BGPT</option><option>SBGT</option></select></div><div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:12px"><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Total Sales Amount</div><div style="font-size:20px;font-weight:800">₹8,97,404</div><div style="font-size:12px;color:var(--text3);margin-top:3px">Received: <strong style="color:var(--green)">₹5,85,736</strong> &nbsp;|&nbsp; Balance: <strong style="color:var(--red)">₹3,11,668</strong></div></div><div class="table-wrapper"><div class="table-scroll"><table><thead><tr><th>Date</th><th>Invoice No.</th><th>Party Name</th><th>Amount</th><th>Balance</th><th>Status</th></tr></thead><tbody><tr><td>15/06/2026</td><td style="color:var(--blue);font-weight:700">FY26-27/116</td><td>Samskar International School</td><td style="font-weight:700">₹56,050</td><td style="color:var(--red)">₹56,050</td><td><span style="color:var(--red);font-weight:700;font-size:11px">Unpaid</span></td></tr><tr><td>13/06/2026</td><td style="color:var(--blue);font-weight:700">FY26-27/115</td><td>M/S SRI VIJAYA VISAKHA</td><td style="font-weight:700">₹590</td><td style="color:var(--red)">₹590</td><td><span style="color:var(--red);font-weight:700;font-size:11px">Unpaid</span></td></tr><tr><td>13/06/2026</td><td style="color:var(--blue);font-weight:700">FY26-27/114</td><td>Kadapa Public School</td><td style="font-weight:700">₹4,130</td><td style="color:var(--red)">₹4,130</td><td><span style="color:var(--red);font-weight:700;font-size:11px">Unpaid</span></td></tr><tr><td>10/06/2026</td><td style="color:var(--blue);font-weight:700">FY26-27/112</td><td>Dress Circle Kurnool</td><td style="font-weight:700">₹4,130</td><td style="color:var(--green)">₹0</td><td><span style="color:var(--green);font-weight:700;font-size:11px">Paid</span></td></tr></tbody></table></div></div>';
+  el.innerHTML = [
+    // Action bar
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">',
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">',
+        '<select class="toolbar-select"><option>All Sale Invoices</option><option>Paid</option><option>Unpaid</option><option>Partially Paid</option></select>',
+        '<select class="toolbar-select"><option>📅 Pick a date</option><option>This Month</option><option>Last Month</option><option>This Year</option></select>',
+        '<select class="toolbar-select"><option>All Firms</option><option>BGPT</option><option>SBGT</option></select>',
+        '<select class="toolbar-select"><option>All Users</option></select>',
+        '<button class="btn-icon-sq" title="Export Excel">📊</button>',
+        '<button class="btn-icon-sq" title="Print">🖨</button>',
+      '</div>',
+      '<button class="btn btn-primary btn-sm" onclick="showAlert(\'Add Sale Invoice — feature coming soon\',\'info\')">➕ Add Sale</button>',
+    '</div>',
+    // Summary card
+    '<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:14px;display:flex;gap:24px;align-items:center;flex-wrap:wrap">',
+      '<div><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">Total Sales Amount</div><div style="font-size:22px;font-weight:800">₹8,97,404</div></div>',
+      '<div style="width:1px;height:36px;background:var(--border)"></div>',
+      '<div><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">Received</div><div style="font-size:16px;font-weight:800;color:var(--green)">₹5,85,736</div></div>',
+      '<div style="width:1px;height:36px;background:var(--border)"></div>',
+      '<div><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">Balance</div><div style="font-size:16px;font-weight:800;color:var(--red)">₹3,11,668</div></div>',
+    '</div>',
+    // Table
+    '<div class="table-wrapper"><div class="table-scroll"><table>',
+    '<thead><tr>',
+      '<th>Date</th><th>Invoice No.</th><th>Party Name</th>',
+      '<th>Transaction</th><th>Payment Type</th>',
+      '<th style="text-align:right">Amount</th><th style="text-align:right">Balance</th>',
+      '<th>Status</th><th>Actions</th>',
+    '</tr></thead>',
+    '<tbody>',
+      '<tr><td>15/06/2026</td><td style="color:var(--blue);font-weight:700;font-size:12px">FY26-27/116</td><td style="font-weight:600">Samskar International School</td><td>Sale</td><td style="font-size:11px;color:var(--text3)">Sri Bharat G…</td><td style="font-weight:700;text-align:right">₹56,050</td><td style="color:var(--red);text-align:right">₹56,050</td><td><span style="background:#fdecea;color:var(--red);padding:3px 8px;border-radius:10px;font-size:11px;font-weight:700">Unpaid</span></td><td><div style="display:flex;gap:4px"><button class="action-btn view">🖨</button><button class="action-btn edit">✏️</button><button class="action-btn" style="background:var(--surface2)">⋮</button></div></td></tr>',
+      '<tr><td>13/06/2026</td><td style="color:var(--blue);font-weight:700;font-size:12px">FY26-27/115</td><td style="font-weight:600">M/S SRI VIJAYA VISAKHA</td><td>Sale</td><td style="font-size:11px;color:var(--text3)">Sri Bharat G…</td><td style="font-weight:700;text-align:right">₹590</td><td style="color:var(--red);text-align:right">₹590</td><td><span style="background:#fdecea;color:var(--red);padding:3px 8px;border-radius:10px;font-size:11px;font-weight:700">Unpaid</span></td><td><div style="display:flex;gap:4px"><button class="action-btn view">🖨</button><button class="action-btn edit">✏️</button><button class="action-btn" style="background:var(--surface2)">⋮</button></div></td></tr>',
+      '<tr><td>13/06/2026</td><td style="color:var(--blue);font-weight:700;font-size:12px">FY26-27/114</td><td style="font-weight:600">Kadapa Public School</td><td>Sale</td><td style="font-size:11px;color:var(--text3)">Sri Bharat G…</td><td style="font-weight:700;text-align:right">₹4,130</td><td style="color:var(--red);text-align:right">₹4,130</td><td><span style="background:#fdecea;color:var(--red);padding:3px 8px;border-radius:10px;font-size:11px;font-weight:700">Unpaid</span></td><td><div style="display:flex;gap:4px"><button class="action-btn view">🖨</button><button class="action-btn edit">✏️</button><button class="action-btn" style="background:var(--surface2)">⋮</button></div></td></tr>',
+      '<tr><td>13/06/2026</td><td style="color:var(--blue);font-weight:700;font-size:12px">FY26-27/113</td><td style="font-weight:600">M/S SRI VIJAYA VISAKHA</td><td>Sale</td><td style="font-size:11px;color:var(--text3)">Sri Bharat G…</td><td style="font-weight:700;text-align:right">₹590</td><td style="color:var(--red);text-align:right">₹590</td><td><span style="background:#fdecea;color:var(--red);padding:3px 8px;border-radius:10px;font-size:11px;font-weight:700">Unpaid</span></td><td><div style="display:flex;gap:4px"><button class="action-btn view">🖨</button><button class="action-btn edit">✏️</button><button class="action-btn" style="background:var(--surface2)">⋮</button></div></td></tr>',
+      '<tr><td>10/06/2026</td><td style="color:var(--blue);font-weight:700;font-size:12px">FY26-27/112</td><td style="font-weight:600">Dress Circle Kurnool</td><td>Sale</td><td style="font-size:11px;color:var(--text3)">Sri Bharat G…</td><td style="font-weight:700;text-align:right">₹4,130</td><td style="color:var(--green);text-align:right">₹0</td><td><span style="background:var(--green-bg);color:var(--green);padding:3px 8px;border-radius:10px;font-size:11px;font-weight:700">Paid</span></td><td><div style="display:flex;gap:4px"><button class="action-btn view">🖨</button><button class="action-btn edit">✏️</button><button class="action-btn" style="background:var(--surface2)">⋮</button></div></td></tr>',
+    '</tbody></table></div></div>'
+  ].join('');
 }
 function renderInvEstimate(el){el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><h2 style="font-size:16px;font-weight:800">Estimate / Quotation</h2><button class="btn btn-primary btn-sm">➕ Add Estimate</button></div><div style="text-align:center;padding:40px 20px;color:var(--text3)"><div style="font-size:40px;margin-bottom:10px">📄</div><div style="font-size:14px;font-weight:700;margin-bottom:6px">No Estimates</div><button class="btn btn-primary btn-sm">➕ Add Estimate</button></div>';}
 function renderInvProforma(el){el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><h2 style="font-size:16px;font-weight:800">Proforma Invoice</h2><button class="btn btn-primary btn-sm">➕ Add Proforma</button></div><div style="text-align:center;padding:40px 20px;color:var(--text3)"><div style="font-size:40px;margin-bottom:10px">📋</div><div style="font-size:14px;font-weight:700;margin-bottom:6px">No Proforma Invoices</div><button class="btn btn-primary btn-sm">➕ Add Proforma</button></div>';}
