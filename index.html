@@ -3631,48 +3631,74 @@ async function invOpenNew(){
   invRowCount  = 0;
   document.getElementById('inv-sale-modal-title').textContent = 'New Sale Invoice';
   document.getElementById('inv-inv-no').value = await invGetNextNo();
-  document.getElementById('inv-inv-date').value = invToday();
-  document.getElementById('inv-due-date').value = '';
-  document.getElementById('inv-customer').value = '';
+  document.getElementById('inv-inv-date').value  = invToday();
+  document.getElementById('inv-due-date').value   = '';
+  document.getElementById('inv-customer').value   = '';
   document.getElementById('inv-billing-name').value = '';
-  document.getElementById('inv-po-no').value = '';
-  document.getElementById('inv-state').value = '';
-  document.getElementById('inv-pay-mode').value = 'Cash';
-  document.getElementById('inv-terms').value = '1. Payments terms: 100% payments against delivery/installation.\n2. Warranty as per Bharat GPS Warranty Policy.\n3. All disputes subject to Visakhapatnam jurisdiction.';
-  document.getElementById('inv-notes').value = '';
-  document.getElementById('inv-cash').checked = false;
+  document.getElementById('inv-po-no').value      = '';
+  document.getElementById('inv-state').value      = '';
+  document.getElementById('inv-gstin').value      = '';
+  document.getElementById('inv-gst-type').value   = 'Unregistered/Consumer';
+  document.getElementById('inv-bill-addr').value  = '';
+  document.getElementById('inv-pay-mode').value   = 'Cash';
+  document.getElementById('inv-terms').value      = '1. Payments terms: 100% payments against delivery/installation.\n2. Warranty as per Bharat GPS Warranty Policy.\n3. All disputes subject to Visakhapatnam jurisdiction.';
+  document.getElementById('inv-notes').value      = '';
+  document.getElementById('inv-cash').checked     = false;
   document.getElementById('inv-cash-received').value = '0';
   invTogglePayMode();
-  // Load customers from tasks
-  invLoadCustomers();
+  invUpdateGSTLabel();
+  // Load customers from tasks + parties
+  await invLoadCustomers();
   // Reset items
   document.getElementById('inv-items-body').innerHTML = '';
-  invAddRow();
-  invAddRow();
+  await invAddRow();
   invCalcTotals();
   document.getElementById('inv-sale-modal').style.display = 'flex';
 }
 
-function invLoadCustomers(){
+async function invLoadCustomers(){
   var sel = document.getElementById('inv-customer');
   sel.innerHTML = '<option value="">Select Customer</option>';
-  // Try to get from tasks if available
+  var seen = {};
+
+  // 1. Load from inv_parties (DB)
+  try{
+    var pRes = await api('inv_get_parties');
+    if(pRes.success && pRes.parties){
+      pRes.parties.forEach(function(p){
+        if(p.name && !seen[p.name.toLowerCase()]){
+          seen[p.name.toLowerCase()] = true;
+          var o = document.createElement('option');
+          o.value = p.name;
+          o.dataset.gstin = p.gstin||'';
+          o.dataset.gst_type = p.gst_type||'';
+          o.dataset.state = p.state||'';
+          o.dataset.address = p.billing_address||'';
+          o.dataset.phone = p.phone||'';
+          o.textContent = p.name + (p.phone?' ('+p.phone+')':'');
+          sel.appendChild(o);
+        }
+      });
+    }
+  }catch(e){}
+
+  // 2. Also load unique customers from tasks
   if(typeof allTasks !== 'undefined' && allTasks.length){
-    var seen = {};
     allTasks.forEach(function(t){
-      if(t.customer_name && !seen[t.customer_name]){
-        seen[t.customer_name] = true;
+      if(t.customer_name && !seen[t.customer_name.toLowerCase()]){
+        seen[t.customer_name.toLowerCase()] = true;
         var o = document.createElement('option');
         o.value = t.customer_name;
+        o.dataset.phone = t.contact_number||'';
         o.textContent = t.customer_name + (t.contact_number?' ('+t.contact_number+')':'');
         sel.appendChild(o);
       }
     });
   }
-  // Also allow manual entry
+
+  // 3. Manual entry option
   var o = document.createElement('option');
-  o.value = '__manual__';
-  o.textContent = '+ Type customer name manually';
+  o.value = '__manual__'; o.textContent = '+ Add new customer...';
   sel.appendChild(o);
 }
 
@@ -3680,13 +3706,37 @@ function invCustomerChange(){
   var sel = document.getElementById('inv-customer');
   if(sel.value === '__manual__'){
     var name = prompt('Enter customer name:');
-    if(name){
+    if(name && name.trim()){
       var o = document.createElement('option');
-      o.value = name; o.textContent = name; o.selected = true;
+      o.value = name.trim(); o.textContent = name.trim(); o.selected = true;
       sel.insertBefore(o, sel.lastChild);
-      sel.value = name;
-    } else { sel.value = ''; }
+      sel.value = name.trim();
+    } else { sel.value = ''; return; }
   }
+  // Auto-fill billing fields from selected option
+  var opt = sel.options[sel.selectedIndex];
+  if(opt && opt.dataset){
+    var bn = document.getElementById('inv-billing-name');
+    if(bn && !bn.value) bn.value = sel.value;
+    var st = document.getElementById('inv-state');
+    if(st && opt.dataset.state) st.value = opt.dataset.state;
+    var gstin = document.getElementById('inv-gstin');
+    if(gstin && opt.dataset.gstin) gstin.value = opt.dataset.gstin;
+    var gtype = document.getElementById('inv-gst-type');
+    if(gtype && opt.dataset.gst_type) gtype.value = opt.dataset.gst_type;
+    var addr = document.getElementById('inv-bill-addr');
+    if(addr && opt.dataset.address) addr.value = opt.dataset.address;
+  }
+  invUpdateGSTLabel();
+}
+
+function invUpdateGSTLabel(){
+  var state = document.getElementById('inv-state')?.value||'';
+  var companyState = 'Andhra Pradesh'; // our state
+  var label = document.getElementById('inv-gst-split-label');
+  if(!label) return;
+  var same = state && state.toLowerCase() === companyState.toLowerCase();
+  label.textContent = same ? 'CGST + SGST' : (state ? 'IGST' : 'GST');
 }
 
 function invTogglePayMode(){
@@ -3775,19 +3825,57 @@ function invCalcTotals(){
     var taxAmt = base * gst / 100;
     subTotal += gross;
     discTotal += discAmt;
-    gstTotal += taxAmt;
+    gstTotal  += taxAmt;
   });
   var grand = subTotal - discTotal + gstTotal;
   var el = function(id){ return document.getElementById(id); };
-  if(el('inv-sub-total'))    el('inv-sub-total').textContent    = invFmt(subTotal);
-  if(el('inv-discount-total'))el('inv-discount-total').textContent = '-'+invFmt(discTotal);
-  if(el('inv-gst-total'))    el('inv-gst-total').textContent    = invFmt(gstTotal);
-  if(el('inv-grand-total'))  el('inv-grand-total').textContent  = invFmt(grand);
-  var cash = document.getElementById('inv-cash')?.checked;
+  if(el('inv-sub-total'))     el('inv-sub-total').textContent     = invFmt(subTotal);
+  if(el('inv-discount-total'))el('inv-discount-total').textContent= '-'+invFmt(discTotal);
+
+  // GST breakdown — CGST+SGST or IGST based on state
+  var state = el('inv-state')?.value||'';
+  var companyState = 'Andhra Pradesh';
+  var sameState = state.toLowerCase() === companyState.toLowerCase();
+  var gstBreakEl = el('inv-gst-breakdown');
+  if(gstBreakEl && gstTotal > 0){
+    if(state && sameState){
+      var half = gstTotal/2;
+      gstBreakEl.innerHTML =
+        '<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;color:var(--text3)"><span>CGST</span><span>'+invFmt(half)+'</span></div>'
+        +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;color:var(--text3)"><span>SGST</span><span>'+invFmt(half)+'</span></div>';
+    } else if(state){
+      gstBreakEl.innerHTML = '<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;color:var(--text3)"><span>IGST</span><span>'+invFmt(gstTotal)+'</span></div>';
+    } else {
+      gstBreakEl.innerHTML = '<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;color:var(--text3)"><span>GST / Tax</span><span>'+invFmt(gstTotal)+'</span></div>';
+    }
+  } else if(gstBreakEl){
+    gstBreakEl.innerHTML = '<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;color:var(--text3)"><span>GST / Tax</span><span>'+invFmt(gstTotal)+'</span></div>';
+  }
+
+  if(el('inv-grand-total')) el('inv-grand-total').textContent = invFmt(grand);
+  // Amount in words
+  if(el('inv-amount-words')) el('inv-amount-words').textContent = invAmountWords(grand);
+
+  var cash = el('inv-cash')?.checked;
   if(cash){
     var rec = parseFloat(el('inv-cash-received')?.value||0);
     var bal = Math.max(0, grand - rec);
     if(el('inv-balance-due')) el('inv-balance-due').textContent = invFmt(bal);
+  }
+
+  // Also update GST info box
+  var infoEl = el('inv-gst-info');
+  if(infoEl && state){
+    if(sameState){
+      infoEl.textContent = 'Intra-state supply → CGST + SGST applies';
+      infoEl.style.color = 'var(--green)';
+    } else {
+      infoEl.textContent = 'Inter-state supply → IGST applies';
+      infoEl.style.color = 'var(--blue)';
+    }
+  } else if(infoEl){
+    infoEl.textContent = 'Select state to determine GST type';
+    infoEl.style.color = 'var(--text3)';
   }
 }
 
@@ -3816,28 +3904,39 @@ function invCollectData(){
   var grand = subTotal - discTotal + gstTotal;
   var cashSale = document.getElementById('inv-cash')?.checked;
   var rec = cashSale ? parseFloat(document.getElementById('inv-cash-received')?.value||0) : 0;
+  var state = document.getElementById('inv-state')?.value||'';
+  var companyState = 'Andhra Pradesh';
+  var sameState = state.toLowerCase()===companyState.toLowerCase();
   return {
     id: invEditingId || ('INV-'+Date.now()),
-    inv_no: document.getElementById('inv-inv-no').value,
-    date: document.getElementById('inv-inv-date').value,
-    due_date: document.getElementById('inv-due-date').value,
-    customer: document.getElementById('inv-customer').value,
-    billing_name: document.getElementById('inv-billing-name').value,
-    po_no: document.getElementById('inv-po-no').value,
-    state: document.getElementById('inv-state').value,
-    pay_mode: document.getElementById('inv-pay-mode').value,
-    cash_sale: cashSale,
+    inv_no:           document.getElementById('inv-inv-no').value,
+    date:             document.getElementById('inv-inv-date').value,
+    due_date:         document.getElementById('inv-due-date').value,
+    customer:         document.getElementById('inv-customer').value,
+    billing_name:     document.getElementById('inv-billing-name').value || document.getElementById('inv-customer').value,
+    po_no:            document.getElementById('inv-po-no').value,
+    gstin:            document.getElementById('inv-gstin')?.value||'',
+    gst_type:         document.getElementById('inv-gst-type')?.value||'',
+    state,
+    billing_address:  document.getElementById('inv-bill-addr')?.value||'',
+    pay_mode:         document.getElementById('inv-pay-mode').value,
+    cash_sale:        cashSale,
+    gst_split:        state ? (sameState ? 'CGST_SGST' : 'IGST') : 'GST',
+    cgst:             (state && sameState) ? gstTotal/2 : 0,
+    sgst:             (state && sameState) ? gstTotal/2 : 0,
+    igst:             (state && !sameState) ? gstTotal : 0,
     items,
-    sub_total: subTotal,
-    discount_total: discTotal,
-    gst_total: gstTotal,
-    grand_total: grand,
-    amount_received: cashSale ? Math.min(rec, grand) : 0,
-    terms: document.getElementById('inv-terms').value,
-    notes: document.getElementById('inv-notes').value,
-    created_at: new Date().toISOString()
+    sub_total:        subTotal,
+    discount_total:   discTotal,
+    gst_total:        gstTotal,
+    grand_total:      grand,
+    amount_received:  cashSale ? Math.min(rec, grand) : 0,
+    terms:            document.getElementById('inv-terms').value,
+    notes:            document.getElementById('inv-notes').value,
+    created_at:       new Date().toISOString()
   };
 }
+
 
 async function invSaveSale(){
   var data = invCollectData();
@@ -3983,7 +4082,17 @@ function invBuildPrintHTML(inv, forPrint){
     '<td style="padding:8px 10px;font-size:12px;text-align:right;font-weight:700">'+invFmt(inv.sub_total)+'</td>',
     '</tr>');
   if(inv.discount_total>0) s.push('<tr style="background:#f0f2f5"><td colspan="7" style="padding:4px 10px;font-size:12px;text-align:right;color:#1a7a3a">Discount</td><td style="padding:4px 10px;font-size:12px;text-align:right;color:#1a7a3a;font-weight:700">-'+invFmt(inv.discount_total)+'</td></tr>');
-  if(inv.gst_total>0) s.push('<tr style="background:#f0f2f5"><td colspan="7" style="padding:4px 10px;font-size:12px;text-align:right;color:#555">GST / Tax</td><td style="padding:4px 10px;font-size:12px;text-align:right;font-weight:700">'+invFmt(inv.gst_total)+'</td></tr>');
+  if(inv.gst_total>0){
+    if(inv.gst_split==='CGST_SGST'){
+      var half=inv.gst_total/2;
+      s.push('<tr style="background:#f0f2f5"><td colspan="7" style="padding:4px 10px;font-size:12px;text-align:right;color:#555">CGST</td><td style="padding:4px 10px;font-size:12px;text-align:right;font-weight:700">'+invFmt(half)+'</td></tr>');
+      s.push('<tr style="background:#f0f2f5"><td colspan="7" style="padding:4px 10px;font-size:12px;text-align:right;color:#555">SGST</td><td style="padding:4px 10px;font-size:12px;text-align:right;font-weight:700">'+invFmt(half)+'</td></tr>');
+    } else if(inv.gst_split==='IGST'){
+      s.push('<tr style="background:#f0f2f5"><td colspan="7" style="padding:4px 10px;font-size:12px;text-align:right;color:#555">IGST</td><td style="padding:4px 10px;font-size:12px;text-align:right;font-weight:700">'+invFmt(inv.gst_total)+'</td></tr>');
+    } else {
+      s.push('<tr style="background:#f0f2f5"><td colspan="7" style="padding:4px 10px;font-size:12px;text-align:right;color:#555">GST / Tax</td><td style="padding:4px 10px;font-size:12px;text-align:right;font-weight:700">'+invFmt(inv.gst_total)+'</td></tr>');
+    }
+  }
   s.push(
     '<tr style="background:#1a3a6b;color:#fff">',
     '<td colspan="7" style="padding:9px 10px;font-size:13px;font-weight:800;text-align:right">TOTAL</td>',
@@ -4466,6 +4575,16 @@ async function itemSave(isService, addAnother){
   var salePrice = parseFloat(document.getElementById('itm-sale')?.value||0);
   if(!salePrice){ showAlert('Sale price is required','error'); return; }
 
+  // ── Duplicate name check ──────────────────────────
+  var existing = await itemsGetAll();
+  var duplicate = existing.find(function(i){
+    return i.name.toLowerCase() === name.toLowerCase() && i.id !== itemEditingId;
+  });
+  if(duplicate){
+    showAlert('An item named "'+name+'" already exists. Please use a different name.','error');
+    return;
+  }
+
   var item = {
     id:             itemEditingId || ('ITEM-'+Date.now()),
     name,
@@ -4620,109 +4739,118 @@ function renderInvSettings(el){
 </script>
 <!-- ═══════════════════ SALE INVOICE MODAL ═══════════════════ -->
 <div class="modal-overlay" id="inv-sale-modal" style="display:none" onclick="closeModal(event,'inv-sale-modal')">
-  <div class="modal modal-lg" style="width:960px">
+  <div class="modal modal-lg" style="width:980px">
     <div class="modal-header">
       <div class="modal-header-left">
         <h3 id="inv-sale-modal-title">New Sale Invoice</h3>
-        <p>Sri Bharat GPS Tracker Pvt Ltd</p>
+        <p>Sri Bharat GPS Tracker Pvt Ltd &nbsp;·&nbsp; GSTIN: 37ABFCS5100E1ZP</p>
       </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text2)">
-          <input type="checkbox" id="inv-cash" onchange="invTogglePayMode()"> Cash Sale
+      <div style="display:flex;align-items:center;gap:10px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text2);background:var(--surface2);padding:5px 10px;border-radius:5px;border:1.5px solid var(--border)">
+          <input type="checkbox" id="inv-cash" onchange="invTogglePayMode()"> 💵 Cash Sale
         </label>
         <button class="modal-close" onclick="closeById('inv-sale-modal')">✕</button>
       </div>
     </div>
-    <div class="modal-body">
-      <!-- Row 1: Customer + Invoice details -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 140px 140px;gap:10px;margin-bottom:12px">
-        <div>
-          <label class="field-label">Customer <span style="color:var(--red)">*</span></label>
-          <select id="inv-customer" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;outline:none" onchange="invCustomerChange()">
-            <option value="">Select Customer</option>
-          </select>
-        </div>
-        <div>
-          <label class="field-label">Billing Name (Optional)</label>
-          <input type="text" id="inv-billing-name" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;outline:none" placeholder="Override billing name">
-        </div>
-        <div>
-          <label class="field-label">PO Number</label>
-          <input type="text" id="inv-po-no" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;outline:none" placeholder="PO / Reference No.">
-        </div>
-        <div>
-          <label class="field-label">Invoice No.</label>
-          <input type="text" id="inv-inv-no" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;outline:none">
-        </div>
-        <div>
-          <label class="field-label">Invoice Date</label>
-          <input type="date" id="inv-inv-date" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;outline:none">
-        </div>
-      </div>
-      <!-- Row 2: State of supply + Due date -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
-        <div>
-          <label class="field-label">State of Supply</label>
-          <select id="inv-state" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;outline:none">
-            <option value="">Select State</option>
-            <option>Andhra Pradesh</option><option>Telangana</option><option>Tamil Nadu</option>
-            <option>Karnataka</option><option>Maharashtra</option><option>Delhi</option>
-            <option>Gujarat</option><option>Rajasthan</option><option>Uttar Pradesh</option>
-            <option>West Bengal</option>
-          </select>
-        </div>
-        <div>
-          <label class="field-label">Due Date</label>
-          <input type="date" id="inv-due-date" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;outline:none">
-        </div>
-        <div id="inv-payment-mode-row">
-          <label class="field-label">Payment Mode</label>
-          <select id="inv-pay-mode" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;outline:none">
-            <option>Cash</option><option>UPI</option><option>Bank Transfer</option><option>Cheque</option><option>Credit Card</option><option>Other</option>
-          </select>
-        </div>
+    <div class="modal-body" style="padding:14px 16px">
+
+      <!-- ── ROW 1: Invoice meta ── -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 130px 130px;gap:10px;margin-bottom:12px">
+        <div><label class="field-label">Invoice No.</label>
+          <input type="text" id="inv-inv-no" class="inv-field" style="font-weight:700"></div>
+        <div><label class="field-label">Invoice Date <span style="color:var(--red)">*</span></label>
+          <input type="date" id="inv-inv-date" class="inv-field"></div>
+        <div><label class="field-label">Due Date</label>
+          <input type="date" id="inv-due-date" class="inv-field"></div>
+        <div id="inv-payment-mode-row"><label class="field-label">Payment Mode</label>
+          <select id="inv-pay-mode" class="inv-field">
+            <option>Cash</option><option>UPI</option><option>Bank Transfer</option><option>Cheque</option><option>NEFT/RTGS</option><option>Credit</option>
+          </select></div>
       </div>
 
-      <!-- Items table -->
-      <div style="overflow-x:auto;margin-bottom:8px">
-        <table style="width:100%;border-collapse:collapse;min-width:700px">
+      <!-- ── ROW 2: Customer + Billing ── -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
+        <div><label class="field-label">Customer <span style="color:var(--red)">*</span></label>
+          <select id="inv-customer" class="inv-field" onchange="invCustomerChange()">
+            <option value="">Select Customer</option>
+          </select></div>
+        <div><label class="field-label">Billing Name</label>
+          <input type="text" id="inv-billing-name" class="inv-field" placeholder="Same as customer if blank"></div>
+        <div><label class="field-label">PO / Ref Number</label>
+          <input type="text" id="inv-po-no" class="inv-field" placeholder="Optional"></div>
+      </div>
+
+      <!-- ── ROW 3: GST + Billing Address ── -->
+      <div style="background:var(--accent-light);border:1.5px solid var(--accent2);border-radius:var(--radius);padding:12px;margin-bottom:14px">
+        <div style="font-size:11px;font-weight:800;color:var(--accent);margin-bottom:8px">📋 GST & Billing Details</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:8px">
+          <div><label class="field-label">Customer GSTIN</label>
+            <input type="text" id="inv-gstin" class="inv-field" placeholder="e.g. 37ABCDE1234F1Z5" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"></div>
+          <div><label class="field-label">GST Type</label>
+            <select id="inv-gst-type" class="inv-field" onchange="invUpdateGSTLabel()">
+              <option value="Unregistered/Consumer">Unregistered / Consumer</option>
+              <option value="Registered Regular">Registered - Regular</option>
+              <option value="Registered Composition">Registered - Composition</option>
+              <option value="SEZ">SEZ</option>
+              <option value="Exempt">Exempt / Nil</option>
+            </select></div>
+          <div><label class="field-label">State of Supply</label>
+            <select id="inv-state" class="inv-field" onchange="invUpdateGSTLabel();invCalcTotals()">
+              <option value="">Select State</option>
+              <option>Andhra Pradesh</option><option>Telangana</option><option>Tamil Nadu</option>
+              <option>Karnataka</option><option>Maharashtra</option><option>Gujarat</option>
+              <option>Rajasthan</option><option>Delhi</option><option>Uttar Pradesh</option>
+              <option>West Bengal</option><option>Kerala</option><option>Odisha</option>
+              <option>Madhya Pradesh</option><option>Bihar</option><option>Punjab</option>
+              <option>Haryana</option><option>Jharkhand</option><option>Chhattisgarh</option>
+            </select></div>
+          <div><label class="field-label">GST Split <span id="inv-gst-split-label" style="color:var(--accent);font-weight:800">CGST + SGST</span></label>
+            <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;font-size:12px;color:var(--text3)" id="inv-gst-info">Select state to determine GST type</div>
+          </div>
+        </div>
+        <div><label class="field-label">Billing Address</label>
+          <textarea id="inv-bill-addr" rows="2" class="inv-field" placeholder="Customer billing address..." style="resize:none"></textarea></div>
+      </div>
+
+      <!-- ── Items Table ── -->
+      <div style="overflow-x:auto;margin-bottom:6px">
+        <table style="width:100%;border-collapse:collapse;min-width:680px">
           <thead>
-            <tr style="background:var(--surface2);border-bottom:1.5px solid var(--border)">
-              <th style="padding:8px 10px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left;width:32px">#</th>
-              <th style="padding:8px 10px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left">Item Name</th>
-              <th style="padding:8px 10px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left;width:60px">Qty</th>
-              <th style="padding:8px 10px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left;width:70px">Unit</th>
-              <th style="padding:8px 10px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:right;width:100px">Price/Unit (₹)</th>
-              <th style="padding:8px 10px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:right;width:80px">Disc (%)</th>
-              <th style="padding:8px 10px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left;width:80px">GST</th>
-              <th style="padding:8px 10px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:right;width:90px">Amount (₹)</th>
-              <th style="padding:8px 6px;width:28px"></th>
+            <tr style="background:var(--accent);color:#fff">
+              <th style="padding:8px 8px;font-size:10px;font-weight:700;text-align:center;width:28px">#</th>
+              <th style="padding:8px 8px;font-size:10px;font-weight:700;text-align:left">Item / Description</th>
+              <th style="padding:8px 8px;font-size:10px;font-weight:700;text-align:center;width:55px">Qty</th>
+              <th style="padding:8px 8px;font-size:10px;font-weight:700;text-align:center;width:60px">Unit</th>
+              <th style="padding:8px 8px;font-size:10px;font-weight:700;text-align:right;width:95px">Price (₹)</th>
+              <th style="padding:8px 8px;font-size:10px;font-weight:700;text-align:right;width:60px">Disc %</th>
+              <th style="padding:8px 8px;font-size:10px;font-weight:700;text-align:center;width:70px">GST %</th>
+              <th style="padding:8px 8px;font-size:10px;font-weight:700;text-align:right;width:90px">Amount (₹)</th>
+              <th style="padding:8px 4px;width:24px"></th>
             </tr>
           </thead>
           <tbody id="inv-items-body"></tbody>
         </table>
       </div>
-      <button onclick="invAddRow()" style="background:none;border:none;color:var(--blue);font-size:12px;font-weight:700;cursor:pointer;padding:4px 0;margin-bottom:14px">+ ADD ROW</button>
+      <button onclick="invAddRow()" style="background:none;border:1.5px dashed var(--border);color:var(--blue);font-size:12px;font-weight:700;cursor:pointer;padding:6px 14px;border-radius:5px;margin-bottom:14px;width:100%">+ ADD ROW</button>
 
-      <!-- Bottom: terms + summary -->
-      <div style="display:grid;grid-template-columns:1fr 260px;gap:16px">
+      <!-- ── Bottom: terms + totals ── -->
+      <div style="display:grid;grid-template-columns:1fr 270px;gap:14px">
         <div>
           <label class="field-label">Terms & Conditions</label>
-          <textarea id="inv-terms" rows="3" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-family:inherit;outline:none;resize:vertical;margin-top:4px" placeholder="1. Payments terms: 100% payments against delivery/installation.&#10;2. Warranty as per Bharat GPS Warranty Policy.&#10;3. All disputes subject to Visakhapatnam jurisdiction."></textarea>
-          <div style="margin-top:8px">
-            <label class="field-label">Description / Notes</label>
-            <textarea id="inv-notes" rows="2" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-family:inherit;outline:none;resize:vertical;margin-top:4px" placeholder="Additional notes..."></textarea>
-          </div>
+          <textarea id="inv-terms" rows="3" class="inv-field" style="resize:vertical;margin-top:4px;font-size:11px" placeholder="1. Payments terms: 100% payments against delivery/installation.&#10;2. Warranty as per Bharat GPS Warranty Policy.&#10;3. All disputes subject to Visakhapatnam jurisdiction."></textarea>
+          <div style="margin-top:8px"><label class="field-label">Notes</label>
+          <textarea id="inv-notes" rows="2" class="inv-field" style="resize:vertical;margin-top:4px;font-size:11px" placeholder="Additional notes..."></textarea></div>
         </div>
         <div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px">
-          <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid var(--border2)"><span style="color:var(--text2)">Sub Total</span><span id="inv-sub-total" style="font-weight:600">₹0.00</span></div>
-          <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid var(--border2)"><span style="color:var(--text2)">Discount</span><span id="inv-discount-total" style="font-weight:600;color:var(--green)">-₹0.00</span></div>
-          <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid var(--border2)"><span style="color:var(--text2)">GST / Tax</span><span id="inv-gst-total" style="font-weight:600">₹0.00</span></div>
-          <div style="display:flex;justify-content:space-between;font-size:15px;padding:8px 0 4px;font-weight:800"><span>Total</span><span id="inv-grand-total" style="color:var(--accent)">₹0.00</span></div>
-          <div id="inv-cash-received-row" style="display:none;border-top:1px solid var(--border2);padding-top:8px;margin-top:4px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:1px solid var(--border2)"><span style="color:var(--text2)">Sub Total</span><span id="inv-sub-total" style="font-weight:600">₹0.00</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:1px solid var(--border2)"><span style="color:var(--text2)">Discount</span><span id="inv-discount-total" style="font-weight:600;color:var(--green)">-₹0.00</span></div>
+          <div id="inv-gst-breakdown"></div>
+          <div style="display:flex;justify-content:space-between;font-size:14px;padding:8px 0 4px;font-weight:800;border-top:2px solid var(--border);margin-top:4px"><span>TOTAL</span><span id="inv-grand-total" style="color:var(--accent)">₹0.00</span></div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px;font-style:italic" id="inv-amount-words"></div>
+          <div id="inv-cash-received-row" style="display:none;border-top:1px solid var(--border2);padding-top:10px;margin-top:8px">
             <label class="field-label">Amount Received (₹)</label>
-            <input type="number" id="inv-cash-received" value="0" min="0" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;outline:none;margin-top:4px" oninput="invCalcTotals()">
-            <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;margin-top:4px"><span style="color:var(--text2)">Balance Due</span><span id="inv-balance-due" style="font-weight:700;color:var(--red)">₹0.00</span></div>
+            <input type="number" id="inv-cash-received" value="0" min="0" class="inv-field" style="margin-top:4px;font-weight:700" oninput="invCalcTotals()">
+            <div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 0;margin-top:4px;font-weight:700"><span style="color:var(--text2)">Balance Due</span><span id="inv-balance-due" style="color:var(--red)">₹0.00</span></div>
           </div>
         </div>
       </div>
