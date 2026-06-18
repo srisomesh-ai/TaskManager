@@ -844,11 +844,23 @@ case 'inv_delete_party':
 
 // ── INV INVOICES ─────────────────────────────────────
 case 'inv_get_invoices':
+    // Ensure new columns exist (safe migration for existing installs)
+    $migrations_inv = [
+        "ALTER TABLE inv_invoices ADD COLUMN IF NOT EXISTS gstin VARCHAR(20) DEFAULT '' AFTER po_no",
+        "ALTER TABLE inv_invoices ADD COLUMN IF NOT EXISTS gst_type VARCHAR(50) DEFAULT 'Unregistered/Consumer' AFTER gstin",
+        "ALTER TABLE inv_invoices ADD COLUMN IF NOT EXISTS billing_address TEXT AFTER state",
+        "ALTER TABLE inv_invoices ADD COLUMN IF NOT EXISTS gst_split VARCHAR(20) DEFAULT 'GST' AFTER cash_sale",
+        "ALTER TABLE inv_invoices ADD COLUMN IF NOT EXISTS cgst DECIMAL(12,2) DEFAULT 0 AFTER gst_split",
+        "ALTER TABLE inv_invoices ADD COLUMN IF NOT EXISTS sgst DECIMAL(12,2) DEFAULT 0 AFTER cgst",
+        "ALTER TABLE inv_invoices ADD COLUMN IF NOT EXISTS igst DECIMAL(12,2) DEFAULT 0 AFTER sgst",
+        "ALTER TABLE inv_invoices ADD COLUMN IF NOT EXISTS task_id_ref INT DEFAULT NULL AFTER notes",
+    ];
+    foreach($migrations_inv as $sql){ try{ $pdo->exec($sql); }catch(Exception $e){} }
+
     $type = $_GET['type'] ?? 'sale';
     $stmt = $pdo->prepare("SELECT * FROM inv_invoices WHERE inv_type=? AND status!='cancelled' ORDER BY date DESC, created_at DESC");
     $stmt->execute([$type]);
     $rows = $stmt->fetchAll();
-    // decode items_json
     foreach($rows as &$r){ $r['items'] = json_decode($r['items_json']??'[]',true); }
     echo json_encode(['success'=>true,'invoices'=>$rows]);
     break;
@@ -858,24 +870,47 @@ case 'inv_save_invoice':
     $id = $body['id'] ?? ('INV-'.time().'-'.rand(100,999));
     $existing = $pdo->prepare("SELECT id FROM inv_invoices WHERE id=?"); $existing->execute([$id]);
     $itemsJson = json_encode($body['items']??[]);
+
+    // Safe helper
+    $g = function($k,$d='') use($body){ return $body[$k]??$d; };
+
     $data = [
-        'inv_no'=>$body['inv_no']??'', 'inv_type'=>$body['inv_type']??'sale',
-        'date'=>$body['date']??date('Y-m-d'), 'due_date'=>$body['due_date']??null,
-        'party_id'=>$body['party_id']??null, 'customer'=>$body['customer']??'',
-        'billing_name'=>$body['billing_name']??'', 'po_no'=>$body['po_no']??'',
-        'state'=>$body['state']??'', 'pay_mode'=>$body['pay_mode']??'',
-        'cash_sale'=>intval($body['cash_sale']??0),
-        'items_json'=>$itemsJson,
-        'sub_total'=>floatval($body['sub_total']??0), 'discount_total'=>floatval($body['discount_total']??0),
-        'gst_total'=>floatval($body['gst_total']??0), 'grand_total'=>floatval($body['grand_total']??0),
-        'amount_received'=>floatval($body['amount_received']??0),
-        'terms'=>$body['terms']??'', 'notes'=>$body['notes']??'',
+        'inv_no'          => $g('inv_no'),
+        'inv_type'        => $g('inv_type','sale'),
+        'date'            => $g('date',date('Y-m-d')),
+        'due_date'        => $g('due_date')||null,
+        'party_id'        => $g('party_id')||null,
+        'customer'        => $g('customer'),
+        'billing_name'    => $g('billing_name'),
+        'po_no'           => $g('po_no'),
+        'gstin'           => $g('gstin'),
+        'gst_type'        => $g('gst_type','Unregistered/Consumer'),
+        'state'           => $g('state'),
+        'billing_address' => $g('billing_address'),
+        'pay_mode'        => $g('pay_mode'),
+        'cash_sale'       => intval($g('cash_sale',0)),
+        'gst_split'       => $g('gst_split','GST'),
+        'cgst'            => floatval($g('cgst',0)),
+        'sgst'            => floatval($g('sgst',0)),
+        'igst'            => floatval($g('igst',0)),
+        'items_json'      => $itemsJson,
+        'sub_total'       => floatval($g('sub_total',0)),
+        'discount_total'  => floatval($g('discount_total',0)),
+        'gst_total'       => floatval($g('gst_total',0)),
+        'grand_total'     => floatval($g('grand_total',0)),
+        'amount_received' => floatval($g('amount_received',0)),
+        'terms'           => $g('terms'),
+        'notes'           => $g('notes'),
+        'task_id_ref'     => $g('task_id_ref')||null,
     ];
+
     if($existing->fetch()){
-        $pdo->prepare("UPDATE inv_invoices SET inv_no=?,inv_type=?,date=?,due_date=?,party_id=?,customer=?,billing_name=?,po_no=?,state=?,pay_mode=?,cash_sale=?,items_json=?,sub_total=?,discount_total=?,gst_total=?,grand_total=?,amount_received=?,terms=?,notes=? WHERE id=?")
+        $pdo->prepare("UPDATE inv_invoices SET inv_no=?,inv_type=?,date=?,due_date=?,party_id=?,customer=?,billing_name=?,po_no=?,gstin=?,gst_type=?,state=?,billing_address=?,pay_mode=?,cash_sale=?,gst_split=?,cgst=?,sgst=?,igst=?,items_json=?,sub_total=?,discount_total=?,gst_total=?,grand_total=?,amount_received=?,terms=?,notes=?,task_id_ref=? WHERE id=?")
             ->execute(array_merge(array_values($data),[$id]));
     } else {
-        $pdo->prepare("INSERT INTO inv_invoices (id,inv_no,inv_type,date,due_date,party_id,customer,billing_name,po_no,state,pay_mode,cash_sale,items_json,sub_total,discount_total,gst_total,grand_total,amount_received,terms,notes,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+        $cols = implode(',',array_keys($data));
+        $placeholders = implode(',',array_fill(0,count($data),'?'));
+        $pdo->prepare("INSERT INTO inv_invoices (id,$cols,created_by) VALUES (?,{$placeholders},?)")
             ->execute(array_merge([$id],array_values($data),[$userId]));
     }
     echo json_encode(['success'=>true,'id'=>$id]);
