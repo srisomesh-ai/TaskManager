@@ -3722,7 +3722,7 @@ function renderInvReports(el){
   var html='<div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:14px">Reports</div>'
     +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">';
   rpts.forEach(function(r){
-    html+='<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px;cursor:pointer;transition:border-color .15s" onclick="showAlert(''+r[1]+' — coming soon','info')">'
+    html+='<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:14px;cursor:pointer">';
       +'<div style="font-size:22px;margin-bottom:8px">'+r[0]+'</div>'
       +'<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">'+r[1]+'</div>'
       +'<div style="font-size:11px;color:var(--text3)">'+r[2]+'</div>'
