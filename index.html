@@ -175,7 +175,20 @@ tbody tr:last-child{border-bottom:none;}
 tbody tr:hover{background:var(--accent-light);}
 tbody tr:nth-child(even){background:var(--surface2);}
 tbody tr:nth-child(even):hover{background:var(--accent-light);}
-tbody td{padding:9px 12px;font-size:13px;white-space:nowrap;}
+tbody td{padding:9px 12px;font-size:13px;vertical-align:middle;}
+tbody td.nowrap{white-space:nowrap;}
+tbody tr{border-bottom:1px solid var(--border2);transition:background .12s;}
+tbody tr:hover{background:var(--surface2);}
+tbody tr:last-child{border-bottom:none;}
+.items-table{table-layout:fixed;width:100%;}
+.items-table td:first-child{width:34%;min-width:180px;}
+.items-table .col-hsn{width:80px;}
+.items-table .col-cat{width:110px;}
+.items-table .col-unit{width:60px;}
+.items-table .col-price{width:90px;text-align:right;}
+.items-table .col-tax{width:60px;text-align:right;}
+.items-table .col-stock{width:70px;text-align:right;}
+.items-table .col-act{width:80px;text-align:center;}
 .task-id-cell{font-family:'Consolas','Courier New',monospace;font-size:11px;font-weight:700;color:var(--accent2);}
 .customer-name{font-weight:700;}
 .contact-cell{font-family:'Consolas','Courier New',monospace;font-size:12px;color:var(--text2);}
@@ -4711,10 +4724,15 @@ async function itemsRenderProducts(el, isService){
   var all = (await itemsGetAll()).filter(function(i){ return (i.is_service==1||i.is_service===true) === isService; });
   var typeLabel = isService ? 'Service' : 'Product';
 
-  // Search + action bar
-  el.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">'
-    +'<input type="text" id="items-search" placeholder="🔍 Search '+typeLabel.toLowerCase()+'..." oninput="itemsSearch(this.value,'+(isService?'true':'false')+')" '
-    +'style="padding:7px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-family:inherit;outline:none;min-width:200px">'
+  el.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">'
+    +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+    +'<div style="position:relative">'
+    +'<span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px">🔍</span>'
+    +'<input type="text" id="items-search" placeholder="Search '+(isService?'services':'products')+'..." oninput="itemsSearchAsync(this.value,'+(isService?'true':'false')+')" '
+    +'style="padding:7px 12px 7px 30px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-family:inherit;outline:none;width:220px;background:var(--surface)">'
+    +'</div>'
+    +'<span style="font-size:12px;color:var(--text3);font-weight:600">'+all.length+' '+(isService?'service':'product')+(all.length===1?'':'s')+'</span>'
+    +'</div>'
     +'<button class="btn btn-primary btn-sm" onclick="itemOpenModal('+(isService?'true':'false')+',null)">➕ Add '+typeLabel+'</button>'
     +'</div>'
     +'<div id="items-list-wrap"></div>';
@@ -4722,9 +4740,13 @@ async function itemsRenderProducts(el, isService){
   itemsRenderList(document.getElementById('items-list-wrap'), all, isService);
 }
 
-function itemsSearch(q, isService){
-  var all = itemsGetAll().filter(function(i){
-    return (i.is_service||false)===isService && (i.name.toLowerCase().includes(q.toLowerCase()) || (i.hsn||'').toLowerCase().includes(q.toLowerCase()));
+async function itemsSearchAsync(q, isService){
+  var all = (await itemsGetAll()).filter(function(i){
+    var matchType = (i.is_service==1||i.is_service===true) === isService;
+    var matchQ = !q || i.name.toLowerCase().includes(q.toLowerCase())
+      || (i.hsn||'').includes(q)
+      || (i.category||'').toLowerCase().includes(q.toLowerCase());
+    return matchType && matchQ;
   });
   itemsRenderList(document.getElementById('items-list-wrap'), all, isService);
 }
@@ -4735,39 +4757,90 @@ function itemsRenderList(el, items, isService){
     el.innerHTML = '<div style="text-align:center;padding:56px 20px;color:var(--text3)">'
       +'<div style="font-size:48px;margin-bottom:14px">'+(isService?'⚙️':'📦')+'</div>'
       +'<div style="font-size:15px;font-weight:700;color:var(--text2);margin-bottom:8px">No '+(isService?'Services':'Products')+' Yet</div>'
-      +'<div style="font-size:13px;margin-bottom:20px">'+(isService?'Add GPS installation, AMC and other services.':'Add GPS devices, accessories and products.')+'</div>'
+      +'<div style="font-size:12px;margin-bottom:20px;color:var(--text3)">'+(isService?'Add GPS installation, AMC and other services.':'Add GPS devices, accessories and products.')+'</div>'
       +'<button class="btn btn-primary" onclick="itemOpenModal('+(isService?'true':'false')+',null)">➕ Add '+(isService?'Service':'Product')+'</button>'
       +'</div>';
     return;
   }
-  var html = '<div class="table-wrapper"><div class="table-scroll"><table>'
+
+  var html = '<div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)">'
+    +'<table class="items-table" style="width:100%;border-collapse:collapse;table-layout:fixed">'
+    +'<colgroup>'
+    +'<col style="width:32%">'    // Name
+    +'<col style="width:8%">'     // HSN
+    +'<col style="width:11%">'    // Category
+    +'<col style="width:6%">'     // Unit
+    +'<col style="width:10%">'    // Sale Price
+    +'<col style="width:10%">'    // Purchase Price
+    +'<col style="width:7%">'     // GST
+    +(isService?'':'<col style="width:7%">')+  // Stock
+    +'<col style="width:9%">'     // Actions
+    +'</colgroup>'
     +'<thead><tr>'
-    +'<th>Item Name</th><th>HSN/SAC</th><th>Category</th><th>Unit</th>'
-    +'<th style="text-align:right">Sale Price</th><th style="text-align:right">Purchase Price</th>'
-    +'<th style="text-align:right">Tax</th><th style="text-align:right">Stock Qty</th>'
-    +'<th>Actions</th>'
-    +'</tr></thead><tbody>';
-  items.forEach(function(item){
+    +'<th style="padding:10px 12px">Item Name</th>'
+    +'<th style="padding:10px 8px;text-align:center">HSN/SAC</th>'
+    +'<th style="padding:10px 8px">Category</th>'
+    +'<th style="padding:10px 8px;text-align:center">Unit</th>'
+    +'<th style="padding:10px 10px;text-align:right">Sale Price</th>'
+    +'<th style="padding:10px 10px;text-align:right">Purchase</th>'
+    +'<th style="padding:10px 8px;text-align:center">GST</th>'
+    +(isService?'':'<th style="padding:10px 8px;text-align:center">Stock</th>')
+    +'<th style="padding:10px 8px;text-align:center">Actions</th>'
+    +'</tr></thead>'
+    +'<tbody>';
+
+  items.forEach(function(item, idx){
     var bal = parseInt(item.opening_stock||0) + parseInt(item.stock_in||0) - parseInt(item.stock_out||0);
+    var stockBg = bal < 0 ? 'var(--red-bg)' : bal === 0 ? 'var(--surface2)' : 'var(--green-bg)';
     var stockColor = bal < 0 ? 'var(--red)' : bal === 0 ? 'var(--text3)' : 'var(--green)';
-    html += '<tr>'
-      +'<td><div style="font-weight:700;font-size:13px">'+item.name+'</div>'
-      +(item.description?'<div style="font-size:11px;color:var(--text3)">'+item.description+'</div>':'')
+    var rowBg = idx%2===0 ? '#fff' : 'var(--surface2)';
+
+    // Truncate long names for display
+    var dispName = item.name;
+    var dispDesc = item.description || '';
+
+    html += '<tr style="background:'+rowBg+';border-bottom:1px solid var(--border2)">'
+      // Name + description
+      +'<td style="padding:9px 12px">'
+        +'<div style="font-size:13px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+item.name+'">'+dispName+'</div>'
+        +(dispDesc?'<div style="font-size:10px;color:var(--text3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+dispDesc+'">'+dispDesc+'</div>':'')
       +'</td>'
-      +'<td style="font-size:12px;color:var(--text3)">'+( item.hsn||'–' )+'</td>'
-      +'<td style="font-size:12px">'+( item.category||'–' )+'</td>'
-      +'<td style="font-size:12px">'+( item.unit||'PCS' )+'</td>'
-      +'<td style="text-align:right;font-weight:700">'+( item.sale_price ? '₹'+parseFloat(item.sale_price).toLocaleString('en-IN') : '₹0' )+'</td>'
-      +'<td style="text-align:right;color:var(--text3)">'+( item.purchase_price ? '₹'+parseFloat(item.purchase_price).toLocaleString('en-IN') : '–' )+'</td>'
-      +'<td style="text-align:right;font-size:12px">'+( item.gst_rate ? item.gst_rate+'%' : '–' )+'</td>'
-      +(!isService ? '<td style="text-align:right;font-weight:700;color:'+stockColor+'">'+bal+'</td>' : '<td style="text-align:right;color:var(--text3)">–</td>')
-      +'<td><div style="display:flex;gap:4px">'
-      +'<button class="action-btn edit" onclick="itemOpenModal('+(isService?'true':'false')+',\''+item.id+'\')" title="Edit">✏️</button>'
-      +'<button class="action-btn" style="background:var(--red-bg);color:var(--red)" onclick="itemDelete(\''+item.id+'\')" title="Delete">🗑</button>'
-      +'</div></td>'
+      // HSN
+      +'<td style="padding:9px 8px;text-align:center">'
+        +'<span style="font-size:11px;font-family:monospace;background:var(--surface2);border:1px solid var(--border);padding:2px 6px;border-radius:4px;color:var(--text2)">'+(item.hsn||'–')+'</span>'
+      +'</td>'
+      // Category
+      +'<td style="padding:9px 8px">'
+        +(item.category?'<span style="font-size:11px;background:var(--accent-light);color:var(--accent2);padding:2px 7px;border-radius:10px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:100%">'+item.category+'</span>':'<span style="color:var(--text3);font-size:12px">–</span>')
+      +'</td>'
+      // Unit
+      +'<td style="padding:9px 8px;text-align:center;font-size:11px;font-weight:700;color:var(--text2)">'+(item.unit||'PCS')+'</td>'
+      // Sale Price
+      +'<td style="padding:9px 10px;text-align:right;font-weight:800;font-size:13px;color:var(--accent)">'+(item.sale_price?'₹'+parseFloat(item.sale_price).toLocaleString('en-IN',{minimumFractionDigits:0}):'–')+'</td>'
+      // Purchase Price
+      +'<td style="padding:9px 10px;text-align:right;font-size:12px;color:var(--text3)">'+(item.purchase_price&&parseFloat(item.purchase_price)>0?'₹'+parseFloat(item.purchase_price).toLocaleString('en-IN',{minimumFractionDigits:0}):'–')+'</td>'
+      // GST rate
+      +'<td style="padding:9px 8px;text-align:center">'
+        +(item.gst_rate>0?'<span style="font-size:11px;font-weight:700;background:var(--saffron-bg);color:var(--saffron);padding:2px 7px;border-radius:10px">'+item.gst_rate+'%</span>':'<span style="color:var(--text3);font-size:11px">0%</span>')
+      +'</td>'
+      // Stock (products only)
+      +(!isService?'<td style="padding:9px 8px;text-align:center"><span style="font-size:12px;font-weight:800;background:'+stockBg+';color:'+stockColor+';padding:2px 8px;border-radius:10px;display:inline-block;min-width:28px">'+bal+'</span></td>':'')
+      // Actions
+      +'<td style="padding:9px 8px;text-align:center">'
+        +'<div style="display:flex;gap:4px;justify-content:center">'
+        +'<button class="action-btn edit" onclick="itemOpenModal('+(isService?'true':'false')+',\''+item.id+'\')" title="Edit" style="padding:4px 8px">✏️</button>'
+        +'<button class="action-btn" style="background:var(--red-bg);color:var(--red);padding:4px 8px" onclick="itemDelete(\''+item.id+'\')" title="Delete">🗑</button>'
+        +'</div>'
+      +'</td>'
       +'</tr>';
   });
-  html += '</tbody></table></div></div>';
+
+  html += '</tbody>'
+    +'<tfoot><tr style="background:var(--surface2);border-top:1.5px solid var(--border)">'
+    +'<td colspan="'+(isService?8:9)+'" style="padding:8px 12px;font-size:12px;color:var(--text3)">'+items.length+' '+(isService?'service':'product')+(items.length===1?'':'s')+'</td>'
+    +'</tr></tfoot>'
+    +'</table></div>';
+
   el.innerHTML = html;
 }
 
