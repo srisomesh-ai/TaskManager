@@ -151,9 +151,16 @@ function getDB() {
                 customer VARCHAR(200),
                 billing_name VARCHAR(200),
                 po_no VARCHAR(100),
+                gstin VARCHAR(20),
+                gst_type VARCHAR(50),
                 state VARCHAR(100),
+                billing_address TEXT,
                 pay_mode VARCHAR(50),
                 cash_sale TINYINT(1) DEFAULT 0,
+                gst_split VARCHAR(20) DEFAULT 'GST',
+                cgst DECIMAL(12,2) DEFAULT 0,
+                sgst DECIMAL(12,2) DEFAULT 0,
+                igst DECIMAL(12,2) DEFAULT 0,
                 items_json LONGTEXT,
                 sub_total DECIMAL(12,2) DEFAULT 0,
                 discount_total DECIMAL(12,2) DEFAULT 0,
@@ -162,6 +169,7 @@ function getDB() {
                 amount_received DECIMAL(12,2) DEFAULT 0,
                 terms TEXT,
                 notes TEXT,
+                task_id_ref INT DEFAULT NULL,
                 status ENUM('draft','active','cancelled') DEFAULT 'active',
                 created_by INT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -169,7 +177,8 @@ function getDB() {
                 INDEX idx_inv_no (inv_no),
                 INDEX idx_date (date),
                 INDEX idx_type (inv_type),
-                INDEX idx_customer (customer)
+                INDEX idx_customer (customer),
+                INDEX idx_task (task_id_ref)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
             "CREATE TABLE IF NOT EXISTS inv_settings (
