@@ -620,26 +620,26 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
   <div class="main-layout">
     <div class="sidebar">
       <div class="nav-section">Main</div>
-      <div class="nav-item active" onclick="showPage('dashboard')" id="nav-dashboard"><span class="nav-icon">📊</span> Dashboard</div>
-      <div class="nav-item admin-only" onclick="showPage('tasks')" id="nav-tasks"><span class="nav-icon">📋</span> All Tasks</div>
-      <div class="nav-item" onclick="showPage('my-tasks')" id="nav-my-tasks"><span class="nav-icon">🙋</span> My Tasks</div>
-      <div class="nav-item admin-only" onclick="showPage('urgent')" id="nav-urgent"><span class="nav-icon">🚨</span> Urgent Tasks <span class="nav-badge" id="urgent-count">0</span></div>
-      <div class="nav-item admin-only" onclick="showPage('approvals')" id="nav-approvals"><span class="nav-icon">✅</span> Approvals <span class="nav-badge" id="approval-count" style="display:none;background:var(--green)">0</span></div>
+      <div class="nav-item active" href="dashboard.html" onclick="localStorage.setItem('bgps_last_page','dashboard');window.location.href='dashboard.html';return false;" id="nav-dashboard"><span class="nav-icon">📊</span> Dashboard</div>
+      <div class="nav-item admin-only" href="tasks.html" onclick="localStorage.setItem('bgps_last_page','tasks');window.location.href='tasks.html';return false;" id="nav-tasks"><span class="nav-icon">📋</span> All Tasks</div>
+      <div class="nav-item" href="my-tasks.html" onclick="localStorage.setItem('bgps_last_page','my-tasks');window.location.href='my-tasks.html';return false;" id="nav-my-tasks"><span class="nav-icon">🙋</span> My Tasks</div>
+      <div class="nav-item admin-only" href="urgent.html" onclick="localStorage.setItem('bgps_last_page','urgent');window.location.href='urgent.html';return false;" id="nav-urgent"><span class="nav-icon">🚨</span> Urgent Tasks <span class="nav-badge" id="urgent-count">0</span></div>
+      <div class="nav-item admin-only" href="approvals.html" onclick="localStorage.setItem('bgps_last_page','approvals');window.location.href='approvals.html';return false;" id="nav-approvals"><span class="nav-icon">✅</span> Approvals <span class="nav-badge" id="approval-count" style="display:none;background:var(--green)">0</span></div>
       <div class="nav-section admin-only">Reports</div>
-      <div class="nav-item admin-only" onclick="showPage('daily-report')" id="nav-daily-report"><span class="nav-icon">📅</span> Daily Report</div>
-      <div class="nav-item admin-only" onclick="showPage('balance-sheet')" id="nav-balance-sheet"><span class="nav-icon">💰</span> Balance Sheet</div>
+      <div class="nav-item admin-only" href="daily-report.html" onclick="localStorage.setItem('bgps_last_page','daily-report');window.location.href='daily-report.html';return false;" id="nav-daily-report"><span class="nav-icon">📅</span> Daily Report</div>
+      <div class="nav-item admin-only" href="balance-sheet.html" onclick="localStorage.setItem('bgps_last_page','balance-sheet');window.location.href='balance-sheet.html';return false;" id="nav-balance-sheet"><span class="nav-icon">💰</span> Balance Sheet</div>
       <div class="nav-section strict-admin-only">Accounts</div>
-      <div class="nav-item strict-admin-only" onclick="showPage('accounts')" id="nav-accounts"><span class="nav-icon">📊</span> P&amp;L Overview</div>
+      <div class="nav-item strict-admin-only" href="accounts.html" onclick="localStorage.setItem('bgps_last_page','accounts');window.location.href='accounts.html';return false;" id="nav-accounts"><span class="nav-icon">📊</span> P&amp;L Overview</div>
 
       <!-- INVOICING — admin + assigner -->
       <div class="admin-only" id="nav-exp-invoicing" style="display:none">
-        <div class="nav-item" id="nav-invoicing-head" onclick="showInvPage('sale')" style="display:flex;align-items:center;justify-content:space-between;padding-right:12px">
+        <div class="nav-item" id="nav-invoicing-head" href="invoicing.html" onclick="localStorage.setItem('bgps_last_page','invoicing');window.location.href='invoicing.html';return false;" style="display:flex;align-items:center;justify-content:space-between;padding-right:12px">
           <span><span class="nav-icon">🧾</span> Invoicing</span>
         </div>
       </div>
 
       <div class="nav-section strict-admin-only">Administration</div>
-      <div class="nav-item strict-admin-only" onclick="showPage('admin')" id="nav-admin"><span class="nav-icon">⚙️</span> Admin Panel</div>
+      <div class="nav-item strict-admin-only" href="admin.html" onclick="localStorage.setItem('bgps_last_page','admin');window.location.href='admin.html';return false;" id="nav-admin"><span class="nav-icon">⚙️</span> Admin Panel</div>
     </div>
 
     <div class="content">
@@ -1615,14 +1615,21 @@ function showPage(name, opts){
 
 // DASHBOARD
 async function loadDashboard(){
-  // All API calls in parallel — including open tasks for accurate tech counts
-  const [statsRes, urgentRes, approvalsRes, techRes, openTasksRes] = await Promise.all([
-    api('get_stats'),
-    api('get_urgent_tasks'),
-    api('get_approvals'),
-    api('get_users', {role:'technician'}),
-    api('get_tasks', {status_group:'active', limit:1000})
-  ]);
+  // All API calls in parallel — individual try/catch so one failure doesn't blank the page
+  let statsRes={}, urgentRes={}, approvalsRes={}, techRes={}, openTasksRes={};
+  try {
+    [statsRes, urgentRes, approvalsRes, techRes, openTasksRes] = await Promise.all([
+      api('get_stats'),
+      api('get_urgent_tasks'),
+      api('get_approvals'),
+      api('get_users', {role:'technician'}),
+      api('get_tasks', {limit:500})
+    ]);
+  } catch(e) {
+    console.warn('Dashboard load error:', e);
+    // Try stats alone as minimum
+    try { statsRes = await api('get_stats'); } catch(e2) {}
+  }
   const stats = statsRes.stats || {};
 
   // ── Stat cards ────────────────────────────────────────────────────────
@@ -1675,7 +1682,7 @@ async function loadDashboard(){
           <div class="appr-av">${initials}</div>
           <div style="flex:1;min-width:0">
             <div class="appr-name">${t.customer_name||'–'}</div>
-            <div class="appr-meta">${t.task_id||''} · ${t.tech_name||'Unassigned'}</div>
+            <div class="appr-meta">${t.task_id||''} · ${t.technician_name||t.tech_name||'Unassigned'}</div>
           </div>
           <div class="appr-amt">₹${parseFloat(t.price_to_collect||0).toLocaleString('en-IN')}</div>
           <button class="appr-go" onclick="viewTask(${t.id})">Review</button>
