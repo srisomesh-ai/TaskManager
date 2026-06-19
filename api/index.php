@@ -38,14 +38,6 @@ if (!in_array($action, $skipAuth)) {
 
 switch ($action) {
 
-// ---- VERIFY TOKEN ----
-case 'verify_token':
-    // Token is already validated above — if we reach here, user is authenticated
-    echo json_encode(['valid'=>true,'user'=>[
-        'id'=>$cu['id'],'name'=>$cu['name'],'role'=>$cu['role'],'email'=>$cu['email']
-    ]]);
-    break;
-
 // ---- PING ----
 case 'ping':
     echo json_encode(['ok'=>true]);
