@@ -5813,6 +5813,31 @@ document.addEventListener('DOMContentLoaded', function(){
   });
 });
 
+
+// ── Initialise ────────────────────────────────────────────────────────────
+(async function(){
+  const token = localStorage.getItem('bgps_token');
+  if(!token){ window.location.replace('index.html'); return; }
+  authToken = token;
+  let res = null;
+  for(let attempt=0; attempt<3; attempt++){
+    try{
+      res = await api('verify_token');
+      if(res && res.valid) break;
+      if(res && res.error && !res.valid){ localStorage.removeItem('bgps_token'); window.location.replace('index.html'); return; }
+    } catch(e){}
+    if(attempt < 2) await new Promise(r=>setTimeout(r,1500));
+  }
+  if(!res || !res.valid){
+    const cached = localStorage.getItem('bgps_user');
+    if(cached){ try{ res = {valid:true, user:JSON.parse(cached)}; }catch(e){} }
+  }
+  if(!res || !res.valid){ localStorage.removeItem('bgps_token'); window.location.replace('index.html'); return; }
+  currentUser = res.user;
+  localStorage.setItem('bgps_user', JSON.stringify(currentUser));
+  initApp();
+})();
+
 </script>
 <!-- ═══════════════════ SALE INVOICE MODAL ═══════════════════ -->
 <div class="modal-overlay" id="inv-sale-modal" style="display:none" onclick="closeModal(event,'inv-sale-modal')">
