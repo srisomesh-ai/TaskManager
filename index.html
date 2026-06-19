@@ -486,6 +486,10 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
   }
   .sidebar.mob-open{left:0;}
 
+  /* Main layout: content fills full width when sidebar is off-screen */
+  .main-layout{display:flex;flex-direction:column;height:calc(100vh - 56px) !important;overflow:hidden;}
+  .content{flex:1;height:0;overflow-y:auto;width:100%;}
+
   /* Content stays flex:1, just gets full width visually since sidebar is off-screen */
   .page{padding:14px 12px !important;}
 
@@ -1620,15 +1624,15 @@ function showPage(name, opts){
 
 // DASHBOARD
 async function loadDashboard(){
-  // All API calls in parallel — including open tasks for accurate tech counts
+  // All API calls in parallel — individual catch so one failure doesn't blank the page
   const [statsRes, urgentRes, approvalsRes, techRes, openTasksRes] = await Promise.all([
-    api('get_stats'),
-    api('get_urgent_tasks'),
-    api('get_approvals'),
-    api('get_users', {role:'technician'}),
-    api('get_tasks', {status_group:'active', limit:1000})
+    api('get_stats').catch(()=>({})),
+    api('get_urgent_tasks').catch(()=>({})),
+    api('get_approvals').catch(()=>({})),
+    api('get_users', {role:'technician'}).catch(()=>({})),
+    api('get_tasks', {status_group:'active', limit:1000}).catch(()=>({}))
   ]);
-  const stats = statsRes.stats || {};
+  const stats = (statsRes && statsRes.stats) || {};
 
   // ── Stat cards ────────────────────────────────────────────────────────
   const sv = (id,val) => { const e=document.getElementById(id); if(e) e.textContent=(val||0); };
@@ -1716,7 +1720,7 @@ async function loadDashboard(){
   }
 
   // ── Recent Tasks (left column) ──────────────────────────────────────
-  const recentRes = await api('get_tasks', {limit:10, sort:'newest'});
+  const recentRes = await api('get_tasks', {limit:10, sort:'newest'}).catch(()=>({}));
   const recent = (recentRes.tasks || []).slice(0,10);
   const rcEl = document.getElementById('dash-recent-tasks');
   if(rcEl){
