@@ -90,13 +90,18 @@ html,body{height:100%;font-family:'Calibri','Segoe UI',sans-serif;background:var
 
 /* LAYOUT */
 .main-layout{display:flex;flex-direction:row;flex:1;overflow:hidden;min-height:0;width:100%;}
-.sidebar{width:225px;min-width:225px;max-width:225px;background:var(--surface);border-right:2px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;padding:10px 0;}
-.nav-section{padding:14px 16px 4px;font-size:11px;font-weight:800;text-transform:uppercase;color:var(--text3);letter-spacing:1px;}
-.nav-item{display:flex;align-items:center;gap:10px;padding:11px 14px;margin:1px 7px;border-radius:var(--radius-sm);cursor:pointer;font-size:14px;font-weight:600;color:var(--text2);transition:all .15s;}
-.nav-item:hover{background:var(--accent-light);color:var(--accent2);}
-.nav-item.active{background:var(--accent-light);color:var(--accent);border-left:3px solid var(--accent);margin-left:4px;padding-left:11px;}
-.nav-icon{font-size:15px;width:20px;text-align:center;}
-.nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:10px;font-weight:800;padding:2px 6px;border-radius:10px;min-width:20px;text-align:center;}
+.sidebar{width:225px;min-width:225px;max-width:225px;background:var(--accent);border-right:none;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;padding:10px 0;box-shadow:2px 0 8px rgba(0,0,0,.18);}
+.nav-section{padding:18px 16px 6px;font-size:9px;font-weight:800;text-transform:uppercase;color:rgba(255,255,255,.35);letter-spacing:1.2px;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;margin:0;border-radius:0;cursor:pointer;font-size:12.5px;font-weight:500;color:rgba(255,255,255,.7);transition:all .15s;position:relative;}
+.nav-item:hover{background:rgba(255,255,255,.08);color:#fff;}
+.nav-item.active{background:rgba(255,255,255,.15);color:#fff;font-weight:700;}.nav-item.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:#60a5fa;border-radius:0 2px 2px 0;}
+.nav-icon{font-size:13px;width:16px;text-align:center;opacity:.8;}
+
+.sidebar-footer{margin-top:auto;padding:14px 16px;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:10px;}
+.sidebar-user-dot{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#60a5fa,#818cf8);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;flex-shrink:0;}
+.sidebar-user-name{font-size:12px;font-weight:700;color:#fff;}
+.sidebar-user-role{font-size:10px;color:rgba(255,255,255,.4);}
+.nav-badge{margin-left:auto;background:#ef4444;color:#fff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:8px;}
 
 /* CONTENT */
 .content{flex:1;min-width:0;height:0;overflow-x:hidden;overflow-y:auto;background:var(--bg);}
@@ -640,6 +645,13 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
 
       <div class="nav-section strict-admin-only">Administration</div>
       <div class="nav-item strict-admin-only" onclick="showPage('admin')" id="nav-admin"><span class="nav-icon">⚙️</span> Admin Panel</div>
+      <div class="sidebar-footer" id="sidebar-footer">
+        <div class="sidebar-user-dot" id="sidebar-avatar-sm">?</div>
+        <div>
+          <div class="sidebar-user-name" id="sidebar-user-name">–</div>
+          <div class="sidebar-user-role" id="sidebar-user-role">–</div>
+        </div>
+      </div>
     </div>
 
     <div class="content">
@@ -706,8 +718,24 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
           </div>
         </div>
 
-        <!-- 3-column panel grid -->
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+        <!-- 2-column dashboard grid -->
+        <div style="display:grid;grid-template-columns:1fr 330px;gap:16px;align-items:start">
+
+          <!-- LEFT: Recent Tasks -->
+          <div>
+            <div class="dash-card">
+              <div class="dash-card-header">
+                <div class="dash-card-title"><span class="dash-card-dot"></span> 🕐 Recent Tasks</div>
+                <button class="dash-card-btn" onclick="showPage('tasks')">View All →</button>
+              </div>
+              <div id="dash-recent-tasks"><div style="text-align:center;padding:24px;color:var(--text3);font-size:12px">⏳ Loading...</div></div>
+            </div>
+          </div>
+
+          </div><!-- /left column -->
+
+          <!-- RIGHT COLUMN -->
+          <div style="display:flex;flex-direction:column;gap:16px">
 
           <!-- Quick Actions -->
           <div class="dash-card">
@@ -760,8 +788,8 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
             </div>
           </div>
 
-          <!-- Field Technicians — spans full width for clean bottom row -->
-          <div class="dash-card" style="grid-column:1 / -1">
+          <!-- Field Technicians -->
+          <div class="dash-card">
             <div class="dash-card-header">
               <div class="dash-card-title">
                 <span class="dash-card-dot" style="background:var(--purple)"></span>
@@ -773,6 +801,7 @@ tr.row-critical{animation:flashWarning 2s ease-in-out infinite;}
             </div>
           </div>
 
+          </div><!-- /right column -->
         </div><!-- /panel grid -->
         </div><!-- /dash-grid -->
       </div>
@@ -1683,6 +1712,46 @@ async function loadDashboard(){
           <button class="action-btn view" style="margin-left:6px;flex-shrink:0" onclick="viewTask(${t.id})" title="View">👁</button>
         </div>`;
       }).join('');
+    }
+  }
+
+  // ── Recent Tasks (left column) ──────────────────────────────────────
+  const recentRes = await api('get_tasks', {limit:10, sort:'newest'});
+  const recent = (recentRes.tasks || []).slice(0,10);
+  const rcEl = document.getElementById('dash-recent-tasks');
+  if(rcEl){
+    if(!recent.length){
+      rcEl.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text3)"><div style="font-size:32px;margin-bottom:8px">📋</div><div style="font-size:14px;font-weight:600">No tasks yet</div></div>';
+    } else {
+      const statusColor = {'Open':'var(--blue)','In Progress':'var(--saffron)','Task Pending':'var(--orange)','Awaiting Approval':'var(--purple)','Closed':'var(--green)','Cancelled':'var(--text3)','Demo Sent':'var(--blue)'};
+      let rhtml = '<table style="width:100%;border-collapse:collapse">';
+      rhtml += '<thead><tr style="background:var(--surface2)">'
+        + '<th style="padding:8px 14px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left;white-space:nowrap">Task ID</th>'
+        + '<th style="padding:8px 14px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left">Customer</th>'
+        + '<th style="padding:8px 14px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left">Job Type</th>'
+        + '<th style="padding:8px 14px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left">Tech</th>'
+        + '<th style="padding:8px 14px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:right">Amount</th>'
+        + '<th style="padding:8px 14px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;text-align:left">Status</th>'
+        + '<th style="padding:8px 6px;width:36px"></th>'
+        + '</tr></thead><tbody>';
+      recent.forEach(function(t){
+        const col = statusColor[t.task_status] || 'var(--text3)';
+        const bal = parseFloat(t.price_to_collect||0) - parseFloat(t.amount_collected||0);
+        rhtml += `<tr style="border-bottom:1px solid var(--border)" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''">
+          <td style="padding:9px 14px;font-size:11px;font-weight:700;color:var(--accent2);white-space:nowrap">${t.task_id||'–'}</td>
+          <td style="padding:9px 14px;font-size:12px;font-weight:600;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.customer_name||'–'}</td>
+          <td style="padding:9px 14px;font-size:11px;color:var(--text2);white-space:nowrap">${t.device_details||'–'}</td>
+          <td style="padding:9px 14px;font-size:11px;color:var(--text2);white-space:nowrap">${t.tech_name||'–'}</td>
+          <td style="padding:9px 14px;text-align:right;white-space:nowrap">
+            <div style="font-size:12px;font-weight:700">₹${parseFloat(t.price_to_collect||0).toLocaleString('en-IN')}</div>
+            ${bal>0?`<div style="font-size:10px;color:var(--red)">₹${bal.toLocaleString('en-IN')} due</div>`:''}
+          </td>
+          <td style="padding:9px 14px"><span style="background:${col}18;color:${col};padding:3px 8px;border-radius:8px;font-size:10px;font-weight:700;white-space:nowrap">${t.task_status}</span></td>
+          <td style="padding:9px 6px;text-align:center"><button class="action-btn" onclick="viewTask(${t.id})" title="View" style="width:26px;height:26px;font-size:12px">👁</button></td>
+        </tr>`;
+      });
+      rhtml += '</tbody></table>';
+      rcEl.innerHTML = rhtml;
     }
   }
 
@@ -5894,5 +5963,6 @@ document.addEventListener('DOMContentLoaded', function(){
   <div class="mob-overlay" id="mob-overlay" onclick="closeMobNav()"></div>
   <button class="mob-nav-toggle" id="mob-nav-toggle" onclick="toggleMobNav()">☰ Menu</button>
 
+</div><!-- /app -->
 </body>
 </html>
