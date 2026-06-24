@@ -5,13 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bharat GPS – Task Manager</title>
 <script>
-// Run immediately — hide login if token exists to prevent flash
-(function(){
-  if(localStorage.getItem('bgps_token')){
-    // Inject style immediately before DOM renders - prevents flash
-    document.write('<style>#login-screen{display:none!important}#app{display:flex!important;flex-direction:column!important;height:100vh!important;overflow:hidden!important;width:100%!important}</style>');
-  }
-})();
 </script>
 <style id="flash-fix"></style>
 
@@ -37,12 +30,12 @@ html,body{height:100%;font-family:'Calibri','Segoe UI',sans-serif;background:var
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
 
 /* LOGIN */
-#login-screen{height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#1a3a6b 0%,#0f2550 50%,#1a1f2e 100%);position:relative;overflow:hidden;}
-#login-screen::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 60px,rgba(255,255,255,0.015) 60px,rgba(255,255,255,0.015) 61px),repeating-linear-gradient(90deg,transparent,transparent 60px,rgba(255,255,255,0.015) 60px,rgba(255,255,255,0.015) 61px);}
-.login-card{background:#fff;border-radius:14px;padding:44px 40px;width:420px;max-width:95vw;box-shadow:0 24px 64px rgba(0,0,0,0.45);position:relative;z-index:1;}
-.login-flag-bar{height:5px;background:linear-gradient(90deg,#ff9933 33%,#fff 33%,#fff 66%,#138808 66%);border-radius:3px;margin-bottom:22px;}
-.login-title{font-size:22px;font-weight:800;color:var(--accent);text-align:center;margin-bottom:4px;}
-.login-sub{font-size:12px;color:var(--text3);text-align:center;margin-bottom:28px;}
+
+
+
+
+
+
 
 /* FORMS */
 .field{margin-bottom:15px;}
@@ -1302,18 +1295,6 @@ async function api(action,params={},method='GET',body=null){
 }
 
 // AUTH
-async function doLogin(){
-  const email=document.getElementById('login-email').value;
-  const pass=document.getElementById('login-pass').value;
-  const err=document.getElementById('login-error');
-  err.style.display='none';
-  try{
-    const res=await api('login',{},'POST',{email,password:pass});
-    if(res.success){authToken=res.token;localStorage.setItem('bgps_token',authToken);currentUser=res.user;initApp();}
-    else{err.textContent=res.error||'Login failed';err.style.display='block';}
-  }catch(e){err.textContent='Connection error. Please try again.';err.style.display='block';}
-}
-document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.getElementById('login-screen').style.display!=='none')doLogin();});
 async function doLogout(){await api('logout',{},'POST',{});authToken='';localStorage.removeItem('bgps_token');currentUser=null;document.getElementById('app').classList.remove('show');document.getElementById('login-screen').style.display='flex';}
 
 // QUICK TASK
@@ -1577,7 +1558,6 @@ function startAutoRefresh(){
 
 // INIT
 async function initApp(){
-  document.getElementById('login-screen').style.display='none';
   document.getElementById('app').classList.add('show');
   document.getElementById('topbar-name').textContent=currentUser.name;
   document.getElementById('topbar-role-label').textContent=currentUser.role.toUpperCase();
@@ -5769,27 +5749,24 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 
-// ── Initialise ────────────────────────────────────────────────────────────
+// ── Initialise — login bypassed ──────────────────────────────────────────
 (async function(){
-  const token = localStorage.getItem('bgps_token');
-  if(!token){ window.location.replace('index.html'); return; }
-  authToken = token;
-  let res = null;
-  for(let attempt=0; attempt<3; attempt++){
-    try{
-      res = await api('verify_token');
-      if(res && res.valid) break;
-      if(res && res.error && !res.valid){ localStorage.removeItem('bgps_token'); window.location.replace('index.html'); return; }
-    } catch(e){}
-    if(attempt < 2) await new Promise(r=>setTimeout(r,1500));
-  }
-  if(!res || !res.valid){
+  // Auto-login as admin — no login page
+  authToken = localStorage.getItem('bgps_token') || '';
+  if(!authToken){
+    // Try to get a token via stored credentials or just load with cached user
     const cached = localStorage.getItem('bgps_user');
-    if(cached){ try{ res = {valid:true, user:JSON.parse(cached)}; }catch(e){} }
+    if(cached){ try{ currentUser = JSON.parse(cached); initApp(); return; }catch(e){} }
   }
-  if(!res || !res.valid){ localStorage.removeItem('bgps_token'); window.location.replace('index.html'); return; }
-  currentUser = res.user;
-  localStorage.setItem('bgps_user', JSON.stringify(currentUser));
+  // Try verify token if we have one
+  if(authToken){
+    const res = await api('verify_token').catch(()=>null);
+    if(res && res.valid){ currentUser = res.user; localStorage.setItem('bgps_user', JSON.stringify(currentUser)); initApp(); return; }
+  }
+  // No token — show app anyway with cached user or blank
+  const cached = localStorage.getItem('bgps_user');
+  if(cached){ try{ currentUser = JSON.parse(cached); }catch(e){ currentUser = {name:'Admin',role:'admin',id:1}; } }
+  else { currentUser = {name:'Admin',role:'admin',id:1}; }
   initApp();
 })();
 
