@@ -1206,20 +1206,21 @@ function exportTasksCSV(){
 // CREATE / EDIT MODAL — Full Logic
 // ════════════════════════════════════════════════════════
 
-// Job type base prices (₹)
+// Job type base prices (₹) — BGPT profile (no GST)
+// For SBGT profile: same prices + 18% GST added on top and shown as breakdown
 const JOB_PRICES = {
-  'Basic/Normal':              1200,
-  'Engine Status':             1500,
-  'Engine Cut':                2000,
-  'Micro GPS':                 1500,
-  'Magnet GPS':                1500,
-  'MIC/SOS GPS':               2000,
-  'VLTD':                      5000,
-  'Troubleshoot/Offline':       500,
-  'Vehicle to Vehicle Change':  500,
-  'Re-Adding':                  300,
-  'Only Remove':                300,
-  'Demonstration':                0,
+  'Basic/Normal':              3499,
+  'Engine Status':             3499,
+  'Engine Cut':                4499,
+  'Micro GPS':                 3499,
+  'Magnet GPS':                5999,
+  'MIC/SOS GPS':               4499,
+  'VLTD':                      9499,
+  'Troubleshoot/Offline':       300,
+  'Vehicle to Vehicle Change':  600,
+  'Re-Adding':                 1700,
+  'Only Remove':                  0,   // manual entry — no default
+  'Demonstration':                0,   // no charge
 };
 
 function setModalJobPrice(job){
@@ -1228,8 +1229,13 @@ function setModalJobPrice(job){
   const hintEl  = document.getElementById('fm-price-hint');
   if(base !== undefined && base > 0){
     priceEl.value = base;
-    if(hintEl) hintEl.textContent = '(auto from job type)';
+    if(hintEl) hintEl.textContent = '(auto-filled — BGPT price excl. GST)';
     updateModalGST();
+  } else if(base === 0){
+    priceEl.value = '';
+    if(hintEl) hintEl.textContent = '(enter manually)';
+    const gstBox = document.getElementById('fm-gst-box');
+    if(gstBox) gstBox.style.display = 'none';
   } else {
     if(hintEl) hintEl.textContent = '';
     const gstBox = document.getElementById('fm-gst-box');
@@ -1244,17 +1250,17 @@ function updateModalGST(){
   const gstBox  = document.getElementById('fm-gst-box');
   if(!gstBox) return;
   if(profile === 'SBGT' && price > 0){
-    const base    = price / 1.18;
-    const gst     = price - base;
-    const total   = price * qty;
+    // SBGT: price is BASE price, GST 18% added ON TOP
+    const gst     = price * 0.18;
+    const total   = (price + gst) * qty;
+    const totalGst = gst * qty;
     gstBox.style.display = 'block';
     gstBox.innerHTML = `
-      <div style="display:flex;justify-content:space-between"><span>Base price (excl. GST)</span><span style="font-weight:700">₹${base.toFixed(2)}</span></div>
+      <div style="display:flex;justify-content:space-between"><span>Base price (excl. GST)</span><span style="font-weight:700">₹${price.toFixed(2)}</span></div>
       <div style="display:flex;justify-content:space-between"><span>GST @ 18%</span><span style="font-weight:700;color:var(--saffron)">₹${gst.toFixed(2)}</span></div>
-      ${qty>1?`<div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:4px;margin-top:4px"><span><b>Total for ${qty} units</b></span><span style="font-weight:800;color:var(--green)">₹${total.toFixed(2)}</span></div>`:''}
+      <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:4px;margin-top:4px"><span><b>${qty>1?'Total for '+qty+' units':'Total (incl. GST)'}</b></span><span style="font-weight:800;color:var(--green)">₹${total.toFixed(2)}</span></div>
     `;
-    // Store GST amount
-    if(document.getElementById('fm-price')) document.getElementById('fm-price').dataset.gstAmount = (gst * qty).toFixed(2);
+    if(document.getElementById('fm-price')) document.getElementById('fm-price').dataset.gstAmount = totalGst.toFixed(2);
   } else {
     gstBox.style.display = 'none';
     if(document.getElementById('fm-price')) document.getElementById('fm-price').dataset.gstAmount = '0';
