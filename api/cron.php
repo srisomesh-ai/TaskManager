@@ -127,12 +127,107 @@ foreach ($unrated as $task) {
 }
 
 // ============================================================
+// JOB 3: Follow-up reminder emails to technician
+// Runs every hour — finds tasks where reminder_date = today
+// and last activity was NOT today (tech hasn't acted yet)
+// Sends reminder email to technician via Gmail SMTP
+// ============================================================
+$todayIST = $now->format('Y-m-d');
+
+$followUps = $pdo->query("
+    SELECT t.*,
+           u.name  AS tech_name,
+           u.email AS tech_email,
+           u.phone AS tech_phone,
+           (SELECT MAX(ta.created_at) FROM task_activities ta WHERE ta.task_id = t.id) AS last_activity
+    FROM tasks t
+    LEFT JOIN users u ON t.assigned_to = u.id
+    WHERE DATE(t.reminder_date) = '$todayIST'
+      AND t.task_status NOT IN ('Closed','Cancelled','Awaiting Approval')
+      AND t.assigned_to IS NOT NULL
+      AND u.email IS NOT NULL
+      AND u.email != ''
+      AND (
+          -- No activity at all today yet
+          NOT EXISTS (
+              SELECT 1 FROM task_activities ta2
+              WHERE ta2.task_id = t.id
+                AND DATE(ta2.created_at) = '$todayIST'
+          )
+          OR
+          -- Last activity was before today
+          (SELECT MAX(ta3.created_at) FROM task_activities ta3 WHERE ta3.task_id = t.id) < '$todayIST'
+      )
+      AND NOT EXISTS (
+          -- Don't send more than once today for same task
+          SELECT 1 FROM task_activities ta4
+          WHERE ta4.task_id = t.id
+            AND ta4.activity_type = 'system'
+            AND ta4.remark LIKE '%Follow-up reminder email sent%'
+            AND DATE(ta4.created_at) = '$todayIST'
+      )
+")->fetchAll();
+
+foreach ($followUps as $task) {
+
+    // Work out how long since creation
+    $createdDt  = new DateTime($task['created_at'], new DateTimeZone('Asia/Kolkata'));
+    $diffDays   = $now->diff($createdDt)->days;
+
+    // Urgency colour based on age
+    $urgColor   = $diffDays >= 3 ? '#c0392b' : ($diffDays >= 1 ? '#e07b00' : '#1a3a6b');
+    $urgLabel   = $diffDays >= 3 ? '🚨 URGENT' : ($diffDays >= 1 ? '⚠️ Follow Up' : '📋 Reminder');
+
+    $content = '
+    <div class="greeting">Hi ' . htmlspecialchars($task['tech_name']) . ',</div>
+    <p style="font-size:14px;font-weight:700;color:' . $urgColor . ';margin-bottom:14px">'
+        . $urgLabel . ' — This task needs your attention today.</p>
+    <div class="details">
+        <div class="row"><div class="label">Task ID</div><div class="value blue">' . $task['task_id'] . '</div></div>
+        <div class="row"><div class="label">Customer</div><div class="value">' . htmlspecialchars($task['customer_name']) . '</div></div>
+        <div class="row"><div class="label">Contact</div><div class="value highlight">
+            <a href="tel:' . $task['contact_number'] . '" style="color:#1a3a6b;font-size:16px;font-weight:800">'
+            . $task['contact_number'] . '</a>
+        </div></div>
+        <div class="row"><div class="label">Location</div><div class="value">' . htmlspecialchars($task['location'] ?? '–') . '</div></div>
+        <div class="row"><div class="label">Job Type</div><div class="value">' . htmlspecialchars($task['device_details'] ?? '–') . '</div></div>
+        <div class="row"><div class="label">Amount</div><div class="value highlight">₹' . number_format(floatval($task['price_to_collect']), 0) . '</div></div>
+        <div class="row"><div class="label">Status</div><div class="value">' . htmlspecialchars($task['task_status']) . '</div></div>
+        <div class="row"><div class="label">Open Since</div><div class="value" style="color:' . $urgColor . ';font-weight:700">' . $diffDays . ' day' . ($diffDays != 1 ? 's' : '') . '</div></div>
+    </div>
+    <div style="background:#fdecea;border-left:4px solid #c0392b;border-radius:6px;padding:14px;margin:16px 0">
+        <div style="font-size:13px;font-weight:800;color:#c0392b;margin-bottom:6px">Action Required Today</div>
+        <div style="font-size:13px;color:#1a1f2e">Please contact the customer, complete the job or update the task with the current status. <strong>The customer is waiting.</strong></div>
+    </div>
+    <p style="font-size:13px;color:#4a5568;margin-top:8px">Log in to the task manager to update your progress after contacting the customer.</p>
+    <p style="font-size:12px;color:#8a9ab0;margin-top:12px">This is an automated reminder triggered because this task is scheduled for follow-up today.</p>';
+
+    $sent = sendMail(
+        $task['tech_email'],
+        $task['tech_name'],
+        $urgLabel . ': Follow-up Required – ' . $task['task_id'] . ' | ' . $task['customer_name'],
+        emailTemplate($content)
+    );
+
+    if ($sent) {
+        // Log that reminder was sent so we don't double-send today
+        $pdo->prepare("INSERT INTO task_activities (task_id, user_id, remark, activity_type) VALUES (?, 1, ?, 'system')")
+            ->execute([
+                $task['id'],
+                "⏰ Follow-up reminder email sent to technician {$task['tech_name']} ({$task['tech_email']})"
+            ]);
+        $log[] = "Follow-up reminder → {$task['tech_name']} for {$task['task_id']} (open {$diffDays}d)";
+    }
+}
+
+// ============================================================
 // DONE
 // ============================================================
 echo json_encode([
-    'status'     => 'ok',
-    'time'       => $now->format('Y-m-d H:i:s'),
-    'reminders'  => count($unopen),
-    'rated'      => count($unrated),
-    'log'        => $log,
+    'status'      => 'ok',
+    'time'        => $now->format('Y-m-d H:i:s'),
+    'reminders'   => count($unopen),
+    'rated'       => count($unrated),
+    'follow_ups'  => count($followUps),
+    'log'         => $log,
 ]);
