@@ -863,52 +863,40 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
               <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--accent2);margin-bottom:8px">② How did the customer respond?</div>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" id="tu-response-cards">
 
-                <div class="tu-card" data-resp="Available — confirmed time" data-next="Will visit today" data-remind="0" data-remind-label="" onclick="selectTuCard(this)" style="border-color:#1a7a3a">
-                  <div class="tu-card-icon">🟢</div>
-                  <div class="tu-card-title">Available</div>
-                  <div class="tu-card-sub">Confirmed time & ready</div>
-                </div>
-
-                <div class="tu-card" data-resp="Come tomorrow" data-next="Visit tomorrow" data-remind="24" data-remind-label="Tomorrow 9 AM" onclick="selectTuCard(this)" style="border-color:#1a56a0">
+                <div class="tu-card" data-resp="Come tomorrow" data-next="Visit tomorrow" data-remind="24" onclick="selectTuCard(this)" style="border-color:#1a56a0">
                   <div class="tu-card-icon">📅</div>
                   <div class="tu-card-title">Come Tomorrow</div>
-                  <div class="tu-card-sub">Reminder set for tomorrow</div>
+                  <div class="tu-card-sub">Will visit tomorrow</div>
                 </div>
 
-                <div class="tu-card" data-resp="Not answering call" data-next="Retry call in 2 hours" data-remind="2" data-remind-label="In 2 hours" onclick="selectTuCard(this)" style="border-color:#c0392b">
+                <div class="tu-card" data-resp="Not answering call" data-next="Retry call in 2 hours" data-remind="2" onclick="selectTuCard(this)" style="border-color:#c0392b">
                   <div class="tu-card-icon">📵</div>
                   <div class="tu-card-title">Not Answering</div>
-                  <div class="tu-card-sub">Auto-retry in 2h</div>
+                  <div class="tu-card-sub">Retry in 2 hours</div>
                 </div>
 
-                <div class="tu-card" data-resp="Asked to call back later" data-next="Call back as requested" data-remind="4" data-remind-label="In 4 hours" onclick="selectTuCard(this)" style="border-color:#e07b00">
+                <div class="tu-card" data-resp="Asked to call back later" data-next="Call back as requested" data-remind="4" onclick="selectTuCard(this)" style="border-color:#e07b00">
                   <div class="tu-card-icon">⏰</div>
                   <div class="tu-card-title">Call Back Later</div>
                   <div class="tu-card-sub">Reminder in 4 hours</div>
                 </div>
 
-                <div class="tu-card" data-resp="Vehicle not ready" data-next="Wait for customer — vehicle not ready" data-remind="48" data-remind-label="In 2 days" onclick="selectTuCard(this)" style="border-color:#d4680a">
+                <div class="tu-card" data-resp="Vehicle not ready" data-next="Follow up when vehicle is ready" data-remind="48" onclick="selectTuCard(this)" style="border-color:#d4680a">
                   <div class="tu-card-icon">🚗</div>
                   <div class="tu-card-title">Vehicle Not Ready</div>
                   <div class="tu-card-sub">Follow up in 2 days</div>
                 </div>
 
-                <div class="tu-card" data-resp="Payment issue — will resolve" data-next="Follow up on payment" data-remind="24" data-remind-label="Tomorrow" onclick="selectTuCard(this)" style="border-color:#5b2d8e">
+                <div class="tu-card" data-resp="Payment issue — will resolve" data-next="Follow up on payment tomorrow" data-remind="24" onclick="selectTuCard(this)" style="border-color:#5b2d8e">
                   <div class="tu-card-icon">💰</div>
                   <div class="tu-card-title">Payment Issue</div>
-                  <div class="tu-card-sub">Flag & follow up tomorrow</div>
+                  <div class="tu-card-sub">Follow up tomorrow</div>
                 </div>
 
-                <div class="tu-card" data-resp="Rescheduled by customer" data-next="Visit on rescheduled date" data-remind="24" data-remind-label="Tomorrow" onclick="selectTuCard(this)" style="border-color:#0d7377">
+                <div class="tu-card" data-resp="Rescheduled by customer" data-next="Visit on rescheduled date" data-remind="24" onclick="selectTuCard(this)" style="border-color:#0d7377">
                   <div class="tu-card-icon">🗓️</div>
                   <div class="tu-card-title">Rescheduled</div>
                   <div class="tu-card-sub">New date agreed</div>
-                </div>
-
-                <div class="tu-card" data-resp="Update only — no customer interaction" data-next="" data-remind="0" data-remind-label="" onclick="selectTuCard(this)" style="border-color:#8a9ab0">
-                  <div class="tu-card-icon">📝</div>
-                  <div class="tu-card-title">Log Only</div>
-                  <div class="tu-card-sub">No customer interaction</div>
                 </div>
 
               </div>
@@ -921,16 +909,13 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
             <div id="tu-reminder-box" style="display:none;border-radius:8px;padding:12px 14px;margin-bottom:16px;border:1.5px solid var(--green);background:var(--green-bg)">
               <div style="display:flex;align-items:center;gap:10px">
                 <span style="font-size:20px">⏰</span>
-                <div style="flex:1">
-                  <div style="font-size:12px;font-weight:800;color:var(--green)">Follow-up Reminder Set</div>
-                  <div id="tu-reminder-label" style="font-size:13px;color:var(--text2);margin-top:2px">–</div>
-                </div>
                 <div>
-                  <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">Override date</label>
-                  <input type="date" id="tu-reminder-date" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;outline:none">
+                  <div style="font-size:12px;font-weight:800;color:var(--green)">Reminder Email Scheduled</div>
+                  <div id="tu-reminder-label" style="font-size:13px;color:var(--text2);margin-top:2px">–</div>
                 </div>
               </div>
             </div>
+            <input type="hidden" id="tu-reminder-date">
 
             <!-- Next step display -->
             <div id="tu-nextstep-box" style="display:none;background:var(--accent-light);border:1.5px solid var(--accent2);border-radius:8px;padding:10px 14px;margin-bottom:4px">
@@ -2369,16 +2354,17 @@ function selectTuCard(card){
   document.getElementById('tch-next-step').value  = nextStep;
   document.getElementById('tch-remind-when').value = remindHours;
 
-  // Show/update reminder box
+  // Show reminder box — no override, system handles it
   const remBox = document.getElementById('tu-reminder-box');
   const remLbl = document.getElementById('tu-reminder-label');
   const remDt  = document.getElementById('tu-reminder-date');
   if(parseInt(remindHours) > 0){
     remBox.style.display='';
-    remLbl.textContent = remindLabel + ' — tap to change date';
-    // Auto-set date
+    // Calculate and show the reminder time clearly
     const d = new Date();
     d.setHours(d.getHours() + parseInt(remindHours));
+    const opts = {weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'};
+    remLbl.textContent = 'You will get a reminder email on ' + d.toLocaleString('en-IN', opts);
     remDt.value = d.toISOString().slice(0,10);
   } else {
     remBox.style.display='none';
