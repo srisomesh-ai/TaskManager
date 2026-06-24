@@ -646,9 +646,93 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
         </div>
       </div>
       <div class="page" id="page-my-tasks">
-        <div class="pg-header"><div class="breadcrumb">Home / <b>My Tasks</b></div><div class="pg-title">🙋 My Tasks</div></div>
-        <div class="card"><div style="padding:40px;text-align:center;color:var(--text3)">Coming soon</div></div>
-      </div>
+        <div class="pg-header">
+          <div class="breadcrumb">Home / <b>My Tasks</b></div>
+          <div class="pg-title">🙋 My Tasks</div>
+          <div class="pg-sub" id="my-tasks-welcome">Your assigned tasks</div>
+        </div>
+
+        <!-- TECH STAT CARDS -->
+        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:20px" id="my-stats-grid">
+          <div class="stat-card" style="border-bottom:3px solid #e07b00" onclick="filterMyTasks('Open')">
+            <div class="stat-ghost">🔄</div>
+            <div class="stat-val" id="my-s-open">–</div>
+            <div class="stat-lbl">Open</div>
+          </div>
+          <div class="stat-card" style="border-bottom:3px solid #1a56a0" onclick="filterMyTasks('In Progress')">
+            <div class="stat-ghost">⚙️</div>
+            <div class="stat-val" id="my-s-inprog">–</div>
+            <div class="stat-lbl">In Progress</div>
+          </div>
+          <div class="stat-card" style="border-bottom:3px solid #d4680a" onclick="filterMyTasks('Task Pending')">
+            <div class="stat-ghost">⏸️</div>
+            <div class="stat-val" id="my-s-pending">–</div>
+            <div class="stat-lbl">Pending</div>
+          </div>
+          <div class="stat-card" style="border-bottom:3px solid #5b2d8e" onclick="filterMyTasks('Awaiting Approval')">
+            <div class="stat-ghost">⏳</div>
+            <div class="stat-val" id="my-s-awaiting">–</div>
+            <div class="stat-lbl">Awaiting</div>
+          </div>
+          <div class="stat-card" style="border-bottom:3px solid #1a7a3a" onclick="filterMyTasks('Closed')">
+            <div class="stat-ghost">✅</div>
+            <div class="stat-val" id="my-s-closed">–</div>
+            <div class="stat-lbl">Closed</div>
+          </div>
+          <div class="stat-card" style="border-bottom:3px solid #c0392b" onclick="filterMyTasks('')">
+            <div class="stat-ghost">📋</div>
+            <div class="stat-val" id="my-s-total">–</div>
+            <div class="stat-lbl">Total</div>
+          </div>
+        </div>
+
+        <!-- TOOLBAR -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+          <input type="text" id="my-search" class="ts-input ts-search" placeholder="🔍 Search customer, task ID, location..." oninput="renderMyTasks()">
+          <select id="my-status-filter" class="ts-input ts-select" onchange="renderMyTasks()">
+            <option value="">All Status</option>
+            <option>Open</option>
+            <option>In Progress</option>
+            <option>Task Pending</option>
+            <option>Awaiting Approval</option>
+            <option>Closed</option>
+            <option>Cancelled</option>
+          </select>
+          <button class="ts-btn ts-btn-secondary" onclick="clearMyFilters()">✕ Clear</button>
+        </div>
+
+        <!-- TASK TABLE -->
+        <div class="tasks-table-wrap">
+          <table class="tasks-table">
+            <thead>
+              <tr>
+                <th style="width:36px">#</th>
+                <th>Task ID</th>
+                <th>Customer</th>
+                <th>Contact</th>
+                <th>Location</th>
+                <th>Job Type</th>
+                <th>Price</th>
+                <th>Status</th>
+                <th>Age</th>
+                <th>Created</th>
+                <th style="width:80px">Action</th>
+              </tr>
+            </thead>
+            <tbody id="my-tasks-tbody">
+              <tr><td colspan="11" style="text-align:center;padding:40px;color:var(--text3)">Loading...</td></tr>
+            </tbody>
+          </table>
+          <div class="tbl-footer">
+            <span id="my-tasks-info">–</span>
+            <div style="display:flex;align-items:center;gap:8px">
+              <button class="pg-btn" id="my-prev" onclick="myTasksPage(-1)" disabled>← Prev</button>
+              <span id="my-page-info" style="font-size:12px;font-weight:600">Page 1</span>
+              <button class="pg-btn" id="my-next" onclick="myTasksPage(1)">Next →</button>
+            </div>
+          </div>
+        </div>
+      </div><!-- /page-my-tasks -->
       <div class="page" id="page-urgent">
         <div class="pg-header"><div class="breadcrumb">Home / <b>Urgent Tasks</b></div><div class="pg-title">🚨 Urgent Tasks</div></div>
         <div class="card"><div style="padding:40px;text-align:center;color:var(--text3)">Coming soon</div></div>
@@ -738,8 +822,9 @@ function showPage(name, opts={}){
   if(opts.status) window._taskFilter = opts.status;
   // Load page data
   const loaders = {
-    dashboard: loadDashboard,
-    tasks:     loadTasksPage,
+    dashboard:  loadDashboard,
+    tasks:      loadTasksPage,
+    'my-tasks': loadMyTasks,
   };
   if(loaders[name]) loaders[name]();
 }
@@ -765,8 +850,10 @@ function startApp(){
   const isAdmin = ['admin','assigner'].includes(currentUser.role);
   document.querySelectorAll('.admin-only').forEach(el=>el.style.display = isAdmin ? '' : 'none');
 
-  // Navigate to last page or dashboard
-  const last = localStorage.getItem('bgps_last_page') || 'dashboard';
+  // Navigate — tech goes to their own dashboard
+  const isAdmin2 = ['admin','assigner'].includes(currentUser.role);
+  const defaultPage = isAdmin2 ? 'dashboard' : 'my-tasks';
+  const last = localStorage.getItem('bgps_last_page') || defaultPage;
   showPage(last);
 }
 
@@ -1487,6 +1574,130 @@ function closeTaskModal(){
   document.getElementById('task-modal').classList.remove('open');
   document.getElementById('pay-confirm-modal').classList.remove('open');
   editingTaskId=null;
+}
+
+
+// ════════════════════════════════════════════════════════
+// MY TASKS — Technician Dashboard
+// ════════════════════════════════════════════════════════
+let myAllTasks = [], myFiltered = [], myPage = 1;
+const MY_PER_PAGE = 25;
+
+async function loadMyTasks(){
+  const tbody = document.getElementById('my-tasks-tbody');
+  if(tbody) tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading your tasks...</td></tr>';
+
+  // Welcome message
+  const welcome = document.getElementById('my-tasks-welcome');
+  if(welcome) welcome.textContent = `Tasks assigned to ${currentUser?.name||'you'}`;
+
+  // Fetch my tasks (API enforces assigned_to for technician role server-side)
+  const res = await api('get_tasks', {limit: 500}).catch(()=>({}));
+  myAllTasks = res.tasks || [];
+
+  // Fetch my stats
+  const sRes = await api('get_stats').catch(()=>({}));
+  const stats = sRes.stats || {};
+  const sv=(id,val)=>{const e=document.getElementById(id);if(e)e.textContent=(val??0);};
+  sv('my-s-open',     stats.open);
+  sv('my-s-inprog',   stats.in_progress);
+  sv('my-s-pending',  stats.task_pending);
+  sv('my-s-awaiting', stats.awaiting_approval);
+  sv('my-s-closed',   stats.closed);
+  sv('my-s-total',    stats.total);
+
+  myPage = 1;
+  renderMyTasks();
+}
+
+function filterMyTasks(status){
+  const sel = document.getElementById('my-status-filter');
+  if(sel) sel.value = status;
+  const search = document.getElementById('my-search');
+  if(search) search.value = '';
+  renderMyTasks();
+}
+
+function clearMyFilters(){
+  const sel = document.getElementById('my-status-filter');
+  if(sel) sel.value = '';
+  const search = document.getElementById('my-search');
+  if(search) search.value = '';
+  myPage = 1;
+  renderMyTasks();
+}
+
+function myTasksPage(dir){
+  const total = Math.ceil(myFiltered.length / MY_PER_PAGE);
+  myPage = Math.max(1, Math.min(total, myPage + dir));
+  renderMyTasks();
+}
+
+function renderMyTasks(){
+  const search  = (document.getElementById('my-search')?.value||'').toLowerCase();
+  const status  = document.getElementById('my-status-filter')?.value||'';
+  const tbody   = document.getElementById('my-tasks-tbody');
+  const info    = document.getElementById('my-tasks-info');
+  const pinf    = document.getElementById('my-page-info');
+  const prev    = document.getElementById('my-prev');
+  const next    = document.getElementById('my-next');
+  const openSt  = ['Open','In Progress','Task Pending'];
+
+  // Filter
+  myFiltered = myAllTasks.filter(t=>{
+    if(status && t.task_status !== status) return false;
+    if(search){
+      const hay = [(t.customer_name||''),(t.task_id||''),(t.location||''),(t.contact_number||'')].join(' ').toLowerCase();
+      if(!hay.includes(search)) return false;
+    }
+    return true;
+  });
+
+  const total = Math.ceil(myFiltered.length / MY_PER_PAGE) || 1;
+  myPage = Math.min(myPage, total);
+  const start = (myPage-1)*MY_PER_PAGE;
+  const slice = myFiltered.slice(start, start+MY_PER_PAGE);
+
+  if(info) info.textContent = myFiltered.length
+    ? `Showing ${start+1}–${Math.min(start+MY_PER_PAGE,myFiltered.length)} of ${myFiltered.length} tasks`
+    : 'No tasks found';
+  if(pinf) pinf.textContent = `Page ${myPage} of ${total}`;
+  if(prev) prev.disabled = myPage === 1;
+  if(next) next.disabled = myPage >= total;
+
+  if(!slice.length){
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:48px;color:var(--text3)">
+      <div style="font-size:36px;margin-bottom:10px">📋</div>
+      <div style="font-size:14px;font-weight:700">No tasks found</div>
+      <div style="font-size:12px;margin-top:4px">Try clearing the filters</div>
+    </td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = slice.map((t,i)=>{
+    const age      = openSt.includes(t.task_status) ? getAgeHours(t.created_at) : 0;
+    const isCrit   = age >= 48;
+    const isUrgent = age >= 24 && age < 48;
+    const rowStyle = isCrit ? 'background:#fff5f5' : isUrgent ? 'background:#fffbf0' : '';
+    const ageTxt   = isCrit  ? `<span class="age-badge" style="background:#fdecea;color:#c0392b">🚨 ${age}h</span>`
+                   : isUrgent? `<span class="age-badge" style="background:#fff3e0;color:#e07b00">⚠️ ${age}h</span>`
+                   : age > 0 ? `<span style="color:var(--text3);font-size:11px">${age}h</span>` : '–';
+    return `<tr style="border-bottom:1px solid var(--border);cursor:pointer;${rowStyle}" onclick="viewTask(${t.id})">
+      <td style="padding:9px 12px;color:var(--text3);font-size:11px">${start+i+1}</td>
+      <td style="padding:9px 12px"><span class="task-id">${t.task_id||'–'}</span></td>
+      <td style="padding:9px 12px"><div class="cust-name" style="max-width:130px">${t.customer_name||'–'}</div></td>
+      <td style="padding:9px 12px;color:var(--text2);font-size:12px">${t.contact_number||'–'}</td>
+      <td style="padding:9px 12px;color:var(--text2);font-size:12px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.location||'–'}</td>
+      <td style="padding:9px 12px;color:var(--text2);font-size:12px;white-space:nowrap">${t.device_details||'–'}</td>
+      <td style="padding:9px 12px;font-weight:700;color:var(--green);white-space:nowrap">₹${parseFloat(t.price_to_collect||0).toLocaleString('en-IN')}</td>
+      <td style="padding:9px 12px">${statusPill(t.task_status)}</td>
+      <td style="padding:9px 12px">${ageTxt}</td>
+      <td style="padding:9px 12px;color:var(--text3);font-size:11px;white-space:nowrap">${(t.created_at||'').slice(0,10)||'–'}</td>
+      <td style="padding:9px 12px">
+        <button class="act-btn act-view" onclick="viewTask(${t.id})" title="View">👁</button>
+      </td>
+    </tr>`;
+  }).join('');
 }
 
 </script>
