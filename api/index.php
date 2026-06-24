@@ -327,7 +327,24 @@ case 'update_task':
     }
     if (isset($body['task_status'])&&$body['task_status']==='Closed'&&$existing['task_status']!=='Closed') $sets[]="closed_at=NOW()";
     if ($sets) { $vals[]=$id; $pdo->prepare("UPDATE tasks SET ".implode(',',$sets)." WHERE id=?")->execute($vals); }
-    if (!empty($body['remark'])) $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'remark')")->execute([$id,$userId,$body['remark']]);
+    if (!empty($body['remark'])) {
+        $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'remark')")->execute([$id,$userId,$body['remark']]);
+        // Send email update to customer
+        try {
+            require_once __DIR__.'/mailer.php';
+            $taskForEmail = $pdo->prepare("SELECT t.*,u.name as tech_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?");
+            $taskForEmail->execute([$id]);
+            $taskData = $taskForEmail->fetch();
+            if($taskData && !empty($taskData['email'])) {
+                $updaterName = $pdo->prepare("SELECT name FROM users WHERE id=?");
+                $updaterName->execute([$userId]);
+                $updater = $updaterName->fetch();
+                sendTaskUpdateCustomer($taskData, $body['remark'], $updater['name'] ?? 'BharatGPS Team');
+            }
+        } catch(Exception $e) {
+            error_log('Update email error: ' . $e->getMessage());
+        }
+    }
     if (isset($body['task_status'])&&$body['task_status']!==$existing['task_status'])
         $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")->execute([$id,$userId,"Status: {$existing['task_status']} → {$body['task_status']}"]);
     echo json_encode(['success'=>true]);
