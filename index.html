@@ -764,6 +764,217 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
 
     </div><!-- /content -->
   </div><!-- /main-layout -->
+
+      <!-- ══════════════════ TASK DETAIL DRAWER ══════════════════ -->
+      <div id="task-detail-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:800" onclick="closeTaskDetail()"></div>
+      <div id="task-detail-drawer" style="
+        position:fixed;right:0;top:0;bottom:0;width:600px;max-width:100vw;
+        background:var(--bg);display:flex;flex-direction:column;
+        box-shadow:-8px 0 40px rgba(0,0,0,.2);z-index:900;
+        transform:translateX(100%);transition:transform .3s cubic-bezier(.4,0,.2,1)">
+
+        <!-- DRAWER HEADER -->
+        <div id="td-header" style="background:var(--accent);padding:16px 20px;display:flex;align-items:flex-start;justify-content:space-between;flex-shrink:0">
+          <div>
+            <div style="font-size:11px;color:rgba(255,255,255,.5);font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-bottom:3px">Task Details</div>
+            <div id="td-task-id" style="font-size:18px;font-weight:900;color:#fff">–</div>
+            <div id="td-customer" style="font-size:13px;color:rgba(255,255,255,.7);margin-top:2px">–</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
+            <button id="td-edit-btn" onclick="openEditFromDetail()" style="display:none;background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.3);color:#fff;padding:6px 14px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">✏️ Edit</button>
+            <button onclick="tdWhatsApp()" style="background:rgba(37,211,102,.25);border:1.5px solid rgba(37,211,102,.4);color:#fff;padding:6px 12px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">📱 WA</button>
+            <button onclick="closeTaskDetail()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:32px;height:32px;border-radius:8px;font-size:18px;cursor:pointer">✕</button>
+          </div>
+        </div>
+
+        <!-- WORKFLOW STEPPER -->
+        <div id="td-stepper" style="background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;flex-shrink:0;overflow-x:auto"></div>
+
+        <!-- BODY -->
+        <div style="flex:1;overflow-y:auto">
+
+          <!-- TECH ACTION PANEL (shown to assigned tech) -->
+          <div id="td-tech-actions" style="display:none;padding:16px 20px;border-bottom:1px solid var(--border);background:var(--surface)"></div>
+
+          <!-- TASK INFO GRID -->
+          <div style="padding:16px 20px;border-bottom:1px solid var(--border);background:var(--surface)">
+            <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--accent2);margin-bottom:12px">📋 Task Information</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px" id="td-info-grid"></div>
+          </div>
+
+          <!-- PAYMENT INFO -->
+          <div style="padding:16px 20px;border-bottom:1px solid var(--border);background:var(--surface)" id="td-payment-section">
+            <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--green);margin-bottom:12px">💰 Payment</div>
+            <div id="td-payment-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px"></div>
+          </div>
+
+          <!-- NOTES / DISCUSSION -->
+          <div style="padding:16px 20px;border-bottom:1px solid var(--border);background:var(--surface)" id="td-notes-section">
+            <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:8px">📝 Discussion & Notes</div>
+            <div id="td-notes" style="font-size:13px;color:var(--text2);line-height:1.7;white-space:pre-wrap"></div>
+          </div>
+
+          <!-- ACTIVITY LOG (remarks history) -->
+          <div style="padding:16px 20px;background:var(--surface)" id="td-activity-section">
+            <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:12px">🕐 Activity Log</div>
+            <div id="td-activity"></div>
+          </div>
+
+        </div><!-- /body -->
+
+        <!-- FOOTER (admin actions) -->
+        <div id="td-admin-footer" style="display:none;padding:14px 20px;border-top:1px solid var(--border);background:var(--surface);display:flex;gap:8px;flex-wrap:wrap;flex-shrink:0"></div>
+
+      </div><!-- /task-detail-drawer -->
+
+      <!-- TECH UPDATE MODAL -->
+      <div class="modal-overlay" id="tech-update-modal" style="z-index:1000">
+        <div style="background:var(--surface);border-radius:12px;width:480px;max-width:calc(100vw - 32px);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.25)">
+          <div style="background:var(--accent);padding:14px 18px;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+            <div style="font-size:14px;font-weight:800;color:#fff" id="tech-update-title">📞 Call / Visit Update</div>
+            <button onclick="closeTechUpdate()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:28px;height:28px;border-radius:6px;font-size:16px;cursor:pointer">✕</button>
+          </div>
+          <div style="padding:18px;overflow-y:auto;flex:1">
+            <input type="hidden" id="tech-update-task-id">
+            <div class="form-group" style="margin-bottom:12px">
+              <label>What was discussed with the customer? *</label>
+              <textarea id="tch-discussed" rows="3" placeholder="e.g. Called customer, confirmed time at 3 PM. Vehicle is at workshop..."></textarea>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Customer Response</label>
+                <select id="tch-cust-resp">
+                  <option value="">Select</option>
+                  <option>Available — confirmed time</option>
+                  <option>Not available — rescheduled</option>
+                  <option>Not answering call</option>
+                  <option>Asked to call back later</option>
+                  <option>Vehicle not ready</option>
+                  <option>Payment issue — will resolve</option>
+                  <option>Already done — update only</option>
+                  <option>Other</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Next Step</label>
+                <select id="tch-next-step">
+                  <option value="">Not decided</option>
+                  <option>Will visit today</option>
+                  <option>Will visit tomorrow</option>
+                  <option>Waiting for customer</option>
+                  <option>Customer will call back</option>
+                  <option>Ready for installation</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom:12px">
+              <label>What did you tell the customer?</label>
+              <textarea id="tch-told" rows="2" placeholder="e.g. Will visit by 3 PM today..."></textarea>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Follow-up reminder in</label>
+                <select id="tch-remind-when">
+                  <option value="">No reminder</option>
+                  <option value="1">1 hour</option>
+                  <option value="2">2 hours</option>
+                  <option value="4">4 hours</option>
+                  <option value="24">Tomorrow</option>
+                  <option value="48">In 2 days</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Reason for follow-up</label>
+                <input type="text" id="tch-remind-reason" placeholder="e.g. Customer will confirm">
+              </div>
+            </div>
+          </div>
+          <div style="padding:14px 18px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;flex-shrink:0">
+            <button class="ts-btn ts-btn-secondary" onclick="closeTechUpdate()">Cancel</button>
+            <button class="ts-btn ts-btn-primary" onclick="submitTechUpdate()">💾 Save Update</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TECH ATTEND MODAL (installation / service flow) -->
+      <div class="modal-overlay" id="tech-attend-modal" style="z-index:1000">
+        <div style="background:var(--surface);border-radius:12px;width:500px;max-width:calc(100vw - 32px);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.25)">
+          <div style="background:linear-gradient(135deg,#1a7a3a,#22c55e);padding:14px 18px;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+            <div>
+              <div style="font-size:14px;font-weight:800;color:#fff" id="attend-title">🔧 Attend Task</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px" id="attend-subtitle">Complete the installation</div>
+            </div>
+            <button onclick="closeTechAttend()" style="background:rgba(255,255,255,.2);border:none;color:#fff;width:28px;height:28px;border-radius:6px;font-size:16px;cursor:pointer">✕</button>
+          </div>
+          <div style="padding:18px;overflow-y:auto;flex:1">
+            <input type="hidden" id="attend-task-id">
+
+            <!-- Step indicator inside attend modal -->
+            <div style="background:var(--surface2);border-radius:8px;padding:12px 14px;margin-bottom:16px">
+              <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">YOU ARE ATTENDING:</div>
+              <div id="attend-task-summary" style="font-size:13px;font-weight:700;color:var(--text)"></div>
+            </div>
+
+            <div class="form-group" style="margin-bottom:12px">
+              <label>What work was done? *</label>
+              <textarea id="attend-work-done" rows="3" placeholder="e.g. GPS device installed successfully. IMEI: 123456789. Device added to server..."></textarea>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>GPS Serial No. / IMEI</label>
+                <input type="text" id="attend-imei" placeholder="IMEI or Serial number">
+              </div>
+              <div class="form-group">
+                <label>Server Name</label>
+                <input type="text" id="attend-server" placeholder="e.g. S1, S2, S3">
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom:12px">
+              <label>Name on Server</label>
+              <input type="text" id="attend-server-name" placeholder="Customer/vehicle name as added on server">
+            </div>
+
+            <!-- Payment collection -->
+            <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:14px;margin-bottom:12px">
+              <div style="font-size:12px;font-weight:800;color:var(--green);margin-bottom:10px">💰 Payment Collection</div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Amount Collected (₹)</label>
+                  <input type="number" id="attend-amount" placeholder="0" min="0" oninput="updateAttendBalance()">
+                </div>
+                <div class="form-group">
+                  <label>Payment Mode</label>
+                  <select id="attend-pay-mode">
+                    <option value="">Select</option>
+                    <option>Cash</option>
+                    <option>UPI</option>
+                    <option>Bank Transfer</option>
+                    <option>Cheque</option>
+                  </select>
+                </div>
+              </div>
+              <div id="attend-balance-line" style="font-size:12px;color:var(--text2);margin-top:6px"></div>
+            </div>
+
+            <div class="form-group">
+              <label>Additional Remarks</label>
+              <textarea id="attend-remarks" rows="2" placeholder="Any issues, observations, or follow-up needed..."></textarea>
+            </div>
+
+            <!-- Submit action -->
+            <div style="background:var(--accent-light);border:1.5px solid var(--accent);border-radius:8px;padding:12px 14px;margin-top:12px">
+              <div style="font-size:11px;font-weight:700;color:var(--accent2);margin-bottom:6px">AFTER SUBMITTING:</div>
+              <div style="font-size:12px;color:var(--text2)">Task will move to <strong>Awaiting Approval</strong> for manager review. You cannot edit after submission.</div>
+            </div>
+          </div>
+          <div style="padding:14px 18px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;flex-shrink:0">
+            <button class="ts-btn ts-btn-secondary" onclick="closeTechAttend()">Cancel</button>
+            <button class="ts-btn ts-btn-primary" onclick="submitTechAttend()" style="background:var(--green)">✅ Submit & Request Approval</button>
+          </div>
+        </div>
+      </div>
 </div><!-- /app -->
 
 <button class="mob-nav-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
@@ -1726,6 +1937,452 @@ function renderMyTasks(){
       </td>
     </tr>`;
   }).join('');
+}
+
+
+// ════════════════════════════════════════════════════════
+// TASK DETAIL DRAWER — Professional View
+// ════════════════════════════════════════════════════════
+let _detailTask = null;
+
+function openTaskDetail(id){ viewTask(id); }
+
+async function viewTask(id){
+  // Show overlay + drawer
+  const overlay = document.getElementById('task-detail-overlay');
+  const drawer  = document.getElementById('task-detail-drawer');
+  if(overlay) overlay.style.display = 'block';
+  if(drawer)  drawer.style.transform = 'translateX(0)';
+
+  // Show loading state
+  document.getElementById('td-task-id').textContent   = 'Loading...';
+  document.getElementById('td-customer').textContent  = '';
+  document.getElementById('td-stepper').innerHTML     = '';
+  document.getElementById('td-info-grid').innerHTML   = '<div style="color:var(--text3);font-size:13px;padding:10px 0">⏳ Loading task...</div>';
+  document.getElementById('td-tech-actions').style.display = 'none';
+  document.getElementById('td-activity').innerHTML    = '';
+  const adFooter = document.getElementById('td-admin-footer');
+  if(adFooter) adFooter.style.display = 'none';
+
+  // Fetch task
+  const res = await api('get_task', {id}).catch(()=>({}));
+  const t   = res.task || res;
+  if(!t || !t.id){
+    document.getElementById('td-info-grid').innerHTML = '<div style="color:var(--red);padding:10px 0">Task not found.</div>';
+    return;
+  }
+  _detailTask = t;
+
+  const isAdmin    = ['admin','assigner'].includes(currentUser?.role);
+  const isTech     = currentUser?.role === 'technician';
+  const isAssigned = String(t.assigned_to) === String(currentUser?.id);
+  const isLocked   = ['Awaiting Approval','Closed','Cancelled'].includes(t.task_status);
+
+  // ── HEADER ────────────────────────────────────────────
+  document.getElementById('td-task-id').textContent  = t.task_id || '–';
+  document.getElementById('td-customer').textContent = (t.customer_name||'–') + '  ·  ' + (t.contact_number||'');
+
+  // Edit button — admin only
+  const editBtn = document.getElementById('td-edit-btn');
+  if(editBtn) editBtn.style.display = isAdmin ? '' : 'none';
+
+  // ── WORKFLOW STEPPER ───────────────────────────────────
+  const steps = ['Open','In Progress','Task Pending','Awaiting Approval','Closed'];
+  const stepIdx = steps.indexOf(t.task_status);
+  const cancelled = t.task_status === 'Cancelled';
+  document.getElementById('td-stepper').innerHTML = `
+    <div style="display:flex;align-items:center;gap:0;overflow-x:auto;padding-bottom:2px">
+      ${cancelled
+        ? '<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;color:var(--text3)">❌ Task Cancelled</div>'
+        : steps.map((s,i)=>{
+            const done   = i < stepIdx;
+            const active = i === stepIdx;
+            const color  = active ? 'var(--accent)' : done ? 'var(--green)' : 'var(--text3)';
+            const bg     = active ? 'var(--accent)' : done ? 'var(--green)' : 'var(--surface2)';
+            const txtCol = (active || done) ? '#fff' : 'var(--text3)';
+            return `<div style="display:flex;align-items:center;flex-shrink:0">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+                <div style="width:28px;height:28px;border-radius:50%;background:${bg};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:${txtCol}">${done?'✓':i+1}</div>
+                <div style="font-size:9px;font-weight:700;color:${color};white-space:nowrap;max-width:70px;text-align:center;line-height:1.2">${s}</div>
+              </div>
+              ${i<steps.length-1?`<div style="width:30px;height:2px;background:${done?'var(--green)':'var(--border)'};margin:0 2px;margin-bottom:12px;flex-shrink:0"></div>`:''}
+            </div>`;
+          }).join('')
+      }
+    </div>
+  `;
+
+  // ── TASK INFO GRID ─────────────────────────────────────
+  const infoItems = [
+    ['👤 Assigned To',    t.tech_name || t.technician_name || '<span style="color:var(--text3)">Unassigned</span>'],
+    ['🔧 Job Type',       t.device_details || '–'],
+    ['📍 Location',       t.location || '–'],
+    ['📊 Lead Type',      t.lead_type || '–'],
+    ['🏢 Profile',        t.profile || 'BGPT'],
+    ['📅 Created',        (t.created_at||'').slice(0,10) || '–'],
+    ['⏰ Reminder',       t.reminder_date || '–'],
+    ['🔢 Device Qty',     t.device_qty || 1],
+  ];
+  if(t.is_outstation){
+    infoItems.push(['📍 Outstation', t.outstation_location || 'Yes']);
+  }
+  if(t.is_urgent){
+    infoItems.push(['🚨 Urgent', '<span style="color:var(--red);font-weight:700">Yes — Marked Urgent</span>']);
+  }
+  if(t.gps_serial_no){
+    infoItems.push(['📡 GPS Serial', t.gps_serial_no]);
+    infoItems.push(['🖥 Server', t.server_name||'–']);
+    infoItems.push(['📝 Name on Server', t.name_on_server||'–']);
+  }
+
+  document.getElementById('td-info-grid').innerHTML = infoItems.map(([label,val])=>`
+    <div style="background:var(--surface2);border-radius:6px;padding:10px 12px">
+      <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">${label}</div>
+      <div style="font-size:13px;font-weight:600;color:var(--text)">${val}</div>
+    </div>
+  `).join('');
+
+  // ── PAYMENT ────────────────────────────────────────────
+  const price  = parseFloat(t.price_to_collect||0);
+  const coll   = parseFloat(t.amount_collected||0);
+  const bal    = price - coll;
+  const payCol = bal > 0 ? 'var(--red)' : 'var(--green)';
+  document.getElementById('td-payment-grid').innerHTML = `
+    <div style="background:var(--surface2);border-radius:6px;padding:10px 12px">
+      <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Price</div>
+      <div style="font-size:16px;font-weight:900;color:var(--text)">₹${price.toLocaleString('en-IN')}</div>
+    </div>
+    <div style="background:var(--surface2);border-radius:6px;padding:10px 12px">
+      <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Collected</div>
+      <div style="font-size:16px;font-weight:900;color:var(--green)">₹${coll.toLocaleString('en-IN')}</div>
+    </div>
+    <div style="background:var(--surface2);border-radius:6px;padding:10px 12px">
+      <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Balance</div>
+      <div style="font-size:16px;font-weight:900;color:${payCol}">₹${bal.toLocaleString('en-IN')}</div>
+    </div>
+  `;
+  if(t.payment_mode){
+    document.getElementById('td-payment-grid').innerHTML += `
+      <div style="grid-column:1/-1;background:var(--surface2);border-radius:6px;padding:8px 12px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">Payment Mode</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">💳 ${t.payment_mode}</div>
+      </div>
+    `;
+  }
+
+  // ── NOTES ──────────────────────────────────────────────
+  const notes = t.general_notes || t.remark || '';
+  const notesEl = document.getElementById('td-notes');
+  if(notesEl) notesEl.textContent = notes || 'No notes added.';
+  const notesSec = document.getElementById('td-notes-section');
+  if(notesSec) notesSec.style.display = '';
+
+  // ── ACTIVITY LOG ───────────────────────────────────────
+  const activityEl = document.getElementById('td-activity');
+  if(activityEl){
+    const logs = t.remarks_log || t.activity_log || [];
+    if(!logs.length){
+      activityEl.innerHTML = `<div style="color:var(--text3);font-size:12px;padding:8px 0">No activity recorded yet.</div>`;
+    } else {
+      activityEl.innerHTML = logs.slice().reverse().map(log=>`
+        <div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+          <div style="width:32px;height:32px;border-radius:50%;background:var(--accent-light);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0">👤</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:700;color:var(--text)">${log.remark||log.note||log.text||''}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:3px">${log.created_by_name||log.by||''} · ${(log.created_at||'').slice(0,16).replace('T',' ')}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+  }
+
+  // ── TECH ACTION PANEL ──────────────────────────────────
+  const techPanel = document.getElementById('td-tech-actions');
+  if(isTech && isAssigned){
+    techPanel.style.display = '';
+    if(isLocked){
+      const lockMsg = {
+        'Awaiting Approval':'⏳ Awaiting manager approval — no edits allowed',
+        'Closed':'✅ Task closed',
+        'Cancelled':'❌ Task cancelled'
+      }[t.task_status] || '🔒 Locked';
+      techPanel.innerHTML = `
+        <div style="background:${t.task_status==='Closed'?'var(--green-bg)':'var(--surface2)'};border:1.5px solid ${t.task_status==='Closed'?'var(--green)':'var(--border)'};border-radius:8px;padding:14px;text-align:center">
+          <div style="font-size:24px;margin-bottom:6px">${t.task_status==='Closed'?'✅':t.task_status==='Awaiting Approval'?'⏳':'🔒'}</div>
+          <div style="font-size:13px;font-weight:800;color:${t.task_status==='Closed'?'var(--green)':'var(--text2)'}">${lockMsg}</div>
+        </div>
+      `;
+    } else {
+      techPanel.innerHTML = `
+        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--accent2);margin-bottom:12px">⚡ Actions</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <button onclick="openTechUpdate(${t.id})" style="background:var(--surface2);border:2px solid var(--accent);border-radius:10px;padding:16px 12px;text-align:center;cursor:pointer;transition:all .15s" onmouseover="this.style.background='var(--accent-light)'" onmouseout="this.style.background='var(--surface2)'">
+            <div style="font-size:28px;margin-bottom:6px">📞</div>
+            <div style="font-size:14px;font-weight:800;color:var(--accent)">Update</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:3px">Call log & next step</div>
+          </button>
+          <button onclick="openTechAttend(${t.id})" style="background:var(--accent);border:none;border-radius:10px;padding:16px 12px;text-align:center;cursor:pointer;transition:opacity .15s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+            <div style="font-size:28px;margin-bottom:6px">🔧</div>
+            <div style="font-size:14px;font-weight:800;color:#fff">Attend</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:3px">${t.device_details||'Start task'}</div>
+          </button>
+        </div>
+      `;
+    }
+  } else {
+    techPanel.style.display = 'none';
+  }
+
+  // ── ADMIN FOOTER ───────────────────────────────────────
+  if(isAdmin && !isLocked){
+    adFooter.style.display = 'flex';
+    adFooter.innerHTML = `
+      <button onclick="adminApproveTask(${t.id})" class="ts-btn" style="background:var(--green);color:#fff">✅ Approve & Close</button>
+      <button onclick="adminRejectTask(${t.id})" class="ts-btn" style="background:var(--red-bg);color:var(--red);border:1.5px solid var(--red)">❌ Reject</button>
+      <button onclick="adminCancelTask(${t.id})" class="ts-btn ts-btn-secondary">🚫 Cancel Task</button>
+    `;
+  } else if(isAdmin && t.task_status === 'Awaiting Approval'){
+    adFooter.style.display = 'flex';
+    adFooter.innerHTML = `
+      <button onclick="adminApproveTask(${t.id})" class="ts-btn" style="background:var(--green);color:#fff">✅ Approve & Close</button>
+      <button onclick="adminRejectTask(${t.id})" class="ts-btn" style="background:var(--red-bg);color:var(--red);border:1.5px solid var(--red)">❌ Send Back</button>
+    `;
+  }
+}
+
+function closeTaskDetail(){
+  const overlay = document.getElementById('task-detail-overlay');
+  const drawer  = document.getElementById('task-detail-drawer');
+  if(overlay) overlay.style.display = 'none';
+  if(drawer)  drawer.style.transform = 'translateX(100%)';
+  _detailTask = null;
+}
+
+function openEditFromDetail(){
+  if(!_detailTask) return;
+  closeTaskDetail();
+  // Open in the create/edit drawer
+  setTimeout(()=> {
+    editingTaskId = null;
+    viewTaskInEditDrawer(_detailTask.id);
+  }, 320);
+}
+
+function tdWhatsApp(){
+  if(!_detailTask) return;
+  const phone = (_detailTask.contact_number||'').replace(/\D/g,'');
+  const msg   = encodeURIComponent(`Hello ${_detailTask.customer_name}, this is regarding your GPS task ${_detailTask.task_id}. Please let us know if you need any assistance.`);
+  window.open(`https://wa.me/91${phone}?text=${msg}`, '_blank');
+}
+
+async function viewTaskInEditDrawer(id){
+  const res = await api('get_task',{id}).catch(()=>({}));
+  const t   = res.task||res;
+  if(!t||!t.id) return;
+  const isAdmin = ['admin','assigner'].includes(currentUser?.role);
+
+  editingTaskId = t.id;
+  document.getElementById('task-modal-title').textContent = `Edit — ${t.task_id||''}`;
+  document.getElementById('fm-task-id').value = t.id;
+
+  const sf=(id,val)=>{const el=document.getElementById(id);if(el)el.value=val??'';};
+  sf('fm-customer',t.customer_name); sf('fm-contact',t.contact_number);
+  sf('fm-email',t.email); sf('fm-location',t.location);
+  sf('fm-price',t.price_to_collect); sf('fm-notes',t.general_notes||t.remark||'');
+  sf('fm-reminder',t.reminder_date); sf('fm-qty',t.device_qty||1);
+  sf('fm-outstation-loc',t.outstation_location);
+  sf('fm-travel-amt',t.outstation_customer_travel_amount);
+  sf('fm-paymode',t.payment_mode||''); sf('fm-pay-reminder',t.payment_reminder_date||'');
+
+  const sel=(id,val)=>{const el=document.getElementById(id);if(el)el.value=val||'';};
+  sel('fm-leadtype',t.lead_type); sel('fm-profile',t.profile||'BGPT');
+  sel('fm-job',t.device_details); sel('fm-travel-by',t.outstation_travel_paid_by);
+
+  const ck=(id,val)=>{const el=document.getElementById(id);if(el)el.checked=!!val;};
+  ck('fm-urgent',t.is_urgent); ck('fm-outstation',t.is_outstation);
+
+  if(t.payment_mode){
+    const cEl=document.getElementById('fm-pay-confirmed');
+    const cTxt=document.getElementById('fm-pay-confirmed-txt');
+    if(cEl) cEl.style.display='flex';
+    if(cTxt) cTxt.textContent=`${t.payment_mode} — ₹${parseFloat(t.price_to_collect||0).toLocaleString('en-IN')}`;
+  }
+
+  handleTechChange(); toggleModalOutstation(); toggleModalTravelAmt(); updateModalGST();
+  await _fillTechDropdown('fm-tech',t.assigned_to);
+  handleTechChange();
+
+  _setDrawerMode('edit', isAdmin);
+  document.getElementById('task-modal').classList.add('open');
+}
+
+// ── TECH UPDATE MODAL ─────────────────────────────────────────────────────
+function openTechUpdate(taskId){
+  document.getElementById('tech-update-task-id').value = taskId;
+  ['tch-discussed','tch-told','tch-remind-reason'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  ['tch-cust-resp','tch-next-step','tch-remind-when'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.selectedIndex=0;
+  });
+  document.getElementById('tech-update-modal').classList.add('open');
+}
+
+function closeTechUpdate(){
+  document.getElementById('tech-update-modal').classList.remove('open');
+}
+
+async function submitTechUpdate(){
+  const taskId    = document.getElementById('tech-update-task-id').value;
+  const discussed = document.getElementById('tch-discussed').value.trim();
+  if(!discussed){ alert('Please describe what was discussed.'); return; }
+
+  const custResp   = document.getElementById('tch-cust-resp').value;
+  const told       = document.getElementById('tch-told').value.trim();
+  const remindWhen = document.getElementById('tch-remind-when').value;
+  const remindReason= document.getElementById('tch-remind-reason').value.trim();
+  const nextStep   = document.getElementById('tch-next-step').value;
+
+  const parts = ['📞 ' + discussed];
+  if(custResp)    parts.push('Customer: ' + custResp);
+  if(told)        parts.push('Told customer: ' + told);
+  if(nextStep)    parts.push('Next step: ' + nextStep);
+  if(remindWhen)  parts.push('Follow-up in ' + remindWhen + 'h' + (remindReason ? ': ' + remindReason : ''));
+
+  const body = { id: taskId, remark: parts.join(' | ') };
+  if(remindWhen){
+    const d = new Date(); d.setHours(d.getHours() + parseInt(remindWhen));
+    body.reminder_date = d.toISOString().split('T')[0];
+  }
+
+  const res = await api('update_task',{},'POST',body).catch(()=>({}));
+  if(res.success){
+    closeTechUpdate();
+    await viewTask(taskId); // Refresh detail view
+    if(typeof renderMyTasks === 'function') renderMyTasks();
+  } else {
+    alert(res.error || 'Update failed.');
+  }
+}
+
+// ── TECH ATTEND MODAL ─────────────────────────────────────────────────────
+function openTechAttend(taskId){
+  document.getElementById('attend-task-id').value = taskId;
+  ['attend-work-done','attend-imei','attend-server','attend-server-name','attend-remarks'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  const amtEl = document.getElementById('attend-amount'); if(amtEl) amtEl.value='';
+  const modeEl = document.getElementById('attend-pay-mode'); if(modeEl) modeEl.selectedIndex=0;
+  document.getElementById('attend-balance-line').textContent='';
+
+  // Fill task summary
+  if(_detailTask){
+    const price = parseFloat(_detailTask.price_to_collect||0);
+    const coll  = parseFloat(_detailTask.amount_collected||0);
+    const bal   = price - coll;
+    document.getElementById('attend-task-summary').innerHTML =
+      `${_detailTask.task_id} · ${_detailTask.customer_name} · ${_detailTask.device_details||''}<br>` +
+      `<span style="color:var(--red);font-weight:700">₹${bal.toLocaleString('en-IN')} balance due</span>`;
+    document.getElementById('attend-title').textContent = '🔧 ' + (_detailTask.device_details||'Attend Task');
+    document.getElementById('attend-subtitle').textContent = _detailTask.customer_name + ' · ' + (_detailTask.location||'');
+    if(amtEl) amtEl.placeholder = `Max: ₹${bal.toLocaleString('en-IN')}`;
+    updateAttendBalance();
+  }
+
+  document.getElementById('tech-attend-modal').classList.add('open');
+}
+
+function closeTechAttend(){
+  document.getElementById('tech-attend-modal').classList.remove('open');
+}
+
+function updateAttendBalance(){
+  if(!_detailTask) return;
+  const price  = parseFloat(_detailTask.price_to_collect||0);
+  const coll   = parseFloat(_detailTask.amount_collected||0);
+  const nowColl = parseFloat(document.getElementById('attend-amount')?.value||0);
+  const totalColl = coll + nowColl;
+  const bal   = price - totalColl;
+  const el    = document.getElementById('attend-balance-line');
+  if(el) el.innerHTML = bal > 0
+    ? `<span style="color:var(--red)">₹${bal.toLocaleString('en-IN')} still due after this collection</span>`
+    : `<span style="color:var(--green)">✅ Fully paid</span>`;
+}
+
+async function submitTechAttend(){
+  const taskId   = document.getElementById('attend-task-id').value;
+  const workDone = document.getElementById('attend-work-done').value.trim();
+  if(!workDone){ alert('Please describe what work was done.'); return; }
+
+  const imei       = document.getElementById('attend-imei').value.trim();
+  const server     = document.getElementById('attend-server').value.trim();
+  const serverName = document.getElementById('attend-server-name').value.trim();
+  const amount     = parseFloat(document.getElementById('attend-amount').value||0);
+  const payMode    = document.getElementById('attend-pay-mode').value;
+  const remarks    = document.getElementById('attend-remarks').value.trim();
+
+  const parts = ['🔧 Work done: ' + workDone];
+  if(imei)   parts.push('GPS IMEI: ' + imei);
+  if(server) parts.push('Server: ' + server);
+  if(serverName) parts.push('Name on server: ' + serverName);
+  if(remarks) parts.push('Note: ' + remarks);
+
+  const body = {
+    id:           taskId,
+    task_status:  'Awaiting Approval',
+    remark:       parts.join(' | '),
+    gps_serial_no: imei||null,
+    server_name:  server||null,
+    name_on_server: serverName||null,
+    amount_collected: amount > 0 ? ((parseFloat(_detailTask?.amount_collected||0)) + amount) : undefined,
+  };
+
+  if(amount > 0 && payMode){
+    await api('add_payment',{},'POST',{
+      task_id: taskId,
+      amount,
+      payment_mode: payMode,
+    }).catch(()=>{});
+  }
+
+  const res = await api('update_task',{},'POST',body).catch(()=>({}));
+  if(res.success){
+    closeTechAttend();
+    await viewTask(taskId);
+    if(typeof renderMyTasks === 'function') renderMyTasks();
+  } else {
+    alert(res.error || 'Submit failed. Please try again.');
+  }
+}
+
+// ── ADMIN ACTIONS ─────────────────────────────────────────────────────────
+async function adminApproveTask(taskId){
+  if(!confirm('Approve and close this task?')) return;
+  const res = await api('approve_task',{},'POST',{id:taskId}).catch(()=>({}));
+  if(res.success){
+    closeTaskDetail();
+    if(typeof loadTasks==='function') loadTasks();
+    if(typeof loadDashboard==='function') loadDashboard();
+  } else { alert(res.error||'Error'); }
+}
+
+async function adminRejectTask(taskId){
+  const reason = prompt('Reason for rejection (sent back to technician):');
+  if(!reason) return;
+  const res = await api('update_task',{},'POST',{id:taskId,task_status:'In Progress',remark:'❌ Rejected: '+reason}).catch(()=>({}));
+  if(res.success){
+    closeTaskDetail();
+    if(typeof loadTasks==='function') loadTasks();
+  } else { alert(res.error||'Error'); }
+}
+
+async function adminCancelTask(taskId){
+  if(!confirm('Cancel this task? This cannot be undone.')) return;
+  const res = await api('update_task',{},'POST',{id:taskId,task_status:'Cancelled',remark:'🚫 Cancelled by admin'}).catch(()=>({}));
+  if(res.success){
+    closeTaskDetail();
+    if(typeof loadTasks==='function') loadTasks();
+  } else { alert(res.error||'Error'); }
 }
 
 </script>
