@@ -1274,6 +1274,75 @@ function enableEditMode(){
 
 function openCreateModal(){ alert('Create task — coming in All Tasks page build.'); }
 
+// ── Render Activity Log ───────────────────────────────────────────────────
+function renderActivityLog(activities){
+  const el = document.getElementById('td-activity');
+  if(!el) return;
+
+  if(!activities || !activities.length){
+    el.innerHTML = `
+      <div style="text-align:center;padding:20px 0;color:var(--text3)">
+        <div style="font-size:28px;margin-bottom:6px">📋</div>
+        <div style="font-size:12px">No activity yet — updates will appear here</div>
+      </div>`;
+    return;
+  }
+
+  // Show newest first
+  const sorted = [...activities].reverse();
+
+  const typeConfig = {
+    'remark':        { icon:'💬', color:'var(--accent)',  bg:'var(--accent-light)' },
+    'status_change': { icon:'🔄', color:'var(--green)',   bg:'var(--green-bg)' },
+    'payment':       { icon:'💰', color:'var(--saffron)', bg:'var(--saffron-bg)' },
+    'default':       { icon:'📝', color:'var(--text3)',   bg:'var(--surface2)' },
+  };
+
+  el.innerHTML = sorted.map((log, idx)=>{
+    const type   = log.activity_type || 'remark';
+    const cfg    = typeConfig[type] || typeConfig.default;
+    const name   = log.user_name || 'System';
+    const initials = name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    const dt     = (log.created_at||'').slice(0,16).replace('T', ' at ');
+    const isNew  = idx === 0;
+
+    // Parse remark for structured display
+    const remark = log.remark || '';
+    let remarkHtml = '';
+    if(remark.includes(' | ')){
+      // Structured remark from tech update
+      const parts = remark.split(' | ');
+      remarkHtml = parts.map((p,i)=>`
+        <div style="font-size:${i===0?'13px':'12px'};${i===0?'font-weight:700;color:var(--text)':'color:var(--text2);margin-top:3px'}">${p}</div>
+      `).join('');
+    } else {
+      remarkHtml = `<div style="font-size:13px;font-weight:600;color:var(--text)">${remark}</div>`;
+    }
+
+    return `
+      <div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);${isNew?'animation:pgFadeIn .3s ease':''}">
+        <div style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:4px">
+          <div style="width:34px;height:34px;border-radius:50%;background:${cfg.bg};border:2px solid ${cfg.color};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:${cfg.color}">
+            ${initials || cfg.icon}
+          </div>
+          ${idx < sorted.length-1 ? `<div style="width:2px;flex:1;background:var(--border);border-radius:1px;min-height:12px"></div>` : ''}
+        </div>
+        <div style="flex:1;min-width:0;padding-top:4px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <span style="font-size:11px;font-weight:800;color:${cfg.color}">${name}</span>
+            ${isNew?'<span style="background:'+cfg.bg+';color:'+cfg.color+';font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px">NEW</span>':''}
+            <span style="font-size:10px;color:var(--text3);margin-left:auto;white-space:nowrap">${dt}</span>
+          </div>
+          <div style="background:var(--surface2);border-radius:6px;padding:8px 10px;border-left:3px solid ${cfg.color}">
+            ${remarkHtml}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+
 // ── INIT ──────────────────────────────────────────────────────────────────
 (async function(){
   const token = localStorage.getItem('bgps_token');
@@ -2077,24 +2146,8 @@ async function viewTask(id){
   const notesSec = document.getElementById('td-notes-section');
   if(notesSec) notesSec.style.display = '';
 
-  // ── ACTIVITY LOG ───────────────────────────────────────
-  const activityEl = document.getElementById('td-activity');
-  if(activityEl){
-    const logs = t.remarks_log || t.activity_log || [];
-    if(!logs.length){
-      activityEl.innerHTML = `<div style="color:var(--text3);font-size:12px;padding:8px 0">No activity recorded yet.</div>`;
-    } else {
-      activityEl.innerHTML = logs.slice().reverse().map(log=>`
-        <div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
-          <div style="width:32px;height:32px;border-radius:50%;background:var(--accent-light);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0">👤</div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:12px;font-weight:700;color:var(--text)">${log.remark||log.note||log.text||''}</div>
-            <div style="font-size:10px;color:var(--text3);margin-top:3px">${log.created_by_name||log.by||''} · ${(log.created_at||'').slice(0,16).replace('T',' ')}</div>
-          </div>
-        </div>
-      `).join('');
-    }
-  }
+  // ── ACTIVITY LOG — uses t.activities from API ────────────
+  renderActivityLog(t.activities || []);
 
   // ── TECH ACTION PANEL ──────────────────────────────────
   const techPanel = document.getElementById('td-tech-actions');
@@ -2255,10 +2308,14 @@ async function submitTechUpdate(){
     body.reminder_date = d.toISOString().split('T')[0];
   }
 
+  const btn = document.querySelector('#tech-update-modal .ts-btn-primary');
+  if(btn){ btn.textContent='Saving…'; btn.disabled=true; }
   const res = await api('update_task',{},'POST',body).catch(()=>({}));
+  if(btn){ btn.textContent='💾 Save Update'; btn.disabled=false; }
   if(res.success){
     closeTechUpdate();
-    await viewTask(taskId); // Refresh detail view
+    // Refresh the detail drawer — reload task and re-render activity log
+    await viewTask(taskId);
     if(typeof renderMyTasks === 'function') renderMyTasks();
   } else {
     alert(res.error || 'Update failed.');
@@ -2345,7 +2402,10 @@ async function submitTechAttend(){
     }).catch(()=>{});
   }
 
+  const btn2 = document.querySelector('#tech-attend-modal .ts-btn-primary');
+  if(btn2){ btn2.textContent='Submitting…'; btn2.disabled=true; }
   const res = await api('update_task',{},'POST',body).catch(()=>({}));
+  if(btn2){ btn2.textContent='✅ Submit & Request Approval'; btn2.disabled=false; }
   if(res.success){
     closeTechAttend();
     await viewTask(taskId);
