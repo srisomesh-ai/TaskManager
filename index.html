@@ -157,6 +157,63 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
   .dash-grid{grid-template-columns:1fr}
   .page{padding:14px 14px}
 }
+
+/* ── TASKS PAGE ── */
+.tasks-toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;align-items:center}
+.ts-input{padding:8px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;background:var(--surface);color:var(--text);outline:none;transition:border .2s}
+.ts-input:focus{border-color:var(--accent2)}
+.ts-search{width:220px}
+.ts-select{min-width:130px;cursor:pointer}
+.ts-btn{padding:8px 14px;border-radius:7px;border:none;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+.ts-btn-primary{background:var(--accent);color:#fff}
+.ts-btn-primary:hover{background:var(--accent2)}
+.ts-btn-secondary{background:var(--surface2);color:var(--text2);border:1.5px solid var(--border)}
+.ts-btn-secondary:hover{background:var(--border)}
+.ts-btn-green{background:var(--green);color:#fff}
+.ts-spacer{flex:1}
+.tasks-table-wrap{overflow-x:auto;border-radius:8px;box-shadow:var(--shadow)}
+.tasks-table{width:100%;border-collapse:collapse;background:var(--surface);font-size:12.5px;min-width:900px}
+.tasks-table thead th{padding:10px 12px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;text-align:left;white-space:nowrap;position:sticky;top:0;z-index:2}
+.tasks-table tbody tr{cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s}
+.tasks-table tbody tr:hover{background:var(--surface2)}
+.tasks-table tbody td{padding:9px 12px;vertical-align:middle}
+.tasks-table tbody tr.row-critical{background:#fff5f5}
+.tasks-table tbody tr.row-critical:hover{background:#ffe8e8}
+.tasks-table tbody tr.row-urgent{background:#fffbf0}
+.tasks-table tbody tr.row-urgent:hover{background:#fff3d0}
+.task-id{font-weight:800;color:var(--accent2);white-space:nowrap}
+.cust-name{font-weight:700;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.status-pill{display:inline-block;padding:3px 9px;border-radius:8px;font-size:10px;font-weight:800;white-space:nowrap}
+.pay-pill{display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700}
+.age-badge{display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700}
+.tbl-actions{display:flex;gap:4px;justify-content:flex-end}
+.act-btn{width:28px;height:28px;border:none;border-radius:5px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:opacity .15s}
+.act-btn:hover{opacity:.75}
+.act-view{background:var(--blue-bg);color:var(--blue)}
+.act-edit{background:var(--saffron-bg);color:var(--saffron)}
+.act-wa{background:var(--green-bg);color:var(--green)}
+.act-del{background:var(--red-bg);color:var(--red)}
+.tbl-footer{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--border);background:var(--surface);border-radius:0 0 8px 8px;font-size:12px;color:var(--text3)}
+.pg-btn{padding:5px 12px;border:1.5px solid var(--border);border-radius:5px;background:var(--surface);cursor:pointer;font-size:12px;font-weight:700}
+.pg-btn:hover:not(:disabled){background:var(--accent-light);color:var(--accent2);border-color:var(--accent2)}
+.pg-btn:disabled{opacity:.4;cursor:default}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal-box{background:var(--surface);border-radius:12px;width:90%;max-width:680px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.2)}
+.modal-hd{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
+.modal-title{font-size:16px;font-weight:800;color:var(--text)}
+.modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3);line-height:1}
+.modal-body{padding:20px;overflow-y:auto;flex:1}
+.modal-ft{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;flex-shrink:0}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.form-row.full{grid-template-columns:1fr}
+.form-group label{display:block;font-size:11px;font-weight:700;color:var(--text3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;background:var(--surface);color:var(--text);outline:none;transition:border .2s;font-family:inherit}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--accent2)}
+.form-group textarea{resize:vertical;min-height:70px}
+.section-hd{font-size:11px;font-weight:800;text-transform:uppercase;color:var(--text3);letter-spacing:.6px;margin:16px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
 </style>
 </head>
 <body>
@@ -349,8 +406,156 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
 
       <!-- OTHER PAGES (placeholders — built next) -->
       <div class="page" id="page-tasks">
-        <div class="pg-header"><div class="breadcrumb">Home / <b>All Tasks</b></div><div class="pg-title">📋 All Tasks</div></div>
-        <div class="card"><div style="padding:40px;text-align:center;color:var(--text3)">Coming soon — building next</div></div>
+        <div class="pg-header">
+          <div class="breadcrumb">Home / <b>All Tasks</b></div>
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div class="pg-title">📋 All Tasks</div>
+            <button class="ts-btn ts-btn-primary admin-only" onclick="openCreateModal()">➕ New Task</button>
+          </div>
+        </div>
+
+        <!-- TOOLBAR -->
+        <div class="tasks-toolbar">
+          <input type="text" id="ts-search" class="ts-input ts-search" placeholder="🔍 Search customer, task ID, location..." oninput="filterTasks()">
+          <select id="ts-status" class="ts-input ts-select" onchange="filterTasks()">
+            <option value="">All Status</option>
+            <option>Open</option>
+            <option>In Progress</option>
+            <option>Task Pending</option>
+            <option>Awaiting Approval</option>
+            <option>Demo Sent</option>
+            <option>Closed</option>
+            <option>Cancelled</option>
+            <option>Re-Adding</option>
+          </select>
+          <select id="ts-tech" class="ts-input ts-select" onchange="filterTasks()">
+            <option value="">All Technicians</option>
+          </select>
+          <input type="date" id="ts-from" class="ts-input" onchange="filterTasks()" title="From date">
+          <input type="date" id="ts-to" class="ts-input" onchange="filterTasks()" title="To date">
+          <button class="ts-btn ts-btn-secondary" onclick="clearTaskFilters()">✕ Clear</button>
+          <div class="ts-spacer"></div>
+          <button class="ts-btn ts-btn-green admin-only" onclick="exportTasksCSV()">⬇ Export CSV</button>
+        </div>
+
+        <!-- TABLE -->
+        <div class="tasks-table-wrap">
+          <table class="tasks-table">
+            <thead>
+              <tr>
+                <th style="width:36px">#</th>
+                <th>Task ID</th>
+                <th>Customer</th>
+                <th>Contact</th>
+                <th>Location</th>
+                <th>Job Type</th>
+                <th>Assigned To</th>
+                <th>Price</th>
+                <th>Payment</th>
+                <th>Status</th>
+                <th>Age</th>
+                <th>Created</th>
+                <th style="width:100px">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tasks-tbody">
+              <tr><td colspan="13" style="text-align:center;padding:40px;color:var(--text3)">Loading tasks...</td></tr>
+            </tbody>
+          </table>
+          <div class="tbl-footer">
+            <span id="tasks-info">–</span>
+            <div style="display:flex;align-items:center;gap:8px">
+              <button class="pg-btn" id="tasks-prev" onclick="tasksPage(-1)" disabled>← Prev</button>
+              <span id="tasks-page-info" style="font-size:12px;font-weight:600">Page 1</span>
+              <button class="pg-btn" id="tasks-next" onclick="tasksPage(1)">Next →</button>
+            </div>
+          </div>
+        </div>
+      </div><!-- /page-tasks -->
+
+      <!-- CREATE / EDIT TASK MODAL -->
+      <div class="modal-overlay" id="task-modal">
+        <div class="modal-box">
+          <div class="modal-hd">
+            <div class="modal-title" id="task-modal-title">New Task</div>
+            <button class="modal-close" onclick="closeTaskModal()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Customer Name *</label>
+                <input type="text" id="fm-customer" placeholder="Full name">
+              </div>
+              <div class="form-group">
+                <label>Contact Number *</label>
+                <input type="tel" id="fm-contact" placeholder="Mobile number">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Location</label>
+                <input type="text" id="fm-location" placeholder="City / Area">
+              </div>
+              <div class="form-group">
+                <label>Job Type</label>
+                <select id="fm-job">
+                  <option value="Basic/Normal">Basic/Normal GPS</option>
+                  <option value="Engine Cut">Engine Cut GPS</option>
+                  <option value="Micro GPS">Micro GPS</option>
+                  <option value="MIC/SOS GPS">MIC/SOS GPS</option>
+                  <option value="Magnet GPS">Magnet GPS</option>
+                  <option value="VLTD">VLTD</option>
+                  <option value="Troubleshoot/Offline">Troubleshoot/Offline</option>
+                  <option value="Engine Status">Engine Status</option>
+                  <option value="Only Remove">Only Remove</option>
+                  <option value="Re-Adding">Re-Adding</option>
+                  <option value="Vehicle to Vehicle Change">Vehicle to Vehicle Change</option>
+                  <option value="Demonstration">Demonstration</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Assigned Technician</label>
+                <select id="fm-tech">
+                  <option value="">Unassigned</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Status</label>
+                <select id="fm-status">
+                  <option>Open</option>
+                  <option>In Progress</option>
+                  <option>Task Pending</option>
+                  <option>Demo Sent</option>
+                  <option>Awaiting Approval</option>
+                  <option>Closed</option>
+                  <option>Cancelled</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Price to Collect (₹)</label>
+                <input type="number" id="fm-price" placeholder="0" min="0">
+              </div>
+              <div class="form-group">
+                <label>Amount Collected (₹)</label>
+                <input type="number" id="fm-collected" placeholder="0" min="0">
+              </div>
+            </div>
+            <div class="form-row full">
+              <div class="form-group">
+                <label>Notes</label>
+                <textarea id="fm-notes" placeholder="Any additional notes..."></textarea>
+              </div>
+            </div>
+          </div>
+          <div class="modal-ft">
+            <button class="ts-btn ts-btn-secondary" onclick="closeTaskModal()">Cancel</button>
+            <button class="ts-btn ts-btn-primary" id="task-save-btn" onclick="saveTask()">💾 Save Task</button>
+          </div>
+        </div>
       </div>
       <div class="page" id="page-my-tasks">
         <div class="pg-header"><div class="breadcrumb">Home / <b>My Tasks</b></div><div class="pg-title">🙋 My Tasks</div></div>
@@ -446,6 +651,7 @@ function showPage(name, opts={}){
   // Load page data
   const loaders = {
     dashboard: loadDashboard,
+    tasks:     loadTasksPage,
   };
   if(loaders[name]) loaders[name]();
 }
@@ -647,6 +853,297 @@ function openCreateModal(){ alert('Create task — coming in All Tasks page buil
     document.addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
   }
 })();
+
+// ════════════════════════════════════════════════════════
+// ALL TASKS
+// ════════════════════════════════════════════════════════
+let allTasks = [], filteredTasks = [], taskCurrentPage = 1;
+const TASKS_PER_PAGE = 25;
+let editingTaskId = null;
+
+async function loadTasksPage(){
+  const tbody = document.getElementById('tasks-tbody');
+  tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading...</td></tr>';
+  // Populate tech filter
+  const tRes = await api('get_users',{role:'technician'}).catch(()=>({}));
+  const techs = tRes.users || [];
+  const techSel = document.getElementById('ts-tech');
+  if(techSel && techSel.options.length <= 1){
+    techs.forEach(t=>{ const o=document.createElement('option'); o.value=t.id; o.textContent=t.name; techSel.appendChild(o); });
+  }
+  // Apply any pending filter from stat card click
+  if(window._taskFilter){
+    const s = document.getElementById('ts-status');
+    if(s) s.value = window._taskFilter;
+    window._taskFilter = null;
+  }
+  await loadTasks();
+}
+
+async function loadTasks(){
+  const tbody = document.getElementById('tasks-tbody');
+  const res = await api('get_tasks', buildTaskParams()).catch(()=>({}));
+  allTasks = res.tasks || [];
+  filteredTasks = allTasks;
+  taskCurrentPage = 1;
+  renderTasksTable();
+}
+
+function buildTaskParams(){
+  const p = {};
+  const s  = document.getElementById('ts-search')?.value?.trim();
+  const st = document.getElementById('ts-status')?.value;
+  const te = document.getElementById('ts-tech')?.value;
+  const df = document.getElementById('ts-from')?.value;
+  const dt = document.getElementById('ts-to')?.value;
+  if(s)  p.search    = s;
+  if(st) p.status    = st;
+  if(te) p.technician= te;
+  if(df) p.date_from = df;
+  if(dt) p.date_to   = dt;
+  return p;
+}
+
+function filterTasks(){
+  const search = (document.getElementById('ts-search')?.value||'').toLowerCase();
+  const status = document.getElementById('ts-status')?.value||'';
+  const tech   = document.getElementById('ts-tech')?.value||'';
+  filteredTasks = allTasks.filter(t=>{
+    if(status && t.task_status !== status) return false;
+    if(tech   && String(t.assigned_to) !== String(tech)) return false;
+    if(search){
+      const hay = [(t.customer_name||''),(t.task_id||''),(t.location||''),(t.contact_number||''),(t.device_details||'')].join(' ').toLowerCase();
+      if(!hay.includes(search)) return false;
+    }
+    return true;
+  });
+  taskCurrentPage = 1;
+  renderTasksTable();
+}
+
+function clearTaskFilters(){
+  ['ts-search','ts-status','ts-tech','ts-from','ts-to'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.value='';
+  });
+  filteredTasks = allTasks;
+  taskCurrentPage = 1;
+  renderTasksTable();
+}
+
+function tasksPage(dir){
+  const total = Math.ceil(filteredTasks.length / TASKS_PER_PAGE);
+  taskCurrentPage = Math.max(1, Math.min(total, taskCurrentPage + dir));
+  renderTasksTable();
+}
+
+function getAgeHours(createdAt){
+  if(!createdAt) return 0;
+  return Math.floor((Date.now() - new Date(createdAt).getTime()) / 3600000);
+}
+
+function statusPill(s){
+  const map = {
+    'Open':              'background:#fff3e0;color:#e07b00',
+    'In Progress':       'background:#e8f0fb;color:#1a56a0',
+    'Task Pending':      'background:#fff0e0;color:#d4680a',
+    'Awaiting Approval': 'background:#f0eaf8;color:#5b2d8e',
+    'Demo Sent':         'background:#e8f0fb;color:#1a56a0',
+    'Closed':            'background:#e8f5ec;color:#1a7a3a',
+    'Cancelled':         'background:#f0f2f5;color:#8a9ab0',
+    'Re-Adding':         'background:#fff3e0;color:#e07b00',
+  };
+  const style = map[s] || 'background:#f0f2f5;color:#8a9ab0';
+  return `<span class="status-pill" style="${style}">${s}</span>`;
+}
+
+function payPill(t){
+  const price = parseFloat(t.price_to_collect||0);
+  const coll  = parseFloat(t.amount_collected||0);
+  if(price === 0) return '<span class="pay-pill" style="background:#f0f2f5;color:#8a9ab0">–</span>';
+  if(coll >= price) return '<span class="pay-pill" style="background:#e8f5ec;color:#1a7a3a">✅ Paid</span>';
+  if(coll > 0) return `<span class="pay-pill" style="background:#fff3e0;color:#e07b00">Partial</span>`;
+  return '<span class="pay-pill" style="background:#fdecea;color:#c0392b">Unpaid</span>';
+}
+
+function renderTasksTable(){
+  const tbody = document.getElementById('tasks-tbody');
+  const info  = document.getElementById('tasks-info');
+  const pinf  = document.getElementById('tasks-page-info');
+  const prev  = document.getElementById('tasks-prev');
+  const next  = document.getElementById('tasks-next');
+  const isAdmin = ['admin','assigner'].includes(currentUser?.role);
+  const openSt  = ['Open','In Progress','Task Pending'];
+  const start   = (taskCurrentPage-1)*TASKS_PER_PAGE;
+  const slice   = filteredTasks.slice(start, start+TASKS_PER_PAGE);
+  const total   = Math.ceil(filteredTasks.length/TASKS_PER_PAGE)||1;
+
+  if(info) info.textContent = filteredTasks.length
+    ? `Showing ${start+1}–${Math.min(start+TASKS_PER_PAGE,filteredTasks.length)} of ${filteredTasks.length} tasks`
+    : 'No tasks found';
+  if(pinf) pinf.textContent = `Page ${taskCurrentPage} of ${total}`;
+  if(prev) prev.disabled = taskCurrentPage===1;
+  if(next) next.disabled = taskCurrentPage>=total;
+
+  if(!slice.length){
+    tbody.innerHTML = `<tr><td colspan="13" style="text-align:center;padding:48px;color:var(--text3)">
+      <div style="font-size:36px;margin-bottom:10px">📋</div>
+      <div style="font-size:14px;font-weight:700">No tasks found</div>
+      <div style="font-size:12px;margin-top:4px">Try clearing the filters</div>
+    </td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = slice.map((t,i)=>{
+    const age       = openSt.includes(t.task_status) ? getAgeHours(t.created_at) : 0;
+    const isCrit    = age>=48;
+    const isUrgent  = age>=24 && age<48;
+    const rowStyle  = isCrit ? 'background:#fff5f5' : isUrgent ? 'background:#fffbf0' : '';
+    const ageTxt    = isCrit  ? `<span class="age-badge" style="background:#fdecea;color:#c0392b">🚨 ${age}h</span>`
+                    : isUrgent? `<span class="age-badge" style="background:#fff3e0;color:#e07b00">⚠️ ${age}h</span>`
+                    : age>0   ? `<span style="color:var(--text3);font-size:11px">${age}h</span>` : '–';
+    return `<tr style="border-bottom:1px solid var(--border);cursor:pointer;${rowStyle}" onclick="viewTask(${t.id})">
+      <td style="color:var(--text3);font-size:11px;padding:9px 12px">${start+i+1}</td>
+      <td style="padding:9px 12px"><span class="task-id">${t.task_id||'–'}</span></td>
+      <td style="padding:9px 12px"><div class="cust-name">${t.customer_name||'–'}</div></td>
+      <td style="padding:9px 12px;color:var(--text2);font-size:12px">${t.contact_number||'–'}</td>
+      <td style="padding:9px 12px;color:var(--text2);font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.location||'–'}</td>
+      <td style="padding:9px 12px;color:var(--text2);font-size:12px;white-space:nowrap">${t.device_details||'–'}</td>
+      <td style="padding:9px 12px;font-size:12px">${t.tech_name||t.technician_name||'<span style="color:var(--text3)">Unassigned</span>'}</td>
+      <td style="padding:9px 12px;font-weight:700;color:var(--green);white-space:nowrap">₹${parseFloat(t.price_to_collect||0).toLocaleString('en-IN')}</td>
+      <td style="padding:9px 12px">${payPill(t)}</td>
+      <td style="padding:9px 12px">${statusPill(t.task_status)}</td>
+      <td style="padding:9px 12px">${ageTxt}</td>
+      <td style="padding:9px 12px;color:var(--text3);font-size:11px;white-space:nowrap">${(t.created_at||'').slice(0,10)||'–'}</td>
+      <td style="padding:9px 12px" onclick="event.stopPropagation()">
+        <div class="tbl-actions">
+          <button class="act-btn act-view" onclick="viewTask(${t.id})" title="View">👁</button>
+          ${isAdmin?`<button class="act-btn act-edit" onclick="openEditModal(${t.id})" title="Edit">✏️</button>`:''}
+          <button class="act-btn act-wa" onclick="quickWA('${t.contact_number}','${t.task_id}','${t.customer_name}')" title="WhatsApp">📱</button>
+          ${isAdmin?`<button class="act-btn act-del" onclick="deleteTask(${t.id},'${t.task_id}')" title="Delete">🗑</button>`:''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ── View Task (opens detail) ──────────────────────────────────────────────
+async function viewTask(id){
+  const res = await api('get_task',{id}).catch(()=>({}));
+  const t   = res.task || res;
+  if(!t || !t.id){ alert('Task not found.'); return; }
+  const isAdmin = ['admin','assigner'].includes(currentUser?.role);
+  const modal = document.getElementById('task-modal');
+  document.getElementById('task-modal-title').textContent = `Task ${t.task_id||''}`;
+  document.getElementById('fm-customer').value   = t.customer_name  || '';
+  document.getElementById('fm-contact').value    = t.contact_number || '';
+  document.getElementById('fm-location').value   = t.location       || '';
+  document.getElementById('fm-price').value      = t.price_to_collect || '';
+  document.getElementById('fm-collected').value  = t.amount_collected  || '';
+  document.getElementById('fm-notes').value      = t.general_notes  || '';
+  const jobSel = document.getElementById('fm-job');
+  if(jobSel) jobSel.value = t.device_details || '';
+  const stSel = document.getElementById('fm-status');
+  if(stSel) stSel.value = t.task_status || 'Open';
+  editingTaskId = t.id;
+  modal.classList.add('open');
+  // Disable editing for non-admins
+  ['fm-customer','fm-contact','fm-location','fm-job','fm-status','fm-price','fm-collected','fm-notes'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.disabled = !isAdmin;
+  });
+  document.getElementById('task-save-btn').style.display = isAdmin ? '' : 'none';
+}
+
+// ── Create Modal ──────────────────────────────────────────────────────────
+function openCreateModal(){
+  editingTaskId = null;
+  document.getElementById('task-modal-title').textContent = 'New Task';
+  ['fm-customer','fm-contact','fm-location','fm-price','fm-collected','fm-notes'].forEach(id=>{
+    const el=document.getElementById(id); if(el){ el.value=''; el.disabled=false; }
+  });
+  const jobSel=document.getElementById('fm-job'); if(jobSel){jobSel.value='Basic/Normal';jobSel.disabled=false;}
+  const stSel=document.getElementById('fm-status'); if(stSel){stSel.value='Open';stSel.disabled=false;}
+  // Fill tech dropdown
+  const techSel=document.getElementById('fm-tech');
+  if(techSel && techSel.options.length<=1){
+    api('get_users',{role:'technician'}).then(r=>{
+      (r.users||[]).forEach(t=>{ const o=document.createElement('option');o.value=t.id;o.textContent=t.name;techSel.appendChild(o); });
+    });
+  }
+  document.getElementById('task-save-btn').style.display='';
+  document.getElementById('task-modal').classList.add('open');
+}
+
+function openEditModal(id){
+  viewTask(id);
+}
+
+function closeTaskModal(){
+  document.getElementById('task-modal').classList.remove('open');
+  editingTaskId = null;
+}
+
+// ── Save Task ─────────────────────────────────────────────────────────────
+async function saveTask(){
+  const btn = document.getElementById('task-save-btn');
+  const customer = document.getElementById('fm-customer').value.trim();
+  const contact  = document.getElementById('fm-contact').value.trim();
+  if(!customer||!contact){ alert('Customer name and contact are required.'); return; }
+  btn.textContent='Saving…'; btn.disabled=true;
+  const payload = {
+    customer_name:    customer,
+    contact_number:   contact,
+    location:         document.getElementById('fm-location').value.trim(),
+    device_details:   document.getElementById('fm-job').value,
+    task_status:      document.getElementById('fm-status').value,
+    price_to_collect: document.getElementById('fm-price').value||0,
+    amount_collected: document.getElementById('fm-collected').value||0,
+    general_notes:    document.getElementById('fm-notes').value.trim(),
+    assigned_to:      document.getElementById('fm-tech')?.value||null,
+  };
+  if(editingTaskId) payload.id = editingTaskId;
+  const action = editingTaskId ? 'update_task' : 'create_task';
+  const res = await api(action,{},'POST',payload).catch(()=>({}));
+  btn.textContent='💾 Save Task'; btn.disabled=false;
+  if(res.success||res.id||res.task_id){
+    closeTaskModal();
+    loadTasks();
+  } else {
+    alert(res.error||'Save failed. Please try again.');
+  }
+}
+
+// ── Delete Task ───────────────────────────────────────────────────────────
+async function deleteTask(id, taskId){
+  if(!confirm(`Delete task ${taskId}? This cannot be undone.`)) return;
+  const res = await api('delete_task',{},'POST',{id}).catch(()=>({}));
+  if(res.success) loadTasks();
+  else alert(res.error||'Delete failed.');
+}
+
+// ── Quick WhatsApp ────────────────────────────────────────────────────────
+function quickWA(phone, taskId, name){
+  const msg = encodeURIComponent(`Hello ${name}, this is regarding your task ${taskId} at BharatGPS. Please let us know if you need any assistance.`);
+  window.open(`https://wa.me/91${phone.replace(/\D/g,'')}?text=${msg}`, '_blank');
+}
+
+// ── Export CSV ────────────────────────────────────────────────────────────
+function exportTasksCSV(){
+  const headers = ['#','Task ID','Customer','Contact','Location','Job Type','Tech','Price','Collected','Status','Created'];
+  const rows = filteredTasks.map((t,i)=>[
+    i+1, t.task_id, t.customer_name, t.contact_number, t.location||'',
+    t.device_details||'', t.tech_name||t.technician_name||'',
+    t.price_to_collect||0, t.amount_collected||0, t.task_status,
+    (t.created_at||'').slice(0,10)
+  ]);
+  const csv = [headers,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `tasks-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
 </script>
 </body>
 </html>
