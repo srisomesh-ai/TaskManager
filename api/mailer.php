@@ -213,3 +213,73 @@ function sendTaskClosedCustomer(array $task): void {
         emailTemplate($content)
     );
 }
+
+// ---- TASK UPDATE — Customer Email (sent every time tech logs an update) ----
+function sendTaskUpdateCustomer(array $task, string $remark, string $techName): void {
+    if (!$task['email']) return;
+
+    // Parse structured remark (parts joined by ' | ')
+    $parts = explode(' | ', $remark);
+    $mainRemark = trim(ltrim($parts[0], '📞🔧 '));
+
+    // Build update detail rows
+    $detailRows = '';
+    foreach($parts as $i => $part) {
+        $part = trim($part);
+        if(!$part) continue;
+        if($i === 0) continue; // main remark shown separately
+        // Parse key: value format
+        if(strpos($part, ': ') !== false){
+            [$key, $val] = explode(': ', $part, 2);
+            $detailRows .= '<div class="row"><div class="label">' . htmlspecialchars(trim($key)) . '</div><div class="value">' . htmlspecialchars(trim($val)) . '</div></div>';
+        }
+    }
+
+    // Status badge
+    $statusColors = [
+        'Open'              => '#e07b00',
+        'In Progress'       => '#1a56a0',
+        'Task Pending'      => '#d4680a',
+        'Awaiting Approval' => '#5b2d8e',
+        'Closed'            => '#1a7a3a',
+        'Cancelled'         => '#8a9ab0',
+    ];
+    $statusColor = $statusColors[$task['task_status']] ?? '#1a3a6b';
+    $statusHtml = '<span style="background:' . $statusColor . '22;color:' . $statusColor . ';padding:3px 10px;border-radius:4px;font-size:13px;font-weight:700">' . htmlspecialchars($task['task_status']) . '</span>';
+
+    $content = '
+    <div class="greeting">Dear ' . htmlspecialchars($task['customer_name']) . ',</div>
+    <p style="font-size:14px;color:#4a5568;margin-bottom:16px">Your service request <strong style="color:#1a3a6b">' . $task['task_id'] . '</strong> has been updated by your technician.</p>
+    <hr class="divider">
+
+    <!-- Update Summary Box -->
+    <div style="background:#e8eef8;border-left:4px solid #1a3a6b;border-radius:8px;padding:16px;margin-bottom:16px">
+        <div style="font-size:11px;font-weight:700;color:#4a5568;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">📋 Update from Technician</div>
+        <div style="font-size:15px;font-weight:700;color:#1a1f2e;line-height:1.5">' . htmlspecialchars($mainRemark) . '</div>
+        ' . ($techName ? '<div style="font-size:12px;color:#4a5568;margin-top:6px">— ' . htmlspecialchars($techName) . '</div>' : '') . '
+    </div>
+
+    <!-- Detail rows if present -->
+    ' . ($detailRows ? '<div class="details">' . $detailRows . '</div>' : '') . '
+
+    <!-- Task Status -->
+    <div class="details">
+        <div class="row"><div class="label">Task ID</div><div class="value blue">' . $task['task_id'] . '</div></div>
+        <div class="row"><div class="label">Service</div><div class="value">' . htmlspecialchars($task['device_details'] ?: 'GPS Service') . '</div></div>
+        <div class="row"><div class="label">Current Status</div><div class="value">' . $statusHtml . '</div></div>
+        <div class="row"><div class="label">Technician</div><div class="value">' . htmlspecialchars($techName ?: 'BharatGPS Team') . '</div></div>
+    </div>
+
+    <p style="font-size:13px;color:#4a5568;margin-top:16px;line-height:1.6">
+        This update has been logged in our system. If you have any concerns about this update, 
+        please contact us at <strong>09963222009</strong> and reference Task ID <strong>' . $task['task_id'] . '</strong>.
+    </p>
+    <p style="font-size:13px;font-weight:700;color:#1a3a6b;margin-top:12px">Thank you for your patience. 🙏</p>';
+
+    sendMail(
+        $task['email'],
+        $task['customer_name'],
+        'Task Update – ' . $task['task_id'] . ' | ' . htmlspecialchars($task['customer_name']) . ' | Bharat GPS',
+        emailTemplate($content)
+    );
+}
