@@ -475,12 +475,19 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
 
       <!-- CREATE / EDIT TASK MODAL -->
       <div class="modal-overlay" id="task-modal">
-        <div class="modal-box">
+        <div class="modal-box" style="max-width:780px">
           <div class="modal-hd">
-            <div class="modal-title" id="task-modal-title">New Task</div>
+            <div>
+              <div class="modal-title" id="task-modal-title">Create New Task</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:2px">Fields marked * are required</div>
+            </div>
             <button class="modal-close" onclick="closeTaskModal()">✕</button>
           </div>
           <div class="modal-body">
+            <input type="hidden" id="fm-task-id">
+
+            <!-- SECTION 1: Customer -->
+            <div class="section-hd">👤 Customer & Lead Info</div>
             <div class="form-row">
               <div class="form-group">
                 <label>Customer Name *</label>
@@ -488,41 +495,108 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
               </div>
               <div class="form-group">
                 <label>Contact Number *</label>
-                <input type="tel" id="fm-contact" placeholder="Mobile number">
+                <input type="tel" id="fm-contact" placeholder="10-digit mobile">
               </div>
             </div>
             <div class="form-row">
               <div class="form-group">
-                <label>Location</label>
-                <input type="text" id="fm-location" placeholder="City / Area">
+                <label>Email ID</label>
+                <input type="email" id="fm-email" placeholder="Optional">
               </div>
               <div class="form-group">
-                <label>Job Type</label>
-                <select id="fm-job">
-                  <option value="Basic/Normal">Basic/Normal GPS</option>
-                  <option value="Engine Cut">Engine Cut GPS</option>
-                  <option value="Micro GPS">Micro GPS</option>
-                  <option value="MIC/SOS GPS">MIC/SOS GPS</option>
-                  <option value="Magnet GPS">Magnet GPS</option>
-                  <option value="VLTD">VLTD</option>
-                  <option value="Troubleshoot/Offline">Troubleshoot/Offline</option>
-                  <option value="Engine Status">Engine Status</option>
-                  <option value="Only Remove">Only Remove</option>
-                  <option value="Re-Adding">Re-Adding</option>
-                  <option value="Vehicle to Vehicle Change">Vehicle to Vehicle Change</option>
-                  <option value="Demonstration">Demonstration</option>
+                <label>Location / Area</label>
+                <input type="text" id="fm-location" placeholder="City, area, landmark">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Lead Type</label>
+                <select id="fm-leadtype">
+                  <option>New Lead</option>
+                  <option>Demo</option>
+                  <option>3rd Party Lead</option>
+                  <option>Troubleshoot</option>
+                  <option>Existing Customer Lead</option>
+                  <option>Outstation Lead</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Company Profile</label>
+                <select id="fm-profile" onchange="updateModalGST()">
+                  <option value="BGPT">BGPT — Bharat GPS Tracker</option>
+                  <option value="SBGT">SBGT — SRIBHARAT GPS TRACKER PVT LTD</option>
                 </select>
               </div>
             </div>
+
+            <!-- SECTION 2: Job & Pricing -->
+            <div class="section-hd">🔧 Job & Pricing</div>
             <div class="form-row">
               <div class="form-group">
-                <label>Assigned Technician</label>
+                <label>Job Type</label>
+                <select id="fm-job" onchange="setModalJobPrice(this.value)">
+                  <option value="">Select Job Type</option>
+                  <option value="Basic/Normal">Basic/Normal GPS</option>
+                  <option value="Engine Status">Engine Status GPS</option>
+                  <option value="Engine Cut">Engine Cut GPS</option>
+                  <option value="Micro GPS">Micro GPS</option>
+                  <option value="Magnet GPS">Magnet GPS</option>
+                  <option value="MIC/SOS GPS">MIC/SOS GPS</option>
+                  <option value="VLTD">VLTD</option>
+                  <option value="Troubleshoot/Offline">Troubleshoot / Offline</option>
+                  <option value="Vehicle to Vehicle Change">Vehicle to Vehicle Change</option>
+                  <option value="Re-Adding">Re-Adding</option>
+                  <option value="Only Remove">Only Remove</option>
+                  <option value="Demonstration">Demonstration</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Device Qty</label>
+                <input type="number" id="fm-qty" value="1" min="1" oninput="updateModalGST()">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Price to Collect (₹) <span id="fm-price-hint" style="font-size:10px;color:var(--text3);font-weight:400"></span></label>
+                <input type="number" id="fm-price" placeholder="Auto-filled from job type" step="0.01" oninput="updateModalGST()">
+                <div id="fm-gst-box" style="display:none;margin-top:6px;background:var(--surface2);border-radius:6px;padding:7px 10px;font-size:11px;color:var(--text2);line-height:1.8"></div>
+              </div>
+              <div class="form-group">
+                <label>Amount Collected (₹)</label>
+                <input type="number" id="fm-collected" placeholder="0" min="0">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Payment Mode</label>
+                <select id="fm-paymode" onchange="handleModalPayMode(this.value)">
+                  <option value="">Select</option>
+                  <option>Cash</option>
+                  <option>UPI</option>
+                  <option>Bank Transfer</option>
+                  <option>In 2 Days</option>
+                  <option>In 7 Days</option>
+                  <option>In 15 Days</option>
+                  <option>Within 30 Days</option>
+                </select>
+              </div>
+              <div class="form-group" id="fm-pay-reminder-wrap" style="display:none">
+                <label>Payment Reminder Date</label>
+                <input type="date" id="fm-pay-reminder">
+              </div>
+            </div>
+
+            <!-- SECTION 3: Assignment -->
+            <div class="section-hd">📋 Assignment & Status</div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Assign Technician</label>
                 <select id="fm-tech">
                   <option value="">Unassigned</option>
                 </select>
               </div>
               <div class="form-group">
-                <label>Status</label>
+                <label>Task Status</label>
                 <select id="fm-status">
                   <option>Open</option>
                   <option>In Progress</option>
@@ -536,24 +610,63 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
             </div>
             <div class="form-row">
               <div class="form-group">
-                <label>Price to Collect (₹)</label>
-                <input type="number" id="fm-price" placeholder="0" min="0">
+                <label>Task Reminder Date</label>
+                <input type="date" id="fm-reminder">
               </div>
+              <div class="form-group" style="display:flex;flex-direction:column;justify-content:flex-end;gap:10px;padding-bottom:4px">
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer">
+                  <input type="checkbox" id="fm-urgent"> 🚨 Mark as Urgent
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer">
+                  <input type="checkbox" id="fm-outstation" onchange="toggleModalOutstation()"> 📍 Outstation Lead
+                </label>
+              </div>
+            </div>
+
+            <!-- OUTSTATION SECTION -->
+            <div id="fm-outstation-section" style="display:none">
+              <div class="section-hd">📍 Outstation Details</div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Travel Location</label>
+                  <input type="text" id="fm-outstation-loc" placeholder="e.g. Kakinada, Rajam, Eluru">
+                </div>
+                <div class="form-group">
+                  <label>Customer Paying Travel?</label>
+                  <select id="fm-travel-by" onchange="toggleModalTravelAmt()">
+                    <option value="">Select</option>
+                    <option value="CUSTOMER">Yes — Customer paying</option>
+                    <option value="COMPANY">No — Company paying</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row" id="fm-travel-amt-wrap" style="display:none">
+                <div class="form-group">
+                  <label>Customer Travel Amount (₹)</label>
+                  <input type="number" id="fm-travel-amt" placeholder="Amount customer agreed to pay" min="0">
+                </div>
+              </div>
+            </div>
+
+            <!-- SECTION 4: Notes -->
+            <div class="section-hd">📝 Notes & Remarks</div>
+            <div class="form-row full">
               <div class="form-group">
-                <label>Amount Collected (₹)</label>
-                <input type="number" id="fm-collected" placeholder="0" min="0">
+                <label>General Notes / Instructions</label>
+                <textarea id="fm-notes" placeholder="Any additional notes, requirements or observations..." rows="3"></textarea>
               </div>
             </div>
             <div class="form-row full">
               <div class="form-group">
-                <label>Notes</label>
-                <textarea id="fm-notes" placeholder="Any additional notes..."></textarea>
+                <label>Initial Remark</label>
+                <textarea id="fm-remark" placeholder="Initial activity or remark..." rows="2"></textarea>
               </div>
             </div>
-          </div>
+
+          </div><!-- /modal-body -->
           <div class="modal-ft">
             <button class="ts-btn ts-btn-secondary" onclick="closeTaskModal()">Cancel</button>
-            <button class="ts-btn ts-btn-primary" id="task-save-btn" onclick="saveTask()">💾 Save Task</button>
+            <button class="ts-btn ts-btn-primary" id="task-save-btn" onclick="saveTask()">✅ Create Task</button>
           </div>
         </div>
       </div>
@@ -1027,62 +1140,6 @@ function renderTasksTable(){
   }).join('');
 }
 
-// ── View Task (opens detail) ──────────────────────────────────────────────
-async function viewTask(id){
-  const res = await api('get_task',{id}).catch(()=>({}));
-  const t   = res.task || res;
-  if(!t || !t.id){ alert('Task not found.'); return; }
-  const isAdmin = ['admin','assigner'].includes(currentUser?.role);
-  const modal = document.getElementById('task-modal');
-  document.getElementById('task-modal-title').textContent = `Task ${t.task_id||''}`;
-  document.getElementById('fm-customer').value   = t.customer_name  || '';
-  document.getElementById('fm-contact').value    = t.contact_number || '';
-  document.getElementById('fm-location').value   = t.location       || '';
-  document.getElementById('fm-price').value      = t.price_to_collect || '';
-  document.getElementById('fm-collected').value  = t.amount_collected  || '';
-  document.getElementById('fm-notes').value      = t.general_notes  || '';
-  const jobSel = document.getElementById('fm-job');
-  if(jobSel) jobSel.value = t.device_details || '';
-  const stSel = document.getElementById('fm-status');
-  if(stSel) stSel.value = t.task_status || 'Open';
-  editingTaskId = t.id;
-  modal.classList.add('open');
-  // Disable editing for non-admins
-  ['fm-customer','fm-contact','fm-location','fm-job','fm-status','fm-price','fm-collected','fm-notes'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(el) el.disabled = !isAdmin;
-  });
-  document.getElementById('task-save-btn').style.display = isAdmin ? '' : 'none';
-}
-
-// ── Create Modal ──────────────────────────────────────────────────────────
-function openCreateModal(){
-  editingTaskId = null;
-  document.getElementById('task-modal-title').textContent = 'New Task';
-  ['fm-customer','fm-contact','fm-location','fm-price','fm-collected','fm-notes'].forEach(id=>{
-    const el=document.getElementById(id); if(el){ el.value=''; el.disabled=false; }
-  });
-  const jobSel=document.getElementById('fm-job'); if(jobSel){jobSel.value='Basic/Normal';jobSel.disabled=false;}
-  const stSel=document.getElementById('fm-status'); if(stSel){stSel.value='Open';stSel.disabled=false;}
-  // Fill tech dropdown
-  const techSel=document.getElementById('fm-tech');
-  if(techSel && techSel.options.length<=1){
-    api('get_users',{role:'technician'}).then(r=>{
-      (r.users||[]).forEach(t=>{ const o=document.createElement('option');o.value=t.id;o.textContent=t.name;techSel.appendChild(o); });
-    });
-  }
-  document.getElementById('task-save-btn').style.display='';
-  document.getElementById('task-modal').classList.add('open');
-}
-
-function openEditModal(id){
-  viewTask(id);
-}
-
-function closeTaskModal(){
-  document.getElementById('task-modal').classList.remove('open');
-  editingTaskId = null;
-}
 
 // ── Save Task ─────────────────────────────────────────────────────────────
 async function saveTask(){
@@ -1142,6 +1199,260 @@ function exportTasksCSV(){
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
   a.download = `tasks-${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
+}
+
+
+// ════════════════════════════════════════════════════════
+// CREATE / EDIT MODAL — Full Logic
+// ════════════════════════════════════════════════════════
+
+// Job type base prices (₹)
+const JOB_PRICES = {
+  'Basic/Normal':              1200,
+  'Engine Status':             1500,
+  'Engine Cut':                2000,
+  'Micro GPS':                 1500,
+  'Magnet GPS':                1500,
+  'MIC/SOS GPS':               2000,
+  'VLTD':                      5000,
+  'Troubleshoot/Offline':       500,
+  'Vehicle to Vehicle Change':  500,
+  'Re-Adding':                  300,
+  'Only Remove':                300,
+  'Demonstration':                0,
+};
+
+function setModalJobPrice(job){
+  const base = JOB_PRICES[job];
+  const priceEl = document.getElementById('fm-price');
+  const hintEl  = document.getElementById('fm-price-hint');
+  if(base !== undefined && base > 0){
+    priceEl.value = base;
+    if(hintEl) hintEl.textContent = '(auto from job type)';
+    updateModalGST();
+  } else {
+    if(hintEl) hintEl.textContent = '';
+    const gstBox = document.getElementById('fm-gst-box');
+    if(gstBox) gstBox.style.display = 'none';
+  }
+}
+
+function updateModalGST(){
+  const profile = document.getElementById('fm-profile')?.value || 'BGPT';
+  const price   = parseFloat(document.getElementById('fm-price')?.value || 0);
+  const qty     = parseInt(document.getElementById('fm-qty')?.value || 1);
+  const gstBox  = document.getElementById('fm-gst-box');
+  if(!gstBox) return;
+  if(profile === 'SBGT' && price > 0){
+    const base    = price / 1.18;
+    const gst     = price - base;
+    const total   = price * qty;
+    gstBox.style.display = 'block';
+    gstBox.innerHTML = `
+      <div style="display:flex;justify-content:space-between"><span>Base price (excl. GST)</span><span style="font-weight:700">₹${base.toFixed(2)}</span></div>
+      <div style="display:flex;justify-content:space-between"><span>GST @ 18%</span><span style="font-weight:700;color:var(--saffron)">₹${gst.toFixed(2)}</span></div>
+      ${qty>1?`<div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:4px;margin-top:4px"><span><b>Total for ${qty} units</b></span><span style="font-weight:800;color:var(--green)">₹${total.toFixed(2)}</span></div>`:''}
+    `;
+    // Store GST amount
+    if(document.getElementById('fm-price')) document.getElementById('fm-price').dataset.gstAmount = (gst * qty).toFixed(2);
+  } else {
+    gstBox.style.display = 'none';
+    if(document.getElementById('fm-price')) document.getElementById('fm-price').dataset.gstAmount = '0';
+  }
+}
+
+function handleModalPayMode(val){
+  const wrap = document.getElementById('fm-pay-reminder-wrap');
+  const dateEl = document.getElementById('fm-pay-reminder');
+  if(!wrap) return;
+  const daysMap = {'In 2 Days':2,'In 7 Days':7,'In 15 Days':15,'Within 30 Days':30};
+  if(daysMap[val]){
+    wrap.style.display = '';
+    const d = new Date();
+    d.setDate(d.getDate() + daysMap[val]);
+    if(dateEl) dateEl.value = d.toISOString().slice(0,10);
+  } else {
+    wrap.style.display = 'none';
+    if(dateEl) dateEl.value = '';
+  }
+}
+
+function toggleModalOutstation(){
+  const checked = document.getElementById('fm-outstation')?.checked;
+  const sec = document.getElementById('fm-outstation-section');
+  if(sec) sec.style.display = checked ? '' : 'none';
+}
+
+function toggleModalTravelAmt(){
+  const val  = document.getElementById('fm-travel-by')?.value;
+  const wrap = document.getElementById('fm-travel-amt-wrap');
+  if(wrap) wrap.style.display = val==='CUSTOMER' ? '' : 'none';
+}
+
+// ── Open create modal ─────────────────────────────────────────────────────
+function openCreateModal(){
+  editingTaskId = null;
+  document.getElementById('task-modal-title').textContent = 'Create New Task';
+  document.getElementById('task-save-btn').textContent    = '✅ Create Task';
+  document.getElementById('fm-task-id').value             = '';
+
+  // Clear all fields
+  ['fm-customer','fm-contact','fm-email','fm-location','fm-notes','fm-remark',
+   'fm-price','fm-collected','fm-reminder','fm-pay-reminder','fm-outstation-loc','fm-travel-amt']
+  .forEach(id=>{ const el=document.getElementById(id); if(el){el.value='';el.disabled=false;} });
+
+  ['fm-leadtype','fm-profile','fm-job','fm-paymode','fm-status','fm-travel-by']
+  .forEach(id=>{ const el=document.getElementById(id); if(el){el.selectedIndex=0;el.disabled=false;} });
+
+  const qtyEl=document.getElementById('fm-qty'); if(qtyEl){qtyEl.value=1;qtyEl.disabled=false;}
+  document.getElementById('fm-status').value='Open';
+
+  ['fm-urgent','fm-outstation'].forEach(id=>{ const el=document.getElementById(id); if(el){el.checked=false;el.disabled=false;} });
+
+  // Reset visibility
+  const gstBox=document.getElementById('fm-gst-box'); if(gstBox) gstBox.style.display='none';
+  const hint=document.getElementById('fm-price-hint'); if(hint) hint.textContent='';
+  const prWrap=document.getElementById('fm-pay-reminder-wrap'); if(prWrap) prWrap.style.display='none';
+  const osSec=document.getElementById('fm-outstation-section'); if(osSec) osSec.style.display='none';
+  const taWrap=document.getElementById('fm-travel-amt-wrap'); if(taWrap) taWrap.style.display='none';
+
+  // Fill tech dropdown if empty
+  _fillTechDropdown('fm-tech');
+
+  document.querySelectorAll('[id^="fm-"]').forEach(el=>el.disabled=false);
+  document.getElementById('task-save-btn').style.display='';
+  document.getElementById('task-modal').classList.add('open');
+}
+
+// ── Open edit modal ───────────────────────────────────────────────────────
+async function viewTask(id){
+  const res = await api('get_task',{id}).catch(()=>({}));
+  const t   = res.task || res;
+  if(!t||!t.id){ alert('Task not found.'); return; }
+  const isAdmin = ['admin','assigner'].includes(currentUser?.role);
+
+  editingTaskId = t.id;
+  document.getElementById('task-modal-title').textContent = 'Task ' + (t.task_id||'');
+  document.getElementById('task-save-btn').textContent    = '💾 Save Changes';
+  document.getElementById('fm-task-id').value             = t.id;
+
+  const sf = (id,val)=>{ const el=document.getElementById(id); if(el) el.value=val??''; };
+  sf('fm-customer',  t.customer_name);
+  sf('fm-contact',   t.contact_number);
+  sf('fm-email',     t.email);
+  sf('fm-location',  t.location);
+  sf('fm-price',     t.price_to_collect);
+  sf('fm-collected', t.amount_collected);
+  sf('fm-notes',     t.general_notes);
+  sf('fm-remark',    t.remark||t.latest_remark||'');
+  sf('fm-reminder',  t.reminder_date);
+  sf('fm-qty',       t.device_qty||1);
+  sf('fm-outstation-loc', t.outstation_location);
+  sf('fm-travel-amt', t.outstation_customer_travel_amount);
+
+  const sel=(id,val)=>{ const el=document.getElementById(id); if(el) el.value=val||''; };
+  sel('fm-leadtype', t.lead_type);
+  sel('fm-profile',  t.profile||'BGPT');
+  sel('fm-job',      t.device_details);
+  sel('fm-status',   t.task_status);
+  sel('fm-paymode',  t.payment_mode);
+  sel('fm-travel-by',t.outstation_travel_paid_by);
+
+  const ck=(id,val)=>{ const el=document.getElementById(id); if(el) el.checked=!!val; };
+  ck('fm-urgent',     t.is_urgent);
+  ck('fm-outstation', t.is_outstation);
+
+  // Show/hide dynamic sections
+  toggleModalOutstation();
+  toggleModalTravelAmt();
+  handleModalPayMode(t.payment_mode||'');
+  updateModalGST();
+
+  // Fill tech dropdown
+  await _fillTechDropdown('fm-tech', t.assigned_to);
+
+  // Disable fields for non-admins
+  if(!isAdmin){
+    document.querySelectorAll('#task-modal input, #task-modal select, #task-modal textarea')
+      .forEach(el=>el.disabled=true);
+    document.getElementById('task-save-btn').style.display='none';
+  } else {
+    document.querySelectorAll('#task-modal input, #task-modal select, #task-modal textarea')
+      .forEach(el=>el.disabled=false);
+    document.getElementById('task-save-btn').style.display='';
+  }
+
+  document.getElementById('task-modal').classList.add('open');
+}
+
+function openEditModal(id){ viewTask(id); }
+
+async function _fillTechDropdown(selId, selectedId=null){
+  const sel = document.getElementById(selId);
+  if(!sel) return;
+  if(sel.options.length <= 1){
+    const r = await api('get_users',{role:'technician'}).catch(()=>({}));
+    (r.users||[]).forEach(t=>{
+      const o=document.createElement('option'); o.value=t.id; o.textContent=t.name; sel.appendChild(o);
+    });
+  }
+  if(selectedId) sel.value = selectedId;
+}
+
+// ── Save Task ─────────────────────────────────────────────────────────────
+async function saveTask(){
+  const btn      = document.getElementById('task-save-btn');
+  const customer = document.getElementById('fm-customer').value.trim();
+  const contact  = document.getElementById('fm-contact').value.trim();
+  if(!customer){ alert('Customer name is required.'); return; }
+  if(!contact) { alert('Contact number is required.'); return; }
+
+  btn.textContent='Saving…'; btn.disabled=true;
+
+  const payload = {
+    customer_name:    customer,
+    contact_number:   contact,
+    email:            document.getElementById('fm-email')?.value.trim()||'',
+    location:         document.getElementById('fm-location')?.value.trim()||'',
+    lead_type:        document.getElementById('fm-leadtype')?.value||'New Lead',
+    profile:          document.getElementById('fm-profile')?.value||'BGPT',
+    device_qty:       document.getElementById('fm-qty')?.value||1,
+    device_details:   document.getElementById('fm-job')?.value||'',
+    price_to_collect: document.getElementById('fm-price')?.value||0,
+    gst_amount:       parseFloat(document.getElementById('fm-price')?.dataset?.gstAmount||0),
+    amount_collected: document.getElementById('fm-collected')?.value||0,
+    payment_mode:     document.getElementById('fm-paymode')?.value||'',
+    payment_reminder_date: document.getElementById('fm-pay-reminder')?.value||null,
+    assigned_to:      document.getElementById('fm-tech')?.value||null,
+    task_status:      document.getElementById('fm-status')?.value||'Open',
+    reminder_date:    document.getElementById('fm-reminder')?.value||null,
+    is_urgent:        document.getElementById('fm-urgent')?.checked?1:0,
+    is_outstation:    document.getElementById('fm-outstation')?.checked?1:0,
+    outstation_location: document.getElementById('fm-outstation-loc')?.value.trim()||null,
+    outstation_travel_paid_by: document.getElementById('fm-travel-by')?.value||null,
+    outstation_customer_travel_amount: document.getElementById('fm-travel-amt')?.value||null,
+    general_notes:    document.getElementById('fm-notes')?.value.trim()||'',
+    remark:           document.getElementById('fm-remark')?.value.trim()||'',
+  };
+
+  if(editingTaskId) payload.id = editingTaskId;
+  const action = editingTaskId ? 'update_task' : 'create_task';
+  const res = await api(action,{},'POST',payload).catch(()=>({}));
+
+  btn.textContent = editingTaskId ? '💾 Save Changes' : '✅ Create Task';
+  btn.disabled = false;
+
+  if(res.success || res.task_id){
+    closeTaskModal();
+    loadTasks();
+  } else {
+    alert(res.error||'Save failed. Please try again.');
+  }
+}
+
+function closeTaskModal(){
+  document.getElementById('task-modal').classList.remove('open');
+  editingTaskId = null;
 }
 
 </script>
