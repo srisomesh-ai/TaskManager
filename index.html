@@ -648,7 +648,7 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
       <div class="page" id="page-my-tasks">
         <div class="pg-header">
           <div class="breadcrumb">Home / <b>My Tasks</b></div>
-          <div class="pg-title">🙋 My Tasks</div>
+          <div class="pg-title" id="my-tasks-title">🙋 My Tasks</div>
           <div class="pg-sub" id="my-tasks-welcome">Your assigned tasks</div>
         </div>
 
@@ -848,12 +848,26 @@ function startApp(){
 
   // Show/hide admin-only elements
   const isAdmin = ['admin','assigner'].includes(currentUser.role);
+  const isTech  = currentUser.role === 'technician';
   document.querySelectorAll('.admin-only').forEach(el=>el.style.display = isAdmin ? '' : 'none');
+
+  // Hide Dashboard nav for technicians — they have My Tasks as home
+  const dashNav = document.getElementById('nav-dashboard');
+  if(dashNav) dashNav.style.display = isTech ? 'none' : '';
+
+  // Hide All Tasks nav for technicians — they only see their own
+  const allTasksNav = document.getElementById('nav-tasks');
+  if(allTasksNav) allTasksNav.style.display = isTech ? 'none' : '';
+
+  // Update nav label for tech
+  const navLabel = document.getElementById('nav-my-tasks-label');
+  if(navLabel) navLabel.textContent = isTech ? 'My Dashboard' : 'My Tasks';
 
   // Navigate — tech goes to their own dashboard
   const isAdmin2 = ['admin','assigner'].includes(currentUser.role);
   const defaultPage = isAdmin2 ? 'dashboard' : 'my-tasks';
-  const last = localStorage.getItem('bgps_last_page') || defaultPage;
+  // Clear saved page for tech so they always start fresh on my-tasks
+  const last = isTech ? 'my-tasks' : (localStorage.getItem('bgps_last_page') || defaultPage);
   showPage(last);
 }
 
@@ -869,12 +883,20 @@ async function doLogout(){
 
 // ── Load Dashboard ────────────────────────────────────────────────────────
 async function loadDashboard(){
+  const isTech = currentUser?.role === 'technician';
+
+  // Technician sees their OWN dashboard — redirect to My Tasks
+  if(isTech){
+    showPage('my-tasks');
+    return;
+  }
+
   document.getElementById('dash-welcome').textContent =
     'Welcome back, ' + (currentUser.name||'') + '. Here\'s today\'s snapshot.';
 
   const COLORS = ['linear-gradient(135deg,#1a3a6b,#2451a3)','linear-gradient(135deg,#0d7377,#14b8a6)','linear-gradient(135deg,#5b2d8e,#818cf8)','linear-gradient(135deg,#1a7a3a,#22c55e)','linear-gradient(135deg,#d97706,#f59e0b)','linear-gradient(135deg,#c0392b,#ef4444)'];
 
-  // Fetch all data in parallel
+  // Fetch all data in parallel — admin only
   const [sRes, uRes, aRes, tRes, oRes] = await Promise.all([
     api('get_stats').catch(()=>({})),
     api('get_urgent_tasks').catch(()=>({})),
@@ -1587,9 +1609,15 @@ async function loadMyTasks(){
   const tbody = document.getElementById('my-tasks-tbody');
   if(tbody) tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading your tasks...</td></tr>';
 
-  // Welcome message
+  const isTech2 = currentUser?.role === 'technician';
+
+  // Page title + welcome — personalised for tech
+  const titleEl = document.getElementById('my-tasks-title');
+  if(titleEl) titleEl.textContent = isTech2 ? '📊 My Dashboard' : '🙋 My Tasks';
   const welcome = document.getElementById('my-tasks-welcome');
-  if(welcome) welcome.textContent = `Tasks assigned to ${currentUser?.name||'you'}`;
+  if(welcome) welcome.textContent = isTech2
+    ? `Welcome back, ${currentUser?.name||''}! Here are your assigned tasks.`
+    : `Tasks assigned to ${currentUser?.name||'you'}`;
 
   // Fetch my tasks (API enforces assigned_to for technician role server-side)
   const res = await api('get_tasks', {limit: 500}).catch(()=>({}));
