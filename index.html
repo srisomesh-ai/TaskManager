@@ -214,6 +214,12 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
 .form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--accent2)}
 .form-group textarea{resize:vertical;min-height:70px}
 .section-hd{font-size:11px;font-weight:800;text-transform:uppercase;color:var(--text3);letter-spacing:.6px;margin:16px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+
+/* DRAWER */
+#task-modal.open #task-drawer{transform:translateX(0) !important}
+.pay-mode-opt{padding:6px 12px;border:1.5px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text2);font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;white-space:nowrap}
+.pay-mode-opt:hover{border-color:var(--accent2);color:var(--accent2);background:var(--accent-light)}
+.pay-mode-opt.selected{border-color:var(--green);color:var(--green);background:var(--green-bg)}
 </style>
 </head>
 <body>
@@ -473,200 +479,166 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
         </div>
       </div><!-- /page-tasks -->
 
-      <!-- CREATE / EDIT TASK MODAL -->
-      <div class="modal-overlay" id="task-modal">
-        <div class="modal-box" style="max-width:780px">
-          <div class="modal-hd">
+            <!-- CREATE / EDIT TASK MODAL — side drawer -->
+      <div class="modal-overlay" id="task-modal" onclick="if(event.target===this)closeTaskModal()">
+        <div id="task-drawer" style="position:fixed;right:0;top:0;bottom:0;width:520px;max-width:100vw;background:var(--surface);display:flex;flex-direction:column;box-shadow:-8px 0 40px rgba(0,0,0,.18);z-index:600;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1)">
+          <div style="background:var(--accent);padding:18px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
             <div>
-              <div class="modal-title" id="task-modal-title">Create New Task</div>
-              <div style="font-size:11px;color:var(--text3);margin-top:2px">Fields marked * are required</div>
+              <div id="task-modal-title" style="font-size:16px;font-weight:800;color:#fff">New Task</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:2px">Fields marked * are required</div>
             </div>
-            <button class="modal-close" onclick="closeTaskModal()">✕</button>
+            <button onclick="closeTaskModal()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:32px;height:32px;border-radius:8px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
           </div>
-          <div class="modal-body">
+          <div style="flex:1;overflow-y:auto">
             <input type="hidden" id="fm-task-id">
-
-            <!-- SECTION 1: Customer -->
-            <div class="section-hd">👤 Customer & Lead Info</div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Customer Name *</label>
-                <input type="text" id="fm-customer" placeholder="Full name">
+            <div style="padding:16px 20px;border-bottom:1px solid var(--border)">
+              <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--accent2);margin-bottom:12px">👤 Customer & Lead</div>
+              <div class="form-row">
+                <div class="form-group"><label>Customer Name *</label><input type="text" id="fm-customer" placeholder="Full name"></div>
+                <div class="form-group"><label>Contact Number *</label><input type="tel" id="fm-contact" placeholder="10-digit mobile"></div>
               </div>
-              <div class="form-group">
-                <label>Contact Number *</label>
-                <input type="tel" id="fm-contact" placeholder="10-digit mobile">
+              <div class="form-row">
+                <div class="form-group"><label>Email ID</label><input type="email" id="fm-email" placeholder="Optional"></div>
+                <div class="form-group"><label>Location / Area</label><input type="text" id="fm-location" placeholder="City, area, landmark"></div>
               </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Email ID</label>
-                <input type="email" id="fm-email" placeholder="Optional">
-              </div>
-              <div class="form-group">
-                <label>Location / Area</label>
-                <input type="text" id="fm-location" placeholder="City, area, landmark">
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Lead Type</label>
-                <select id="fm-leadtype">
-                  <option>New Lead</option>
-                  <option>Demo</option>
-                  <option>3rd Party Lead</option>
-                  <option>Troubleshoot</option>
-                  <option>Existing Customer Lead</option>
-                  <option>Outstation Lead</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label>Company Profile</label>
-                <select id="fm-profile" onchange="updateModalGST()">
-                  <option value="BGPT">BGPT — Bharat GPS Tracker</option>
-                  <option value="SBGT">SBGT — SRIBHARAT GPS TRACKER PVT LTD</option>
-                </select>
-              </div>
-            </div>
-
-            <!-- SECTION 2: Job & Pricing -->
-            <div class="section-hd">🔧 Job & Pricing</div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Job Type</label>
-                <select id="fm-job" onchange="setModalJobPrice(this.value)">
-                  <option value="">Select Job Type</option>
-                  <option value="Basic/Normal">Basic/Normal GPS</option>
-                  <option value="Engine Status">Engine Status GPS</option>
-                  <option value="Engine Cut">Engine Cut GPS</option>
-                  <option value="Micro GPS">Micro GPS</option>
-                  <option value="Magnet GPS">Magnet GPS</option>
-                  <option value="MIC/SOS GPS">MIC/SOS GPS</option>
-                  <option value="VLTD">VLTD</option>
-                  <option value="Troubleshoot/Offline">Troubleshoot / Offline</option>
-                  <option value="Vehicle to Vehicle Change">Vehicle to Vehicle Change</option>
-                  <option value="Re-Adding">Re-Adding</option>
-                  <option value="Only Remove">Only Remove</option>
-                  <option value="Demonstration">Demonstration</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label>Device Qty</label>
-                <input type="number" id="fm-qty" value="1" min="1" oninput="updateModalGST()">
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Price to Collect (₹) <span id="fm-price-hint" style="font-size:10px;color:var(--text3);font-weight:400"></span></label>
-                <input type="number" id="fm-price" placeholder="Auto-filled from job type" step="0.01" oninput="updateModalGST()">
-                <div id="fm-gst-box" style="display:none;margin-top:6px;background:var(--surface2);border-radius:6px;padding:7px 10px;font-size:11px;color:var(--text2);line-height:1.8"></div>
-              </div>
-              <div class="form-group">
-                <label>Amount Collected (₹)</label>
-                <input type="number" id="fm-collected" placeholder="0" min="0">
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Payment Mode</label>
-                <select id="fm-paymode" onchange="handleModalPayMode(this.value)">
-                  <option value="">Select</option>
-                  <option>Cash</option>
-                  <option>UPI</option>
-                  <option>Bank Transfer</option>
-                  <option>In 2 Days</option>
-                  <option>In 7 Days</option>
-                  <option>In 15 Days</option>
-                  <option>Within 30 Days</option>
-                </select>
-              </div>
-              <div class="form-group" id="fm-pay-reminder-wrap" style="display:none">
-                <label>Payment Reminder Date</label>
-                <input type="date" id="fm-pay-reminder">
-              </div>
-            </div>
-
-            <!-- SECTION 3: Assignment -->
-            <div class="section-hd">📋 Assignment & Status</div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Assign Technician</label>
-                <select id="fm-tech">
-                  <option value="">Unassigned</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label>Task Status</label>
-                <select id="fm-status">
-                  <option>Open</option>
-                  <option>In Progress</option>
-                  <option>Task Pending</option>
-                  <option>Demo Sent</option>
-                  <option>Awaiting Approval</option>
-                  <option>Closed</option>
-                  <option>Cancelled</option>
-                </select>
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Task Reminder Date</label>
-                <input type="date" id="fm-reminder">
-              </div>
-              <div class="form-group" style="display:flex;flex-direction:column;justify-content:flex-end;gap:10px;padding-bottom:4px">
-                <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer">
-                  <input type="checkbox" id="fm-urgent"> 🚨 Mark as Urgent
-                </label>
-                <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer">
-                  <input type="checkbox" id="fm-outstation" onchange="toggleModalOutstation()"> 📍 Outstation Lead
-                </label>
-              </div>
-            </div>
-
-            <!-- OUTSTATION SECTION -->
-            <div id="fm-outstation-section" style="display:none">
-              <div class="section-hd">📍 Outstation Details</div>
               <div class="form-row">
                 <div class="form-group">
-                  <label>Travel Location</label>
-                  <input type="text" id="fm-outstation-loc" placeholder="e.g. Kakinada, Rajam, Eluru">
+                  <label>Lead Type</label>
+                  <select id="fm-leadtype">
+                    <option>New Lead</option><option>Demo</option><option>3rd Party Lead</option>
+                    <option>Troubleshoot</option><option>Existing Customer Lead</option><option>Outstation Lead</option>
+                  </select>
                 </div>
                 <div class="form-group">
-                  <label>Customer Paying Travel?</label>
-                  <select id="fm-travel-by" onchange="toggleModalTravelAmt()">
-                    <option value="">Select</option>
-                    <option value="CUSTOMER">Yes — Customer paying</option>
-                    <option value="COMPANY">No — Company paying</option>
+                  <label>Company Profile</label>
+                  <select id="fm-profile" onchange="updateModalGST()">
+                    <option value="BGPT">BGPT — No GST</option>
+                    <option value="SBGT">SBGT — With 18% GST</option>
                   </select>
                 </div>
               </div>
-              <div class="form-row" id="fm-travel-amt-wrap" style="display:none">
+            </div>
+            <div style="padding:16px 20px;border-bottom:1px solid var(--border)">
+              <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--accent2);margin-bottom:12px">🔧 Job & Pricing</div>
+              <div class="form-row">
                 <div class="form-group">
-                  <label>Customer Travel Amount (₹)</label>
-                  <input type="number" id="fm-travel-amt" placeholder="Amount customer agreed to pay" min="0">
+                  <label>Job Type</label>
+                  <select id="fm-job" onchange="setModalJobPrice(this.value)">
+                    <option value="">Select Job Type</option>
+                    <option value="Basic/Normal">Basic/Normal GPS</option>
+                    <option value="Engine Status">Engine Status GPS</option>
+                    <option value="Engine Cut">Engine Cut GPS</option>
+                    <option value="Micro GPS">Micro GPS</option>
+                    <option value="Magnet GPS">Magnet GPS</option>
+                    <option value="MIC/SOS GPS">MIC/SOS GPS</option>
+                    <option value="VLTD">VLTD</option>
+                    <option value="Troubleshoot/Offline">Troubleshoot / Offline</option>
+                    <option value="Vehicle to Vehicle Change">Vehicle to Vehicle Change</option>
+                    <option value="Re-Adding">Re-Adding</option>
+                    <option value="Only Remove">Only Remove</option>
+                    <option value="Demonstration">Demonstration</option>
+                  </select>
+                </div>
+                <div class="form-group"><label>Device Qty</label><input type="number" id="fm-qty" value="1" min="1" oninput="updateModalGST()"></div>
+              </div>
+              <div class="form-group" style="margin-bottom:12px">
+                <label>Price to Collect (₹) <span id="fm-price-hint" style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none"></span></label>
+                <input type="number" id="fm-price" placeholder="Auto-filled from job type" step="0.01" oninput="updateModalGST()">
+                <div id="fm-gst-box" style="display:none;margin-top:6px;background:var(--surface2);border-radius:6px;padding:8px 12px;font-size:11px;color:var(--text2);line-height:1.9"></div>
+              </div>
+              <div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:12px 14px">
+                <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px">💳 How will the customer pay?</div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <button type="button" class="pay-mode-opt" onclick="selectPayMode('Cash')">💵 Cash</button>
+                  <button type="button" class="pay-mode-opt" onclick="selectPayMode('UPI')">📱 UPI</button>
+                  <button type="button" class="pay-mode-opt" onclick="selectPayMode('Bank Transfer')">🏦 Bank Transfer</button>
+                  <button type="button" class="pay-mode-opt" onclick="selectPayMode('In 2 Days')">📅 In 2 Days</button>
+                  <button type="button" class="pay-mode-opt" onclick="selectPayMode('In 7 Days')">📅 In 7 Days</button>
+                  <button type="button" class="pay-mode-opt" onclick="selectPayMode('In 15 Days')">📅 In 15 Days</button>
+                  <button type="button" class="pay-mode-opt" onclick="selectPayMode('Within 30 Days')">📅 30 Days</button>
+                </div>
+                <input type="hidden" id="fm-paymode">
+                <input type="hidden" id="fm-pay-reminder">
+                <div id="fm-pay-confirmed" style="display:none;margin-top:10px;background:var(--green-bg);border:1.5px solid var(--green);border-radius:6px;padding:8px 12px;font-size:12px;color:var(--green);align-items:center;gap:8px">
+                  <span style="font-size:15px">✅</span>
+                  <span id="fm-pay-confirmed-txt" style="font-weight:700;flex:1"></span>
+                  <button type="button" onclick="clearPayMode()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:0;margin-left:auto">✕</button>
+                </div>
+              </div>
+              <div style="margin-top:10px">
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer">
+                  <input type="checkbox" id="fm-urgent"> 🚨 Mark as Urgent
+                </label>
+              </div>
+            </div>
+            <div style="padding:16px 20px;border-bottom:1px solid var(--border)">
+              <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--accent2);margin-bottom:12px">📋 Assignment</div>
+              <div class="form-group" style="margin-bottom:12px">
+                <label>Assign Technician</label>
+                <select id="fm-tech" onchange="handleTechChange()"><option value="">Unassigned</option></select>
+              </div>
+              <div id="fm-reminder-wrap" style="margin-bottom:12px">
+                <div style="background:var(--saffron-bg);border:1.5px solid var(--saffron);border-radius:7px;padding:10px 14px">
+                  <div style="font-size:11px;font-weight:700;color:var(--saffron);margin-bottom:6px">⚠️ No technician assigned — set a follow-up reminder</div>
+                  <input type="date" id="fm-reminder" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;outline:none">
+                </div>
+              </div>
+              <div id="fm-outstation-wrap" style="display:none">
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;margin-bottom:10px">
+                  <input type="checkbox" id="fm-outstation" onchange="toggleModalOutstation()"> 📍 Outstation Lead
+                </label>
+                <div id="fm-outstation-section" style="display:none;background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:12px 14px">
+                  <div class="form-row">
+                    <div class="form-group"><label>Travel Location</label><input type="text" id="fm-outstation-loc" placeholder="e.g. Kakinada, Rajam"></div>
+                    <div class="form-group">
+                      <label>Customer Paying Travel?</label>
+                      <select id="fm-travel-by" onchange="toggleModalTravelAmt()">
+                        <option value="">Select</option>
+                        <option value="CUSTOMER">Yes — Customer paying</option>
+                        <option value="COMPANY">No — Company paying</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div id="fm-travel-amt-wrap" style="display:none">
+                    <div class="form-group"><label>Customer Travel Amount (₹)</label><input type="number" id="fm-travel-amt" placeholder="Amount customer agreed to pay" min="0"></div>
+                  </div>
                 </div>
               </div>
             </div>
-
-            <!-- SECTION 4: Notes -->
-            <div class="section-hd">📝 Notes & Remarks</div>
-            <div class="form-row full">
+            <div style="padding:16px 20px">
+              <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--accent2);margin-bottom:8px">📝 Discussion & Next Steps</div>
               <div class="form-group">
-                <label>General Notes / Instructions</label>
-                <textarea id="fm-notes" placeholder="Any additional notes, requirements or observations..." rows="3"></textarea>
+                <textarea id="fm-notes" rows="4" placeholder="What was discussed with the customer? What is the next step? Any special requirements or instructions..."></textarea>
               </div>
             </div>
-            <div class="form-row full">
-              <div class="form-group">
-                <label>Initial Remark</label>
-                <textarea id="fm-remark" placeholder="Initial activity or remark..." rows="2"></textarea>
-              </div>
-            </div>
-
-          </div><!-- /modal-body -->
-          <div class="modal-ft">
+          </div>
+          <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0;background:var(--surface)">
             <button class="ts-btn ts-btn-secondary" onclick="closeTaskModal()">Cancel</button>
             <button class="ts-btn ts-btn-primary" id="task-save-btn" onclick="saveTask()">✅ Create Task</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAYMENT CONFIRMATION MODAL -->
+      <div class="modal-overlay" id="pay-confirm-modal" onclick="if(event.target===this)cancelPayMode()" style="z-index:700">
+        <div style="background:var(--surface);border-radius:12px;width:380px;max-width:calc(100vw - 32px);box-shadow:0 8px 40px rgba(0,0,0,.25);overflow:hidden">
+          <div style="background:var(--accent);padding:14px 18px">
+            <div style="font-size:14px;font-weight:800;color:#fff">💳 Confirm Payment Agreement</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.55);margin-top:2px">Customer has agreed to pay</div>
+          </div>
+          <div style="padding:18px">
+            <div id="pay-confirm-summary" style="background:var(--surface2);border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:13px;line-height:1.8"></div>
+            <div class="form-group" style="margin-bottom:14px">
+              <label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:5px">AGREEMENT DATE & TIME</label>
+              <input type="datetime-local" id="pay-confirm-datetime" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;outline:none">
+            </div>
+            <div style="background:var(--green-bg);border:1px solid var(--green);border-radius:7px;padding:10px 12px;font-size:11px;color:var(--green);margin-bottom:14px">
+              ✅ By confirming, you acknowledge the customer has agreed to pay the mentioned amount via the selected method.
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end">
+              <button class="ts-btn ts-btn-secondary" onclick="cancelPayMode()">Cancel</button>
+              <button class="ts-btn ts-btn-primary" onclick="confirmPayMode()" style="background:var(--green)">✅ Yes, Customer Agreed</button>
+            </div>
           </div>
         </div>
       </div>
@@ -1206,8 +1178,7 @@ function exportTasksCSV(){
 // CREATE / EDIT MODAL — Full Logic
 // ════════════════════════════════════════════════════════
 
-// Job type base prices (₹) — BGPT profile (no GST)
-// For SBGT profile: same prices + 18% GST added on top and shown as breakdown
+// Job type base prices (₹) — BGPT no GST, SBGT adds 18% on top
 const JOB_PRICES = {
   'Basic/Normal':              3499,
   'Engine Status':             3499,
@@ -1219,246 +1190,260 @@ const JOB_PRICES = {
   'Troubleshoot/Offline':       300,
   'Vehicle to Vehicle Change':  600,
   'Re-Adding':                 1700,
-  'Only Remove':                  0,   // manual entry — no default
-  'Demonstration':                0,   // no charge
+  'Only Remove':                  0,
+  'Demonstration':                0,
 };
 
-function setModalJobPrice(job){
-  const base = JOB_PRICES[job];
-  const priceEl = document.getElementById('fm-price');
-  const hintEl  = document.getElementById('fm-price-hint');
-  if(base !== undefined && base > 0){
-    priceEl.value = base;
-    if(hintEl) hintEl.textContent = '(auto-filled — BGPT price excl. GST)';
-    updateModalGST();
-  } else if(base === 0){
-    priceEl.value = '';
-    if(hintEl) hintEl.textContent = '(enter manually)';
-    const gstBox = document.getElementById('fm-gst-box');
-    if(gstBox) gstBox.style.display = 'none';
-  } else {
-    if(hintEl) hintEl.textContent = '';
-    const gstBox = document.getElementById('fm-gst-box');
-    if(gstBox) gstBox.style.display = 'none';
-  }
-}
+let _pendingPayMode = null;
 
-function updateModalGST(){
-  const profile = document.getElementById('fm-profile')?.value || 'BGPT';
-  const price   = parseFloat(document.getElementById('fm-price')?.value || 0);
-  const qty     = parseInt(document.getElementById('fm-qty')?.value || 1);
-  const gstBox  = document.getElementById('fm-gst-box');
-  if(!gstBox) return;
-  if(profile === 'SBGT' && price > 0){
-    // SBGT: price is BASE price, GST 18% added ON TOP
-    const gst     = price * 0.18;
-    const total   = (price + gst) * qty;
-    const totalGst = gst * qty;
-    gstBox.style.display = 'block';
-    gstBox.innerHTML = `
-      <div style="display:flex;justify-content:space-between"><span>Base price (excl. GST)</span><span style="font-weight:700">₹${price.toFixed(2)}</span></div>
-      <div style="display:flex;justify-content:space-between"><span>GST @ 18%</span><span style="font-weight:700;color:var(--saffron)">₹${gst.toFixed(2)}</span></div>
-      <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:4px;margin-top:4px"><span><b>${qty>1?'Total for '+qty+' units':'Total (incl. GST)'}</b></span><span style="font-weight:800;color:var(--green)">₹${total.toFixed(2)}</span></div>
-    `;
-    if(document.getElementById('fm-price')) document.getElementById('fm-price').dataset.gstAmount = totalGst.toFixed(2);
-  } else {
-    gstBox.style.display = 'none';
-    if(document.getElementById('fm-price')) document.getElementById('fm-price').dataset.gstAmount = '0';
-  }
-}
-
-function handleModalPayMode(val){
-  const wrap = document.getElementById('fm-pay-reminder-wrap');
-  const dateEl = document.getElementById('fm-pay-reminder');
-  if(!wrap) return;
+function selectPayMode(mode){
+  _pendingPayMode = mode;
+  const price   = parseFloat(document.getElementById('fm-price')?.value||0);
+  const profile = document.getElementById('fm-profile')?.value||'BGPT';
+  const gst     = profile==='SBGT' ? price*0.18 : 0;
+  const qty     = parseInt(document.getElementById('fm-qty')?.value||1);
+  const total   = (price+gst)*qty;
   const daysMap = {'In 2 Days':2,'In 7 Days':7,'In 15 Days':15,'Within 30 Days':30};
-  if(daysMap[val]){
-    wrap.style.display = '';
-    const d = new Date();
-    d.setDate(d.getDate() + daysMap[val]);
-    if(dateEl) dateEl.value = d.toISOString().slice(0,10);
-  } else {
-    wrap.style.display = 'none';
-    if(dateEl) dateEl.value = '';
+  let reminderNote='';
+  if(daysMap[mode]){
+    const d=new Date(); d.setDate(d.getDate()+daysMap[mode]);
+    reminderNote=`<div style="color:var(--saffron);font-size:11px;margin-top:4px">⏰ Payment reminder: ${d.toDateString()}</div>`;
+  }
+  document.getElementById('pay-confirm-summary').innerHTML=`
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:var(--text3)">Payment Mode</span><span style="font-weight:800;color:var(--accent2)">${mode}</span></div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:var(--text3)">Amount</span><span style="font-weight:800;color:var(--green)">₹${total.toLocaleString('en-IN',{minimumFractionDigits:2})}</span></div>
+    ${profile==='SBGT'?`<div style="font-size:11px;color:var(--text3)">incl. GST ₹${(gst*qty).toLocaleString('en-IN',{minimumFractionDigits:2})}</div>`:''}
+    ${reminderNote}
+  `;
+  const now=new Date(); now.setSeconds(0,0);
+  document.getElementById('pay-confirm-datetime').value=now.toISOString().slice(0,16);
+  document.getElementById('pay-confirm-modal').classList.add('open');
+}
+
+function confirmPayMode(){
+  const mode=_pendingPayMode;
+  const dt=document.getElementById('pay-confirm-datetime').value;
+  document.getElementById('fm-paymode').value=mode;
+  const daysMap={'In 2 Days':2,'In 7 Days':7,'In 15 Days':15,'Within 30 Days':30};
+  if(daysMap[mode]){
+    const d=new Date(); d.setDate(d.getDate()+daysMap[mode]);
+    document.getElementById('fm-pay-reminder').value=d.toISOString().slice(0,10);
+  }
+  document.querySelectorAll('.pay-mode-opt').forEach(b=>{
+    b.classList.toggle('selected', b.getAttribute('onclick')===`selectPayMode('${mode}')`);
+  });
+  const price=parseFloat(document.getElementById('fm-price')?.value||0);
+  const profile=document.getElementById('fm-profile')?.value||'BGPT';
+  const gst=profile==='SBGT'?price*0.18:0;
+  const qty=parseInt(document.getElementById('fm-qty')?.value||1);
+  const total=(price+gst)*qty;
+  const cEl=document.getElementById('fm-pay-confirmed');
+  const cTxt=document.getElementById('fm-pay-confirmed-txt');
+  if(cEl){cEl.style.display='flex';}
+  if(cTxt){cTxt.textContent=`${mode} — ₹${total.toLocaleString('en-IN',{minimumFractionDigits:2})} confirmed`;}
+  document.getElementById('pay-confirm-modal').classList.remove('open');
+  _pendingPayMode=null;
+}
+
+function cancelPayMode(){
+  document.getElementById('pay-confirm-modal').classList.remove('open');
+  _pendingPayMode=null;
+}
+
+function clearPayMode(){
+  document.getElementById('fm-paymode').value='';
+  document.getElementById('fm-pay-reminder').value='';
+  const cEl=document.getElementById('fm-pay-confirmed');
+  if(cEl) cEl.style.display='none';
+  document.querySelectorAll('.pay-mode-opt').forEach(b=>b.classList.remove('selected'));
+}
+
+function handleTechChange(){
+  const val=document.getElementById('fm-tech')?.value||'';
+  const rw=document.getElementById('fm-reminder-wrap');
+  const ow=document.getElementById('fm-outstation-wrap');
+  if(rw) rw.style.display=val?'none':'';
+  if(ow) ow.style.display=val?'':'none';
+  if(!val){
+    const osCb=document.getElementById('fm-outstation'); if(osCb) osCb.checked=false;
+    const osS=document.getElementById('fm-outstation-section'); if(osS) osS.style.display='none';
   }
 }
 
 function toggleModalOutstation(){
-  const checked = document.getElementById('fm-outstation')?.checked;
-  const sec = document.getElementById('fm-outstation-section');
-  if(sec) sec.style.display = checked ? '' : 'none';
+  const checked=document.getElementById('fm-outstation')?.checked;
+  const sec=document.getElementById('fm-outstation-section');
+  if(sec) sec.style.display=checked?'':'none';
 }
 
 function toggleModalTravelAmt(){
-  const val  = document.getElementById('fm-travel-by')?.value;
-  const wrap = document.getElementById('fm-travel-amt-wrap');
-  if(wrap) wrap.style.display = val==='CUSTOMER' ? '' : 'none';
+  const val=document.getElementById('fm-travel-by')?.value;
+  const wrap=document.getElementById('fm-travel-amt-wrap');
+  if(wrap) wrap.style.display=val==='CUSTOMER'?'':'none';
 }
 
-// ── Open create modal ─────────────────────────────────────────────────────
+function setModalJobPrice(job){
+  const base=JOB_PRICES[job];
+  const priceEl=document.getElementById('fm-price');
+  const hintEl=document.getElementById('fm-price-hint');
+  if(base!==undefined && base>0){
+    priceEl.value=base;
+    if(hintEl) hintEl.textContent='(auto-filled — BGPT price excl. GST)';
+    updateModalGST();
+  } else {
+    if(priceEl) priceEl.value='';
+    if(hintEl) hintEl.textContent=base===0?'(enter manually)':'';
+    const gstBox=document.getElementById('fm-gst-box'); if(gstBox) gstBox.style.display='none';
+  }
+}
+
+function updateModalGST(){
+  const profile=document.getElementById('fm-profile')?.value||'BGPT';
+  const price=parseFloat(document.getElementById('fm-price')?.value||0);
+  const qty=parseInt(document.getElementById('fm-qty')?.value||1);
+  const gstBox=document.getElementById('fm-gst-box');
+  if(!gstBox) return;
+  if(profile==='SBGT' && price>0){
+    const gst=price*0.18;
+    const total=(price+gst)*qty;
+    gstBox.style.display='block';
+    gstBox.innerHTML=`
+      <div style="display:flex;justify-content:space-between"><span>Base price</span><span style="font-weight:700">₹${price.toFixed(2)}</span></div>
+      <div style="display:flex;justify-content:space-between"><span>GST @ 18%</span><span style="font-weight:700;color:var(--saffron)">+ ₹${(price*0.18).toFixed(2)}</span></div>
+      <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:4px;margin-top:4px"><span><b>${qty>1?'Total for '+qty+' units':'Total incl. GST'}</b></span><span style="font-weight:800;color:var(--green)">₹${total.toFixed(2)}</span></div>
+    `;
+    if(priceEl) document.getElementById('fm-price').dataset.gstAmount=(price*0.18*qty).toFixed(2);
+  } else {
+    gstBox.style.display='none';
+    if(document.getElementById('fm-price')) document.getElementById('fm-price').dataset.gstAmount='0';
+  }
+}
+
 function openCreateModal(){
-  editingTaskId = null;
-  document.getElementById('task-modal-title').textContent = 'Create New Task';
-  document.getElementById('task-save-btn').textContent    = '✅ Create Task';
-  document.getElementById('fm-task-id').value             = '';
-
-  // Clear all fields
-  ['fm-customer','fm-contact','fm-email','fm-location','fm-notes','fm-remark',
-   'fm-price','fm-collected','fm-reminder','fm-pay-reminder','fm-outstation-loc','fm-travel-amt']
-  .forEach(id=>{ const el=document.getElementById(id); if(el){el.value='';el.disabled=false;} });
-
-  ['fm-leadtype','fm-profile','fm-job','fm-paymode','fm-status','fm-travel-by']
-  .forEach(id=>{ const el=document.getElementById(id); if(el){el.selectedIndex=0;el.disabled=false;} });
-
-  const qtyEl=document.getElementById('fm-qty'); if(qtyEl){qtyEl.value=1;qtyEl.disabled=false;}
-  document.getElementById('fm-status').value='Open';
-
-  ['fm-urgent','fm-outstation'].forEach(id=>{ const el=document.getElementById(id); if(el){el.checked=false;el.disabled=false;} });
-
-  // Reset visibility
-  const gstBox=document.getElementById('fm-gst-box'); if(gstBox) gstBox.style.display='none';
-  const hint=document.getElementById('fm-price-hint'); if(hint) hint.textContent='';
-  const prWrap=document.getElementById('fm-pay-reminder-wrap'); if(prWrap) prWrap.style.display='none';
-  const osSec=document.getElementById('fm-outstation-section'); if(osSec) osSec.style.display='none';
-  const taWrap=document.getElementById('fm-travel-amt-wrap'); if(taWrap) taWrap.style.display='none';
-
-  // Fill tech dropdown if empty
-  _fillTechDropdown('fm-tech');
-
-  document.querySelectorAll('[id^="fm-"]').forEach(el=>el.disabled=false);
+  editingTaskId=null;
+  document.getElementById('task-modal-title').textContent='New Task';
+  document.getElementById('task-save-btn').textContent='✅ Create Task';
+  document.getElementById('fm-task-id').value='';
+  ['fm-customer','fm-contact','fm-email','fm-location','fm-price','fm-reminder',
+   'fm-pay-reminder','fm-outstation-loc','fm-travel-amt','fm-notes']
+    .forEach(id=>{const el=document.getElementById(id);if(el){el.value='';el.disabled=false;}});
+  ['fm-leadtype','fm-profile','fm-job','fm-travel-by']
+    .forEach(id=>{const el=document.getElementById(id);if(el){el.selectedIndex=0;el.disabled=false;}});
+  const qty=document.getElementById('fm-qty');if(qty){qty.value=1;qty.disabled=false;}
+  ['fm-urgent','fm-outstation'].forEach(id=>{const el=document.getElementById(id);if(el){el.checked=false;el.disabled=false;}});
+  const gstBox=document.getElementById('fm-gst-box');if(gstBox)gstBox.style.display='none';
+  const hint=document.getElementById('fm-price-hint');if(hint)hint.textContent='';
+  document.getElementById('fm-outstation-section').style.display='none';
+  document.getElementById('fm-outstation-wrap').style.display='none';
+  document.getElementById('fm-reminder-wrap').style.display='';
+  const taW=document.getElementById('fm-travel-amt-wrap');if(taW)taW.style.display='none';
+  clearPayMode();
+  _fillTechDropdown('fm-tech',null);
   document.getElementById('task-save-btn').style.display='';
   document.getElementById('task-modal').classList.add('open');
 }
 
-// ── Open edit modal ───────────────────────────────────────────────────────
 async function viewTask(id){
-  const res = await api('get_task',{id}).catch(()=>({}));
-  const t   = res.task || res;
-  if(!t||!t.id){ alert('Task not found.'); return; }
-  const isAdmin = ['admin','assigner'].includes(currentUser?.role);
-
-  editingTaskId = t.id;
-  document.getElementById('task-modal-title').textContent = 'Task ' + (t.task_id||'');
-  document.getElementById('task-save-btn').textContent    = '💾 Save Changes';
-  document.getElementById('fm-task-id').value             = t.id;
-
-  const sf = (id,val)=>{ const el=document.getElementById(id); if(el) el.value=val??''; };
-  sf('fm-customer',  t.customer_name);
-  sf('fm-contact',   t.contact_number);
-  sf('fm-email',     t.email);
-  sf('fm-location',  t.location);
-  sf('fm-price',     t.price_to_collect);
-  sf('fm-collected', t.amount_collected);
-  sf('fm-notes',     t.general_notes);
-  sf('fm-remark',    t.remark||t.latest_remark||'');
-  sf('fm-reminder',  t.reminder_date);
-  sf('fm-qty',       t.device_qty||1);
-  sf('fm-outstation-loc', t.outstation_location);
-  sf('fm-travel-amt', t.outstation_customer_travel_amount);
-
-  const sel=(id,val)=>{ const el=document.getElementById(id); if(el) el.value=val||''; };
-  sel('fm-leadtype', t.lead_type);
-  sel('fm-profile',  t.profile||'BGPT');
-  sel('fm-job',      t.device_details);
-  sel('fm-status',   t.task_status);
-  sel('fm-paymode',  t.payment_mode);
-  sel('fm-travel-by',t.outstation_travel_paid_by);
-
-  const ck=(id,val)=>{ const el=document.getElementById(id); if(el) el.checked=!!val; };
-  ck('fm-urgent',     t.is_urgent);
-  ck('fm-outstation', t.is_outstation);
-
-  // Show/hide dynamic sections
-  toggleModalOutstation();
-  toggleModalTravelAmt();
-  handleModalPayMode(t.payment_mode||'');
-  updateModalGST();
-
-  // Fill tech dropdown
-  await _fillTechDropdown('fm-tech', t.assigned_to);
-
-  // Disable fields for non-admins
+  const res=await api('get_task',{id}).catch(()=>({}));
+  const t=res.task||res;
+  if(!t||!t.id){alert('Task not found.');return;}
+  const isAdmin=['admin','assigner'].includes(currentUser?.role);
+  editingTaskId=t.id;
+  document.getElementById('task-modal-title').textContent=`Task ${t.task_id||''}`;
+  document.getElementById('task-save-btn').textContent='💾 Save Changes';
+  document.getElementById('fm-task-id').value=t.id;
+  const sf=(id,val)=>{const el=document.getElementById(id);if(el)el.value=val??'';};
+  sf('fm-customer',t.customer_name); sf('fm-contact',t.contact_number);
+  sf('fm-email',t.email); sf('fm-location',t.location);
+  sf('fm-price',t.price_to_collect); sf('fm-notes',t.general_notes||t.remark||'');
+  sf('fm-reminder',t.reminder_date); sf('fm-qty',t.device_qty||1);
+  sf('fm-outstation-loc',t.outstation_location);
+  sf('fm-travel-amt',t.outstation_customer_travel_amount);
+  sf('fm-paymode',t.payment_mode||''); sf('fm-pay-reminder',t.payment_reminder_date||'');
+  const sel=(id,val)=>{const el=document.getElementById(id);if(el)el.value=val||'';};
+  sel('fm-leadtype',t.lead_type); sel('fm-profile',t.profile||'BGPT');
+  sel('fm-job',t.device_details); sel('fm-travel-by',t.outstation_travel_paid_by);
+  const ck=(id,val)=>{const el=document.getElementById(id);if(el)el.checked=!!val;};
+  ck('fm-urgent',t.is_urgent); ck('fm-outstation',t.is_outstation);
+  if(t.payment_mode){
+    const cEl=document.getElementById('fm-pay-confirmed');
+    const cTxt=document.getElementById('fm-pay-confirmed-txt');
+    if(cEl) cEl.style.display='flex';
+    if(cTxt) cTxt.textContent=`${t.payment_mode} — ₹${parseFloat(t.price_to_collect||0).toLocaleString('en-IN')}`;
+  }
+  handleTechChange(); toggleModalOutstation(); toggleModalTravelAmt(); updateModalGST();
+  await _fillTechDropdown('fm-tech',t.assigned_to);
+  handleTechChange();
   if(!isAdmin){
-    document.querySelectorAll('#task-modal input, #task-modal select, #task-modal textarea')
-      .forEach(el=>el.disabled=true);
+    document.querySelectorAll('#task-drawer input,#task-drawer select,#task-drawer textarea,.pay-mode-opt').forEach(el=>el.disabled=true);
     document.getElementById('task-save-btn').style.display='none';
   } else {
-    document.querySelectorAll('#task-modal input, #task-modal select, #task-modal textarea')
-      .forEach(el=>el.disabled=false);
+    document.querySelectorAll('#task-drawer input,#task-drawer select,#task-drawer textarea').forEach(el=>el.disabled=false);
     document.getElementById('task-save-btn').style.display='';
   }
-
   document.getElementById('task-modal').classList.add('open');
 }
 
-function openEditModal(id){ viewTask(id); }
+function openEditModal(id){viewTask(id);}
 
-async function _fillTechDropdown(selId, selectedId=null){
-  const sel = document.getElementById(selId);
-  if(!sel) return;
-  if(sel.options.length <= 1){
-    const r = await api('get_users',{role:'technician'}).catch(()=>({}));
-    (r.users||[]).forEach(t=>{
-      const o=document.createElement('option'); o.value=t.id; o.textContent=t.name; sel.appendChild(o);
-    });
-  }
-  if(selectedId) sel.value = selectedId;
+async function _fillTechDropdown(selId,selectedId=null){
+  const sel=document.getElementById(selId);if(!sel)return;
+  while(sel.options.length>1)sel.remove(1);
+  const r=await api('get_users',{role:'technician'}).catch(()=>({}));
+  (r.users||[]).forEach(t=>{const o=document.createElement('option');o.value=t.id;o.textContent=t.name;sel.appendChild(o);});
+  if(selectedId)sel.value=selectedId;
 }
 
-// ── Save Task ─────────────────────────────────────────────────────────────
 async function saveTask(){
-  const btn      = document.getElementById('task-save-btn');
-  const customer = document.getElementById('fm-customer').value.trim();
-  const contact  = document.getElementById('fm-contact').value.trim();
-  if(!customer){ alert('Customer name is required.'); return; }
-  if(!contact) { alert('Contact number is required.'); return; }
-
-  btn.textContent='Saving…'; btn.disabled=true;
-
-  const payload = {
-    customer_name:    customer,
-    contact_number:   contact,
-    email:            document.getElementById('fm-email')?.value.trim()||'',
-    location:         document.getElementById('fm-location')?.value.trim()||'',
-    lead_type:        document.getElementById('fm-leadtype')?.value||'New Lead',
-    profile:          document.getElementById('fm-profile')?.value||'BGPT',
-    device_qty:       document.getElementById('fm-qty')?.value||1,
-    device_details:   document.getElementById('fm-job')?.value||'',
-    price_to_collect: document.getElementById('fm-price')?.value||0,
-    gst_amount:       parseFloat(document.getElementById('fm-price')?.dataset?.gstAmount||0),
-    amount_collected: document.getElementById('fm-collected')?.value||0,
-    payment_mode:     document.getElementById('fm-paymode')?.value||'',
-    payment_reminder_date: document.getElementById('fm-pay-reminder')?.value||null,
-    assigned_to:      document.getElementById('fm-tech')?.value||null,
-    task_status:      document.getElementById('fm-status')?.value||'Open',
-    reminder_date:    document.getElementById('fm-reminder')?.value||null,
-    is_urgent:        document.getElementById('fm-urgent')?.checked?1:0,
-    is_outstation:    document.getElementById('fm-outstation')?.checked?1:0,
-    outstation_location: document.getElementById('fm-outstation-loc')?.value.trim()||null,
-    outstation_travel_paid_by: document.getElementById('fm-travel-by')?.value||null,
-    outstation_customer_travel_amount: document.getElementById('fm-travel-amt')?.value||null,
-    general_notes:    document.getElementById('fm-notes')?.value.trim()||'',
-    remark:           document.getElementById('fm-remark')?.value.trim()||'',
-  };
-
-  if(editingTaskId) payload.id = editingTaskId;
-  const action = editingTaskId ? 'update_task' : 'create_task';
-  const res = await api(action,{},'POST',payload).catch(()=>({}));
-
-  btn.textContent = editingTaskId ? '💾 Save Changes' : '✅ Create Task';
-  btn.disabled = false;
-
-  if(res.success || res.task_id){
-    closeTaskModal();
-    loadTasks();
-  } else {
-    alert(res.error||'Save failed. Please try again.');
+  const btn=document.getElementById('task-save-btn');
+  const customer=document.getElementById('fm-customer').value.trim();
+  const contact=document.getElementById('fm-contact').value.trim();
+  if(!customer){alert('Customer name is required.');return;}
+  if(!contact){alert('Contact number is required.');return;}
+  const techVal=document.getElementById('fm-tech')?.value||'';
+  const reminderVal=document.getElementById('fm-reminder')?.value||'';
+  if(!techVal&&!reminderVal){
+    alert('No technician assigned — please set a follow-up reminder date.');
+    document.getElementById('fm-reminder')?.focus();
+    return;
   }
+  btn.textContent='Saving…';btn.disabled=true;
+  const payload={
+    customer_name:customer, contact_number:contact,
+    email:document.getElementById('fm-email')?.value.trim()||'',
+    location:document.getElementById('fm-location')?.value.trim()||'',
+    lead_type:document.getElementById('fm-leadtype')?.value||'New Lead',
+    profile:document.getElementById('fm-profile')?.value||'BGPT',
+    device_qty:document.getElementById('fm-qty')?.value||1,
+    device_details:document.getElementById('fm-job')?.value||'',
+    price_to_collect:document.getElementById('fm-price')?.value||0,
+    gst_amount:parseFloat(document.getElementById('fm-price')?.dataset?.gstAmount||0),
+    amount_collected:0,
+    payment_mode:document.getElementById('fm-paymode')?.value||'',
+    payment_reminder_date:document.getElementById('fm-pay-reminder')?.value||null,
+    assigned_to:techVal||null,
+    task_status:editingTaskId?'Open':'Open',
+    reminder_date:reminderVal||null,
+    is_urgent:document.getElementById('fm-urgent')?.checked?1:0,
+    is_outstation:document.getElementById('fm-outstation')?.checked?1:0,
+    outstation_location:document.getElementById('fm-outstation-loc')?.value.trim()||null,
+    outstation_travel_paid_by:document.getElementById('fm-travel-by')?.value||null,
+    outstation_customer_travel_amount:document.getElementById('fm-travel-amt')?.value||null,
+    general_notes:document.getElementById('fm-notes')?.value.trim()||'',
+    remark:document.getElementById('fm-notes')?.value.trim()||'',
+  };
+  if(editingTaskId)payload.id=editingTaskId;
+  const action=editingTaskId?'update_task':'create_task';
+  const res=await api(action,{},'POST',payload).catch(()=>({}));
+  btn.textContent=editingTaskId?'💾 Save Changes':'✅ Create Task';btn.disabled=false;
+  if(res.success||res.task_id){closeTaskModal();loadTasks();}
+  else alert(res.error||'Save failed. Please try again.');
 }
 
 function closeTaskModal(){
   document.getElementById('task-modal').classList.remove('open');
-  editingTaskId = null;
+  document.getElementById('pay-confirm-modal').classList.remove('open');
+  editingTaskId=null;
 }
 
 </script>
