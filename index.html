@@ -220,6 +220,15 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
 .pay-mode-opt{padding:6px 12px;border:1.5px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text2);font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;white-space:nowrap}
 .pay-mode-opt:hover{border-color:var(--accent2);color:var(--accent2);background:var(--accent-light)}
 .pay-mode-opt.selected{border-color:var(--green);color:var(--green);background:var(--green-bg)}
+
+/* TECH UPDATE CARDS */
+.tu-card{border:2px solid var(--border);border-radius:10px;padding:12px 10px;cursor:pointer;transition:all .15s;background:var(--surface);text-align:center;user-select:none}
+.tu-card:hover{background:var(--surface2);transform:translateY(-1px)}
+.tu-card.selected{background:var(--accent-light) !important;border-width:2.5px !important;transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.12)}
+.tu-card-icon{font-size:24px;margin-bottom:5px}
+.tu-card-title{font-size:12px;font-weight:800;color:var(--text);margin-bottom:2px}
+.tu-card-sub{font-size:10px;color:var(--text3);line-height:1.3}
+.tu-card.selected .tu-card-title{color:var(--accent)}
 </style>
 </head>
 <body>
@@ -827,71 +836,119 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
 
       </div><!-- /task-detail-drawer -->
 
-      <!-- TECH UPDATE MODAL -->
+      <!-- TECH UPDATE MODAL — Smart Card Design -->
       <div class="modal-overlay" id="tech-update-modal" style="z-index:1000">
-        <div style="background:var(--surface);border-radius:12px;width:480px;max-width:calc(100vw - 32px);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.25)">
-          <div style="background:var(--accent);padding:14px 18px;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
-            <div style="font-size:14px;font-weight:800;color:#fff" id="tech-update-title">📞 Call / Visit Update</div>
-            <button onclick="closeTechUpdate()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:28px;height:28px;border-radius:6px;font-size:16px;cursor:pointer">✕</button>
+        <div style="background:var(--surface);border-radius:14px;width:520px;max-width:calc(100vw - 24px);max-height:92vh;display:flex;flex-direction:column;box-shadow:0 12px 48px rgba(0,0,0,.28)">
+
+          <!-- Header -->
+          <div style="background:var(--accent);padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+            <div>
+              <div style="font-size:15px;font-weight:800;color:#fff">📞 Call / Visit Update</div>
+              <div id="tu-task-ref" style="font-size:11px;color:rgba(255,255,255,.55);margin-top:2px">–</div>
+            </div>
+            <button onclick="closeTechUpdate()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:30px;height:30px;border-radius:7px;font-size:17px;cursor:pointer">✕</button>
           </div>
-          <div style="padding:18px;overflow-y:auto;flex:1">
+
+          <div style="overflow-y:auto;flex:1;padding:18px 20px">
             <input type="hidden" id="tech-update-task-id">
-            <div class="form-group" style="margin-bottom:12px">
-              <label>What was discussed with the customer? *</label>
-              <textarea id="tch-discussed" rows="3" placeholder="e.g. Called customer, confirmed time at 3 PM. Vehicle is at workshop..."></textarea>
+
+            <!-- STEP 1: What happened -->
+            <div style="margin-bottom:18px">
+              <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--accent2);margin-bottom:8px">① What happened?</div>
+              <textarea id="tch-discussed" rows="3" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;resize:vertical;transition:border .2s" onfocus="this.style.borderColor='var(--accent2)'" onblur="this.style.borderColor='var(--border)'" placeholder="Write what happened — called customer, visited location, issue found..."></textarea>
             </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Customer Response</label>
-                <select id="tch-cust-resp">
-                  <option value="">Select</option>
-                  <option>Available — confirmed time</option>
-                  <option>Not available — rescheduled</option>
-                  <option>Not answering call</option>
-                  <option>Asked to call back later</option>
-                  <option>Vehicle not ready</option>
-                  <option>Payment issue — will resolve</option>
-                  <option>Already done — update only</option>
-                  <option>Other</option>
-                </select>
+
+            <!-- STEP 2: Customer Response Cards -->
+            <div style="margin-bottom:18px">
+              <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--accent2);margin-bottom:8px">② How did the customer respond?</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" id="tu-response-cards">
+
+                <div class="tu-card" data-resp="Available — confirmed time" data-next="Will visit today" data-remind="0" data-remind-label="" onclick="selectTuCard(this)" style="border-color:#1a7a3a">
+                  <div class="tu-card-icon">🟢</div>
+                  <div class="tu-card-title">Available</div>
+                  <div class="tu-card-sub">Confirmed time & ready</div>
+                </div>
+
+                <div class="tu-card" data-resp="Come tomorrow" data-next="Visit tomorrow" data-remind="24" data-remind-label="Tomorrow 9 AM" onclick="selectTuCard(this)" style="border-color:#1a56a0">
+                  <div class="tu-card-icon">📅</div>
+                  <div class="tu-card-title">Come Tomorrow</div>
+                  <div class="tu-card-sub">Reminder set for tomorrow</div>
+                </div>
+
+                <div class="tu-card" data-resp="Not answering call" data-next="Retry call in 2 hours" data-remind="2" data-remind-label="In 2 hours" onclick="selectTuCard(this)" style="border-color:#c0392b">
+                  <div class="tu-card-icon">📵</div>
+                  <div class="tu-card-title">Not Answering</div>
+                  <div class="tu-card-sub">Auto-retry in 2h</div>
+                </div>
+
+                <div class="tu-card" data-resp="Asked to call back later" data-next="Call back as requested" data-remind="4" data-remind-label="In 4 hours" onclick="selectTuCard(this)" style="border-color:#e07b00">
+                  <div class="tu-card-icon">⏰</div>
+                  <div class="tu-card-title">Call Back Later</div>
+                  <div class="tu-card-sub">Reminder in 4 hours</div>
+                </div>
+
+                <div class="tu-card" data-resp="Vehicle not ready" data-next="Wait for customer — vehicle not ready" data-remind="48" data-remind-label="In 2 days" onclick="selectTuCard(this)" style="border-color:#d4680a">
+                  <div class="tu-card-icon">🚗</div>
+                  <div class="tu-card-title">Vehicle Not Ready</div>
+                  <div class="tu-card-sub">Follow up in 2 days</div>
+                </div>
+
+                <div class="tu-card" data-resp="Payment issue — will resolve" data-next="Follow up on payment" data-remind="24" data-remind-label="Tomorrow" onclick="selectTuCard(this)" style="border-color:#5b2d8e">
+                  <div class="tu-card-icon">💰</div>
+                  <div class="tu-card-title">Payment Issue</div>
+                  <div class="tu-card-sub">Flag & follow up tomorrow</div>
+                </div>
+
+                <div class="tu-card" data-resp="Rescheduled by customer" data-next="Visit on rescheduled date" data-remind="24" data-remind-label="Tomorrow" onclick="selectTuCard(this)" style="border-color:#0d7377">
+                  <div class="tu-card-icon">🗓️</div>
+                  <div class="tu-card-title">Rescheduled</div>
+                  <div class="tu-card-sub">New date agreed</div>
+                </div>
+
+                <div class="tu-card" data-resp="Update only — no customer interaction" data-next="" data-remind="0" data-remind-label="" onclick="selectTuCard(this)" style="border-color:#8a9ab0">
+                  <div class="tu-card-icon">📝</div>
+                  <div class="tu-card-title">Log Only</div>
+                  <div class="tu-card-sub">No customer interaction</div>
+                </div>
+
               </div>
-              <div class="form-group">
-                <label>Next Step</label>
-                <select id="tch-next-step">
-                  <option value="">Not decided</option>
-                  <option>Will visit today</option>
-                  <option>Will visit tomorrow</option>
-                  <option>Waiting for customer</option>
-                  <option>Customer will call back</option>
-                  <option>Ready for installation</option>
-                </select>
+              <input type="hidden" id="tch-cust-resp">
+              <input type="hidden" id="tch-next-step">
+              <input type="hidden" id="tch-remind-when">
+            </div>
+
+            <!-- STEP 3: Auto reminder confirmation (shown after card select) -->
+            <div id="tu-reminder-box" style="display:none;border-radius:8px;padding:12px 14px;margin-bottom:16px;border:1.5px solid var(--green);background:var(--green-bg)">
+              <div style="display:flex;align-items:center;gap:10px">
+                <span style="font-size:20px">⏰</span>
+                <div style="flex:1">
+                  <div style="font-size:12px;font-weight:800;color:var(--green)">Follow-up Reminder Set</div>
+                  <div id="tu-reminder-label" style="font-size:13px;color:var(--text2);margin-top:2px">–</div>
+                </div>
+                <div>
+                  <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">Override date</label>
+                  <input type="date" id="tu-reminder-date" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;outline:none">
+                </div>
               </div>
             </div>
-            <div class="form-group" style="margin-bottom:12px">
-              <label>What did you tell the customer?</label>
-              <textarea id="tch-told" rows="2" placeholder="e.g. Will visit by 3 PM today..."></textarea>
+
+            <!-- Next step display -->
+            <div id="tu-nextstep-box" style="display:none;background:var(--accent-light);border:1.5px solid var(--accent2);border-radius:8px;padding:10px 14px;margin-bottom:4px">
+              <div style="font-size:10px;font-weight:800;text-transform:uppercase;color:var(--accent2);margin-bottom:4px">Next Step</div>
+              <div id="tu-nextstep-label" style="font-size:13px;font-weight:700;color:var(--text)">–</div>
             </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Follow-up reminder in</label>
-                <select id="tch-remind-when">
-                  <option value="">No reminder</option>
-                  <option value="1">1 hour</option>
-                  <option value="2">2 hours</option>
-                  <option value="4">4 hours</option>
-                  <option value="24">Tomorrow</option>
-                  <option value="48">In 2 days</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label>Reason for follow-up</label>
-                <input type="text" id="tch-remind-reason" placeholder="e.g. Customer will confirm">
-              </div>
-            </div>
+
           </div>
-          <div style="padding:14px 18px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;flex-shrink:0">
-            <button class="ts-btn ts-btn-secondary" onclick="closeTechUpdate()">Cancel</button>
-            <button class="ts-btn ts-btn-primary" onclick="submitTechUpdate()">💾 Save Update</button>
+
+          <!-- Footer -->
+          <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0;background:var(--surface);border-radius:0 0 14px 14px">
+            <div id="tu-email-note" style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:5px">
+              <span>✉️</span> Customer will be emailed this update
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="ts-btn ts-btn-secondary" onclick="closeTechUpdate()">Cancel</button>
+              <button class="ts-btn ts-btn-primary" id="tu-save-btn" onclick="submitTechUpdate()">💾 Save Update</button>
+            </div>
           </div>
         </div>
       </div>
@@ -2276,13 +2333,67 @@ async function viewTaskInEditDrawer(id){
 // ── TECH UPDATE MODAL ─────────────────────────────────────────────────────
 function openTechUpdate(taskId){
   document.getElementById('tech-update-task-id').value = taskId;
-  ['tch-discussed','tch-told','tch-remind-reason'].forEach(id=>{
-    const el=document.getElementById(id); if(el) el.value='';
-  });
-  ['tch-cust-resp','tch-next-step','tch-remind-when'].forEach(id=>{
-    const el=document.getElementById(id); if(el) el.selectedIndex=0;
-  });
+  document.getElementById('tch-discussed').value = '';
+  document.getElementById('tch-cust-resp').value = '';
+  document.getElementById('tch-next-step').value = '';
+  document.getElementById('tch-remind-when').value = '';
+
+  // Reset cards
+  document.querySelectorAll('.tu-card').forEach(c=>c.classList.remove('selected'));
+  document.getElementById('tu-reminder-box').style.display='none';
+  document.getElementById('tu-nextstep-box').style.display='none';
+  document.getElementById('tu-reminder-date').value='';
+
+  // Set task ref in header
+  if(_detailTask){
+    document.getElementById('tu-task-ref').textContent =
+      (_detailTask.task_id||'') + ' · ' + (_detailTask.customer_name||'');
+  }
+
   document.getElementById('tech-update-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('tch-discussed').focus(), 200);
+}
+
+function selectTuCard(card){
+  // Deselect all
+  document.querySelectorAll('.tu-card').forEach(c=>c.classList.remove('selected'));
+  card.classList.add('selected');
+
+  const resp        = card.dataset.resp || '';
+  const nextStep    = card.dataset.next || '';
+  const remindHours = card.dataset.remind || '0';
+  const remindLabel = card.dataset.remindLabel || '';
+
+  // Store values
+  document.getElementById('tch-cust-resp').value  = resp;
+  document.getElementById('tch-next-step').value  = nextStep;
+  document.getElementById('tch-remind-when').value = remindHours;
+
+  // Show/update reminder box
+  const remBox = document.getElementById('tu-reminder-box');
+  const remLbl = document.getElementById('tu-reminder-label');
+  const remDt  = document.getElementById('tu-reminder-date');
+  if(parseInt(remindHours) > 0){
+    remBox.style.display='';
+    remLbl.textContent = remindLabel + ' — tap to change date';
+    // Auto-set date
+    const d = new Date();
+    d.setHours(d.getHours() + parseInt(remindHours));
+    remDt.value = d.toISOString().slice(0,10);
+  } else {
+    remBox.style.display='none';
+    remDt.value='';
+  }
+
+  // Show next step
+  const nsBox = document.getElementById('tu-nextstep-box');
+  const nsLbl = document.getElementById('tu-nextstep-label');
+  if(nextStep){
+    nsBox.style.display='';
+    nsLbl.textContent = nextStep;
+  } else {
+    nsBox.style.display='none';
+  }
 }
 
 function closeTechUpdate(){
@@ -2292,33 +2403,30 @@ function closeTechUpdate(){
 async function submitTechUpdate(){
   const taskId    = document.getElementById('tech-update-task-id').value;
   const discussed = document.getElementById('tch-discussed').value.trim();
-  if(!discussed){ alert('Please describe what was discussed.'); return; }
+  if(!discussed){ alert('Please describe what happened.'); document.getElementById('tch-discussed').focus(); return; }
 
-  const custResp   = document.getElementById('tch-cust-resp').value;
-  const told       = document.getElementById('tch-told').value.trim();
-  const remindWhen = document.getElementById('tch-remind-when').value;
-  const remindReason= document.getElementById('tch-remind-reason').value.trim();
-  const nextStep   = document.getElementById('tch-next-step').value;
+  const custResp    = document.getElementById('tch-cust-resp').value;
+  const nextStep    = document.getElementById('tch-next-step').value;
+  const remindHours = document.getElementById('tch-remind-when').value;
+  const remindDate  = document.getElementById('tu-reminder-date').value;
 
+  // Build structured remark
   const parts = ['📞 ' + discussed];
-  if(custResp)    parts.push('Customer: ' + custResp);
-  if(told)        parts.push('Told customer: ' + told);
-  if(nextStep)    parts.push('Next step: ' + nextStep);
-  if(remindWhen)  parts.push('Follow-up in ' + remindWhen + 'h' + (remindReason ? ': ' + remindReason : ''));
+  if(custResp)  parts.push('Customer: ' + custResp);
+  if(nextStep)  parts.push('Next step: ' + nextStep);
+  if(remindHours && remindDate) parts.push('Follow-up: ' + remindDate);
 
   const body = { id: taskId, remark: parts.join(' | ') };
-  if(remindWhen){
-    const d = new Date(); d.setHours(d.getHours() + parseInt(remindWhen));
-    body.reminder_date = d.toISOString().split('T')[0];
-  }
+  // Set reminder date if selected
+  if(remindDate) body.reminder_date = remindDate;
 
-  const btn = document.querySelector('#tech-update-modal .ts-btn-primary');
+  const btn = document.getElementById('tu-save-btn');
   if(btn){ btn.textContent='Saving…'; btn.disabled=true; }
   const res = await api('update_task',{},'POST',body).catch(()=>({}));
   if(btn){ btn.textContent='💾 Save Update'; btn.disabled=false; }
+
   if(res.success){
     closeTechUpdate();
-    // Refresh the detail drawer — reload task and re-render activity log
     await viewTask(taskId);
     if(typeof renderMyTasks === 'function') renderMyTasks();
   } else {
