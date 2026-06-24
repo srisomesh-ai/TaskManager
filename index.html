@@ -485,9 +485,12 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
           <div style="background:var(--accent);padding:18px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
             <div>
               <div id="task-modal-title" style="font-size:16px;font-weight:800;color:#fff">New Task</div>
-              <div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:2px">Fields marked * are required</div>
+              <div id="task-modal-subtitle" style="font-size:11px;color:rgba(255,255,255,.5);margin-top:2px">Fields marked * are required</div>
             </div>
-            <button onclick="closeTaskModal()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:32px;height:32px;border-radius:8px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
+            <div style="display:flex;align-items:center;gap:8px">
+              <button id="task-edit-btn" onclick="enableEditMode()" style="display:none;background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.3);color:#fff;padding:6px 14px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">✏️ Edit</button>
+              <button onclick="closeTaskModal()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:32px;height:32px;border-radius:8px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
+            </div>
           </div>
           <div style="flex:1;overflow-y:auto">
             <input type="hidden" id="fm-task-id">
@@ -612,9 +615,9 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
               </div>
             </div>
           </div>
-          <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0;background:var(--surface)">
-            <button class="ts-btn ts-btn-secondary" onclick="closeTaskModal()">Cancel</button>
-            <button class="ts-btn ts-btn-primary" id="task-save-btn" onclick="saveTask()">✅ Create Task</button>
+          <div id="task-modal-footer" style="padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0;background:var(--surface)">
+            <button class="ts-btn ts-btn-secondary" onclick="closeTaskModal()">Close</button>
+            <button class="ts-btn ts-btn-primary" id="task-save-btn" onclick="saveTask()" style="display:none">✅ Create Task</button>
           </div>
         </div>
       </div>
@@ -904,6 +907,51 @@ async function loadDashboard(){
 }
 
 // ── Placeholder for create modal ──────────────────────────────────────────
+// ── Drawer Modes: view / create / edit ───────────────────────────────────
+function _setDrawerMode(mode, isAdmin){
+  const isView   = mode === 'view';
+  const isCreate = mode === 'create';
+
+  // Disable/enable all inputs
+  document.querySelectorAll('#task-drawer input, #task-drawer select, #task-drawer textarea')
+    .forEach(el => { el.disabled = isView; });
+
+  // Pay mode buttons
+  document.querySelectorAll('.pay-mode-opt').forEach(b => b.disabled = isView);
+
+  // Header subtitle
+  const subtitle = document.getElementById('task-modal-subtitle');
+  if(subtitle){
+    subtitle.textContent = isView ? 'View only — click Edit to make changes'
+      : isCreate ? 'Fill all required fields * to create'
+      : 'Edit mode — save when done';
+  }
+
+  // Edit button — show in view mode (admin only)
+  const editBtn = document.getElementById('task-edit-btn');
+  if(editBtn) editBtn.style.display = (isView && isAdmin) ? '' : 'none';
+
+  // Save button — hidden in view mode
+  const saveBtn = document.getElementById('task-save-btn');
+  if(saveBtn){
+    saveBtn.style.display = isView ? 'none' : '';
+    saveBtn.textContent   = isCreate ? '✅ Create Task' : '💾 Save Changes';
+  }
+
+  // Close/Cancel button label
+  const closeBtn = document.querySelector('#task-modal-footer .ts-btn-secondary');
+  if(closeBtn) closeBtn.textContent = isView ? 'Close' : 'Cancel';
+
+  // Visual cue on drawer — subtle border change
+  const drawer = document.getElementById('task-drawer');
+  if(drawer) drawer.style.borderLeft = isView ? '' : '3px solid var(--accent2)';
+}
+
+function enableEditMode(){
+  _setDrawerMode('edit', true);
+}
+
+
 function openCreateModal(){ alert('Create task — coming in All Tasks page build.'); }
 
 // ── INIT ──────────────────────────────────────────────────────────────────
@@ -1339,7 +1387,7 @@ function openCreateModal(){
   const taW=document.getElementById('fm-travel-amt-wrap');if(taW)taW.style.display='none';
   clearPayMode();
   _fillTechDropdown('fm-tech',null);
-  document.getElementById('task-save-btn').style.display='';
+  _setDrawerMode('create', true);
   document.getElementById('task-modal').classList.add('open');
 }
 
@@ -1374,13 +1422,8 @@ async function viewTask(id){
   handleTechChange(); toggleModalOutstation(); toggleModalTravelAmt(); updateModalGST();
   await _fillTechDropdown('fm-tech',t.assigned_to);
   handleTechChange();
-  if(!isAdmin){
-    document.querySelectorAll('#task-drawer input,#task-drawer select,#task-drawer textarea,.pay-mode-opt').forEach(el=>el.disabled=true);
-    document.getElementById('task-save-btn').style.display='none';
-  } else {
-    document.querySelectorAll('#task-drawer input,#task-drawer select,#task-drawer textarea').forEach(el=>el.disabled=false);
-    document.getElementById('task-save-btn').style.display='';
-  }
+  // Always open in VIEW mode — edit only via Edit button
+  _setDrawerMode('view', isAdmin);
   document.getElementById('task-modal').classList.add('open');
 }
 
