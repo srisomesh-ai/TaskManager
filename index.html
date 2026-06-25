@@ -696,6 +696,70 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
               <label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:5px">AGREEMENT DATE & TIME</label>
               <input type="datetime-local" id="pay-confirm-datetime" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;outline:none">
             </div>
+            <!-- DEFERRED PAYMENT FIELDS — shown for In 2/7/15/30 Days -->
+            <div id="pay-deferred-section" style="display:none;margin-bottom:14px">
+              <div style="background:var(--amber-bg);border:1.5px solid var(--amber);border-radius:8px;padding:12px 14px">
+                <div style="font-size:12px;font-weight:800;color:var(--saffron);margin-bottom:10px">📋 Deferred Payment Details Required</div>
+                <div class="form-group" style="margin-bottom:10px">
+                  <label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:5px">AUTHORIZED APPROVER *</label>
+                  <select id="pay-approver" style="width:100%;padding:9px 12px;border:1.5px solid var(--amber);border-radius:7px;font-size:13px;outline:none">
+                    <option value="">Select approver</option>
+                    <option value="Raghavendra Manoj">Raghavendra Manoj</option>
+                    <option value="Gummidi Lohita">Gummidi Lohita</option>
+                    <option value="Tanuja">Tanuja</option>
+                    <option value="Somesh">Somesh</option>
+                    <option value="Sri Mam">Sri Mam</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin-bottom:0">
+                  <label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:5px">REASON FOR DELAY *</label>
+                  <textarea id="pay-delay-reason" rows="2" placeholder="Purpose and reason for payment delay..." style="width:100%;padding:9px 12px;border:1.5px solid var(--amber);border-radius:7px;font-size:13px;outline:none;resize:vertical;font-family:inherit"></textarea>
+                </div>
+              </div>
+            </div>
+
+            <!-- DOCUMENTATION — shown for SBGT + >7 days -->
+            <div id="pay-doc-section" style="display:none;margin-bottom:14px">
+              <div style="background:var(--red-bg);border:1.5px solid var(--red);border-radius:8px;padding:12px 14px">
+                <div style="font-size:12px;font-weight:800;color:var(--red);margin-bottom:10px">📄 Documentation Required (SBGT — Delay &gt; 7 Days)</div>
+                <div style="margin-bottom:10px">
+                  <label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:6px">DOCUMENTATION TYPE *</label>
+                  <div style="display:flex;gap:8px">
+                    <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;flex:1;border:1.5px solid var(--border);border-radius:7px;padding:8px 10px">
+                      <input type="radio" name="pay-doc-type" value="email" onchange="toggleDocFields()"> 📧 Customer Email
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;flex:1;border:1.5px solid var(--border);border-radius:7px;padding:8px 10px">
+                      <input type="radio" name="pay-doc-type" value="po" onchange="toggleDocFields()"> 📄 PO Copy
+                    </label>
+                  </div>
+                </div>
+                <div id="pay-doc-email-fields" style="display:none">
+                  <div class="form-group" style="margin-bottom:8px">
+                    <label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">EMAIL SUBJECT *</label>
+                    <input type="text" id="pay-email-subject" placeholder="Subject line of customer email" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;outline:none">
+                  </div>
+                  <div class="form-group" style="margin-bottom:8px">
+                    <label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">CUSTOMER EMAIL ADDRESS *</label>
+                    <input type="email" id="pay-email-address" placeholder="customer@email.com" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;outline:none">
+                  </div>
+                  <div class="form-group" style="margin-bottom:0">
+                    <label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">DATE OF EMAIL *</label>
+                    <input type="date" id="pay-email-date" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;outline:none">
+                  </div>
+                </div>
+                <div id="pay-doc-po-fields" style="display:none">
+                  <div class="form-group" style="margin-bottom:8px">
+                    <label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">PO NUMBER *</label>
+                    <input type="text" id="pay-po-number" placeholder="Purchase Order number" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;outline:none">
+                  </div>
+                  <div class="form-group" style="margin-bottom:0">
+                    <label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">PO DATE *</label>
+                    <input type="date" id="pay-po-date" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;outline:none">
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div style="background:var(--green-bg);border:1px solid var(--green);border-radius:7px;padding:10px 12px;font-size:11px;color:var(--green);margin-bottom:14px">
               ✅ By confirming, you acknowledge the customer has agreed to pay the mentioned amount via the selected method.
             </div>
@@ -1944,11 +2008,27 @@ async function saveTask(){
     location:         document.getElementById('fm-location').value.trim(),
     device_details:   document.getElementById('fm-job').value,
     task_status:      document.getElementById('fm-status').value,
-    price_to_collect: document.getElementById('fm-price').value||0,
+    price_to_collect: parseFloat(document.getElementById('fm-price')?.dataset?.totalAmount || document.getElementById('fm-price')?.value || 0),
     amount_collected: document.getElementById('fm-collected').value||0,
     general_notes:    document.getElementById('fm-notes').value.trim(),
     assigned_to:      document.getElementById('fm-tech')?.value||null,
+    gst_amount:       parseFloat(document.getElementById('fm-price')?.dataset?.gstAmount||0),
   };
+  // Append deferred payment metadata to notes
+  if(window._payDeferredMeta){
+    const m = window._payDeferredMeta;
+    let deferNote = `\n[Deferred Payment — ${document.getElementById('fm-paymode').value}]`;
+    deferNote += `\nApproved by: ${m.approver}`;
+    deferNote += `\nReason: ${m.reason}`;
+    if(m.docType==='email'){
+      deferNote += `\nDoc: Customer Email | Subject: ${m.emailSubject} | From: ${m.emailAddress} | Date: ${m.emailDate}`;
+    } else if(m.docType==='po'){
+      deferNote += `\nDoc: PO Copy | PO No: ${m.poNumber} | PO Date: ${m.poDate}`;
+    }
+    payload.general_notes = (payload.general_notes ? payload.general_notes + '\n' : '') + deferNote;
+    payload.customer_requested_delay = 1;
+    payload.payment_reminder_date = document.getElementById('fm-pay-reminder').value;
+  }
   if(editingTaskId) payload.id = editingTaskId;
   const action = editingTaskId ? 'update_task' : 'create_task';
   const res = await api(action,{},'POST',payload).catch(()=>({}));
@@ -2016,51 +2096,126 @@ let _pendingPayMode = null;
 
 function selectPayMode(mode){
   _pendingPayMode = mode;
-  const price   = parseFloat(document.getElementById('fm-price')?.value||0);
+  const {price, qty, gst, total, gstTotal} = getDrawerTotal();
   const profile = document.getElementById('fm-profile')?.value||'BGPT';
-  const gst     = profile==='SBGT' ? price*0.18 : 0;
-  const qty     = parseInt(document.getElementById('fm-qty')?.value||1);
-  const total   = (price+gst)*qty;
+
+  // Deferred payment modes
   const daysMap = {'In 2 Days':2,'In 7 Days':7,'In 15 Days':15,'Within 30 Days':30};
-  let reminderNote='';
-  if(daysMap[mode]){
-    const d=new Date(); d.setDate(d.getDate()+daysMap[mode]);
-    reminderNote=`<div style="color:var(--saffron);font-size:11px;margin-top:4px">⏰ Payment reminder: ${d.toDateString()}</div>`;
+  const isDeferred = !!daysMap[mode];
+  const days = daysMap[mode]||0;
+
+  // BGPT hard block: deferred > 7 days not allowed
+  if(isDeferred && profile==='BGPT' && days > 7){
+    alert('🚫 Under BGPT profile, payment delay cannot exceed 7 days.\n\nFor delays beyond 7 days, the profile must be changed to SBGT and a written email or Purchase Order copy from the customer is required.');
+    return;
   }
+
+  // SBGT > 7 days: will need documentation — show in confirm modal
+  const needsDoc = isDeferred && profile==='SBGT' && days > 7;
+
+  let reminderNote = '';
+  if(isDeferred){
+    const d=new Date(); d.setDate(d.getDate()+days);
+    reminderNote=`<div style="color:var(--saffron);font-size:11px;margin-top:4px">⏰ Payment expected by: ${d.toDateString()}</div>`;
+  }
+
   document.getElementById('pay-confirm-summary').innerHTML=`
     <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:var(--text3)">Payment Mode</span><span style="font-weight:800;color:var(--accent2)">${mode}</span></div>
-    <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:var(--text3)">Amount</span><span style="font-weight:800;color:var(--green)">₹${total.toLocaleString('en-IN',{minimumFractionDigits:2})}</span></div>
-    ${profile==='SBGT'?`<div style="font-size:11px;color:var(--text3)">incl. GST ₹${(gst*qty).toLocaleString('en-IN',{minimumFractionDigits:2})}</div>`:''}
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:var(--text3)">Qty</span><span style="font-weight:700">${qty} unit${qty>1?'s':''}</span></div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:var(--text3)">Total Amount</span><span style="font-weight:800;color:var(--green);font-size:15px">₹${total.toLocaleString('en-IN',{minimumFractionDigits:2})}</span></div>
+    ${profile==='SBGT'?`<div style="font-size:11px;color:var(--text3)">incl. GST ₹${gstTotal.toLocaleString('en-IN',{minimumFractionDigits:2})}</div>`:''}
     ${reminderNote}
   `;
+
+  // Show/hide deferred fields and documentation section
+  const deferredSection = document.getElementById('pay-deferred-section');
+  const docSection      = document.getElementById('pay-doc-section');
+  if(deferredSection) deferredSection.style.display = isDeferred ? '' : 'none';
+  if(docSection)      docSection.style.display      = needsDoc   ? '' : 'none';
+
+  // Clear deferred fields
+  const appEl = document.getElementById('pay-approver');
+  const rsnEl = document.getElementById('pay-delay-reason');
+  if(appEl) appEl.value = '';
+  if(rsnEl) rsnEl.value = '';
+
   const now=new Date(); now.setSeconds(0,0);
   document.getElementById('pay-confirm-datetime').value=now.toISOString().slice(0,16);
   document.getElementById('pay-confirm-modal').classList.add('open');
 }
 
+function toggleDocFields(){
+  const type = document.querySelector('input[name="pay-doc-type"]:checked')?.value;
+  document.getElementById('pay-doc-email-fields').style.display = type==='email' ? '' : 'none';
+  document.getElementById('pay-doc-po-fields').style.display    = type==='po'    ? '' : 'none';
+}
+
 function confirmPayMode(){
-  const mode=_pendingPayMode;
-  const dt=document.getElementById('pay-confirm-datetime').value;
-  document.getElementById('fm-paymode').value=mode;
-  const daysMap={'In 2 Days':2,'In 7 Days':7,'In 15 Days':15,'Within 30 Days':30};
-  if(daysMap[mode]){
-    const d=new Date(); d.setDate(d.getDate()+daysMap[mode]);
-    document.getElementById('fm-pay-reminder').value=d.toISOString().slice(0,10);
+  const mode    = _pendingPayMode;
+  const daysMap = {'In 2 Days':2,'In 7 Days':7,'In 15 Days':15,'Within 30 Days':30};
+  const isDeferred = !!daysMap[mode];
+  const days    = daysMap[mode]||0;
+  const profile = document.getElementById('fm-profile')?.value||'BGPT';
+  const needsDoc = isDeferred && profile==='SBGT' && days > 7;
+
+  // Validate deferred fields
+  if(isDeferred){
+    const approver = document.getElementById('pay-approver')?.value;
+    const reason   = document.getElementById('pay-delay-reason')?.value.trim();
+    if(!approver){ alert('Please select the authorized approver for this deferred payment.'); return; }
+    if(!reason)  { alert('Please enter the reason for payment delay.'); return; }
+
+    // Validate documentation for SBGT >7 days
+    if(needsDoc){
+      const docType = document.querySelector('input[name="pay-doc-type"]:checked')?.value;
+      if(!docType){ alert('Please select documentation type (Email or PO Copy).'); return; }
+      if(docType==='email'){
+        const subj = document.getElementById('pay-email-subject')?.value.trim();
+        const addr = document.getElementById('pay-email-address')?.value.trim();
+        const date = document.getElementById('pay-email-date')?.value;
+        if(!subj||!addr||!date){ alert('Please fill all email details (Subject, Address, Date).'); return; }
+      } else {
+        const poNo   = document.getElementById('pay-po-number')?.value.trim();
+        const poDate = document.getElementById('pay-po-date')?.value;
+        if(!poNo||!poDate){ alert('Please enter PO Number and PO Date.'); return; }
+      }
+    }
   }
+
+  document.getElementById('fm-paymode').value = mode;
+  if(isDeferred){
+    const d = new Date(); d.setDate(d.getDate()+days);
+    document.getElementById('fm-pay-reminder').value = d.toISOString().slice(0,10);
+    // Store deferred metadata for form submit
+    window._payDeferredMeta = {
+      approver: document.getElementById('pay-approver')?.value,
+      reason:   document.getElementById('pay-delay-reason')?.value.trim(),
+      days,
+      docType:  document.querySelector('input[name="pay-doc-type"]:checked')?.value||'',
+      emailSubject: document.getElementById('pay-email-subject')?.value.trim()||'',
+      emailAddress: document.getElementById('pay-email-address')?.value.trim()||'',
+      emailDate:    document.getElementById('pay-email-date')?.value||'',
+      poNumber:     document.getElementById('pay-po-number')?.value.trim()||'',
+      poDate:       document.getElementById('pay-po-date')?.value||'',
+    };
+  } else {
+    window._payDeferredMeta = null;
+  }
+
   document.querySelectorAll('.pay-mode-opt').forEach(b=>{
     b.classList.toggle('selected', b.getAttribute('onclick')===`selectPayMode('${mode}')`);
   });
-  const price=parseFloat(document.getElementById('fm-price')?.value||0);
-  const profile=document.getElementById('fm-profile')?.value||'BGPT';
-  const gst=profile==='SBGT'?price*0.18:0;
-  const qty=parseInt(document.getElementById('fm-qty')?.value||1);
-  const total=(price+gst)*qty;
-  const cEl=document.getElementById('fm-pay-confirmed');
-  const cTxt=document.getElementById('fm-pay-confirmed-txt');
-  if(cEl){cEl.style.display='flex';}
-  if(cTxt){cTxt.textContent=`${mode} — ₹${total.toLocaleString('en-IN',{minimumFractionDigits:2})} confirmed`;}
+
+  const {total, gstTotal} = getDrawerTotal();
+  const cEl  = document.getElementById('fm-pay-confirmed');
+  const cTxt = document.getElementById('fm-pay-confirmed-txt');
+  if(cEl){ cEl.style.display='flex'; }
+  if(cTxt){
+    const approverNote = _payDeferredMeta ? ` | Auth: ${_payDeferredMeta.approver}` : '';
+    cTxt.textContent = `${mode} — ₹${total.toLocaleString('en-IN',{minimumFractionDigits:2})} confirmed${approverNote}`;
+  }
   document.getElementById('pay-confirm-modal').classList.remove('open');
-  _pendingPayMode=null;
+  _pendingPayMode = null;
 }
 
 function cancelPayMode(){
@@ -2115,25 +2270,47 @@ function setModalJobPrice(job){
   }
 }
 
+function getDrawerTotal(){
+  // Returns the true total (unit price × qty + GST if SBGT)
+  const profile = document.getElementById('fm-profile')?.value||'BGPT';
+  const price   = parseFloat(document.getElementById('fm-price')?.value||0);
+  const qty     = parseInt(document.getElementById('fm-qty')?.value||1);
+  const gst     = profile==='SBGT' ? price*0.18 : 0;
+  return { price, qty, gst, total: (price+gst)*qty, gstTotal: gst*qty };
+}
+
 function updateModalGST(){
-  const profile=document.getElementById('fm-profile')?.value||'BGPT';
-  const price=parseFloat(document.getElementById('fm-price')?.value||0);
-  const qty=parseInt(document.getElementById('fm-qty')?.value||1);
-  const gstBox=document.getElementById('fm-gst-box');
+  const {price, qty, gst, total, gstTotal} = getDrawerTotal();
+  const profile = document.getElementById('fm-profile')?.value||'BGPT';
+  const gstBox  = document.getElementById('fm-gst-box');
   if(!gstBox) return;
-  if(profile==='SBGT' && price>0){
-    const gst=price*0.18;
-    const total=(price+gst)*qty;
-    gstBox.style.display='block';
-    gstBox.innerHTML=`
-      <div style="display:flex;justify-content:space-between"><span>Base price</span><span style="font-weight:700">₹${price.toFixed(2)}</span></div>
-      <div style="display:flex;justify-content:space-between"><span>GST @ 18%</span><span style="font-weight:700;color:var(--saffron)">+ ₹${(price*0.18).toFixed(2)}</span></div>
-      <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:4px;margin-top:4px"><span><b>${qty>1?'Total for '+qty+' units':'Total incl. GST'}</b></span><span style="font-weight:800;color:var(--green)">₹${total.toFixed(2)}</span></div>
+
+  const priceEl = document.getElementById('fm-price');
+  if(priceEl){
+    priceEl.dataset.gstAmount = gstTotal.toFixed(2);
+    priceEl.dataset.totalAmount = total.toFixed(2);
+  }
+
+  if(price > 0){
+    gstBox.style.display = 'block';
+    const qtyNote = qty > 1 ? ` × ${qty} units` : '';
+    gstBox.innerHTML = `
+      <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+        <span style="color:var(--text3)">Unit price${qtyNote}</span>
+        <span style="font-weight:700">₹${price.toLocaleString('en-IN')}${qty>1?' × '+qty:''}</span>
+      </div>
+      ${profile==='SBGT' ? `
+      <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+        <span style="color:var(--text3)">GST @ 18%</span>
+        <span style="font-weight:700;color:var(--saffron)">+ ₹${gstTotal.toLocaleString('en-IN',{minimumFractionDigits:2})}</span>
+      </div>` : ''}
+      <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:5px;margin-top:4px">
+        <span><strong>Total to Collect</strong></span>
+        <span style="font-weight:900;color:var(--green);font-size:15px">₹${total.toLocaleString('en-IN',{minimumFractionDigits:2})}</span>
+      </div>
     `;
-    if(priceEl) document.getElementById('fm-price').dataset.gstAmount=(price*0.18*qty).toFixed(2);
   } else {
-    gstBox.style.display='none';
-    if(document.getElementById('fm-price')) document.getElementById('fm-price').dataset.gstAmount='0';
+    gstBox.style.display = 'none';
   }
 }
 
