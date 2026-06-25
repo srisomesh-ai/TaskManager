@@ -7,21 +7,25 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#f0f2f5;--surface:#fff;--surface2:#f7f8fa;--border:#d0d5dd;
-  --accent:#1a3a6b;--accent2:#2451a3;--accent-light:#e8eef8;
-  --green:#1a7a3a;--green-bg:#e8f5ec;
-  --red:#c0392b;--red-bg:#fdecea;
-  --saffron:#e07b00;--saffron-bg:#fff3e0;
-  --orange:#d4680a;--orange-bg:#fff0e0;
-  --blue:#1a56a0;--blue-bg:#e8f0fb;
-  --purple:#5b2d8e;--purple-bg:#f0eaf8;
-  --text:#1a1f2e;--text2:#4a5568;--text3:#8a9ab0;
-  --shadow:0 2px 8px rgba(0,0,0,.08);
+  /* BharatGPS Brand Theme — matches tracking portal & Flutter app */
+  --bg:#EFF3F2;--surface:#fff;--surface2:#F3F6F5;--border:#D9E2E0;
+  --accent:#0E5C5C;--accent2:#137272;--accent-light:#E0EEEE;
+  --amber:#F5A623;--amber-bg:#FDF1DE;
+  --green:#27AE60;--green-bg:#E7F7EC;
+  --red:#E74C3C;--red-bg:#FCE9E7;
+  --saffron:#F39C12;--saffron-bg:#FDF1DE;
+  --orange:#E67E22;--orange-bg:#FDF0E0;
+  --blue:#2E86DE;--blue-bg:#E7F1FC;
+  --purple:#6C5CE7;--purple-bg:#F0F0FB;
+  --teal2:#137272;--teal-bg:#E0EEEE;
+  --text:#16201F;--text2:#55676A;--text3:#8A9A98;
+  --shadow:0 2px 8px rgba(14,92,92,.08);
+  --line:#E9EFEE;
 }
 html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
 
 /* LOGIN */
-#login-screen{display:flex;height:100vh;align-items:center;justify-content:center;background:linear-gradient(160deg,#1a3a6b,#0f2550 50%,#1a1f2e)}
+#login-screen{display:flex;height:100vh;align-items:center;justify-content:center;background:linear-gradient(160deg,#0E5C5C,#0B4A4A 50%,#16201F)}
 .lcard{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:36px 32px;width:380px}
 .lcard img{display:block;margin:0 auto 16px;height:48px}
 .lflag{height:5px;border-radius:3px;background:linear-gradient(90deg,#ff9933 33%,#fff 33% 66%,#138808 66%);margin-bottom:20px}
@@ -246,6 +250,36 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
 .pm-mode-btn{transition:all .15s}
 .pm-mode-btn:hover{border-color:var(--accent2);background:var(--accent-light)}
 .pm-mode-btn.selected{border-color:var(--green);background:var(--green-bg);color:var(--green)}
+
+/* WORKFLOW BADGES */
+@keyframes pulse-badge{0%,100%{opacity:1}50%{opacity:.5}}
+.wf-badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:9px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;white-space:nowrap;vertical-align:middle;margin-left:4px}
+.wf-tech-updated{background:#FDF1DE;color:#E67E22;animation:pulse-badge 1.5s infinite}
+.wf-consent-sent{background:#E7F1FC;color:#2E86DE}
+.wf-ready-add{background:#E7F7EC;color:#27AE60}
+.wf-adding-done{background:#E0EEEE;color:#0E5C5C;animation:pulse-badge 2s infinite}
+.wf-payment-pending{background:#FCE9E7;color:#E74C3C;animation:pulse-badge 1.2s infinite}
+.wf-approve-now{background:#F0F0FB;color:#6C5CE7;animation:pulse-badge 1.5s infinite}
+
+/* ROW highlight for unseen tech update */
+tr.row-unseen{background:rgba(245,166,35,.06) !important}
+tr.row-unseen:hover{background:rgba(245,166,35,.12) !important}
+tr.row-approve{background:rgba(108,92,231,.06) !important}
+tr.row-approve:hover{background:rgba(108,92,231,.12) !important}
+tr.row-payment-overdue{background:rgba(231,76,60,.06) !important}
+tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
+
+/* DASHBOARD action panels */
+.dash-action-panel{border-radius:10px;margin-bottom:12px;overflow:hidden;box-shadow:var(--shadow)}
+.dash-action-hd{padding:12px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+.dash-action-hd-title{font-size:13px;font-weight:800;color:#fff;display:flex;align-items:center;gap:8px}
+.dash-action-count{background:rgba(255,255,255,.25);color:#fff;font-size:11px;font-weight:800;padding:2px 8px;border-radius:12px}
+.dash-action-body{background:var(--surface);padding:0}
+.dash-action-row{padding:10px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;cursor:pointer;transition:background .15s}
+.dash-action-row:hover{background:var(--surface2)}
+.dash-action-row:last-child{border-bottom:none}
+.dash-approve-btn{background:var(--accent);color:#fff;border:none;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.dash-approve-btn:hover{background:var(--accent2)}
 </style>
 </head>
 <body>
@@ -323,7 +357,8 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
         </div>
 
         <!-- ALERT BANNERS -->
-        <div id="dash-banners" style="margin-bottom:16px"></div>
+        <div id="dash-banners" style="margin-bottom:12px"></div>
+      <div id="dash-action-panels" style="margin-bottom:16px"></div>
 
         <!-- STAT CARDS -->
         <div class="stats-grid">
@@ -1339,19 +1374,12 @@ async function doLogout(){
 // ── Load Dashboard ────────────────────────────────────────────────────────
 async function loadDashboard(){
   const isTech = currentUser?.role === 'technician';
-
-  // Technician sees their OWN dashboard — redirect to My Tasks
-  if(isTech){
-    showPage('my-tasks');
-    return;
-  }
+  if(isTech){ showPage('my-tasks'); return; }
 
   document.getElementById('dash-welcome').textContent =
-    'Welcome back, ' + (currentUser.name||'') + '. Here\'s today\'s snapshot.';
+    'Welcome, ' + (currentUser.name||'') + '. Here is today\'s snapshot.';
 
-  const COLORS = ['linear-gradient(135deg,#1a3a6b,#2451a3)','linear-gradient(135deg,#0d7377,#14b8a6)','linear-gradient(135deg,#5b2d8e,#818cf8)','linear-gradient(135deg,#1a7a3a,#22c55e)','linear-gradient(135deg,#d97706,#f59e0b)','linear-gradient(135deg,#c0392b,#ef4444)'];
-
-  // Fetch all data in parallel — admin only
+  // Fetch all in parallel
   const [sRes, uRes, aRes, tRes, oRes] = await Promise.all([
     api('get_stats').catch(()=>({})),
     api('get_urgent_tasks').catch(()=>({})),
@@ -1360,13 +1388,13 @@ async function loadDashboard(){
     api('get_tasks',{status_group:'active',limit:500}).catch(()=>({}))
   ]);
 
-  const stats     = sRes.stats     || {};
-  const urgent    = uRes.tasks     || [];
-  const approvals = aRes.tasks     || [];
-  const techs     = tRes.users     || [];
-  const openTasks = oRes.tasks     || [];
+  const stats     = sRes.stats  || {};
+  const urgent    = uRes.tasks  || [];
+  const approvals = aRes.tasks  || [];
+  const techs     = tRes.users  || [];
+  const openTasks = oRes.tasks  || [];
 
-  // Stat cards
+  // ── Stat cards ────────────────────────────────────────────
   const sv = (id,val) => { const e=document.getElementById(id); if(e) e.textContent=(val??0); };
   sv('s-total',       stats.total);
   sv('s-open',        stats.open);
@@ -1384,18 +1412,106 @@ async function loadDashboard(){
   const apprBadge = document.getElementById('approval-badge');
   const urgBadge  = document.getElementById('urgent-badge');
   if(apprBadge){ apprBadge.textContent=apprCount; apprBadge.style.display=apprCount?'':'none'; }
-  if(urgBadge){ urgBadge.textContent=urgCount; urgBadge.style.display=urgCount?'':'none'; }
+  if(urgBadge){  urgBadge.textContent=urgCount;   urgBadge.style.display=urgCount?'':'none';   }
 
-  // Alert banners
+  // ── Workflow state grouping ────────────────────────────────
+  const approveNow      = openTasks.filter(t=>t.workflow_state==='approve_now');
+  const paymentPending  = openTasks.filter(t=>t.workflow_state==='payment_pending');
+  const techUpdated     = openTasks.filter(t=>t.workflow_state==='tech_updated');
+  const addingDone      = openTasks.filter(t=>t.workflow_state==='adding_done');
+  const readyToAdd      = openTasks.filter(t=>t.workflow_state==='ready_to_add');
+
+  // ── Action banners ────────────────────────────────────────
   const critical = urgent.filter(t=>parseInt(t.age_hours||0)>=48);
   const warning  = urgent.filter(t=>{ const h=parseInt(t.age_hours||0); return h>=24&&h<48; });
   let banners = '';
-  if(critical.length) banners += `<div class="dash-alert alert-red">🚨 <strong>${critical.length} task${critical.length>1?'s':''}</strong> open 48+ hours — urgent! <button class="dal-btn" onclick="showPage('urgent')">View →</button></div>`;
-  if(warning.length)  banners += `<div class="dash-alert alert-yellow">⚠️ <strong>${warning.length} task${warning.length>1?'s':''}</strong> open 24+ hours. <button class="dal-btn" onclick="showPage('urgent')">View →</button></div>`;
-  if(apprCount)       banners += `<div class="dash-alert alert-green">✅ <strong>${apprCount} task${apprCount>1?'s':''}</strong> waiting approval. <button class="dal-btn" onclick="showPage('approvals')">Review →</button></div>`;
-  document.getElementById('dash-banners').innerHTML = banners;
+  if(approveNow.length)     banners += `<div class="dash-alert" style="background:#F0F0FB;border-left:4px solid var(--purple);color:var(--purple)">🟣 <strong>${approveNow.length} task${approveNow.length>1?'s':''}</strong> waiting for your approval. <button class="dal-btn" style="background:var(--purple)" onclick="showPage('approvals')">Approve Now →</button></div>`;
+  if(paymentPending.length) banners += `<div class="dash-alert" style="background:var(--red-bg);border-left:4px solid var(--red);color:var(--red)">🔴 <strong>${paymentPending.length} task${paymentPending.length>1?'s':''}</strong> — installation done but payment not collected. <button class="dal-btn" style="background:var(--red)" onclick="filterByWorkflow('payment_pending')">View →</button></div>`;
+  if(techUpdated.length)    banners += `<div class="dash-alert" style="background:var(--amber-bg);border-left:4px solid var(--amber);color:#7a4500">🟠 <strong>${techUpdated.length} task${techUpdated.length>1?'s':''}</strong> updated by technician — not yet reviewed. <button class="dal-btn" style="background:var(--amber);color:#fff" onclick="filterByWorkflow('tech_updated')">Review →</button></div>`;
+  if(critical.length)       banners += `<div class="dash-alert" style="background:var(--red-bg);border-left:4px solid var(--red);color:var(--red)">🚨 <strong>${critical.length} task${critical.length>1?'s':''}</strong> open 48+ hours. <button class="dal-btn" style="background:var(--red)" onclick="showPage('urgent')">View →</button></div>`;
+  if(warning.length)        banners += `<div class="dash-alert" style="background:var(--amber-bg);border-left:4px solid var(--amber);color:#7a4500">⚠️ <strong>${warning.length} task${warning.length>1?'s':''}</strong> open 24+ hours. <button class="dal-btn" style="background:var(--amber);color:#fff" onclick="showPage('urgent')">View →</button></div>`;
+  document.getElementById('dash-banners').innerHTML = banners || '<div style="font-size:12px;color:var(--text3);padding:6px 0">✅ No urgent actions needed</div>';
 
-  // Pending approvals panel
+  // ── Three action panels (Approve / Payment Overdue / Tech Updated) ──
+  const actionPanelsEl = document.getElementById('dash-action-panels');
+  if(actionPanelsEl){
+    const panels = [
+      {
+        state:'approve_now', tasks: approveNow,
+        bg:'linear-gradient(135deg,var(--purple),#9b8ef8)',
+        icon:'🟣', title:'Approve & Close',
+        emptyMsg:'No tasks awaiting approval',
+        rowFn: t => {
+          const price = parseFloat(t.price_to_collect||0);
+          const coll  = parseFloat(t.amount_collected||0);
+          const bal   = price - coll;
+          const paid  = bal <= 15;
+          return `<div class="dash-action-row" onclick="viewTask(${t.id})">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;font-weight:700;color:var(--text)">${t.customer_name||'–'} <span style="color:var(--text3);font-weight:400">· ${t.task_id}</span></div>
+              <div style="font-size:11px;color:var(--text3);margin-top:2px">${t.tech_name||'Unassigned'} · ${t.device_details||'–'}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0;margin:0 10px">
+              <div style="font-size:12px;font-weight:800;color:${paid?'var(--green)':'var(--red)'}">₹${coll.toLocaleString('en-IN')}</div>
+              <div style="font-size:10px;color:var(--text3)">${paid?'Fully paid':'₹'+bal.toLocaleString('en-IN')+' pending'}</div>
+            </div>
+            <button class="dash-approve-btn" onclick="event.stopPropagation();quickApprove(${t.id},this)"
+              ${!paid?'disabled title="Balance pending — cannot approve" style="opacity:.4;cursor:not-allowed"':''}>
+              ✅ Approve
+            </button>
+          </div>`;
+        }
+      },
+      {
+        state:'payment_pending', tasks: paymentPending,
+        bg:'linear-gradient(135deg,var(--red),#f97575)',
+        icon:'🔴', title:'Payment Pending',
+        emptyMsg:'No payment pending tasks',
+        rowFn: t => {
+          const price = parseFloat(t.price_to_collect||0);
+          // Time since install — from activity log not available here, use updated_at
+          return `<div class="dash-action-row" onclick="viewTask(${t.id})">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;font-weight:700;color:var(--text)">${t.customer_name||'–'} <span style="color:var(--text3);font-weight:400">· ${t.task_id}</span></div>
+              <div style="font-size:11px;color:var(--text3);margin-top:2px">${t.tech_name||'Unassigned'} · ${t.location||'–'}</div>
+            </div>
+            <div style="font-size:13px;font-weight:800;color:var(--red);flex-shrink:0">₹${price.toLocaleString('en-IN')}</div>
+          </div>`;
+        }
+      },
+      {
+        state:'tech_updated', tasks: techUpdated,
+        bg:'linear-gradient(135deg,var(--amber),#f5b942)',
+        icon:'🟠', title:'Tech Updated — Unseen',
+        emptyMsg:'No unseen updates',
+        rowFn: t => `<div class="dash-action-row" onclick="viewTask(${t.id})">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:700;color:var(--text)">${t.customer_name||'–'} <span style="color:var(--text3);font-weight:400">· ${t.task_id}</span></div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">${t.tech_name||'Unassigned'} · ${t.task_status}</div>
+          </div>
+          <span class="wf-badge wf-tech-updated">UPDATED</span>
+        </div>`
+      }
+    ].filter(p=>p.tasks.length > 0);
+
+    if(!panels.length){
+      actionPanelsEl.innerHTML = '';
+    } else {
+      actionPanelsEl.innerHTML = panels.map(p=>`
+        <div class="dash-action-panel">
+          <div class="dash-action-hd" style="background:${p.bg}" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
+            <div class="dash-action-hd-title">${p.icon} ${p.title}</div>
+            <span class="dash-action-count">${p.tasks.length}</span>
+          </div>
+          <div class="dash-action-body">
+            ${p.tasks.slice(0,8).map(p.rowFn).join('')}
+            ${p.tasks.length>8?`<div style="padding:8px 16px;font-size:11px;color:var(--text3);text-align:center">+${p.tasks.length-8} more</div>`:''}
+          </div>
+        </div>`).join('');
+    }
+  }
+
+  // ── Existing approvals panel (keep for backward compat) ───
   const apBadge = document.getElementById('dash-appr-badge');
   if(apBadge){ apBadge.textContent=approvals.length; apBadge.style.display=approvals.length?'':'none'; }
   const apEl = document.getElementById('dash-approvals');
@@ -1404,21 +1520,22 @@ async function loadDashboard(){
       apEl.innerHTML = '<div class="empty"><div class="empty-icon">✅</div><div class="empty-txt">No pending approvals</div></div>';
     } else {
       apEl.innerHTML = approvals.slice(0,5).map(t=>{
-        const ini = (t.customer_name||'?').split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
+        const coll = parseFloat(t.amount_collected||0);
+        const price= parseFloat(t.price_to_collect||0);
+        const paid = (price-coll) <= 15;
         return `<div class="appr-item">
-          <div class="appr-av">${ini}</div>
+          <div class="appr-av">${(t.customer_name||'?').split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase()}</div>
           <div style="flex:1;min-width:0">
             <div class="appr-name">${t.customer_name||'–'}</div>
-            <div class="appr-meta">${t.task_id||''} · ${t.tech_name||'Unassigned'}</div>
+            <div class="appr-meta">${t.task_id||''} · ${t.tech_name||'Unassigned'} · <span style="color:${paid?'var(--green)':'var(--red)'}">₹${coll.toLocaleString('en-IN')} ${paid?'✅':'⚠️'}</span></div>
           </div>
-          <div class="appr-amt">₹${parseFloat(t.price_to_collect||0).toLocaleString('en-IN')}</div>
           <button class="appr-go" onclick="showPage('approvals')">Review</button>
         </div>`;
       }).join('');
     }
   }
 
-  // Overdue panel
+  // ── Overdue panel ─────────────────────────────────────────
   const overdueAll = [...critical,...warning];
   const ugBadge = document.getElementById('dash-urg-badge');
   if(ugBadge){ ugBadge.textContent=overdueAll.length; ugBadge.style.display=overdueAll.length?'':'none'; }
@@ -1430,8 +1547,8 @@ async function loadDashboard(){
       ugEl.innerHTML = overdueAll.slice(0,5).map(t=>{
         const h = parseInt(t.age_hours||0);
         const crit = h>=48;
-        const col  = crit?'var(--red)':'var(--saffron)';
-        return `<div class="urg-item">
+        const col  = crit?'var(--red)':'var(--amber)';
+        return `<div class="urg-item" onclick="viewTask(${t.id})" style="cursor:pointer">
           <div class="urg-dot" style="background:${col}"></div>
           <div style="flex:1;min-width:0">
             <div class="urg-name">${t.customer_name||'–'}</div>
@@ -1443,7 +1560,8 @@ async function loadDashboard(){
     }
   }
 
-  // Tech grid
+  // ── Tech grid ─────────────────────────────────────────────
+  const COLORS = ['linear-gradient(135deg,#0E5C5C,#137272)','linear-gradient(135deg,#2E86DE,#5ba8f5)','linear-gradient(135deg,#6C5CE7,#9b8ef8)','linear-gradient(135deg,#E74C3C,#f97575)','linear-gradient(135deg,#F39C12,#f5b942)','linear-gradient(135deg,#27AE60,#4fd180)'];
   const openByTech = {};
   openTasks.forEach(t=>{ if(t.assigned_to) openByTech[t.assigned_to]=(openByTech[t.assigned_to]||0)+1; });
   const techEl = document.getElementById('dash-techs');
@@ -1455,8 +1573,8 @@ async function loadDashboard(){
         const ini   = (t.name||'?').split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
         const cnt   = openByTech[t.id]||0;
         const busy  = cnt>=3;
-        const col   = busy?'var(--saffron)':'var(--green)';
-        const bgcol = busy?'var(--saffron-bg)':'var(--green-bg)';
+        const col   = busy?'var(--amber)':'var(--green)';
+        const bgcol = busy?'var(--amber-bg)':'var(--green-bg)';
         return `<div class="tech-item">
           <div class="tech-av" style="background:${COLORS[i%COLORS.length]}">${ini}</div>
           <div style="flex:1;min-width:0">
@@ -1772,9 +1890,9 @@ function renderTasksTable(){
     const ageTxt    = isCrit  ? `<span class="age-badge" style="background:#fdecea;color:#c0392b">🚨 ${age}h</span>`
                     : isUrgent? `<span class="age-badge" style="background:#fff3e0;color:#e07b00">⚠️ ${age}h</span>`
                     : age>0   ? `<span style="color:var(--text3);font-size:11px">${age}h</span>` : '–';
-    return `<tr style="border-bottom:1px solid var(--border);cursor:pointer;${rowStyle}" onclick="viewTask(${t.id})">
+    return `<tr class="${getRowClass(t)}" style="border-bottom:1px solid var(--border);cursor:pointer;${rowStyle}" onclick="viewTask(${t.id})">
       <td style="color:var(--text3);font-size:11px;padding:9px 12px">${start+i+1}</td>
-      <td style="padding:9px 12px"><span class="task-id">${t.task_id||'–'}</span></td>
+      <td style="padding:9px 12px"><span class="task-id">${t.task_id||'–'}</span>${getWorkflowBadge(t)}</td>
       <td style="padding:9px 12px"><div class="cust-name">${t.customer_name||'–'}</div></td>
       <td style="padding:9px 12px;color:var(--text2);font-size:12px">${t.contact_number||'–'}</td>
       <td style="padding:9px 12px;color:var(--text2);font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.location||'–'}</td>
@@ -2028,10 +2146,36 @@ function openCreateModal(){
   document.getElementById('task-modal').classList.add('open');
 }
 
+function getWorkflowBadge(t){
+  const s = t.workflow_state||'';
+  const badges = {
+    'tech_updated':  '<span class="wf-badge wf-tech-updated">TECH UPDATED</span>',
+    'consent_sent':  '<span class="wf-badge" style="background:var(--blue-bg);color:var(--blue)">CONSENT SENT</span>',
+    'ready_to_add':  '<span class="wf-badge" style="background:var(--green-bg);color:var(--green)">READY TO ADD</span>',
+    'adding_done':   '<span class="wf-badge wf-adding-done">ADDING DONE</span>',
+    'payment_pending':'<span class="wf-badge wf-payment-pending">PAYMENT PENDING</span>',
+    'approve_now':   '<span class="wf-badge wf-approve-now">APPROVE NOW</span>',
+  };
+  return badges[s]||'';
+}
+
+function getRowClass(t){
+  const s = t.workflow_state||'';
+  if(s==='tech_updated')   return 'row-unseen';
+  if(s==='approve_now')    return 'row-approve';
+  if(s==='payment_pending') return 'row-payment-overdue';
+  return '';
+}
+
 async function viewTask(id){
   const res=await api('get_task',{id}).catch(()=>({}));
   const t=res.task||res;
   if(!t||!t.id){alert('Task not found.');return;}
+  // Mark as viewed by admin (clears unseen badge)
+  const role = currentUser?.role;
+  if(role==='admin'||role==='assigner'){
+    api('mark_viewed',{},'POST',{id}).catch(()=>{});
+  }
   const isAdmin=['admin','assigner'].includes(currentUser?.role);
   editingTaskId=t.id;
   document.getElementById('task-modal-title').textContent=`Task ${t.task_id||''}`;
@@ -3636,6 +3780,33 @@ async function savePayment(){
   } else {
     alert(res.error||'Save failed. Please try again.');
   }
+}
+
+async function quickApprove(taskId, btn){
+  if(btn){ btn.textContent='…'; btn.disabled=true; }
+  const res = await api('approve_task',{},'POST',{id:taskId}).catch(()=>({}));
+  if(res.success){
+    loadDashboard();
+    if(typeof loadAllTasks==='function') loadAllTasks();
+  } else {
+    alert(res.error||'Could not approve. Please check payment status.');
+    if(btn){ btn.textContent='✅ Approve'; btn.disabled=false; }
+  }
+}
+
+function filterByWorkflow(state){
+  showPage('all-tasks');
+  // After tasks load, filter them
+  setTimeout(()=>{
+    const badges = {'payment_pending':'Payment Pending','tech_updated':'Updated','approve_now':'Awaiting Approval'};
+    // Apply status filter if applicable
+    const statusMap = {'approve_now':'Awaiting Approval'};
+    if(statusMap[state]){
+      const sel = document.getElementById('filter-status');
+      if(sel){ sel.value=statusMap[state]; }
+      if(typeof applyFilters==='function') applyFilters();
+    }
+  }, 800);
 }
 
 </script>
