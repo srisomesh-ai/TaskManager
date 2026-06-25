@@ -342,9 +342,10 @@ case 'update_task':
             $taskForEmail->execute([$id]);
             $taskData = $taskForEmail->fetch();
             if($taskData && !empty($taskData['email'])) {
-                if(empty($taskData['feedback_token'])){
+                // Regenerate token if missing OR previously used (expired after dispute)
+                if(empty($taskData['feedback_token']) || $taskData['feedback_token'] === 'USED'){
                     $newToken = bin2hex(random_bytes(24));
-                    try { $pdo->prepare("ALTER TABLE tasks ADD COLUMN feedback_token VARCHAR(64) UNIQUE DEFAULT NULL")->execute(); } catch(Exception $ex){}
+                    try { $pdo->prepare("ALTER TABLE tasks ADD COLUMN feedback_token VARCHAR(64) DEFAULT NULL")->execute(); } catch(Exception $ex){}
                     $pdo->prepare("UPDATE tasks SET feedback_token=? WHERE id=?")->execute([$newToken, $id]);
                     $taskData['feedback_token'] = $newToken;
                 }
