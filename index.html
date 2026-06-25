@@ -844,7 +844,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
           <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
             <button id="td-edit-btn" onclick="openEditFromDetail()" style="display:none;background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.3);color:#fff;padding:6px 14px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">✏️ Edit</button>
             <button onclick="tdWhatsApp()" style="background:rgba(37,211,102,.25);border:1.5px solid rgba(37,211,102,.4);color:#fff;padding:6px 12px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">📱 WA</button>
-            <button onclick="closeTaskDetail()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:32px;height:32px;border-radius:8px;font-size:18px;cursor:pointer">✕</button>
+            <button type="button" onclick="closeTaskDetail()" style="background:rgba(255,255,255,.2);border:none;color:#fff;width:32px;height:32px;border-radius:8px;font-size:18px;cursor:pointer;flex-shrink:0;line-height:1;z-index:10;position:relative">✕</button>
           </div>
         </div>
 
@@ -2163,21 +2163,29 @@ function openCreateModal(){
 
 function getWorkflowBadge(t){
   const s = t.workflow_state||'';
+  // Check if admin already viewed this task this session
+  if(s==='tech_updated' && window._viewedTaskIds && window._viewedTaskIds.has(parseInt(t.id))){
+    return ''; // Badge cleared after viewing
+  }
   const badges = {
-    'tech_updated':  '<span class="wf-badge wf-tech-updated">TECH UPDATED</span>',
-    'consent_sent':  '<span class="wf-badge" style="background:var(--blue-bg);color:var(--blue)">CONSENT SENT</span>',
-    'ready_to_add':  '<span class="wf-badge" style="background:var(--green-bg);color:var(--green)">READY TO ADD</span>',
-    'adding_done':   '<span class="wf-badge wf-adding-done">ADDING DONE</span>',
+    'tech_updated':   '<span class="wf-badge wf-tech-updated">UPDATED</span>',
+    'consent_sent':   '<span class="wf-badge" style="background:var(--blue-bg);color:var(--blue)">CONSENT SENT</span>',
+    'ready_to_add':   '<span class="wf-badge" style="background:var(--green-bg);color:var(--green)">READY TO ADD</span>',
     'payment_pending':'<span class="wf-badge wf-payment-pending">PAYMENT PENDING</span>',
-    'approve_now':   '<span class="wf-badge wf-approve-now">APPROVE NOW</span>',
+    'approve_now':    '<span class="wf-badge wf-approve-now">APPROVE NOW</span>',
+    // adding_done: no badge — payment is the next step, not a milestone to show
   };
   return badges[s]||'';
 }
 
 function getRowClass(t){
   const s = t.workflow_state||'';
-  if(s==='tech_updated')   return 'row-unseen';
-  if(s==='approve_now')    return 'row-approve';
+  // Clear row highlight if already viewed this session
+  if(s==='tech_updated' && window._viewedTaskIds && window._viewedTaskIds.has(parseInt(t.id))){
+    return '';
+  }
+  if(s==='tech_updated')    return 'row-unseen';
+  if(s==='approve_now')     return 'row-approve';
   if(s==='payment_pending') return 'row-payment-overdue';
   return '';
 }
@@ -2186,10 +2194,13 @@ async function viewTask(id){
   const res=await api('get_task',{id}).catch(()=>({}));
   const t=res.task||res;
   if(!t||!t.id){alert('Task not found.');return;}
-  // Mark as viewed by admin (clears unseen badge)
+  // Mark as viewed by admin/assigner — clears TECH UPDATED badge
   const role = currentUser?.role;
   if(role==='admin'||role==='assigner'){
     api('mark_viewed',{},'POST',{id}).catch(()=>{});
+    // Update the row in the existing table without full reload
+    window._viewedTaskIds = window._viewedTaskIds || new Set();
+    window._viewedTaskIds.add(parseInt(id));
   }
   const isAdmin=['admin','assigner'].includes(currentUser?.role);
   editingTaskId=t.id;
@@ -2654,10 +2665,9 @@ async function viewTask(id){
 function closeTaskDetail(){
   const overlay = document.getElementById('task-detail-overlay');
   const drawer  = document.getElementById('task-detail-drawer');
-  if(overlay){ overlay.style.display = 'none'; overlay.style.opacity='0'; }
+  if(overlay) overlay.style.display = 'none';
   if(drawer)  drawer.style.transform = 'translateX(100%)';
   _detailTask = null;
-  // Clear any consent poll timer
   if(typeof _consentPollTimer !== 'undefined' && _consentPollTimer){
     clearInterval(_consentPollTimer); _consentPollTimer = null;
   }
