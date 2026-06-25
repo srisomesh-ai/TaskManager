@@ -2486,12 +2486,12 @@ function getWorkflowBadge(t){
     return ''; // Badge cleared after viewing
   }
   const badges = {
-    'tech_updated':   '<span class="wf-badge wf-tech-updated">UPDATED</span>',
-    'consent_sent':   '<span class="wf-badge" style="background:var(--blue-bg);color:var(--blue)">CONSENT SENT</span>',
-    'ready_to_add':   '<span class="wf-badge" style="background:var(--green-bg);color:var(--green)">READY TO ADD</span>',
-    'payment_pending':'<span class="wf-badge wf-payment-pending">PAYMENT PENDING</span>',
-    'approve_now':    '<span class="wf-badge wf-approve-now">APPROVE NOW</span>',
-    // adding_done: no badge — payment is the next step, not a milestone to show
+    'tech_updated':            '<span class="wf-badge wf-tech-updated">UPDATED</span>',
+    'consent_sent':            '<span class="wf-badge" style="background:var(--blue-bg);color:var(--blue)">CONSENT SENT</span>',
+    'ready_to_add':            '<span class="wf-badge" style="background:var(--green-bg);color:var(--green)">READY TO ADD</span>',
+    'postponed_after_consent': '<span class="wf-badge" style="background:#fdecea;color:#c0392b;animation:pulse-badge 1.5s infinite">⏸️ POSTPONED</span>',
+    'payment_pending':         '<span class="wf-badge wf-payment-pending">PAYMENT PENDING</span>',
+    'approve_now':             '<span class="wf-badge wf-approve-now">APPROVE NOW</span>',
   };
   return badges[s]||'';
 }
@@ -2502,9 +2502,10 @@ function getRowClass(t){
   if(s==='tech_updated' && window._viewedTaskIds && window._viewedTaskIds.has(parseInt(t.id))){
     return '';
   }
-  if(s==='tech_updated')    return 'row-unseen';
-  if(s==='approve_now')     return 'row-approve';
-  if(s==='payment_pending') return 'row-payment-overdue';
+  if(s==='tech_updated')             return 'row-unseen';
+  if(s==='approve_now')              return 'row-approve';
+  if(s==='payment_pending')          return 'row-payment-overdue';
+  if(s==='postponed_after_consent')  return 'row-payment-overdue';
   return '';
 }
 

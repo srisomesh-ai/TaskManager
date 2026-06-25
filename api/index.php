@@ -261,13 +261,13 @@ case 'get_tasks':
             $task['workflow_state'] = '';
         } elseif($addingDone && $amtCollected <= 0){
             $task['workflow_state'] = 'payment_pending';
-        } elseif($consentAt !== ''){
-            // Consent done — ready to add (or adding done + paid = no badge needed)
-            if(!$addingDone){
-                $task['workflow_state'] = 'ready_to_add';
-            } else {
-                $task['workflow_state'] = ''; // adding done + paid, no extra badge
-            }
+        } elseif($status === 'Task Pending' && $consentAt !== ''){
+            // Postponed AFTER customer already consented — needs attention
+            $task['workflow_state'] = 'postponed_after_consent';
+        } elseif($consentAt !== '' && !$addingDone){
+            $task['workflow_state'] = 'ready_to_add';
+        } elseif($consentAt !== '' && $addingDone){
+            $task['workflow_state'] = '';
         } elseif($consentToken && $consentToken !== 'USED' && $consentToken !== ''){
             $task['workflow_state'] = 'consent_sent';
         } elseif($hasUnseenUpdate){
@@ -427,21 +427,27 @@ case 'update_task':
                 // ✅ Call/visit updates (📞) — only BEFORE device adding is done
                 // ✅ Payment collected (💰) — always send
                 // ❌ Device push to server (🛰), system entries, consent logs — never send
-                $isPayment  = mb_strpos($remark,'💰')!==false;
-                $isDevPush  = mb_strpos($remark,'🛰')!==false;
-                $isSystem   = mb_strpos($remark,'⏰')!==false || mb_strpos($remark,'T+')!==false;
-                $isCall     = mb_strpos($remark,'📞')!==false;
+                $isPayment   = mb_strpos($remark,'💰')!==false;
+                $isDevPush   = mb_strpos($remark,'🛰')!==false;
+                $isSystem    = mb_strpos($remark,'⏰')!==false || mb_strpos($remark,'T+')!==false;
+                $isCall      = mb_strpos($remark,'📞')!==false;
+                $isPostpone  = mb_strpos($remark,'⏸️')!==false || mb_strpos($remark,'postponed')!==false;
+                $isCancel    = mb_strpos($remark,'❌')!==false && mb_strpos($remark,'cancelled')!==false;
 
                 // Check if adding is done
                 $addChk = $pdo->prepare("SELECT COUNT(*) FROM task_device_installs WHERE task_id=? AND gps_serial_no IS NOT NULL");
                 $addChk->execute([$id]);
                 $addingDone = $addChk->fetchColumn() > 0;
 
+                // Check if customer had consented (postpone email only relevant post-consent)
+                $hadConsent = !empty($taskData['customer_consent_at']);
+
                 $shouldEmail = false;
-                if($isPayment)           $shouldEmail = true;
-                elseif($isDevPush)       $shouldEmail = false;
-                elseif($isSystem)        $shouldEmail = false;
-                elseif($isCall && !$addingDone) $shouldEmail = true;
+                if($isPayment)                        $shouldEmail = true;
+                elseif($isDevPush)                    $shouldEmail = false;
+                elseif($isSystem)                     $shouldEmail = false;
+                elseif($isPostpone && $hadConsent)    $shouldEmail = true;  // Postpone after consent
+                elseif($isCall && !$addingDone)       $shouldEmail = true;
 
                 if($shouldEmail){
                     if(empty($taskData['feedback_token']) || $taskData['feedback_token']==='USED'){
@@ -457,7 +463,21 @@ case 'update_task':
                     $actStmt = $pdo->prepare("SELECT a.*, u.name AS user_name FROM task_activities a LEFT JOIN users u ON a.user_id=u.id WHERE a.task_id=? AND a.activity_type='remark' AND (a.remark LIKE '%📞%' OR a.remark LIKE '%💰%') ORDER BY a.created_at ASC");
                     $actStmt->execute([$id]);
                     $allActivities = $actStmt->fetchAll();
-                    sendTaskUpdateCustomer($taskData, $remark, $updater['name'] ?? 'BharatGPS Team', $allActivities);
+                    // Use specific postpone template if this is a postponement
+                    if($isPostpone && $hadConsent){
+                        require_once __DIR__.'/mailer.php';
+                        // Extract postpone details from remark
+                        $pReason  = ''; $pDetails = ''; $pDate = '';
+                        if(preg_match('/Reason: ([^|]+)/', $remark, $m)) $pReason  = trim($m[1]);
+                        if(preg_match('/Details: ([^|]+)/', $remark, $m)) $pDetails = trim($m[1]);
+                        if(preg_match('/Reschedule date: ([^|]+)/', $remark, $m)) $pDate = trim($m[1]);
+                        $techNameRow = $pdo->prepare("SELECT name FROM users WHERE id=?");
+                        $techNameRow->execute([$taskData['assigned_to']??0]);
+                        $tName = $techNameRow->fetchColumn() ?: 'BharatGPS Technician';
+                        sendPostponeCustomer($taskData, $pReason, $pDetails, $pDate, $tName);
+                    } else {
+                        sendTaskUpdateCustomer($taskData, $remark, $updater['name'] ?? 'BharatGPS Team', $allActivities);
+                    }
                 }
             }
         } catch(Exception $e) {
