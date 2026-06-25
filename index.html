@@ -1112,7 +1112,7 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
 
       <!-- PAYMENT MODAL -->
       <div class="modal-overlay" id="payment-modal" style="z-index:1000">
-        <div style="background:var(--surface);border-radius:14px;width:440px;max-width:calc(100vw - 24px);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 12px 48px rgba(0,0,0,.25)">
+        <div style="background:var(--surface);border-radius:14px;width:460px;max-width:calc(100vw - 24px);max-height:94vh;display:flex;flex-direction:column;box-shadow:0 12px 48px rgba(0,0,0,.25)">
           <div style="background:linear-gradient(135deg,#1a7a3a,#22c55e);padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
             <div>
               <div style="font-size:15px;font-weight:800;color:#fff">💳 Collect Payment</div>
@@ -1123,45 +1123,94 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
           <div style="padding:18px 20px;overflow-y:auto;flex:1">
             <input type="hidden" id="pm-task-id">
 
-            <!-- Agreed payment info -->
-            <div id="pm-agreed-box" style="background:var(--accent-light);border:1.5px solid var(--accent2);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px"></div>
+            <!-- Agreed payment summary -->
+            <div id="pm-agreed-box" style="background:var(--accent-light);border:1.5px solid var(--accent2);border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:13px"></div>
 
             <!-- Amount -->
             <div class="form-group" style="margin-bottom:14px">
               <label>Amount Collected (₹) *</label>
-              <input type="number" id="pm-amount" placeholder="Enter amount" min="1" oninput="updatePmBalance()" style="font-size:18px;font-weight:700">
-              <div id="pm-balance" style="font-size:12px;margin-top:5px;color:var(--text2)"></div>
+              <input type="number" id="pm-amount" placeholder="Enter amount collected" min="0" step="1"
+                oninput="updatePmBalance()" style="font-size:20px;font-weight:800;letter-spacing:.5px">
+              <div id="pm-balance" style="font-size:12px;margin-top:6px"></div>
             </div>
 
-            <!-- Payment mode -->
-            <div class="form-group" style="margin-bottom:14px">
+            <!-- Mode buttons -->
+            <div class="form-group" style="margin-bottom:10px">
               <label>Payment Mode *</label>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" id="pm-mode-btns">
-                <button type="button" class="pm-mode-btn" data-mode="Cash"         onclick="selectPmMode('Cash')"         style="padding:10px;border:2px solid var(--border);border-radius:8px;background:var(--surface);cursor:pointer;font-size:13px;font-weight:700">💵 Cash</button>
-                <button type="button" class="pm-mode-btn" data-mode="UPI"          onclick="selectPmMode('UPI')"          style="padding:10px;border:2px solid var(--border);border-radius:8px;background:var(--surface);cursor:pointer;font-size:13px;font-weight:700">📱 UPI</button>
-                <button type="button" class="pm-mode-btn" data-mode="Bank Transfer" onclick="selectPmMode('Bank Transfer')" style="padding:10px;border:2px solid var(--border);border-radius:8px;background:var(--surface);cursor:pointer;font-size:13px;font-weight:700">🏦 Bank Transfer</button>
-                <button type="button" class="pm-mode-btn" data-mode="Cheque"       onclick="selectPmMode('Cheque')"       style="padding:10px;border:2px solid var(--border);border-radius:8px;background:var(--surface);cursor:pointer;font-size:13px;font-weight:700">📝 Cheque</button>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <button type="button" class="pm-mode-btn" data-mode="Cash"          onclick="selectPmMode('Cash')"          style="padding:11px 8px;border:2px solid var(--border);border-radius:8px;background:var(--surface);cursor:pointer;font-size:13px;font-weight:700">💵 Cash</button>
+                <button type="button" class="pm-mode-btn" data-mode="UPI"           onclick="selectPmMode('UPI')"           style="padding:11px 8px;border:2px solid var(--border);border-radius:8px;background:var(--surface);cursor:pointer;font-size:13px;font-weight:700">📱 UPI</button>
+                <button type="button" class="pm-mode-btn" data-mode="Bank Transfer" onclick="selectPmMode('Bank Transfer')" style="padding:11px 8px;border:2px solid var(--border);border-radius:8px;background:var(--surface);cursor:pointer;font-size:13px;font-weight:700">🏦 Bank Transfer</button>
+                <button type="button" class="pm-mode-btn" data-mode="Cheque"        onclick="selectPmMode('Cheque')"        style="padding:11px 8px;border:2px solid var(--border);border-radius:8px;background:var(--surface);cursor:pointer;font-size:13px;font-weight:700">📝 Cheque</button>
               </div>
               <input type="hidden" id="pm-mode">
             </div>
 
-            <!-- Mismatch warning -->
-            <div id="pm-mismatch-box" style="display:none;background:#fff3cd;border:1.5px solid #e07b00;border-radius:8px;padding:12px 14px;margin-bottom:14px">
-              <div style="font-size:12px;font-weight:800;color:#e07b00;margin-bottom:6px">⚠️ Payment Mode Changed</div>
-              <div id="pm-mismatch-msg" style="font-size:12px;color:#5a3e00;margin-bottom:10px"></div>
-              <button type="button" onclick="confirmModeOverride()" style="width:100%;padding:9px;background:#e07b00;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:800;cursor:pointer" id="pm-override-btn"></button>
+            <!-- Cash reason (only when cash + mismatch) -->
+            <div id="pm-cash-reason-box" style="display:none;background:#fff3cd;border:1.5px solid #e07b00;border-radius:8px;padding:12px 14px;margin-bottom:10px">
+              <div style="font-size:12px;font-weight:800;color:#e07b00;margin-bottom:6px">⚠️ Customer agreed to pay via <span id="pm-agreed-mode-label"></span></div>
+              <div class="form-group" style="margin-bottom:0">
+                <label style="font-size:11px">Reason for Cash Payment *</label>
+                <select id="pm-cash-reason" onchange="onCashReasonChange()" style="width:100%;padding:8px 10px;border:1.5px solid #e07b00;border-radius:6px;font-size:13px;outline:none">
+                  <option value="">Select reason</option>
+                  <option value="UPI not available">UPI not available on customer phone</option>
+                  <option value="No internet connection">No internet connection</option>
+                  <option value="Bank app not working">Bank app not working</option>
+                  <option value="Customer requested cash">Customer requested cash payment</option>
+                  <option value="Technical issue with UPI">Technical issue with UPI</option>
+                  <option value="Other">Other reason</option>
+                </select>
+              </div>
             </div>
 
-            <!-- Cash deposit warning -->
-            <div id="pm-cash-warning" style="display:none;background:#fdecea;border:1.5px solid var(--red);border-radius:8px;padding:12px 14px;margin-bottom:14px">
-              <div style="font-size:12px;font-weight:800;color:var(--red);margin-bottom:4px">⏰ Cash Deposit Reminder</div>
-              <div style="font-size:12px;color:#7a1e14;line-height:1.6">You have <strong>24 hours</strong> to deposit this cash to the office or company account. A reminder email will be sent to you tomorrow morning.</div>
+            <!-- Cash deposit warning (always show for cash) -->
+            <div id="pm-cash-deposit-warn" style="display:none;background:#fdecea;border:1.5px solid var(--red);border-radius:8px;padding:12px 14px;margin-bottom:10px">
+              <div style="font-size:12px;font-weight:800;color:var(--red);margin-bottom:4px">⏰ Cash Deposit — 24 Hours</div>
+              <div style="font-size:12px;color:#7a1e14;line-height:1.6">Deposit this cash to the office or company account <strong>within 24 hours</strong>. A reminder email will be sent to you tomorrow morning.</div>
             </div>
 
-            <!-- Notes -->
-            <div class="form-group">
-              <label>Payment Notes (optional)</label>
-              <input type="text" id="pm-notes" placeholder="e.g. UPI ref: 123456789">
+            <!-- Cheque details -->
+            <div id="pm-cheque-box" style="display:none;background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:10px">
+              <div style="font-size:12px;font-weight:800;color:var(--text2);margin-bottom:8px">📝 Cheque Details</div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Cheque Number *</label>
+                  <input type="text" id="pm-cheque-no" placeholder="e.g. 012345">
+                </div>
+                <div class="form-group">
+                  <label>Bank Name</label>
+                  <input type="text" id="pm-cheque-bank" placeholder="e.g. SBI, HDFC">
+                </div>
+              </div>
+            </div>
+
+            <!-- Balance reason (shown when partial payment) -->
+            <div id="pm-balance-reason-box" style="display:none;background:#fff3cd;border:1.5px solid #e07b00;border-radius:8px;padding:12px 14px;margin-bottom:10px">
+              <div style="font-size:12px;font-weight:800;color:#e07b00;margin-bottom:6px">⚠️ Balance Pending — Reason Required</div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label style="font-size:11px">Why is there a balance? *</label>
+                <select id="pm-balance-reason" style="width:100%;padding:8px 10px;border:1.5px solid #e07b00;border-radius:6px;font-size:13px;outline:none">
+                  <option value="">Select reason</option>
+                  <option value="Customer will pay remaining via UPI later">Customer will pay remaining via UPI later</option>
+                  <option value="Customer will pay on next visit">Will collect on next technician visit</option>
+                  <option value="Split payment agreed">Split payment agreed by customer</option>
+                  <option value="Customer does not have full amount now">Customer does not have full amount now</option>
+                  <option value="Customer paying in instalments">Customer paying in instalments</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label style="font-size:11px">When will you collect the balance? *</label>
+                <input type="date" id="pm-balance-date" style="width:100%;padding:8px 10px;border:1.5px solid #e07b00;border-radius:6px;font-size:13px;outline:none">
+              </div>
+              <div style="background:rgba(224,123,0,.12);border-radius:6px;padding:9px 11px;font-size:11px;color:#7a3e00;font-weight:700;line-height:1.6">
+                ⚠️ You are responsible for collecting the balance of <span id="pm-balance-amount-label"></span> by the selected date. This will be tracked and a reminder will be sent to you.
+              </div>
+            </div>
+
+            <!-- Reference / Notes -->
+            <div class="form-group" style="margin-bottom:0">
+              <label>Reference / Notes <span style="font-weight:400;color:var(--text3)">(optional)</span></label>
+              <input type="text" id="pm-notes" placeholder="e.g. UPI ref: 987654321 / Cheque deposited to Axis Bank">
             </div>
           </div>
           <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0;background:var(--surface);border-radius:0 0 14px 14px">
@@ -3373,47 +3422,42 @@ function checkAttendAllDevicesSaved(){
 }
 
 // ════════════════════════════════════════════════════════
-// PAYMENT MODAL
+// PAYMENT MODAL — Smart collection with enforcement
 // ════════════════════════════════════════════════════════
-let _pmAgreedMode   = '';   // what customer originally agreed to
-let _pmSelectedMode = '';   // what technician selected
-let _pmOverrideConfirmed = false;
+const PM_ROUND_TOLERANCE = 15; // ₹15 rounding accepted as full payment
+let _pmAgreedMode = '';
+let _pmSelectedMode = '';
 
 function openPaymentModal(taskId){
   const t = _detailTask;
   if(!t) return;
-
   document.getElementById('pm-task-id').value = taskId;
   document.getElementById('pm-amount').value  = '';
   document.getElementById('pm-notes').value   = '';
   document.getElementById('pm-mode').value    = '';
-  document.getElementById('pm-mismatch-box').style.display  = 'none';
-  document.getElementById('pm-cash-warning').style.display  = 'none';
+  document.getElementById('pm-cheque-no').value  = '';
+  document.getElementById('pm-cheque-bank').value= '';
+  document.getElementById('pm-balance-reason').value = '';
+  document.getElementById('pm-balance-date').value   = '';
+  document.getElementById('pm-cash-reason').value    = '';
+
+  ['pm-cash-reason-box','pm-cash-deposit-warn','pm-cheque-box','pm-balance-reason-box'].forEach(id=>{
+    document.getElementById(id).style.display='none';
+  });
   document.querySelectorAll('.pm-mode-btn').forEach(b=>b.classList.remove('selected'));
   _pmSelectedMode = '';
-  _pmOverrideConfirmed = false;
+  _pmAgreedMode   = t.payment_mode || '';
 
-  // What customer agreed to
-  _pmAgreedMode = t.payment_mode || '';
-  const price   = parseFloat(t.price_to_collect||0);
-  const coll    = parseFloat(t.amount_collected||0);
-  const bal     = price - coll;
+  const price = parseFloat(t.price_to_collect||0);
+  const coll  = parseFloat(t.amount_collected||0);
+  const bal   = price - coll;
 
   document.getElementById('pm-subtitle').textContent = t.task_id + ' · ' + t.customer_name;
   document.getElementById('pm-agreed-box').innerHTML = `
-    <div style="font-size:11px;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Customer Payment Agreement</div>
-    <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-      <span style="color:var(--text3)">Agreed Mode</span>
-      <strong>${_pmAgreedMode || '—'}</strong>
-    </div>
-    <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-      <span style="color:var(--text3)">Total Price</span>
-      <strong>₹${price.toLocaleString('en-IN')}</strong>
-    </div>
-    <div style="display:flex;justify-content:space-between">
-      <span style="color:var(--text3)">Balance Due</span>
-      <strong style="color:var(--red)">₹${bal.toLocaleString('en-IN')}</strong>
-    </div>`;
+    <div style="font-size:10px;font-weight:800;color:var(--accent2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Payment Agreement</div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--text3)">Customer agreed</span><strong>${_pmAgreedMode||'—'}</strong></div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--text3)">Total price</span><strong>₹${price.toLocaleString('en-IN')}</strong></div>
+    <div style="display:flex;justify-content:space-between"><span style="color:var(--text3)">Balance due</span><strong style="color:var(--red)">₹${bal.toLocaleString('en-IN')}</strong></div>`;
 
   document.getElementById('pm-balance').textContent = '';
   document.getElementById('payment-modal').classList.add('open');
@@ -3425,56 +3469,75 @@ function closePaymentModal(){
 }
 
 function updatePmBalance(){
-  const t     = _detailTask;
-  if(!t) return;
+  const t     = _detailTask; if(!t) return;
   const price = parseFloat(t.price_to_collect||0);
   const prev  = parseFloat(t.amount_collected||0);
   const now   = parseFloat(document.getElementById('pm-amount').value||0);
   const bal   = price - prev - now;
   const el    = document.getElementById('pm-balance');
-  if(!el) return;
-  el.innerHTML = bal > 0
-    ? `<span style="color:var(--red)">₹${bal.toLocaleString('en-IN')} still due after this</span>`
-    : `<span style="color:var(--green);font-weight:700">✅ Fully paid</span>`;
+  const balBox= document.getElementById('pm-balance-reason-box');
+  const balLbl= document.getElementById('pm-balance-amount-label');
+
+  if(now <= 0){
+    el.innerHTML = '';
+    if(balBox) balBox.style.display='none';
+    return;
+  }
+
+  const isFullyPaid = bal <= PM_ROUND_TOLERANCE;
+  if(isFullyPaid){
+    el.innerHTML = `<span style="color:var(--green);font-weight:700">✅ ${bal<=0?'Fully paid':'Accepted as full payment (rounding ₹'+Math.abs(bal)+')'}</span>`;
+    if(balBox) balBox.style.display='none';
+  } else {
+    el.innerHTML = `<span style="color:var(--red);font-weight:700">₹${bal.toLocaleString('en-IN')} balance remaining</span>`;
+    if(balBox) balBox.style.display='';
+    if(balLbl) balLbl.textContent = '₹'+bal.toLocaleString('en-IN');
+    // Auto-set balance date to tomorrow
+    const balDate = document.getElementById('pm-balance-date');
+    if(balDate && !balDate.value){
+      const d=new Date(); d.setDate(d.getDate()+1);
+      balDate.value = d.toISOString().slice(0,10);
+    }
+  }
 }
 
 function selectPmMode(mode){
   _pmSelectedMode = mode;
-  _pmOverrideConfirmed = false;
   document.getElementById('pm-mode').value = mode;
   document.querySelectorAll('.pm-mode-btn').forEach(b=>{
-    b.classList.toggle('selected', b.dataset.mode === mode);
+    b.classList.toggle('selected', b.dataset.mode===mode);
   });
 
-  const mismatchBox  = document.getElementById('pm-mismatch-box');
-  const cashWarning  = document.getElementById('pm-cash-warning');
-  const mismatchMsg  = document.getElementById('pm-mismatch-msg');
-  const overrideBtn  = document.getElementById('pm-override-btn');
+  // Reset all conditional boxes
+  ['pm-cash-reason-box','pm-cash-deposit-warn','pm-cheque-box'].forEach(id=>{
+    document.getElementById(id).style.display='none';
+  });
 
-  // Check mismatch — only for direct modes (ignore deferred)
   const directModes = ['Cash','UPI','Bank Transfer','Cheque'];
   const agreedDirect = directModes.includes(_pmAgreedMode);
   const mismatch = agreedDirect && _pmAgreedMode && _pmAgreedMode !== mode;
 
-  if(mismatch){
-    mismatchBox.style.display = '';
-    mismatchMsg.textContent = `Customer confirmed payment via ${_pmAgreedMode} when this task was created. You selected ${mode}. What happened?`;
-    overrideBtn.textContent = `${mode} — Customer doesn't have ${_pmAgreedMode}, will pay by ${mode}`;
-    cashWarning.style.display = 'none'; // hide until override confirmed
-  } else {
-    mismatchBox.style.display = 'none';
-    // Show cash warning if cash selected
-    cashWarning.style.display = (mode === 'Cash') ? '' : 'none';
+  if(mode === 'Cash'){
+    if(mismatch){
+      // Show reason dropdown for cash mismatch
+      document.getElementById('pm-cash-reason-box').style.display='';
+      document.getElementById('pm-agreed-mode-label').textContent = _pmAgreedMode;
+      document.getElementById('pm-cash-reason').value = '';
+      // Deposit warning only shown after reason selected
+    } else {
+      // Cash was the agreed mode — just show deposit warning
+      document.getElementById('pm-cash-deposit-warn').style.display='';
+    }
+  } else if(mode === 'Cheque'){
+    document.getElementById('pm-cheque-box').style.display='';
   }
+  // UPI + Bank Transfer — nothing extra
 }
 
-function confirmModeOverride(){
-  _pmOverrideConfirmed = true;
-  document.getElementById('pm-mismatch-box').style.display = 'none';
-  // Show cash warning if cash
-  if(_pmSelectedMode === 'Cash'){
-    document.getElementById('pm-cash-warning').style.display = '';
-  }
+function onCashReasonChange(){
+  const reason = document.getElementById('pm-cash-reason').value;
+  // Show deposit warning once reason is selected
+  document.getElementById('pm-cash-deposit-warn').style.display = reason ? '' : 'none';
 }
 
 async function savePayment(){
@@ -3483,60 +3546,88 @@ async function savePayment(){
   const mode   = document.getElementById('pm-mode').value;
   const notes  = document.getElementById('pm-notes').value.trim();
 
-  if(!amount || amount <= 0){ alert('Please enter the amount collected.'); return; }
-  if(!mode){ alert('Please select a payment mode.'); return; }
+  // Validate amount
+  if(!amount || amount <= 0){
+    alert('⚠️ No payment collected. You must collect at least a partial payment to proceed. If customer is refusing to pay, escalate to your manager.');
+    return;
+  }
 
-  // If mismatch not resolved
+  // Validate mode
+  if(!mode){ alert('Please select payment mode.'); return; }
+
+  const t     = _detailTask;
+  const price = parseFloat(t?.price_to_collect||0);
+  const prev  = parseFloat(t?.amount_collected||0);
+  const total = prev + amount;
+  const bal   = price - total;
+  const isFullyPaid = bal <= PM_ROUND_TOLERANCE;
+
+  // Cash mismatch — reason required
   const directModes = ['Cash','UPI','Bank Transfer','Cheque'];
   const agreedDirect = directModes.includes(_pmAgreedMode);
   const mismatch = agreedDirect && _pmAgreedMode && _pmAgreedMode !== mode;
-  if(mismatch && !_pmOverrideConfirmed){
-    alert('Please confirm the reason for payment mode change first.');
-    return;
+  if(mode==='Cash' && mismatch){
+    const cashReason = document.getElementById('pm-cash-reason').value;
+    if(!cashReason){ alert('Please select the reason for cash payment.'); return; }
+  }
+
+  // Cheque number required
+  if(mode==='Cheque'){
+    const chqNo = document.getElementById('pm-cheque-no').value.trim();
+    if(!chqNo){ alert('Please enter the cheque number.'); return; }
+  }
+
+  // Balance reason required if not fully paid
+  let balReason = '', balDate = '';
+  if(!isFullyPaid && bal > 0){
+    balReason = document.getElementById('pm-balance-reason').value;
+    balDate   = document.getElementById('pm-balance-date').value;
+    if(!balReason){ alert('Please select the reason for balance pending.'); return; }
+    if(!balDate)  { alert('Please enter when you will collect the balance.'); return; }
   }
 
   const btn = document.getElementById('pm-save-btn');
   if(btn){ btn.textContent='Saving…'; btn.disabled=true; }
 
-  // Build remark for activity log
-  const prev     = parseFloat(_detailTask?.amount_collected||0);
-  const total    = prev + amount;
-  const price    = parseFloat(_detailTask?.price_to_collect||0);
-  const balance  = price - total;
-  const override = (mismatch && _pmOverrideConfirmed)
-    ? ` | Mode override: Customer agreed ${_pmAgreedMode}, paid by ${mode}` : '';
-  const cashNote = (mode==='Cash') ? ' | Cash to be deposited within 24 hours' : '';
+  // Build remark
+  const cashReason  = document.getElementById('pm-cash-reason').value;
+  const chqNo       = document.getElementById('pm-cheque-no').value.trim();
+  const chqBank     = document.getElementById('pm-cheque-bank').value.trim();
+  const overridePart= (mismatch && cashReason) ? ` | Cash reason: ${cashReason}` : '';
+  const chequePart  = (mode==='Cheque' && chqNo) ? ` | Cheque No: ${chqNo}${chqBank?' ('+chqBank+')':''}` : '';
+  const cashDep     = (mode==='Cash') ? ' | ⏰ Cash to be deposited within 24 hours' : '';
+  const balPart     = (!isFullyPaid && balReason) ? ` | Balance reason: ${balReason} | Collect by: ${balDate}` : '';
+  const fullPaidPart= isFullyPaid && bal > 0 ? ` (₹${bal} rounding accepted)` : '';
 
-  const remark = `💰 Payment collected: ₹${amount.toLocaleString('en-IN')} via ${mode}` +
-    (notes ? ` (${notes})` : '') +
-    ` | Total collected: ₹${total.toLocaleString('en-IN')}` +
-    (balance > 0 ? ` | Balance due: ₹${balance.toLocaleString('en-IN')}` : ' | Fully paid') +
-    override + cashNote;
-
-  // Set cash reminder if cash mode
-  let reminderDate = null;
-  if(mode === 'Cash'){
-    const d = new Date(); d.setDate(d.getDate()+1);
-    reminderDate = d.toISOString().slice(0,10);
-  }
+  const remark = `💰 Payment collected: ₹${amount.toLocaleString('en-IN')} via ${mode}${fullPaidPart}`
+    + (notes ? ` | Ref: ${notes}` : '')
+    + ` | Total: ₹${total.toLocaleString('en-IN')}`
+    + (isFullyPaid ? ' | ✅ Fully paid' : ` | Balance due: ₹${bal.toLocaleString('en-IN')}`)
+    + overridePart + chequePart + cashDep + balPart;
 
   const body = {
-    id:               taskId,
+    id: taskId,
     amount_collected: total,
-    payment_mode:     mode,
-    remark:           remark,
+    payment_mode: mode,
+    remark,
   };
-  if(reminderDate) body.reminder_date = reminderDate;
+  // Set reminder for balance or cash deposit
+  if(!isFullyPaid && balDate){
+    body.reminder_date = balDate;
+  } else if(mode==='Cash'){
+    const d=new Date(); d.setDate(d.getDate()+1);
+    body.reminder_date = d.toISOString().slice(0,10);
+  }
 
   const res = await api('update_task',{},'POST',body).catch(()=>({}));
   if(btn){ btn.textContent='💰 Save Payment'; btn.disabled=false; }
 
   if(res.success){
     closePaymentModal();
-    await viewTask(taskId);           // refresh detail drawer
+    await viewTask(taskId);
     if(typeof renderMyTasks==='function') renderMyTasks();
   } else {
-    alert(res.error || 'Save failed. Please try again.');
+    alert(res.error||'Save failed. Please try again.');
   }
 }
 
