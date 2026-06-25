@@ -333,7 +333,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:#1a1f2e;min-heig
 
         <div class="chk-item" onclick="this.querySelector('input').click()">
           <input type="checkbox" name="chk_pay" id="chk_pay" <?= isset($_POST['chk_pay'])?'checked':'' ?>>
-          <label for="chk_pay">I confirm that I will pay <strong>₹<?= $price ?></strong><?php if(!empty($task['payment_mode'])): ?> via <strong><?= htmlspecialchars($task['payment_mode']) ?></strong><?php endif; ?> <strong>immediately after installation</strong>. I understand BharatGPS has the right to recover the device if payment is not made.</label>
+          <label for="chk_pay">I confirm that I will pay <strong>₹<?= $price ?></strong><?php if(!empty($task['payment_mode'])): ?> via <strong><?= htmlspecialchars($task['payment_mode']) ?></strong><?php endif; ?> <strong>immediately after installation</strong>.</label>
         </div>
 
         <button type="submit" class="btn-submit">✅ I Agree — Proceed with Installation</button>
