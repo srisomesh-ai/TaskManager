@@ -924,8 +924,50 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
         <div class="card"><div style="padding:40px;text-align:center;color:var(--text3)">Coming soon</div></div>
       </div>
       <div class="page" id="page-admin">
-        <div class="pg-header"><div class="breadcrumb">Home / <b>Admin Panel</b></div><div class="pg-title">⚙️ Admin Panel</div></div>
-        <div class="card"><div style="padding:40px;text-align:center;color:var(--text3)">Coming soon</div></div>
+        <div class="pg-header">
+          <div class="breadcrumb">Home / <b>Admin Panel</b></div>
+          <div class="pg-title">⚙️ Admin Panel</div>
+          <div class="pg-sub">Manage users, data and system settings</div>
+        </div>
+
+        <!-- DATA MANAGEMENT -->
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-hd">
+            <div class="card-title"><span class="card-dot" style="background:var(--red)"></span> Data Management</div>
+          </div>
+          <div style="padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+
+            <div style="background:var(--red-bg);border:1.5px solid var(--red);border-radius:8px;padding:14px 16px">
+              <div style="font-size:13px;font-weight:800;color:var(--red);margin-bottom:4px">🗑️ Delete All Tasks</div>
+              <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Permanently deletes all tasks, activities, device installs, and consent records. Cannot be undone.</div>
+              <button onclick="adminWipeData('tasks')" style="background:var(--red);color:#fff;border:none;padding:9px 18px;border-radius:7px;font-size:13px;font-weight:800;cursor:pointer">🗑️ Wipe All Task Data</button>
+            </div>
+
+            <div style="background:var(--amber-bg);border:1.5px solid var(--amber);border-radius:8px;padding:14px 16px">
+              <div style="font-size:13px;font-weight:800;color:var(--saffron);margin-bottom:4px">🔄 Reset Task IDs</div>
+              <div style="font-size:12px;color:var(--text2);margin-bottom:12px">After wiping, reset the task counter so next task starts from ID-2026-0001.</div>
+              <button onclick="adminWipeData('reset_ids')" style="background:var(--saffron);color:#fff;border:none;padding:9px 18px;border-radius:7px;font-size:13px;font-weight:800;cursor:pointer">🔄 Reset Task Counter</button>
+            </div>
+
+            <div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:14px 16px">
+              <div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:4px">📊 Database Stats</div>
+              <div id="admin-db-stats" style="font-size:12px;color:var(--text2)">Click to load stats</div>
+              <button onclick="adminLoadStats()" style="margin-top:10px;background:var(--accent);color:#fff;border:none;padding:7px 14px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">Load Stats</button>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- USER MANAGEMENT -->
+        <div class="card">
+          <div class="card-hd">
+            <div class="card-title"><span class="card-dot" style="background:var(--accent)"></span> Users</div>
+            <button class="card-btn" onclick="adminLoadUsers()">Refresh</button>
+          </div>
+          <div id="admin-users-list" style="padding:8px 0">
+            <div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Click Refresh to load users</div>
+          </div>
+        </div>
       </div>
 
     </div><!-- /content -->
@@ -4124,6 +4166,76 @@ async function markTaskViewed(id, btn){
   window._viewedTaskIds.add(parseInt(id));
   // Reload dashboard to reflect change
   setTimeout(()=>loadDashboard(), 300);
+}
+
+// ════════════════════════════════════════════════════════
+// ADMIN PANEL
+// ════════════════════════════════════════════════════════
+async function adminWipeData(type){
+  const labels = {
+    tasks:     'ALL tasks, activities, device installs, consent records',
+    reset_ids: 'the task ID counter (so next task = ID-2026-0001)',
+  };
+  const label = labels[type] || type;
+  const confirm1 = confirm(`⚠️ This will permanently delete ${label}.\n\nAre you sure?`);
+  if(!confirm1) return;
+  const confirm2 = prompt(`Type DELETE to confirm:`);
+  if(confirm2 !== 'DELETE'){ alert('Cancelled — you must type DELETE to confirm.'); return; }
+
+  const btn = event.target;
+  const orig = btn.textContent;
+  btn.textContent = 'Deleting…'; btn.disabled = true;
+
+  const res = await api('admin_wipe',{},'POST',{type, confirm:'DELETE'}).catch(()=>({}));
+  btn.textContent = orig; btn.disabled = false;
+
+  if(res.success){
+    alert('✅ Done: ' + (res.message||'Data deleted.'));
+    loadDashboard();
+  } else {
+    alert('❌ Error: ' + (res.error||'Unknown error'));
+  }
+}
+
+async function adminLoadStats(){
+  const el = document.getElementById('admin-db-stats');
+  if(el) el.textContent = 'Loading…';
+  const res = await api('admin_db_stats').catch(()=>({}));
+  if(el && res.stats){
+    const s = res.stats;
+    el.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">
+        <div>Tasks: <strong>${s.tasks||0}</strong></div>
+        <div>Activities: <strong>${s.activities||0}</strong></div>
+        <div>Device Installs: <strong>${s.device_installs||0}</strong></div>
+        <div>Consent Records: <strong>${s.consents||0}</strong></div>
+        <div>Users: <strong>${s.users||0}</strong></div>
+      </div>`;
+  } else {
+    if(el) el.textContent = 'Failed to load stats.';
+  }
+}
+
+async function adminLoadUsers(){
+  const el = document.getElementById('admin-users-list');
+  if(el) el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Loading…</div>';
+  const res = await api('get_users').catch(()=>({}));
+  const users = res.users || [];
+  if(!el) return;
+  if(!users.length){ el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3)">No users found</div>'; return; }
+  el.innerHTML = users.map(u => `
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 18px;border-bottom:1px solid var(--border)">
+      <div style="width:36px;height:36px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex-shrink:0">
+        ${(u.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700">${u.name||'–'}</div>
+        <div style="font-size:11px;color:var(--text3)">${u.email||''} · ${u.role||''}</div>
+      </div>
+      <span style="font-size:11px;padding:3px 8px;border-radius:12px;font-weight:700;${u.is_active=='1'?'background:var(--green-bg);color:var(--green)':'background:var(--red-bg);color:var(--red)'}">
+        ${u.is_active=='1'?'Active':'Inactive'}
+      </span>
+    </div>`).join('');
 }
 
 </script>

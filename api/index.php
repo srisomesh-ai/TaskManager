@@ -1140,6 +1140,51 @@ case 'check_consent':
     break;
 
 // ---- MARK TASK VIEWED (clears unseen badge) ----
+
+// ---- ADMIN WIPE ----
+case 'admin_wipe':
+    if($userRole !== 'admin'){ echo json_encode(['error'=>'Admin only']); break; }
+    if(($body['confirm']??'') !== 'DELETE'){ echo json_encode(['error'=>'Confirmation required']); break; }
+    $type = $body['type'] ?? '';
+    try {
+        if($type === 'tasks'){
+            // Wipe in order (FK constraints)
+            $pdo->exec("DELETE FROM task_device_installs");
+            $pdo->exec("DELETE FROM task_activities");
+            // consent_token etc stored on tasks table
+            try { $pdo->exec("DELETE FROM consent_logs"); } catch(Exception $e){}
+            $pdo->exec("DELETE FROM tasks");
+            echo json_encode(['success'=>true,'message'=>'All tasks, activities and device installs deleted.']);
+        } elseif($type === 'reset_ids'){
+            // Reset auto increment — only if tasks table is empty
+            $cnt = $pdo->query("SELECT COUNT(*) FROM tasks")->fetchColumn();
+            if($cnt > 0){
+                echo json_encode(['error'=>'Cannot reset IDs while tasks exist. Wipe tasks first.']);
+            } else {
+                $pdo->exec("ALTER TABLE tasks AUTO_INCREMENT = 1");
+                echo json_encode(['success'=>true,'message'=>'Task counter reset. Next task will be ID-'.date('Y').'-0001.']);
+            }
+        } else {
+            echo json_encode(['error'=>'Unknown wipe type']);
+        }
+    } catch(Exception $e){
+        echo json_encode(['error'=>'DB error: '.$e->getMessage()]);
+    }
+    break;
+
+// ---- ADMIN DB STATS ----
+case 'admin_db_stats':
+    if($userRole !== 'admin'){ echo json_encode(['error'=>'Admin only']); break; }
+    $stats = [
+        'tasks'          => $pdo->query("SELECT COUNT(*) FROM tasks")->fetchColumn(),
+        'activities'     => $pdo->query("SELECT COUNT(*) FROM task_activities")->fetchColumn(),
+        'device_installs'=> $pdo->query("SELECT COUNT(*) FROM task_device_installs")->fetchColumn(),
+        'consents'       => $pdo->query("SELECT COUNT(*) FROM tasks WHERE customer_consent_at IS NOT NULL")->fetchColumn(),
+        'users'          => $pdo->query("SELECT COUNT(*) FROM users WHERE is_active=1")->fetchColumn(),
+    ];
+    echo json_encode(['stats'=>$stats]);
+    break;
+
 case 'mark_viewed':
     $id = intval($body['id'] ?? $_GET['id'] ?? 0);
     if($id){
