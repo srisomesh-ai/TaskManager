@@ -1,4 +1,5 @@
 <?php
+ob_start();
 ini_set('display_errors', 0);
 error_reporting(0);
 header('Content-Type: application/json');
@@ -70,13 +71,11 @@ case 'logout':
 
 // ---- ME ----
 case 'me':
-    touchUserActive($pdo, $userId);
     echo json_encode(['user'=>['id'=>$cu['id'],'name'=>$cu['name'],'role'=>$cu['role'],'email'=>$cu['email']]]);
     break;
 
 // ---- GET SYNC ----
 case 'get_sync':
-    touchUserActive($pdo, $userId);
     $last = $pdo->query("SELECT MAX(updated_at) FROM tasks")->fetchColumn();
     $active = $pdo->query("SELECT name,role FROM users WHERE last_active > DATE_SUB(NOW(), INTERVAL 10 MINUTE) AND is_active=1")->fetchAll();
     // Role-filtered counts
@@ -295,7 +294,6 @@ case 'create_task':
         $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'assignment')")->execute([$newId,$userId,"Task assigned to ".$tn->fetchColumn()]);
     }
     echo json_encode(['success'=>true,'task_id'=>$taskId,'id'=>$newId]);
-    logSync($pdo,'task_created',$newId,$userId);
     // Send emails
     if ($at && !empty($body['email'])) {
         try {
@@ -362,8 +360,6 @@ case 'update_task':
     if (isset($body['task_status'])&&$body['task_status']!==$existing['task_status'])
         $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")->execute([$id,$userId,"Status: {$existing['task_status']} → {$body['task_status']}"]);
     echo json_encode(['success'=>true]);
-    logSync($pdo,'task_updated',$id,$userId);
-    touchUserActive($pdo,$userId);
     // Auto star rating on close
     if (isset($body['task_status'])&&$body['task_status']==='Closed'&&$existing['task_status']!=='Closed') {
         $h=(time()-strtotime($existing['created_at']))/3600;
@@ -414,7 +410,6 @@ case 'delete_task':
     $id=intval($body['id']??$_GET['id']??0);
     $pdo->prepare("DELETE FROM tasks WHERE id=?")->execute([$id]);
     echo json_encode(['success'=>true]);
-    logSync($pdo,'task_deleted',$id,$userId);
     break;
 
 // ---- TRANSFER TASK ----
@@ -427,7 +422,6 @@ case 'transfer_task':
     $pdo->prepare("UPDATE tasks SET assigned_to=?,transferred_from=?,task_status='Open' WHERE id=?")->execute([$toId,$task['assigned_to'],$id]);
     $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'assignment')")->execute([$id,$userId,"Transferred to $toName".(!empty($body['note'])?": {$body['note']}":"")]);
     echo json_encode(['success'=>true]);
-    logSync($pdo,'task_transferred',$id,$userId);
     break;
 
 // ---- APPROVE TASK ----
@@ -466,7 +460,6 @@ case 'approve_task':
         } catch(Exception $e) { error_log('BS close error: '.$e->getMessage()); }
     }
     echo json_encode(['success'=>true]);
-    logSync($pdo,'task_closed',$id,$userId);
     break;
 
 // ---- REJECT TASK ----
