@@ -938,82 +938,179 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
         </div>
       </div>
 
-      <!-- TECH ATTEND MODAL (installation / service flow) -->
+      <!-- TECH ATTEND MODAL — Status-driven installation form -->
       <div class="modal-overlay" id="tech-attend-modal" style="z-index:1000">
-        <div style="background:var(--surface);border-radius:12px;width:500px;max-width:calc(100vw - 32px);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.25)">
-          <div style="background:linear-gradient(135deg,#1a7a3a,#22c55e);padding:14px 18px;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+        <div style="background:var(--surface);border-radius:14px;width:520px;max-width:calc(100vw - 24px);max-height:92vh;display:flex;flex-direction:column;box-shadow:0 12px 48px rgba(0,0,0,.25)">
+
+          <!-- Header -->
+          <div id="attend-header" style="background:linear-gradient(135deg,#1a7a3a,#22c55e);padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
             <div>
-              <div style="font-size:14px;font-weight:800;color:#fff" id="attend-title">🔧 Attend Task</div>
-              <div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px" id="attend-subtitle">Complete the installation</div>
+              <div style="font-size:15px;font-weight:800;color:#fff" id="attend-title">🔧 Installation</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px" id="attend-subtitle">Select installation status</div>
             </div>
-            <button onclick="closeTechAttend()" style="background:rgba(255,255,255,.2);border:none;color:#fff;width:28px;height:28px;border-radius:6px;font-size:16px;cursor:pointer">✕</button>
+            <button onclick="closeTechAttend()" style="background:rgba(255,255,255,.2);border:none;color:#fff;width:30px;height:30px;border-radius:7px;font-size:17px;cursor:pointer">✕</button>
           </div>
-          <div style="padding:18px;overflow-y:auto;flex:1">
+
+          <div style="overflow-y:auto;flex:1;padding:18px 20px">
             <input type="hidden" id="attend-task-id">
 
-            <!-- Step indicator inside attend modal -->
-            <div style="background:var(--surface2);border-radius:8px;padding:12px 14px;margin-bottom:16px">
-              <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">YOU ARE ATTENDING:</div>
+            <!-- Task summary -->
+            <div style="background:var(--surface2);border-radius:8px;padding:12px 14px;margin-bottom:18px">
+              <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Task</div>
               <div id="attend-task-summary" style="font-size:13px;font-weight:700;color:var(--text)"></div>
             </div>
 
-            <div class="form-group" style="margin-bottom:12px">
-              <label>What work was done? *</label>
-              <textarea id="attend-work-done" rows="3" placeholder="e.g. GPS device installed successfully. IMEI: 123456789. Device added to server..."></textarea>
-            </div>
+            <!-- STEP 1: Installation Status -->
+            <div style="margin-bottom:18px">
+              <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--accent2);margin-bottom:10px">① Installation Status *</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
 
-            <div class="form-row">
-              <div class="form-group">
-                <label>GPS Serial No. / IMEI</label>
-                <input type="text" id="attend-imei" placeholder="IMEI or Serial number">
+                <div class="attend-status-card" data-status="completed" onclick="selectAttendStatus('completed')"
+                  style="border:2px solid var(--border);border-radius:10px;padding:14px 8px;text-align:center;cursor:pointer;transition:all .15s">
+                  <div style="font-size:26px;margin-bottom:5px">✅</div>
+                  <div style="font-size:12px;font-weight:800;color:var(--text)">Completed</div>
+                  <div style="font-size:10px;color:var(--text3);margin-top:2px">Installation done</div>
+                </div>
+
+                <div class="attend-status-card" data-status="postponed" onclick="selectAttendStatus('postponed')"
+                  style="border:2px solid var(--border);border-radius:10px;padding:14px 8px;text-align:center;cursor:pointer;transition:all .15s">
+                  <div style="font-size:26px;margin-bottom:5px">⏸️</div>
+                  <div style="font-size:12px;font-weight:800;color:var(--text)">Postponed</div>
+                  <div style="font-size:10px;color:var(--text3);margin-top:2px">Will reschedule</div>
+                </div>
+
+                <div class="attend-status-card" data-status="cancelled" onclick="selectAttendStatus('cancelled')"
+                  style="border:2px solid var(--border);border-radius:10px;padding:14px 8px;text-align:center;cursor:pointer;transition:all .15s">
+                  <div style="font-size:26px;margin-bottom:5px">❌</div>
+                  <div style="font-size:12px;font-weight:800;color:var(--text)">Cancelled</div>
+                  <div style="font-size:10px;color:var(--text3);margin-top:2px">Not proceeding</div>
+                </div>
+
               </div>
-              <div class="form-group">
-                <label>Server Name</label>
-                <input type="text" id="attend-server" placeholder="e.g. S1, S2, S3">
-              </div>
+              <input type="hidden" id="attend-install-status">
             </div>
 
-            <div class="form-group" style="margin-bottom:12px">
-              <label>Name on Server</label>
-              <input type="text" id="attend-server-name" placeholder="Customer/vehicle name as added on server">
-            </div>
+            <!-- SECTION: COMPLETED -->
+            <div id="attend-section-completed" style="display:none">
+              <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--green);margin-bottom:12px;padding-top:4px;border-top:1px solid var(--border)">② Installation Details</div>
 
-            <!-- Payment collection -->
-            <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:14px;margin-bottom:12px">
-              <div style="font-size:12px;font-weight:800;color:var(--green);margin-bottom:10px">💰 Payment Collection</div>
               <div class="form-row">
                 <div class="form-group">
-                  <label>Amount Collected (₹)</label>
-                  <input type="number" id="attend-amount" placeholder="0" min="0" oninput="updateAttendBalance()">
+                  <label>Vehicle Number *</label>
+                  <input type="text" id="attend-vehicle-no" placeholder="e.g. AP39AB1234" style="text-transform:uppercase">
                 </div>
                 <div class="form-group">
-                  <label>Payment Mode</label>
-                  <select id="attend-pay-mode">
-                    <option value="">Select</option>
-                    <option>Cash</option>
-                    <option>UPI</option>
-                    <option>Bank Transfer</option>
-                    <option>Cheque</option>
-                  </select>
+                  <label>GPS Serial / IMEI *</label>
+                  <input type="text" id="attend-imei" placeholder="IMEI or Serial number">
                 </div>
               </div>
-              <div id="attend-balance-line" style="font-size:12px;color:var(--text2);margin-top:6px"></div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Server Name</label>
+                  <input type="text" id="attend-server" placeholder="e.g. S1, S2, S3">
+                </div>
+                <div class="form-group">
+                  <label>Name on Server</label>
+                  <input type="text" id="attend-server-name" placeholder="Name added on server">
+                </div>
+              </div>
+              <div class="form-group" style="margin-bottom:14px">
+                <label>Work Done *</label>
+                <textarea id="attend-work-done" rows="2" placeholder="e.g. GPS installed on dashboard, wired to ignition, tested successfully..."></textarea>
+              </div>
+
+              <!-- Payment collection -->
+              <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:14px;margin-bottom:12px">
+                <div style="font-size:12px;font-weight:800;color:var(--green);margin-bottom:10px">💰 Payment Collection</div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Amount Collected (₹)</label>
+                    <input type="number" id="attend-amount" placeholder="0" min="0" oninput="updateAttendBalance()">
+                  </div>
+                  <div class="form-group">
+                    <label>Payment Mode</label>
+                    <select id="attend-pay-mode">
+                      <option value="">Select</option>
+                      <option>Cash</option>
+                      <option>UPI</option>
+                      <option>Bank Transfer</option>
+                      <option>Cheque</option>
+                    </select>
+                  </div>
+                </div>
+                <div id="attend-balance-line" style="font-size:12px;color:var(--text2);margin-top:6px"></div>
+              </div>
+
+              <div class="form-group">
+                <label>Additional Remarks</label>
+                <textarea id="attend-remarks-completed" rows="2" placeholder="Any notes, observations or follow-up..."></textarea>
+              </div>
+
+              <div style="background:var(--accent-light);border:1.5px solid var(--accent);border-radius:8px;padding:10px 14px;margin-top:4px;font-size:12px;color:var(--accent2)">
+                ℹ️ Task will move to <strong>Awaiting Approval</strong> after submission.
+              </div>
             </div>
 
-            <div class="form-group">
-              <label>Additional Remarks</label>
-              <textarea id="attend-remarks" rows="2" placeholder="Any issues, observations, or follow-up needed..."></textarea>
+            <!-- SECTION: POSTPONED -->
+            <div id="attend-section-postponed" style="display:none">
+              <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--saffron);margin-bottom:12px;padding-top:4px;border-top:1px solid var(--border)">② Postponement Details</div>
+              <div class="form-group" style="margin-bottom:12px">
+                <label>Reason for Postponement *</label>
+                <select id="attend-postpone-reason">
+                  <option value="">Select reason</option>
+                  <option>Vehicle not available at location</option>
+                  <option>Customer requested to reschedule</option>
+                  <option>Payment not ready</option>
+                  <option>Vehicle under repair / workshop</option>
+                  <option>Customer not reachable at location</option>
+                  <option>Technical issue — parts needed</option>
+                  <option>Other</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom:12px">
+                <label>Additional Details</label>
+                <textarea id="attend-postpone-details" rows="2" placeholder="Any additional information about the postponement..."></textarea>
+              </div>
+              <div class="form-group">
+                <label>Reschedule Date</label>
+                <input type="date" id="attend-postpone-date">
+              </div>
+              <div style="background:var(--saffron-bg);border:1.5px solid var(--saffron);border-radius:8px;padding:10px 14px;margin-top:4px;font-size:12px;color:var(--saffron)">
+                ⏸️ Task will move back to <strong>Task Pending</strong> with reschedule reminder.
+              </div>
             </div>
 
-            <!-- Submit action -->
-            <div style="background:var(--accent-light);border:1.5px solid var(--accent);border-radius:8px;padding:12px 14px;margin-top:12px">
-              <div style="font-size:11px;font-weight:700;color:var(--accent2);margin-bottom:6px">AFTER SUBMITTING:</div>
-              <div style="font-size:12px;color:var(--text2)">Task will move to <strong>Awaiting Approval</strong> for manager review. You cannot edit after submission.</div>
+            <!-- SECTION: CANCELLED -->
+            <div id="attend-section-cancelled" style="display:none">
+              <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--red);margin-bottom:12px;padding-top:4px;border-top:1px solid var(--border)">② Cancellation Details</div>
+              <div class="form-group" style="margin-bottom:12px">
+                <label>Reason for Cancellation *</label>
+                <select id="attend-cancel-reason">
+                  <option value="">Select reason</option>
+                  <option>Customer changed mind</option>
+                  <option>Customer purchased from competitor</option>
+                  <option>Price dispute</option>
+                  <option>Vehicle sold</option>
+                  <option>Customer not reachable — repeated attempts</option>
+                  <option>Duplicate lead</option>
+                  <option>Other</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Additional Details</label>
+                <textarea id="attend-cancel-details" rows="2" placeholder="Any additional information about the cancellation..."></textarea>
+              </div>
+              <div style="background:var(--red-bg);border:1.5px solid var(--red);border-radius:8px;padding:10px 14px;margin-top:4px;font-size:12px;color:var(--red)">
+                ❌ Task will be marked as <strong>Cancelled</strong>. This action is final.
+              </div>
             </div>
+
           </div>
-          <div style="padding:14px 18px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;flex-shrink:0">
+
+          <!-- Footer -->
+          <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;flex-shrink:0;background:var(--surface);border-radius:0 0 14px 14px">
             <button class="ts-btn ts-btn-secondary" onclick="closeTechAttend()">Cancel</button>
-            <button class="ts-btn ts-btn-primary" onclick="submitTechAttend()" style="background:var(--green)">✅ Submit & Request Approval</button>
+            <button class="ts-btn ts-btn-primary" id="attend-submit-btn" onclick="submitTechAttend()" style="display:none">Submit</button>
           </div>
         </div>
       </div>
@@ -2433,12 +2530,29 @@ async function submitTechUpdate(){
 // ── TECH ATTEND MODAL ─────────────────────────────────────────────────────
 function openTechAttend(taskId){
   document.getElementById('attend-task-id').value = taskId;
-  ['attend-work-done','attend-imei','attend-server','attend-server-name','attend-remarks'].forEach(id=>{
+
+  // Reset all fields and sections
+  document.querySelectorAll('.attend-status-card').forEach(c=>{
+    c.style.borderColor='var(--border)';
+    c.style.background='var(--surface)';
+  });
+  ['attend-section-completed','attend-section-postponed','attend-section-cancelled'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.style.display='none';
+  });
+  document.getElementById('attend-install-status').value='';
+  document.getElementById('attend-submit-btn').style.display='none';
+
+  // Clear inputs
+  ['attend-vehicle-no','attend-imei','attend-server','attend-server-name',
+   'attend-work-done','attend-remarks-completed','attend-postpone-details','attend-cancel-details'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
-  const amtEl = document.getElementById('attend-amount'); if(amtEl) amtEl.value='';
-  const modeEl = document.getElementById('attend-pay-mode'); if(modeEl) modeEl.selectedIndex=0;
-  document.getElementById('attend-balance-line').textContent='';
+  ['attend-postpone-reason','attend-cancel-reason','attend-pay-mode'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.selectedIndex=0;
+  });
+  const amtEl=document.getElementById('attend-amount'); if(amtEl) amtEl.value='';
+  const dateEl=document.getElementById('attend-postpone-date'); if(dateEl) dateEl.value='';
+  const balEl=document.getElementById('attend-balance-line'); if(balEl) balEl.textContent='';
 
   // Fill task summary
   if(_detailTask){
@@ -2446,15 +2560,48 @@ function openTechAttend(taskId){
     const coll  = parseFloat(_detailTask.amount_collected||0);
     const bal   = price - coll;
     document.getElementById('attend-task-summary').innerHTML =
-      `${_detailTask.task_id} · ${_detailTask.customer_name} · ${_detailTask.device_details||''}<br>` +
-      `<span style="color:var(--red);font-weight:700">₹${bal.toLocaleString('en-IN')} balance due</span>`;
-    document.getElementById('attend-title').textContent = '🔧 ' + (_detailTask.device_details||'Attend Task');
+      `<strong>${_detailTask.task_id}</strong> · ${_detailTask.customer_name} · ${_detailTask.device_details||''}` +
+      (bal>0 ? `<br><span style="color:var(--red);font-weight:700;font-size:12px">₹${bal.toLocaleString('en-IN')} balance due</span>` : '');
+    document.getElementById('attend-title').textContent = '🔧 ' + (_detailTask.device_details||'Installation');
     document.getElementById('attend-subtitle').textContent = _detailTask.customer_name + ' · ' + (_detailTask.location||'');
     if(amtEl) amtEl.placeholder = `Max: ₹${bal.toLocaleString('en-IN')}`;
-    updateAttendBalance();
   }
 
   document.getElementById('tech-attend-modal').classList.add('open');
+}
+
+function selectAttendStatus(status){
+  // Highlight selected card
+  const colors = {
+    completed: {border:'var(--green)',  bg:'var(--green-bg)'},
+    postponed:  {border:'var(--saffron)',bg:'var(--saffron-bg)'},
+    cancelled:  {border:'var(--red)',   bg:'var(--red-bg)'},
+  };
+  document.querySelectorAll('.attend-status-card').forEach(c=>{
+    const s = c.dataset.status;
+    c.style.borderColor = s===status ? colors[s].border : 'var(--border)';
+    c.style.background  = s===status ? colors[s].bg     : 'var(--surface)';
+  });
+  document.getElementById('attend-install-status').value = status;
+
+  // Show/hide sections
+  ['completed','postponed','cancelled'].forEach(s=>{
+    const sec = document.getElementById('attend-section-'+s);
+    if(sec) sec.style.display = s===status ? '' : 'none';
+  });
+
+  // Update header color + submit button
+  const header = document.getElementById('attend-header');
+  const submitBtn = document.getElementById('attend-submit-btn');
+  const submitLabels = {
+    completed: {bg:'linear-gradient(135deg,#1a7a3a,#22c55e)', txt:'✅ Submit — Request Approval'},
+    postponed:  {bg:'linear-gradient(135deg,#e07b00,#f59e0b)', txt:'⏸️ Submit — Mark Postponed'},
+    cancelled:  {bg:'linear-gradient(135deg,#c0392b,#ef4444)', txt:'❌ Submit — Cancel Task'},
+  };
+  if(header) header.style.background = submitLabels[status].bg;
+  if(submitBtn){ submitBtn.textContent = submitLabels[status].txt; submitBtn.style.display=''; }
+
+  if(status==='completed') updateAttendBalance();
 }
 
 function closeTechAttend(){
@@ -2463,61 +2610,96 @@ function closeTechAttend(){
 
 function updateAttendBalance(){
   if(!_detailTask) return;
-  const price  = parseFloat(_detailTask.price_to_collect||0);
-  const coll   = parseFloat(_detailTask.amount_collected||0);
+  const price   = parseFloat(_detailTask.price_to_collect||0);
+  const prev    = parseFloat(_detailTask.amount_collected||0);
   const nowColl = parseFloat(document.getElementById('attend-amount')?.value||0);
-  const totalColl = coll + nowColl;
-  const bal   = price - totalColl;
-  const el    = document.getElementById('attend-balance-line');
+  const bal     = price - prev - nowColl;
+  const el      = document.getElementById('attend-balance-line');
   if(el) el.innerHTML = bal > 0
-    ? `<span style="color:var(--red)">₹${bal.toLocaleString('en-IN')} still due after this collection</span>`
-    : `<span style="color:var(--green)">✅ Fully paid</span>`;
+    ? `<span style="color:var(--red)">₹${bal.toLocaleString('en-IN')} still due after this</span>`
+    : `<span style="color:var(--green);font-weight:700">✅ Fully paid</span>`;
 }
 
 async function submitTechAttend(){
-  const taskId   = document.getElementById('attend-task-id').value;
-  const workDone = document.getElementById('attend-work-done').value.trim();
-  if(!workDone){ alert('Please describe what work was done.'); return; }
+  const taskId = document.getElementById('attend-task-id').value;
+  const status = document.getElementById('attend-install-status').value;
+  if(!status){ alert('Please select installation status.'); return; }
 
-  const imei       = document.getElementById('attend-imei').value.trim();
-  const server     = document.getElementById('attend-server').value.trim();
-  const serverName = document.getElementById('attend-server-name').value.trim();
-  const amount     = parseFloat(document.getElementById('attend-amount').value||0);
-  const payMode    = document.getElementById('attend-pay-mode').value;
-  const remarks    = document.getElementById('attend-remarks').value.trim();
+  const btn = document.getElementById('attend-submit-btn');
+  if(btn){ btn.disabled=true; btn.textContent='Submitting…'; }
 
-  const parts = ['🔧 Work done: ' + workDone];
-  if(imei)   parts.push('GPS IMEI: ' + imei);
-  if(server) parts.push('Server: ' + server);
-  if(serverName) parts.push('Name on server: ' + serverName);
-  if(remarks) parts.push('Note: ' + remarks);
+  let body = { id: taskId };
+  let parts = [];
 
-  const body = {
-    id:           taskId,
-    task_status:  'Awaiting Approval',
-    remark:       parts.join(' | '),
-    gps_serial_no: imei||null,
-    server_name:  server||null,
-    name_on_server: serverName||null,
-    amount_collected: amount > 0 ? ((parseFloat(_detailTask?.amount_collected||0)) + amount) : undefined,
-  };
+  if(status === 'completed'){
+    const vehicleNo  = document.getElementById('attend-vehicle-no').value.trim().toUpperCase();
+    const imei       = document.getElementById('attend-imei').value.trim();
+    const server     = document.getElementById('attend-server').value.trim();
+    const serverName = document.getElementById('attend-server-name').value.trim();
+    const workDone   = document.getElementById('attend-work-done').value.trim();
+    const amount     = parseFloat(document.getElementById('attend-amount').value||0);
+    const payMode    = document.getElementById('attend-pay-mode').value;
+    const remarks    = document.getElementById('attend-remarks-completed').value.trim();
 
-  if(amount > 0 && payMode){
-    await api('add_payment',{},'POST',{
-      task_id: taskId,
-      amount,
-      payment_mode: payMode,
-    }).catch(()=>{});
+    if(!vehicleNo){ alert('Please enter the vehicle number.'); btn.disabled=false; btn.textContent='✅ Submit — Request Approval'; return; }
+    if(!imei)     { alert('Please enter the GPS Serial / IMEI.'); btn.disabled=false; btn.textContent='✅ Submit — Request Approval'; return; }
+    if(!workDone) { alert('Please describe the work done.'); btn.disabled=false; btn.textContent='✅ Submit — Request Approval'; return; }
+
+    parts = ['🔧 Installation completed'];
+    parts.push('Vehicle No: ' + vehicleNo);
+    parts.push('GPS IMEI: ' + imei);
+    if(server)     parts.push('Server: ' + server);
+    if(serverName) parts.push('Name on server: ' + serverName);
+    parts.push('Work done: ' + workDone);
+    if(remarks)    parts.push('Note: ' + remarks);
+
+    body.task_status   = 'Awaiting Approval';
+    body.gps_serial_no = imei||null;
+    body.server_name   = server||null;
+    body.name_on_server= serverName||null;
+    body.vehicle_no    = vehicleNo||null;
+    if(amount > 0){
+      body.amount_collected = (parseFloat(_detailTask?.amount_collected||0)) + amount;
+    }
+    if(payMode) body.payment_mode = payMode;
+
+  } else if(status === 'postponed'){
+    const reason  = document.getElementById('attend-postpone-reason').value;
+    const details = document.getElementById('attend-postpone-details').value.trim();
+    const date    = document.getElementById('attend-postpone-date').value;
+    if(!reason){ alert('Please select a reason for postponement.'); btn.disabled=false; btn.textContent='⏸️ Submit — Mark Postponed'; return; }
+
+    parts = ['⏸️ Installation postponed'];
+    parts.push('Reason: ' + reason);
+    if(details) parts.push('Details: ' + details);
+    if(date)    parts.push('Reschedule date: ' + date);
+
+    body.task_status  = 'Task Pending';
+    if(date) body.reminder_date = date;
+
+  } else if(status === 'cancelled'){
+    const reason  = document.getElementById('attend-cancel-reason').value;
+    const details = document.getElementById('attend-cancel-details').value.trim();
+    if(!reason){ alert('Please select a reason for cancellation.'); btn.disabled=false; btn.textContent='❌ Submit — Cancel Task'; return; }
+
+    parts = ['❌ Installation cancelled'];
+    parts.push('Reason: ' + reason);
+    if(details) parts.push('Details: ' + details);
+
+    body.task_status = 'Cancelled';
   }
 
-  const btn2 = document.querySelector('#tech-attend-modal .ts-btn-primary');
-  if(btn2){ btn2.textContent='Submitting…'; btn2.disabled=true; }
+  body.remark = parts.join(' | ');
+
   const res = await api('update_task',{},'POST',body).catch(()=>({}));
-  if(btn2){ btn2.textContent='✅ Submit & Request Approval'; btn2.disabled=false; }
+
+  const labels = {completed:'✅ Submit — Request Approval', postponed:'⏸️ Submit — Mark Postponed', cancelled:'❌ Submit — Cancel Task'};
+  if(btn){ btn.disabled=false; btn.textContent=labels[status]||'Submit'; }
+
   if(res.success){
     closeTechAttend();
     await viewTask(taskId);
-    if(typeof renderMyTasks === 'function') renderMyTasks();
+    if(typeof renderMyTasks==='function') renderMyTasks();
   } else {
     alert(res.error || 'Submit failed. Please try again.');
   }
