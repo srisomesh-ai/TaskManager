@@ -21,6 +21,9 @@ if ($method === 'POST') {
 $token = $_SERVER['HTTP_X_AUTH_TOKEN'] ?? $_GET['token'] ?? '';
 
 $pdo = getDB();
+// Migration: admin_viewed_at per task (track when admin last viewed)
+try { $pdo->exec("ALTER TABLE tasks ADD COLUMN admin_viewed_at DATETIME DEFAULT NULL"); } catch(Exception $e){}
+
 
 // Auth
 $skipAuth = ['login','ping','verify_pin'];
@@ -210,14 +213,58 @@ case 'get_tasks':
     }
 
     $limit = min(intval($_GET['limit'] ?? 500), 1000);
-    $sql = "SELECT t.*,u.name as technician_name,u.phone as tech_phone,c.name as creator_name
+    $sql = "SELECT t.*,u.name as tech_name,u.name as technician_name,u.phone as tech_phone,c.name as creator_name,
+            (SELECT MAX(a.created_at) FROM task_activities a WHERE a.task_id=t.id AND a.activity_type='remark') as last_tech_activity
             FROM tasks t
             LEFT JOIN users u ON t.assigned_to=u.id
             LEFT JOIN users c ON t.created_by=c.id"
          . ($where ? " WHERE ".implode(" AND ",$where) : "")
          . " ORDER BY t.created_at DESC LIMIT $limit";
     $s = $pdo->prepare($sql); $s->execute($params);
-    echo json_encode(['tasks'=>$s->fetchAll()]);
+    $tasks = $s->fetchAll();
+
+    // Compute workflow_state for each task
+    foreach($tasks as &$task){
+        $id = $task['id'];
+        $status       = $task['task_status']??'';
+        $amtCollected = floatval($task['amount_collected']??0);
+        $price        = floatval($task['price_to_collect']??0);
+        $consentAt    = $task['customer_consent_at']??'';
+        $consentToken = $task['consent_token']??'';
+
+        // Check device installs
+        try {
+            $di = $pdo->prepare("SELECT COUNT(*) FROM task_device_installs WHERE task_id=? AND gps_serial_no IS NOT NULL");
+            $di->execute([$id]);
+            $addingDone = $di->fetchColumn() > 0;
+        } catch(Exception $e){ $addingDone = false; }
+
+        // Check unseen tech update (activity after admin last viewed)
+        // We use a simple proxy: last remark activity timestamp vs task updated_at
+        $lastActivity = $task['last_tech_activity']??null;
+        $adminViewed  = $task['admin_viewed_at']??null;
+        $hasUnseenUpdate = $lastActivity && (!$adminViewed || $lastActivity > $adminViewed);
+
+        // Determine state (priority order)
+        if($status === 'Awaiting Approval'){
+            $task['workflow_state'] = 'approve_now';
+        } elseif($addingDone && $amtCollected <= 0){
+            $task['workflow_state'] = 'payment_pending';
+        } elseif($addingDone && $amtCollected > 0){
+            $task['workflow_state'] = 'adding_done';
+        } elseif($consentAt){
+            $task['workflow_state'] = 'ready_to_add';
+        } elseif($consentToken && $consentToken !== 'USED'){
+            $task['workflow_state'] = 'consent_sent';
+        } elseif($hasUnseenUpdate){
+            $task['workflow_state'] = 'tech_updated';
+        } else {
+            $task['workflow_state'] = '';
+        }
+    }
+    unset($task);
+
+    echo json_encode(['tasks'=>$tasks]);
     break;
 
 // ---- GET TASK ----
@@ -1049,6 +1096,17 @@ case 'check_consent':
         echo json_encode(['consented'=>false]);
     }
     break;
+
+// ---- MARK TASK VIEWED (clears unseen badge) ----
+case 'mark_viewed':
+    $id = intval($body['id'] ?? $_GET['id'] ?? 0);
+    if($id){
+        try { $pdo->exec("ALTER TABLE tasks ADD COLUMN admin_viewed_at DATETIME DEFAULT NULL"); } catch(Exception $e){}
+        $pdo->prepare("UPDATE tasks SET admin_viewed_at=NOW() WHERE id=?")->execute([$id]);
+    }
+    echo json_encode(['success'=>true]);
+    break;
+
 
 default:
     http_response_code(404);
