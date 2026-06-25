@@ -980,9 +980,9 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
 
                 <div class="attend-status-card" data-status="completed" onclick="selectAttendStatus('completed')"
                   style="border:2px solid var(--border);border-radius:10px;padding:14px 8px;text-align:center;cursor:pointer;transition:all .15s">
-                  <div style="font-size:26px;margin-bottom:5px">✅</div>
-                  <div style="font-size:12px;font-weight:800;color:var(--text)">Completed</div>
-                  <div style="font-size:10px;color:var(--text3);margin-top:2px">Installation done</div>
+                  <div style="font-size:26px;margin-bottom:5px">➕</div>
+                  <div style="font-size:12px;font-weight:800;color:var(--text)">Proceed to Adding</div>
+                  <div style="font-size:10px;color:var(--text3);margin-top:2px">Add device to server</div>
                 </div>
 
                 <div class="attend-status-card" data-status="postponed" onclick="selectAttendStatus('postponed')"
@@ -2594,6 +2594,10 @@ function selectAttendStatus(status){
     postponed:  {bg:'linear-gradient(135deg,#e07b00,#f59e0b)', txt:'⏸️ Submit — Mark Postponed'},
     cancelled:  {bg:'linear-gradient(135deg,#c0392b,#ef4444)', txt:'❌ Submit — Cancel Task'},
   };
+  if(status==='completed'){
+    document.getElementById('attend-title').textContent='➕ Proceed to Adding';
+    document.getElementById('attend-subtitle').textContent='Add GPS device to server';
+  }
   if(header) header.style.background = submitLabels[status].bg;
   if(submitBtn){ submitBtn.textContent = submitLabels[status].txt; submitBtn.style.display=''; }
 
@@ -2890,18 +2894,23 @@ function buildAttendDeviceCard(idx, saved, done){
   const total = _attendTaskQty;
   const s = saved || {};
   if(done){
-    return `<div class="dev-card saved" id="attend-dev-card-${idx}" style="margin-bottom:14px">
-      <div class="dev-card-head">
-        <div class="dev-card-title">🚗 Device ${idx}${total>1?' of '+total:''}</div>
-        <span class="dev-saved-badge">✅ Added to Server</span>
+    return `<div class="dev-card saved" id="attend-dev-card-${idx}" style="margin-bottom:14px;border-color:var(--green)">
+      <div class="dev-card-head" style="background:var(--green-bg)">
+        <div class="dev-card-title" style="color:var(--green)">🚗 Device ${idx}${total>1?' of '+total:''}</div>
+        <span class="dev-saved-badge">✅ Added to Server — Final</span>
       </div>
       <div class="dev-card-body">
-        <div style="background:var(--green-bg);border-radius:6px;padding:10px 12px;font-size:12px;line-height:1.9">
-          <div>📡 <strong>${escHtml(s.device_name||'')}</strong> · ${escHtml(s.server_name||'')}</div>
-          <div>🚗 <strong>${escHtml(s.plate_number||'')}</strong> · ${escHtml(s.vehicle_type||'')}</div>
-          <div>📟 IMEI: ${escHtml(s.imei||'')} · Owner: ${escHtml(s.object_owner||'')}</div>
+        <div style="background:var(--green-bg);border-radius:6px;padding:12px 14px;font-size:12px;line-height:2;border:1px solid var(--green)">
+          <div>📡 <strong>${escHtml(s.device_name||'')}</strong></div>
+          <div>🌐 Server: <strong>${escHtml(s.server_name||'')}</strong></div>
+          <div>📟 IMEI: <strong>${escHtml(s.imei||'')}</strong></div>
+          <div>🚗 Plate: <strong>${escHtml(s.plate_number||'')}</strong>${s.vehicle_type?' · '+escHtml(s.vehicle_type):''}</div>
+          <div>👤 Owner: <strong>${escHtml(s.object_owner||'–')}</strong></div>
+          <div>📅 Installed: <strong>${escHtml(s.installation_date||'')}</strong> · Expires: <strong>${escHtml(s.expiration_date||'')}</strong></div>
         </div>
-        <button class="ts-btn ts-btn-secondary" style="width:100%;margin-top:8px;font-size:12px" onclick="reopenDeviceCard(${idx})">✏️ Edit Device ${idx}</button>
+        <div style="margin-top:8px;padding:8px 12px;background:var(--surface2);border-radius:6px;font-size:11px;color:var(--text3);text-align:center">
+          🔒 Device successfully added to GPS server. This cannot be edited.
+        </div>
       </div>
     </div>`;
   }
@@ -2972,8 +2981,13 @@ function buildAttendDeviceCard(idx, saved, done){
         </div>
         <div style="display:flex;gap:8px">
           <button class="ts-btn ts-btn-secondary" style="flex:1" onclick="resetIMEISearch(${idx})">← Back</button>
-          <button class="ts-btn ts-btn-primary" style="flex:2;background:var(--green)" onclick="pushDeviceToServer(${idx})" id="adev-push-btn-${idx}">🛰 Push to GPS Server</button>
-        </div>
+            <button class="ts-btn ts-btn-primary" style="flex:2;background:var(--accent2)" onclick="showPushConfirm(${idx})">📋 Review & Push →</button>
+          </div>
+          <div id="adev-review-${idx}" style="display:none;background:var(--surface2);border:1.5px solid var(--accent);border-radius:8px;padding:12px 14px;margin-top:10px;font-size:12px;line-height:1.9"></div>
+          <div id="adev-confirm-btns-${idx}" style="display:none;gap:8px;margin-top:10px">
+            <button class="ts-btn ts-btn-secondary" style="flex:1" onclick="hidePushConfirm(${idx})">← Check Again</button>
+            <button class="ts-btn ts-btn-primary" style="flex:2;background:var(--green)" onclick="pushDeviceToServer(${idx})" id="adev-push-btn-${idx}">✅ Confirm & Push to Server</button>
+          </div>
       </div>
     </div>
   </div>`;
@@ -3039,11 +3053,37 @@ async function searchIMEI(idx){
 
 function loadAttendDevice(idx, device){
   const dd = device.device_data||{};
+  const resEl = document.getElementById('adev-search-result-'+idx);
+
+  // Check if device already has installation data — block if so
+  const alreadyInstalled = dd.installation_date && dd.installation_date !== '0000-00-00'
+    && dd.plate_number && dd.plate_number.trim() !== '';
+
+  if(alreadyInstalled){
+    if(resEl) resEl.innerHTML = `
+      <div style="background:#fff3cd;border:1.5px solid #e07b00;border-radius:8px;padding:12px 14px;font-size:12px;line-height:1.8">
+        <div style="font-weight:800;color:#e07b00;margin-bottom:4px">⚠️ This device is already installed</div>
+        <div style="color:#5a3e00">
+          <strong>${escHtml(device.name||'–')}</strong><br>
+          Plate: <strong>${escHtml(dd.plate_number||'–')}</strong><br>
+          Owner: <strong>${escHtml(dd.object_owner||'–')}</strong><br>
+          Installed: <strong>${escHtml(dd.installation_date||'–')}</strong><br>
+          Server: <strong>${escHtml(device._server_name||'–')}</strong>
+        </div>
+        <div style="margin-top:8px;padding:8px;background:rgba(224,123,0,.1);border-radius:5px;color:#7a3e00;font-size:11px;font-weight:700">
+          🚫 This IMEI is already in use. Please search a different IMEI number.
+        </div>
+      </div>`;
+    return; // Block — do not show form
+  }
+
+  // Device is free — proceed
   document.getElementById('adev-server-id-'+idx).value = device._server_id||'';
   document.getElementById('adev-device-id-'+idx).value = dd.id||device.id||'';
   document.getElementById('adev-imei-'+idx).value       = dd.imei||'';
   const infoEl = document.getElementById('adev-device-info-'+idx);
-  if(infoEl) infoEl.innerHTML=`<div style="font-weight:800;color:var(--text);margin-bottom:3px">📡 ${escHtml(device.name||'–')}</div>
+  if(infoEl) infoEl.innerHTML=`
+    <div style="font-weight:800;color:var(--text);margin-bottom:3px">📡 ${escHtml(device.name||'–')}</div>
     <div style="color:var(--text3);font-size:11px">IMEI: <strong>${escHtml(dd.imei||'–')}</strong> &nbsp;·&nbsp; Server: <strong>${escHtml(device._server_name||'–')}</strong></div>`;
   const sf=(id,v)=>{const el=document.getElementById(id);if(el&&v)el.value=v;};
   sf('adev-name-'+idx,    device.name);
@@ -3057,6 +3097,59 @@ function loadAttendDevice(idx, device){
   document.getElementById('adev-step-search-'+idx).style.display='none';
   document.getElementById('adev-step-form-'+idx).style.display='';
 }
+
+function showPushConfirm(idx){
+  const name     = document.getElementById('adev-name-'+idx)?.value.trim();
+  const plate    = document.getElementById('adev-plate-'+idx)?.value.trim().toUpperCase();
+  const vtype    = document.getElementById('adev-vtype-'+idx)?.value;
+  const owner    = document.getElementById('adev-owner-'+idx)?.value.trim();
+  const instDate = document.getElementById('adev-inst-date-'+idx)?.value;
+  const expDate  = document.getElementById('adev-exp-date-'+idx)?.value;
+  const imei     = document.getElementById('adev-imei-'+idx)?.value;
+  const serverId = document.getElementById('adev-server-id-'+idx)?.value;
+  const notes    = document.getElementById('adev-notes-'+idx)?.value.trim();
+  const serverNames = ['','Server 1 — bharatgps.com','Server 2 — bharatgps.in','Server 3 — bharatgps.school','Server 4 — bharatgps.org'];
+
+  if(!plate){  alert('Vehicle number / plate is required.'); return; }
+  if(!name){   alert('Name on server is required.'); return; }
+  if(!instDate){alert('Installation date is required.'); return; }
+
+  const reviewEl = document.getElementById('adev-review-'+idx);
+  if(reviewEl){
+    reviewEl.style.display='';
+    reviewEl.innerHTML = `
+      <div style="font-size:11px;font-weight:800;color:var(--accent2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📋 Review — Confirm Before Pushing</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <tr><td style="color:var(--text3);padding:2px 0;width:40%">Name on Server</td><td style="font-weight:700">${escHtml(name)}</td></tr>
+        <tr><td style="color:var(--text3);padding:2px 0">IMEI</td><td style="font-weight:700;font-family:monospace">${escHtml(imei)}</td></tr>
+        <tr><td style="color:var(--text3);padding:2px 0">GPS Server</td><td style="font-weight:700">${escHtml(serverNames[parseInt(serverId)||0]||'Server '+serverId)}</td></tr>
+        <tr><td style="color:var(--text3);padding:2px 0">Vehicle Plate</td><td style="font-weight:700">${escHtml(plate)}</td></tr>
+        ${vtype?`<tr><td style="color:var(--text3);padding:2px 0">Vehicle Type</td><td style="font-weight:700">${escHtml(vtype)}</td></tr>`:''}
+        ${owner?`<tr><td style="color:var(--text3);padding:2px 0">Owner</td><td style="font-weight:700">${escHtml(owner)}</td></tr>`:''}
+        <tr><td style="color:var(--text3);padding:2px 0">Install Date</td><td style="font-weight:700">${escHtml(instDate)}</td></tr>
+        <tr><td style="color:var(--text3);padding:2px 0">Expiry Date</td><td style="font-weight:700">${escHtml(expDate)}</td></tr>
+        ${notes?`<tr><td style="color:var(--text3);padding:2px 0">Notes</td><td style="font-weight:700">${escHtml(notes)}</td></tr>`:''}
+      </table>
+      <div style="margin-top:8px;font-size:11px;color:var(--saffron);font-weight:700">⚠️ Please verify all details carefully. Once pushed to GPS server this cannot be changed from here.</div>
+    `;
+  }
+
+  // Show confirm buttons, hide form buttons
+  const formBtns    = document.getElementById('adev-form-btns-'+idx);
+  const confirmBtns = document.getElementById('adev-confirm-btns-'+idx);
+  if(formBtns)    formBtns.style.display    = 'none';
+  if(confirmBtns) confirmBtns.style.display = 'flex';
+}
+
+function hidePushConfirm(idx){
+  const reviewEl    = document.getElementById('adev-review-'+idx);
+  const formBtns    = document.getElementById('adev-form-btns-'+idx);
+  const confirmBtns = document.getElementById('adev-confirm-btns-'+idx);
+  if(reviewEl)    reviewEl.style.display    = 'none';
+  if(formBtns)    formBtns.style.display    = 'flex';
+  if(confirmBtns) confirmBtns.style.display = 'none';
+}
+
 
 async function pushDeviceToServer(idx){
   const serverId = document.getElementById('adev-server-id-'+idx)?.value;
