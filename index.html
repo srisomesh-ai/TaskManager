@@ -280,6 +280,10 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
 .dash-action-row:last-child{border-bottom:none}
 .dash-approve-btn{background:var(--accent);color:#fff;border:none;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;flex-shrink:0}
 .dash-approve-btn:hover{background:var(--accent2)}
+
+.dal-btn{background:var(--accent);color:#fff;border:none;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;flex-shrink:0;margin-left:auto}
+.dal-btn:hover{opacity:.85}
+.dash-alert{padding:10px 14px;border-radius:8px;margin-bottom:8px;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
 </style>
 </head>
 <body>
@@ -4105,9 +4109,9 @@ async function quickApprove(taskId, btn){
 }
 
 function filterByWorkflow(state){
-  showPage('all-tasks');
-  // Store requested workflow filter
+  // Set filter BEFORE showPage so loadTasks picks it up
   window._pendingWorkflowFilter = state;
+  showPage('tasks');
 }
 
 function applyWorkflowFilter(tasks){
