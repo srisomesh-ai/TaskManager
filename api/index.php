@@ -327,14 +327,21 @@ case 'update_task':
     if ($sets) { $vals[]=$id; $pdo->prepare("UPDATE tasks SET ".implode(',',$sets)." WHERE id=?")->execute($vals); }
     if (!empty($body['remark'])) {
         $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'remark')")->execute([$id,$userId,$body['remark']]);
-        // Send email update to customer — same pattern as working version 035b309
+    }
+    if (isset($body['task_status'])&&$body['task_status']!==$existing['task_status'])
+        $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")->execute([$id,$userId,"Status: {$existing['task_status']} → {$body['task_status']}"]);
+
+    // ── Respond to browser immediately — DB is updated, that is what matters ──
+    echo json_encode(['success'=>true]);
+
+    // ── Send email after responding — slow SMTP won't affect browser ──────
+    if (!empty($body['remark'])) {
         try {
             require_once __DIR__.'/mailer.php';
             $taskForEmail = $pdo->prepare("SELECT t.*,u.name as tech_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?");
             $taskForEmail->execute([$id]);
             $taskData = $taskForEmail->fetch();
             if($taskData && !empty($taskData['email'])) {
-                // Ensure feedback_token exists for report link
                 if(empty($taskData['feedback_token'])){
                     $newToken = bin2hex(random_bytes(24));
                     try { $pdo->prepare("ALTER TABLE tasks ADD COLUMN feedback_token VARCHAR(64) UNIQUE DEFAULT NULL")->execute(); } catch(Exception $ex){}
@@ -344,7 +351,6 @@ case 'update_task':
                 $updaterName = $pdo->prepare("SELECT name FROM users WHERE id=?");
                 $updaterName->execute([$userId]);
                 $updater = $updaterName->fetch();
-                // Fetch activity log for full history in email
                 $actStmt = $pdo->prepare("SELECT a.*, u.name AS user_name FROM task_activities a LEFT JOIN users u ON a.user_id=u.id WHERE a.task_id=? ORDER BY a.created_at ASC");
                 $actStmt->execute([$id]);
                 $allActivities = $actStmt->fetchAll();
@@ -354,9 +360,6 @@ case 'update_task':
             error_log('Update email error: ' . $e->getMessage());
         }
     }
-    if (isset($body['task_status'])&&$body['task_status']!==$existing['task_status'])
-        $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")->execute([$id,$userId,"Status: {$existing['task_status']} → {$body['task_status']}"]);
-    echo json_encode(['success'=>true]);
     break;
     // Create BS entry when technician submits (Awaiting Approval) — shows installation done, payment with tech
     if (isset($body['task_status']) && $body['task_status']==='Awaiting Approval' && $existing['task_status']!=='Awaiting Approval') {
