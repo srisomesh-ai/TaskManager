@@ -327,71 +327,36 @@ case 'update_task':
     if ($sets) { $vals[]=$id; $pdo->prepare("UPDATE tasks SET ".implode(',',$sets)." WHERE id=?")->execute($vals); }
     if (!empty($body['remark'])) {
         $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'remark')")->execute([$id,$userId,$body['remark']]);
-    }
-    if (isset($body['task_status'])&&$body['task_status']!==$existing['task_status'])
-        $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")->execute([$id,$userId,"Status: {$existing['task_status']} → {$body['task_status']}"]);
-    // Auto star rating on close
-    if (isset($body['task_status'])&&$body['task_status']==='Closed'&&$existing['task_status']!=='Closed') {
-        $h=(time()-strtotime($existing['created_at']))/3600;
-        $stars=$h<=12?5:($h<=24?4:($h<=48?3:($h<=72?2:1)));
-        $pdo->prepare("UPDATE tasks SET star_rating=? WHERE id=? AND (star_rating IS NULL OR star_rating=0)")->execute([$stars,$id]);
-    }
-
-    // ── Send success to browser, then send emails ─────────────────────────
-    $responseJson = json_encode(['success'=>true]);
-    // PHP-FPM safe background: close connection then continue
-    header('Content-Type: application/json');
-    header('Content-Length: ' . strlen($responseJson));
-    header('Connection: close');
-    ignore_user_abort(true);
-    echo $responseJson;
-    if(ob_get_level()){ ob_end_flush(); }
-    flush();
-    if(function_exists('fastcgi_finish_request')){ fastcgi_finish_request(); }
-
-    // ── Send emails AFTER flushing response (background) ──────────────────
-    // Customer update email
-    if (!empty($body['remark'])) {
+        // Send email update to customer — same pattern as working version 035b309
         try {
             require_once __DIR__.'/mailer.php';
             $taskForEmail = $pdo->prepare("SELECT t.*,u.name as tech_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?");
             $taskForEmail->execute([$id]);
             $taskData = $taskForEmail->fetch();
             if($taskData && !empty($taskData['email'])) {
+                // Ensure feedback_token exists for report link
                 if(empty($taskData['feedback_token'])){
                     $newToken = bin2hex(random_bytes(24));
-                    try { $pdo->prepare("ALTER TABLE tasks ADD COLUMN feedback_token VARCHAR(64) UNIQUE DEFAULT NULL")->execute(); } catch(Exception $e){}
+                    try { $pdo->prepare("ALTER TABLE tasks ADD COLUMN feedback_token VARCHAR(64) UNIQUE DEFAULT NULL")->execute(); } catch(Exception $ex){}
                     $pdo->prepare("UPDATE tasks SET feedback_token=? WHERE id=?")->execute([$newToken, $id]);
                     $taskData['feedback_token'] = $newToken;
                 }
                 $updaterName = $pdo->prepare("SELECT name FROM users WHERE id=?");
                 $updaterName->execute([$userId]);
                 $updater = $updaterName->fetch();
+                // Fetch activity log for full history in email
                 $actStmt = $pdo->prepare("SELECT a.*, u.name AS user_name FROM task_activities a LEFT JOIN users u ON a.user_id=u.id WHERE a.task_id=? ORDER BY a.created_at ASC");
                 $actStmt->execute([$id]);
                 $allActivities = $actStmt->fetchAll();
                 sendTaskUpdateCustomer($taskData, $body['remark'], $updater['name'] ?? 'BharatGPS Team', $allActivities);
             }
-        } catch(Exception $e) { error_log('Update email: '.$e->getMessage()); }
+        } catch(Exception $e) {
+            error_log('Update email error: ' . $e->getMessage());
+        }
     }
-    // Closed customer email
-    if (isset($body['task_status'])&&$body['task_status']==='Closed'&&$existing['task_status']!=='Closed') {
-        try {
-            require_once __DIR__.'/mailer.php';
-            $cr=$pdo->prepare("SELECT * FROM tasks WHERE id=?"); $cr->execute([$id]); $cd=$cr->fetch();
-            if ($cd) sendTaskClosedCustomer($cd);
-        } catch(Exception $e) {}
-    }
-    // Tech assignment email
-    if (isset($body['assigned_to'])&&$body['assigned_to']!=$existing['assigned_to']&&!empty($body['assigned_to'])) {
-        try {
-            require_once __DIR__.'/mailer.php';
-            $rr=$pdo->prepare("SELECT * FROM tasks WHERE id=?"); $rr->execute([$id]); $rd=$rr->fetch();
-            $nr=$pdo->prepare("SELECT name,email,phone FROM users WHERE id=?"); $nr->execute([intval($body['assigned_to'])]); $nt=$nr->fetch();
-            if ($rd && $nt && $nt['email']) sendTaskCreatedTech($rd,$nt['email'],$nt['name']);
-            if ($rd) sendTaskCreatedCustomer($rd,$nt['name']??'',$nt['phone']??'');
-        } catch(Exception $e) {}
-    }
+    if (isset($body['task_status'])&&$body['task_status']!==$existing['task_status'])
+        $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")->execute([$id,$userId,"Status: {$existing['task_status']} → {$body['task_status']}"]);
+    echo json_encode(['success'=>true]);
     break;
     // Create BS entry when technician submits (Awaiting Approval) — shows installation done, payment with tech
     if (isset($body['task_status']) && $body['task_status']==='Awaiting Approval' && $existing['task_status']!=='Awaiting Approval') {
