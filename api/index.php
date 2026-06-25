@@ -5,23 +5,7 @@ header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 
-// ── Firebase real-time signal ──────────────────────────────────────────────
-function firebaseSignal(){
-    $url = 'https://bharat-gps-tracker-e00d8-default-rtdb.asia-southeast1.firebasedatabase.app/taskmanager/signal.json';
-    $ch  = curl_init($url);
-    if(!$ch) return;
-    curl_setopt_array($ch, [
-        CURLOPT_CUSTOMREQUEST  => 'PUT',
-        CURLOPT_POSTFIELDS     => json_encode((string)time()),
-        CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT        => 2,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_NOSIGNAL       => 1,
-    ]);
-    curl_exec($ch);
-    curl_close($ch);
-}
+
 header('Access-Control-Allow-Headers: Content-Type, X-Auth-Token');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
 
@@ -390,7 +374,6 @@ case 'create_task':
         $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'assignment')")->execute([$newId,$userId,"Task assigned to ".$tn->fetchColumn()]);
     }
     echo json_encode(['success'=>true,'task_id'=>$taskId,'id'=>$newId]);
-    firebaseSignal(); // notify clients
     // Send emails
     if ($at && !empty($body['email'])) {
         try {
@@ -431,7 +414,6 @@ case 'update_task':
 
     // ── Respond to browser immediately — DB is updated, that is what matters ──
     echo json_encode(['success'=>true]);
-    firebaseSignal(); // Push real-time signal to clients
 
     // ── Send email after responding — slow SMTP won't affect browser ──────
     if (!empty($body['remark'])) {
@@ -1235,6 +1217,19 @@ case 'mark_viewed':
     break;
 
 
+// ---- SIGNAL CHECK (real-time polling) ----
+case 'get_signal':
+    // Returns the timestamp of the most recently updated task
+    // Client compares with its last known value to detect changes
+    try {
+        $sig = $pdo->query("SELECT MAX(updated_at) as sig FROM tasks")->fetchColumn();
+        echo json_encode(['signal' => $sig ?: '0']);
+    } catch(Exception $e){
+        echo json_encode(['signal' => '0']);
+    }
+    break;
+
+// ---- VERIFY TOKEN ----
 case 'verify_token':
     // Validate the auth token and return user info
     $tok = $_SERVER['HTTP_X_AUTH_TOKEN'] ?? '';

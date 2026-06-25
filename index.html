@@ -287,48 +287,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
 .dal-btn:hover{opacity:.85}
 .dash-alert{padding:10px 14px;border-radius:8px;margin-bottom:8px;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
 
-<!-- Firebase Real-Time Updates -->
-<script type="module">
-  import { initializeApp }         from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-  import { getDatabase, ref, onValue } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
 
-  const FIREBASE_CONFIG = {
-    apiKey:            "AIzaSyD6tMQeVjxVwqiuIJwIQsJaWqD5Oc3RKXY",
-    authDomain:        "bharat-gps-tracker-e00d8.firebaseapp.com",
-    databaseURL:       "https://bharat-gps-tracker-e00d8-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId:         "bharat-gps-tracker-e00d8",
-    storageBucket:     "bharat-gps-tracker-e00d8.appspot.com",
-    messagingSenderId: "321186271704",
-    appId:             "1:321186271704:web:bharatgps-taskmanager"
-  };
-
-  let _lastSignal = null;
-  let _fbReady    = false;
-
-  function initFirebaseListener(){
-    try {
-      const app = initializeApp(FIREBASE_CONFIG, 'taskmanager');
-      const db  = getDatabase(app);
-      // Listen to /taskmanager/signal — a simple timestamp written on every task update
-      onValue(ref(db, 'taskmanager/signal'), (snap) => {
-        const val = snap.val();
-        if(!val) return;
-        if(_lastSignal === null){ _lastSignal = val; _fbReady = true; return; } // ignore first
-        if(val !== _lastSignal){
-          _lastSignal = val;
-          // Task was updated — refresh whichever page is active
-          window.dispatchEvent(new CustomEvent('taskmanager-update', { detail: { signal: val } }));
-        }
-      });
-      console.log('[TaskManager] Firebase real-time listener active');
-    } catch(e){
-      console.warn('[TaskManager] Firebase listener failed:', e.message);
-    }
-  }
-
-  // Start after app loads
-  window.addEventListener('DOMContentLoaded', ()=>{ setTimeout(initFirebaseListener, 2000); });
-</script>
 </style>
 </head>
 <body>
@@ -1548,13 +1507,16 @@ function startApp(){
   // Navigate — tech goes to their own dashboard
   const isAdmin2 = ['admin','assigner'].includes(currentUser.role);
   const defaultPage = isAdmin2 ? 'dashboard' : 'my-tasks';
-  // Clear saved page for tech so they always start fresh on my-tasks
   const last = isTech ? 'my-tasks' : (localStorage.getItem('bgps_last_page') || defaultPage);
   showPage(last);
+
+  // Start real-time polling
+  startPolling();
 }
 
 // ── Logout ────────────────────────────────────────────────────────────────
 async function doLogout(){
+  stopPolling();
   try{ await api('logout',{},'POST',{}); }catch(e){}
   authToken = ''; currentUser = null;
   localStorage.removeItem('bgps_token');
@@ -4299,55 +4261,85 @@ async function adminLoadUsers(){
     </div>`).join('');
 }
 
+
+
 // ════════════════════════════════════════════════════════
-// REAL-TIME UPDATES via Firebase signal
+// REAL-TIME UPDATES — Smart polling (15s interval)
+// Detects task changes via updated_at timestamp
 // ════════════════════════════════════════════════════════
-window.addEventListener('taskmanager-update', (e) => {
-  console.log('[TaskManager] Real-time update signal received:', e.detail.signal);
+let _lastSignal   = null;
+let _pollTimer    = null;
+let _pollActive   = false;
 
-  // Show a subtle toast notification
-  showUpdateToast();
-
-  // Refresh current page data
-  const currentPage = localStorage.getItem('bgps_last_page') || 'dashboard';
-  if(currentPage === 'dashboard'){
-    loadDashboard();
-  } else if(currentPage === 'tasks'){
-    if(typeof loadTasks === 'function') loadTasks();
-  } else if(currentPage === 'my-tasks'){
-    if(typeof loadMyTasks === 'function') loadMyTasks();
-  } else if(currentPage === 'approvals'){
-    if(typeof loadApprovals === 'function') loadApprovals();
-  }
-  // Also update dashboard badges even on other pages
-  if(currentPage !== 'dashboard'){
-    api('get_stats').then(r => {
-      const stats = r.stats || {};
-      const apprCount = parseInt(stats.awaiting_approval||0);
-      const apprBadge = document.getElementById('approval-badge');
-      if(apprBadge){ apprBadge.textContent=apprCount; apprBadge.style.display=apprCount?'':'none'; }
-    }).catch(()=>{});
-  }
-});
-
-function showUpdateToast(){
-  // Remove existing toast
-  const existing = document.getElementById('tm-update-toast');
-  if(existing) existing.remove();
-
-  const toast = document.createElement('div');
-  toast.id = 'tm-update-toast';
-  toast.innerHTML = '🔄 Dashboard updated';
-  toast.style.cssText = [
-    'position:fixed;bottom:80px;left:50%;transform:translateX(-50%)',
-    'background:#0E5C5C;color:#fff;padding:8px 18px;border-radius:20px',
-    'font-size:12px;font-weight:700;z-index:9999;pointer-events:none',
-    'box-shadow:0 4px 14px rgba(14,92,92,.4)',
-    'animation:toast-in .3s ease',
-  ].join(';');
-  document.body.appendChild(toast);
-  setTimeout(()=>{ toast.style.opacity='0'; toast.style.transition='opacity .4s'; setTimeout(()=>toast.remove(), 400); }, 3000);
+function startPolling(){
+  if(_pollTimer) return; // already running
+  _pollActive = true;
+  _pollTimer = setInterval(checkForUpdates, 15000); // every 15s
+  console.log('[TaskManager] Polling started (15s)');
 }
+
+function stopPolling(){
+  if(_pollTimer){ clearInterval(_pollTimer); _pollTimer = null; }
+  _pollActive = false;
+}
+
+async function checkForUpdates(){
+  if(!authToken || !currentUser) return;
+  try {
+    const res = await api('get_signal').catch(()=>({}));
+    const sig  = res.signal || null;
+    if(!sig) return;
+
+    if(_lastSignal === null){
+      _lastSignal = sig; // first check — store baseline
+      return;
+    }
+
+    if(sig !== _lastSignal){
+      _lastSignal = sig;
+      // Something changed — refresh current page
+      onTaskUpdate();
+    }
+  } catch(e){ /* silent */ }
+}
+
+function onTaskUpdate(){
+  // Show toast
+  showUpdateToast('🔄 Tasks updated');
+
+  // Refresh whichever page is active
+  const page = localStorage.getItem('bgps_last_page') || 'dashboard';
+  if(page === 'dashboard')        loadDashboard();
+  else if(page === 'tasks')       { if(typeof loadTasks==='function') loadTasks(); }
+  else if(page === 'my-tasks')    { if(typeof loadMyTasks==='function') loadMyTasks(); }
+  else if(page === 'approvals')   { if(typeof loadApprovals==='function') loadApprovals(); }
+
+  // Always refresh sidebar badges
+  api('get_stats').then(r=>{
+    const s = r.stats||{};
+    const n = parseInt(s.awaiting_approval||0);
+    const b = document.getElementById('approval-badge');
+    if(b){ b.textContent=n; b.style.display=n?'':'none'; }
+  }).catch(()=>{});
+}
+
+function showUpdateToast(msg){
+  const old = document.getElementById('tm-toast');
+  if(old) old.remove();
+  const t = document.createElement('div');
+  t.id = 'tm-toast';
+  t.textContent = msg || '🔄 Updated';
+  t.style.cssText='position:fixed;bottom:72px;left:50%;transform:translateX(-50%);'+
+    'background:#0E5C5C;color:#fff;padding:8px 20px;border-radius:20px;'+
+    'font-size:12px;font-weight:700;z-index:9999;pointer-events:none;'+
+    'box-shadow:0 4px 14px rgba(14,92,92,.4);opacity:0;transition:opacity .3s';
+  document.body.appendChild(t);
+  requestAnimationFrame(()=>{ t.style.opacity='1'; });
+  setTimeout(()=>{ t.style.opacity='0'; setTimeout(()=>t.remove(),400); }, 3000);
+}
+
+// Start polling after login
+const _origStartApp = typeof startApp === 'function' ? startApp : null;
 
 </script>
 </body>
