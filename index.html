@@ -1030,10 +1030,21 @@ async function api(action, params={}, method='GET', body=null){
   const url = API + '?action=' + action + (method==='GET' ? '&'+new URLSearchParams(params) : '');
   const opts = {method, headers:{'X-Auth-Token': authToken}};
   if(body){ opts.headers['Content-Type']='application/json'; opts.body=JSON.stringify(body); }
-  const r = await fetch(url, opts);
-  const text = await r.text();
-  try{ return JSON.parse(text); }
-  catch(e){ console.error('API non-JSON:', action, text.slice(0,200)); return {}; }
+  // 30-second timeout — email sending can be slow
+  const controller = new AbortController();
+  const timer = setTimeout(()=>controller.abort(), 30000);
+  opts.signal = controller.signal;
+  try {
+    const r = await fetch(url, opts);
+    clearTimeout(timer);
+    const text = await r.text();
+    try{ return JSON.parse(text); }
+    catch(e){ console.error('API non-JSON ['+action+']:', text.slice(0,300)); return {}; }
+  } catch(e){
+    clearTimeout(timer);
+    if(e.name==='AbortError') throw new Error('Request timed out');
+    throw e;
+  }
 }
 
 // ── Login ─────────────────────────────────────────────────────────────────
@@ -2386,37 +2397,44 @@ function closeTechUpdate(){
   document.getElementById('tech-update-modal').classList.remove('open');
 }
 
+let _tuSubmitting = false;
 async function submitTechUpdate(){
+  if(_tuSubmitting) return; // prevent double submit
   const taskId    = document.getElementById('tech-update-task-id').value;
   const discussed = document.getElementById('tch-discussed').value.trim();
   if(!discussed){ alert('Please describe what happened.'); document.getElementById('tch-discussed').focus(); return; }
 
-  const custResp    = document.getElementById('tch-cust-resp').value;
-  const nextStep    = document.getElementById('tch-next-step').value;
-  const remindHours = document.getElementById('tch-remind-when').value;
-  const remindDate  = document.getElementById('tu-reminder-date').value;
+  const custResp  = document.getElementById('tch-cust-resp').value;
+  const nextStep  = document.getElementById('tch-next-step').value;
+  const remindDate= document.getElementById('tu-reminder-date').value;
 
   // Build structured remark
   const parts = ['📞 ' + discussed];
-  if(custResp)  parts.push('Customer: ' + custResp);
-  if(nextStep)  parts.push('Next step: ' + nextStep);
-  if(remindHours && remindDate) parts.push('Follow-up: ' + remindDate);
+  if(custResp)   parts.push('Customer: ' + custResp);
+  if(nextStep)   parts.push('Next step: ' + nextStep);
+  if(remindDate) parts.push('Follow-up: ' + remindDate);
 
   const body = { id: taskId, remark: parts.join(' | ') };
-  // Set reminder date if selected
   if(remindDate) body.reminder_date = remindDate;
 
+  _tuSubmitting = true;
   const btn = document.getElementById('tu-save-btn');
   if(btn){ btn.textContent='Saving…'; btn.disabled=true; }
-  const res = await api('update_task',{},'POST',body).catch(()=>({}));
-  if(btn){ btn.textContent='💾 Save Update'; btn.disabled=false; }
 
-  if(res.success){
-    closeTechUpdate();
-    await viewTask(taskId);
-    if(typeof renderMyTasks === 'function') renderMyTasks();
-  } else {
-    alert(res.error || 'Update failed.');
+  try {
+    const res = await api('update_task', {}, 'POST', body);
+    if(res && res.success){
+      closeTechUpdate();
+      await viewTask(taskId);
+      if(typeof renderMyTasks === 'function') renderMyTasks();
+    } else {
+      alert(res.error || 'Update failed. Please try again.');
+    }
+  } catch(e){
+    alert('Connection error. Please try again.');
+  } finally {
+    _tuSubmitting = false;
+    if(btn){ btn.textContent='💾 Save Update'; btn.disabled=false; }
   }
 }
 
