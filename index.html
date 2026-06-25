@@ -363,7 +363,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
 
         <!-- ALERT BANNERS -->
         <div id="dash-banners" style="margin-bottom:12px"></div>
-      <div id="dash-action-panels" style="margin-bottom:16px"></div>
+        <div id="dash-action-panels" style="margin-bottom:16px"></div>
 
         <!-- STAT CARDS -->
         <div class="stats-grid">
@@ -1755,7 +1755,6 @@ function enableEditMode(){
 }
 
 
-function openCreateModal(){ alert('Create task — coming in All Tasks page build.'); }
 
 // ── Render Activity Log ───────────────────────────────────────────────────
 function renderActivityLog(activities){
@@ -2451,49 +2450,6 @@ function getRowClass(t){
   return '';
 }
 
-async function viewTask(id){
-  const res=await api('get_task',{id}).catch(()=>({}));
-  const t=res.task||res;
-  if(!t||!t.id){alert('Task not found.');return;}
-  // Mark as viewed by admin/assigner — clears TECH UPDATED badge
-  const role = currentUser?.role;
-  if(role==='admin'||role==='assigner'){
-    api('mark_viewed',{},'POST',{id}).catch(()=>{});
-    // Update the row in the existing table without full reload
-    window._viewedTaskIds = window._viewedTaskIds || new Set();
-    window._viewedTaskIds.add(parseInt(id));
-  }
-  const isAdmin=['admin','assigner'].includes(currentUser?.role);
-  editingTaskId=t.id;
-  document.getElementById('task-modal-title').textContent=`Task ${t.task_id||''}`;
-  document.getElementById('task-save-btn').textContent='💾 Save Changes';
-  document.getElementById('fm-task-id').value=t.id;
-  const sf=(id,val)=>{const el=document.getElementById(id);if(el)el.value=val??'';};
-  sf('fm-customer',t.customer_name); sf('fm-contact',t.contact_number);
-  sf('fm-email',t.email); sf('fm-location',t.location);
-  sf('fm-price',t.price_to_collect); sf('fm-notes',t.general_notes||t.remark||'');
-  sf('fm-reminder',t.reminder_date); sf('fm-qty',t.device_qty||1);
-  sf('fm-outstation-loc',t.outstation_location);
-  sf('fm-travel-amt',t.outstation_customer_travel_amount);
-  sf('fm-paymode',t.payment_mode||''); sf('fm-pay-reminder',t.payment_reminder_date||'');
-  const sel=(id,val)=>{const el=document.getElementById(id);if(el)el.value=val||'';};
-  sel('fm-leadtype',t.lead_type); sel('fm-profile',t.profile||'BGPT');
-  sel('fm-job',t.device_details); sel('fm-travel-by',t.outstation_travel_paid_by);
-  const ck=(id,val)=>{const el=document.getElementById(id);if(el)el.checked=!!val;};
-  ck('fm-urgent',t.is_urgent); ck('fm-outstation',t.is_outstation);
-  if(t.payment_mode){
-    const cEl=document.getElementById('fm-pay-confirmed');
-    const cTxt=document.getElementById('fm-pay-confirmed-txt');
-    if(cEl) cEl.style.display='flex';
-    if(cTxt) cTxt.textContent=`${t.payment_mode} — ₹${parseFloat(t.price_to_collect||0).toLocaleString('en-IN')}`;
-  }
-  handleTechChange(); toggleModalOutstation(); toggleModalTravelAmt(); updateModalGST();
-  await _fillTechDropdown('fm-tech',t.assigned_to);
-  handleTechChange();
-  // Always open in VIEW mode — edit only via Edit button
-  _setDrawerMode('view', isAdmin);
-  document.getElementById('task-modal').classList.add('open');
-}
 
 function openEditModal(id){viewTask(id);}
 
@@ -2505,51 +2461,6 @@ async function _fillTechDropdown(selId,selectedId=null){
   if(selectedId)sel.value=selectedId;
 }
 
-async function saveTask(){
-  const btn=document.getElementById('task-save-btn');
-  const customer=document.getElementById('fm-customer').value.trim();
-  const contact=document.getElementById('fm-contact').value.trim();
-  if(!customer){alert('Customer name is required.');return;}
-  if(!contact){alert('Contact number is required.');return;}
-  const techVal=document.getElementById('fm-tech')?.value||'';
-  const reminderVal=document.getElementById('fm-reminder')?.value||'';
-  if(!techVal&&!reminderVal){
-    alert('No technician assigned — please set a follow-up reminder date.');
-    document.getElementById('fm-reminder')?.focus();
-    return;
-  }
-  btn.textContent='Saving…';btn.disabled=true;
-  const payload={
-    customer_name:customer, contact_number:contact,
-    email:document.getElementById('fm-email')?.value.trim()||'',
-    location:document.getElementById('fm-location')?.value.trim()||'',
-    lead_type:document.getElementById('fm-leadtype')?.value||'New Lead',
-    profile:document.getElementById('fm-profile')?.value||'BGPT',
-    device_qty:document.getElementById('fm-qty')?.value||1,
-    device_details:document.getElementById('fm-job')?.value||'',
-    price_to_collect:document.getElementById('fm-price')?.value||0,
-    gst_amount:parseFloat(document.getElementById('fm-price')?.dataset?.gstAmount||0),
-    amount_collected:0,
-    payment_mode:document.getElementById('fm-paymode')?.value||'',
-    payment_reminder_date:document.getElementById('fm-pay-reminder')?.value||null,
-    assigned_to:techVal||null,
-    task_status:editingTaskId?'Open':'Open',
-    reminder_date:reminderVal||null,
-    is_urgent:document.getElementById('fm-urgent')?.checked?1:0,
-    is_outstation:document.getElementById('fm-outstation')?.checked?1:0,
-    outstation_location:document.getElementById('fm-outstation-loc')?.value.trim()||null,
-    outstation_travel_paid_by:document.getElementById('fm-travel-by')?.value||null,
-    outstation_customer_travel_amount:document.getElementById('fm-travel-amt')?.value||null,
-    general_notes:document.getElementById('fm-notes')?.value.trim()||'',
-    remark:document.getElementById('fm-notes')?.value.trim()||'',
-  };
-  if(editingTaskId)payload.id=editingTaskId;
-  const action=editingTaskId?'update_task':'create_task';
-  const res=await api(action,{},'POST',payload).catch(()=>({}));
-  btn.textContent=editingTaskId?'💾 Save Changes':'✅ Create Task';btn.disabled=false;
-  if(res.success||res.task_id){closeTaskModal();loadTasks();}
-  else alert(res.error||'Save failed. Please try again.');
-}
 
 function closeTaskModal(){
   document.getElementById('task-modal').classList.remove('open');

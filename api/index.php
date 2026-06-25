@@ -574,13 +574,20 @@ case 'add_payment':
 
 // ---- GET URGENT TASKS ----
 case 'get_urgent_tasks':
-    if ($userRole === 'technician') {
-        $s=$pdo->prepare("SELECT t.*,u.name as technician_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.assigned_to=? AND t.task_status IN ('Open','In Progress','Task Pending') AND t.created_at <= DATE_SUB(NOW(), INTERVAL 24 HOUR) ORDER BY t.created_at ASC");
-        $s->execute([$userId]);
+    $urgSql = "SELECT t.*,u.name as tech_name,u.name as technician_name,
+        TIMESTAMPDIFF(HOUR, t.created_at, NOW()) as age_hours
+        FROM tasks t
+        LEFT JOIN users u ON t.assigned_to=u.id
+        WHERE t.task_status IN ('Open','In Progress','Task Pending')
+        AND t.created_at <= DATE_SUB(NOW(), INTERVAL 24 HOUR)";
+    if($userRole === 'technician'){
+        $us = $pdo->prepare($urgSql . " AND t.assigned_to=? ORDER BY t.created_at ASC");
+        $us->execute([$userId]);
     } else {
-        $s=$pdo->query("SELECT t.*,u.name as technician_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.task_status IN ('Open','In Progress','Task Pending') AND t.created_at <= DATE_SUB(NOW(), INTERVAL 24 HOUR) ORDER BY t.created_at ASC");
+        $us = $pdo->prepare($urgSql . " ORDER BY t.created_at ASC");
+        $us->execute([]);
     }
-    echo json_encode(['tasks'=>$s->fetchAll()]);
+    echo json_encode(['tasks'=>$us->fetchAll()]);
     break;
 
 // ---- GET APPROVALS ----
