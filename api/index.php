@@ -337,10 +337,17 @@ case 'update_task':
         $pdo->prepare("UPDATE tasks SET star_rating=? WHERE id=? AND (star_rating IS NULL OR star_rating=0)")->execute([$stars,$id]);
     }
 
-    // ── Send success to browser FIRST ──────────────────────────────────────
-    echo json_encode(['success'=>true]);
-    if(ob_get_level()) { ob_end_flush(); }
+    // ── Send success to browser, then send emails ─────────────────────────
+    $responseJson = json_encode(['success'=>true]);
+    // PHP-FPM safe background: close connection then continue
+    header('Content-Type: application/json');
+    header('Content-Length: ' . strlen($responseJson));
+    header('Connection: close');
+    ignore_user_abort(true);
+    echo $responseJson;
+    if(ob_get_level()){ ob_end_flush(); }
     flush();
+    if(function_exists('fastcgi_finish_request')){ fastcgi_finish_request(); }
 
     // ── Send emails AFTER flushing response (background) ──────────────────
     // Customer update email
