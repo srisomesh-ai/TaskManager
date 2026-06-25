@@ -61,8 +61,11 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
         $pdo->prepare("UPDATE tasks SET feedback_token='USED' WHERE id=?")
             ->execute([$task['id']]);
 
-        // Fetch admin emails
-        $admins = $pdo->query("SELECT name, email FROM users WHERE role IN ('admin','assigner') AND email IS NOT NULL AND email != ''")->fetchAll();
+        // Fetch admin emails — exclude customer's own email
+        $customerEmail = strtolower(trim($task['email'] ?? ''));
+        $adminStmt = $pdo->prepare("SELECT name, email FROM users WHERE role IN ('admin','assigner') AND email IS NOT NULL AND email != '' AND LOWER(email) != ?");
+        $adminStmt->execute([$customerEmail]);
+        $admins = $adminStmt->fetchAll();
 
         $disputeContent = '
         <div style="background:#fdecea;border:2px solid #c0392b;border-radius:8px;padding:16px;margin-bottom:16px">
@@ -86,7 +89,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
         }
 
         // Email technician
-        if($task['tech_email']){
+        if($task['tech_email'] && strtolower($task['tech_email']) !== $customerEmail){
             $techContent = '
             <div style="background:#fdecea;border:2px solid #c0392b;border-radius:8px;padding:16px;margin-bottom:16px">
                 <div style="font-size:15px;font-weight:800;color:#c0392b;margin-bottom:8px">⚠️ Customer Disputed Your Update</div>
