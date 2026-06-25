@@ -214,72 +214,116 @@ function sendTaskClosedCustomer(array $task): void {
     );
 }
 
-// ---- TASK UPDATE — Customer Email (sent every time tech logs an update) ----
-function sendTaskUpdateCustomer(array $task, string $remark, string $techName): void {
-    if (!$task['email']) return;
+// ---- TASK UPDATE — Customer Email with full history + Report button ----
+function sendTaskUpdateCustomer(array $task, string $remark, string $techName, array $activities = []): void {
+    if (empty($task['email'])) return;
 
-    // Parse structured remark (parts joined by ' | ')
-    $parts = explode(' | ', $remark);
-    $mainRemark = trim(ltrim($parts[0], '📞🔧 '));
+    $BASE_URL = 'https://salmon-goldfish-110661.hostingersite.com';
+    $token    = $task['feedback_token'] ?? '';
+    $feedbackUrl = $BASE_URL . '/feedback.php?token=' . urlencode($token);
 
-    // Build update detail rows
+    // Parse latest remark into structured parts
+    $parts      = explode(' | ', $remark);
+    $mainRemark = ltrim(trim($parts[0]), '📞🔧 ');
+    $details    = array_slice($parts, 1);
+
+    // Status colour
+    $statusColors = [
+        'Open'=>'#e07b00','In Progress'=>'#1a56a0','Task Pending'=>'#d4680a',
+        'Awaiting Approval'=>'#5b2d8e','Closed'=>'#1a7a3a','Cancelled'=>'#8a9ab0',
+    ];
+    $sc = $statusColors[$task['task_status']] ?? '#1a3a6b';
+
+    // Build full activity history HTML (newest at bottom = chronological for customer)
+    $historyHtml = '';
+    if(!empty($activities)){
+        $historyHtml .= '<div style="margin:20px 0"><div style="font-size:11px;font-weight:700;color:#8a9ab0;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">📋 Full Update History</div>';
+        foreach($activities as $i => $act){
+            $aType   = $act['activity_type'] ?? 'remark';
+            if($aType === 'system') continue; // skip system entries
+            $aName   = htmlspecialchars($act['user_name'] ?? 'BharatGPS Team');
+            $aDt     = date('d M Y, h:i A', strtotime($act['created_at']));
+            $aRemark = $act['remark'] ?? '';
+            $aParts  = explode(' | ', $aRemark);
+            $aMain   = htmlspecialchars(ltrim(trim($aParts[0]), '📞🔧 '));
+            $aDets   = array_slice($aParts, 1);
+            $isNew   = ($i === count($activities)-1);
+            $border  = $isNew ? '#1a3a6b' : '#d0d5dd';
+            $bg      = $isNew ? '#e8eef8' : '#f7f8fa';
+
+            $historyHtml .= '<div style="margin-bottom:10px;border-left:3px solid '.$border.';padding:10px 12px;background:'.$bg.';border-radius:0 6px 6px 0">';
+            $historyHtml .= '<div style="display:flex;justify-content:space-between;margin-bottom:5px">';
+            $historyHtml .= '<span style="font-size:11px;font-weight:700;color:#4a5568">'.$aName.'</span>';
+            if($isNew) $historyHtml .= '<span style="background:#1a3a6b;color:#fff;font-size:9px;font-weight:800;padding:1px 7px;border-radius:4px">LATEST</span>';
+            $historyHtml .= '<span style="font-size:10px;color:#8a9ab0">'.$aDt.'</span></div>';
+            $historyHtml .= '<div style="font-size:13px;font-weight:600;color:#1a1f2e">'.$aMain.'</div>';
+            foreach($aDets as $det){
+                $historyHtml .= '<div style="font-size:11px;color:#4a5568;margin-top:2px">· '.htmlspecialchars(trim($det)).'</div>';
+            }
+            $historyHtml .= '</div>';
+        }
+        $historyHtml .= '</div>';
+    }
+
+    // Detail rows for this update
     $detailRows = '';
-    foreach($parts as $i => $part) {
-        $part = trim($part);
-        if(!$part) continue;
-        if($i === 0) continue; // main remark shown separately
-        // Parse key: value format
-        if(strpos($part, ': ') !== false){
-            [$key, $val] = explode(': ', $part, 2);
-            $detailRows .= '<div class="row"><div class="label">' . htmlspecialchars(trim($key)) . '</div><div class="value">' . htmlspecialchars(trim($val)) . '</div></div>';
+    foreach($details as $d){
+        if(!trim($d)) continue;
+        if(strpos($d,': ') !== false){
+            [$k,$v] = explode(': ', $d, 2);
+            $detailRows .= '<div class="row"><div class="label">'.htmlspecialchars(trim($k)).'</div><div class="value">'.htmlspecialchars(trim($v)).'</div></div>';
         }
     }
 
-    // Status badge
-    $statusColors = [
-        'Open'              => '#e07b00',
-        'In Progress'       => '#1a56a0',
-        'Task Pending'      => '#d4680a',
-        'Awaiting Approval' => '#5b2d8e',
-        'Closed'            => '#1a7a3a',
-        'Cancelled'         => '#8a9ab0',
-    ];
-    $statusColor = $statusColors[$task['task_status']] ?? '#1a3a6b';
-    $statusHtml = '<span style="background:' . $statusColor . '22;color:' . $statusColor . ';padding:3px 10px;border-radius:4px;font-size:13px;font-weight:700">' . htmlspecialchars($task['task_status']) . '</span>';
-
-    $content = '
+    $emailContent = '
     <div class="greeting">Dear ' . htmlspecialchars($task['customer_name']) . ',</div>
-    <p style="font-size:14px;color:#4a5568;margin-bottom:16px">Your service request <strong style="color:#1a3a6b">' . $task['task_id'] . '</strong> has been updated by your technician.</p>
-    <hr class="divider">
+    <p style="font-size:14px;color:#4a5568;margin-bottom:16px">
+        Your service request <strong style="color:#1a3a6b">' . $task['task_id'] . '</strong>
+        has been updated by your technician.
+    </p>
 
-    <!-- Update Summary Box -->
-    <div style="background:#e8eef8;border-left:4px solid #1a3a6b;border-radius:8px;padding:16px;margin-bottom:16px">
-        <div style="font-size:11px;font-weight:700;color:#4a5568;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">📋 Update from Technician</div>
+    <!-- Latest update box -->
+    <div style="background:#e8eef8;border-left:4px solid #1a3a6b;border-radius:8px;padding:16px;margin-bottom:14px">
+        <div style="font-size:10px;font-weight:700;color:#4a5568;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">📋 Latest Update</div>
         <div style="font-size:15px;font-weight:700;color:#1a1f2e;line-height:1.5">' . htmlspecialchars($mainRemark) . '</div>
         ' . ($techName ? '<div style="font-size:12px;color:#4a5568;margin-top:6px">— ' . htmlspecialchars($techName) . '</div>' : '') . '
     </div>
 
-    <!-- Detail rows if present -->
-    ' . ($detailRows ? '<div class="details">' . $detailRows . '</div>' : '') . '
+    ' . ($detailRows ? '<div class="details">'.$detailRows.'</div>' : '') . '
 
-    <!-- Task Status -->
-    <div class="details">
+    <!-- Task status -->
+    <div class="details" style="margin-bottom:0">
         <div class="row"><div class="label">Task ID</div><div class="value blue">' . $task['task_id'] . '</div></div>
         <div class="row"><div class="label">Service</div><div class="value">' . htmlspecialchars($task['device_details'] ?: 'GPS Service') . '</div></div>
-        <div class="row"><div class="label">Current Status</div><div class="value">' . $statusHtml . '</div></div>
+        <div class="row"><div class="label">Status</div><div class="value"><span style="background:'.$sc.'22;color:'.$sc.';padding:2px 8px;border-radius:4px;font-weight:700">' . $task['task_status'] . '</span></div></div>
         <div class="row"><div class="label">Technician</div><div class="value">' . htmlspecialchars($techName ?: 'BharatGPS Team') . '</div></div>
     </div>
 
-    <p style="font-size:13px;color:#4a5568;margin-top:16px;line-height:1.6">
-        This update has been logged in our system. If you have any concerns about this update, 
-        please contact us at <strong>09963222009</strong> and reference Task ID <strong>' . $task['task_id'] . '</strong>.
-    </p>
-    <p style="font-size:13px;font-weight:700;color:#1a3a6b;margin-top:12px">Thank you for your patience. 🙏</p>';
+    <!-- Full history -->
+    ' . $historyHtml . '
+
+    <!-- Report false update button -->
+    ' . ($token ? '
+    <div style="background:#fff5f5;border:1.5px solid #c0392b;border-radius:8px;padding:14px;margin-top:16px">
+        <div style="font-size:12px;font-weight:800;color:#c0392b;margin-bottom:6px">⚠️ Is this update incorrect?</div>
+        <p style="font-size:12px;color:#7b1e14;margin-bottom:12px;line-height:1.6">
+            If the information above is false or incorrect, click below to report it.
+            Our management will be notified immediately.
+        </p>
+        <a href="' . $feedbackUrl . '" style="display:inline-block;background:#c0392b;color:#fff;padding:10px 20px;border-radius:7px;font-size:13px;font-weight:800;text-decoration:none">
+            🚨 Report False Update
+        </a>
+        <div style="font-size:11px;color:#8a9ab0;margin-top:8px">Or copy this link: ' . $feedbackUrl . '</div>
+    </div>' : '') . '
+
+    <p style="font-size:12px;color:#8a9ab0;margin-top:16px">
+        For help, contact us at <strong>09963222009</strong> · <strong>info@bharatgps.com</strong>
+    </p>';
 
     sendMail(
         $task['email'],
         $task['customer_name'],
         'Task Update – ' . $task['task_id'] . ' | ' . htmlspecialchars($task['customer_name']) . ' | Bharat GPS',
-        emailTemplate($content)
+        emailTemplate($emailContent)
     );
 }
