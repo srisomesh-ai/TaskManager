@@ -2220,13 +2220,16 @@ async function viewTask(id){
             <div style="font-size:14px;font-weight:800;color:var(--accent)">Update</div>
             <div style="font-size:11px;color:var(--text3);margin-top:3px">Call log & next step</div>
           </button>
-          <button onclick="handleAttendClick(${t.id})" id="td-attend-btn-${t.id}" style="background:var(--accent);border:none;border-radius:10px;padding:16px 12px;text-align:center;cursor:pointer;transition:opacity .15s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+          <button onclick="handleAttendClick(${t.id})" id="td-attend-btn-${t.id}" style="background:var(--accent);border:none;border-radius:10px;padding:16px 12px;text-align:center;cursor:pointer;transition:all .2s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
             <div style="font-size:28px;margin-bottom:6px" id="td-attend-icon-${t.id}">🔧</div>
             <div style="font-size:14px;font-weight:800;color:#fff" id="td-attend-label-${t.id}">Attend</div>
             <div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:3px" id="td-attend-sub-${t.id}">${t.device_details||'Start task'}</div>
           </button>
         </div>
+        <div id="td-consent-status-${t.id}" style="margin-top:10px"></div>
       `;
+      // Check consent status immediately when panel loads
+      checkAndUpdateAttendBtn(t.id);
     }
   } else {
     techPanel.style.display = 'none';
@@ -2641,6 +2644,38 @@ const _origCloseDetail = closeTaskDetail;
 function closeTaskDetail(){
   if(_consentPollTimer){ clearInterval(_consentPollTimer); _consentPollTimer = null; }
   _origCloseDetail();
+}
+
+// ── Check consent and update Attend button state on task open ─────────────
+async function checkAndUpdateAttendBtn(taskId){
+  const res = await api('check_consent', {id: taskId}).catch(()=>({}));
+  const btn    = document.getElementById('td-attend-btn-'  + taskId);
+  const icon   = document.getElementById('td-attend-icon-' + taskId);
+  const label  = document.getElementById('td-attend-label-'+ taskId);
+  const sub    = document.getElementById('td-attend-sub-'  + taskId);
+  const status = document.getElementById('td-consent-status-' + taskId);
+
+  if(res.consented){
+    // Customer already confirmed — show green proceed button
+    if(btn){
+      btn.style.background = 'var(--green)';
+      btn.setAttribute('onclick', 'openTechAttend(' + taskId + ')');
+    }
+    if(icon)   icon.textContent  = '✅';
+    if(label)  label.textContent = 'Proceed!';
+    if(sub)    sub.textContent   = 'Customer confirmed';
+    if(status) status.innerHTML  = `
+      <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--green);line-height:1.6">
+        ✅ <strong>${res.name||'Customer'}</strong> has confirmed T&amp;C and payment commitment.<br>
+        <span style="font-size:10px;color:var(--text3)">Confirmed at: ${(res.consented_at||'').replace('T',' ').slice(0,16)}</span>
+      </div>`;
+  } else {
+    // Check if consent was sent but not yet confirmed — look at activity log
+    // (consent_token exists means request was sent)
+    // We don't need to re-check this — just leave button as default Attend
+    // If token was sent before, show a waiting status
+    if(status) status.innerHTML = '';
+  }
 }
 
 </script>
