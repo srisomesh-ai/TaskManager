@@ -93,39 +93,32 @@ case 'get_sync':
 
 // ---- GET STATS ----
 case 'get_stats':
-    $troubleshoot_types = "'Troubleshoot/Offline','Troubleshoot','Offline','Demo','Demonstration'";
-    if ($userRole === 'technician') {
-        $s = $pdo->prepare("SELECT
-            COUNT(*) total,
-            SUM(task_status IN ('Open','In Progress','Task Pending')) open,
-            SUM(task_status='In Progress') in_progress,
-            SUM(task_status='Task Pending') task_pending,
-            SUM(task_status='Awaiting Approval') awaiting_approval,
-            SUM(task_status='Closed') closed,
-            SUM(task_status='Cancelled') cancelled,
-            SUM(task_status='Demo Sent') demo_sent,
-            SUM(CASE WHEN task_status='Closed' AND device_details NOT IN ($troubleshoot_types) THEN COALESCE(device_qty,1) ELSE 0 END) devices_installed,
-            SUM(CASE WHEN task_status='Closed' AND device_details IN ($troubleshoot_types) THEN 1 ELSE 0 END) troubleshoot_done,
-            SUM(CASE WHEN task_status='Awaiting Approval' AND (price_to_collect - COALESCE(amount_collected,0)) > 0 THEN 1 ELSE 0 END) payment_pending
-            FROM tasks WHERE assigned_to=?");
-        $s->execute([$userId]);
-        $r = $s->fetch();
+    $sql = "SELECT
+        COUNT(*) total,
+        SUM(task_status IN ('Open','In Progress','Task Pending')) open,
+        SUM(task_status='Closed') closed,
+        SUM(task_status='Cancelled') cancelled,
+        SUM(task_status='Demo Sent') demo_sent,
+        SUM(task_status='Awaiting Approval') awaiting_approval,
+        SUM(CASE WHEN task_status='Closed'
+            AND device_details NOT IN ('Troubleshoot/Offline','Troubleshoot','Offline','Demo','Demonstration','Only Remove')
+            THEN COALESCE(device_qty,1) ELSE 0 END) devices_installed,
+        SUM(CASE WHEN task_status='Closed'
+            AND device_details IN ('Troubleshoot/Offline','Troubleshoot','Offline')
+            THEN 1 ELSE 0 END) troubleshoot_done,
+        SUM(CASE WHEN task_status NOT IN ('Closed','Cancelled')
+            AND amount_collected IS NOT NULL AND amount_collected < price_to_collect - 15
+            AND EXISTS (SELECT 1 FROM task_device_installs di WHERE di.task_id=tasks.id AND di.gps_serial_no IS NOT NULL)
+            THEN 1 ELSE 0 END) payment_pending
+        FROM tasks";
+    if($userRole === 'technician'){
+        $st = $pdo->prepare($sql . " WHERE assigned_to=?");
+        $st->execute([$userId]);
     } else {
-        $r = $pdo->query("SELECT
-            COUNT(*) total,
-            SUM(task_status IN ('Open','In Progress','Task Pending')) open,
-            SUM(task_status='In Progress') in_progress,
-            SUM(task_status='Task Pending') task_pending,
-            SUM(task_status='Awaiting Approval') awaiting_approval,
-            SUM(task_status='Closed') closed,
-            SUM(task_status='Cancelled') cancelled,
-            SUM(task_status='Demo Sent') demo_sent,
-            SUM(CASE WHEN task_status='Closed' AND device_details NOT IN ($troubleshoot_types) THEN COALESCE(device_qty,1) ELSE 0 END) devices_installed,
-            SUM(CASE WHEN task_status='Closed' AND device_details IN ($troubleshoot_types) THEN 1 ELSE 0 END) troubleshoot_done,
-            SUM(CASE WHEN task_status='Awaiting Approval' AND (price_to_collect - COALESCE(amount_collected,0)) > 0 THEN 1 ELSE 0 END) payment_pending
-            FROM tasks")->fetch();
+        $st = $pdo->prepare($sql);
+        $st->execute([]);
     }
-    echo json_encode(['stats'=>$r]);
+    echo json_encode(['stats' => $st->fetch()]);
     break;
 
 // ---- GET USERS ----
@@ -574,10 +567,10 @@ case 'add_payment':
 
 // ---- GET URGENT TASKS ----
 case 'get_urgent_tasks':
-    $urgSql = "SELECT t.*,u.name as tech_name,u.name as technician_name,
+    $urgSql = "SELECT t.*, u.name as tech_name, u.name as technician_name,
         TIMESTAMPDIFF(HOUR, t.created_at, NOW()) as age_hours
         FROM tasks t
-        LEFT JOIN users u ON t.assigned_to=u.id
+        LEFT JOIN users u ON t.assigned_to = u.id
         WHERE t.task_status IN ('Open','In Progress','Task Pending')
         AND t.created_at <= DATE_SUB(NOW(), INTERVAL 24 HOUR)";
     if($userRole === 'technician'){
@@ -587,18 +580,26 @@ case 'get_urgent_tasks':
         $us = $pdo->prepare($urgSql . " ORDER BY t.created_at ASC");
         $us->execute([]);
     }
-    echo json_encode(['tasks'=>$us->fetchAll()]);
+    echo json_encode(['tasks' => $us->fetchAll()]);
     break;
 
 // ---- GET APPROVALS ----
 case 'get_approvals':
-    if ($userRole === 'technician') {
-        $s=$pdo->prepare("SELECT t.*,u.name as technician_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.assigned_to=? AND t.task_status='Awaiting Approval' ORDER BY t.updated_at DESC");
-        $s->execute([$userId]);
+    $apSql = "SELECT t.*, u.name as tech_name, u.name as technician_name
+        FROM tasks t
+        LEFT JOIN users u ON t.assigned_to = u.id
+        WHERE t.task_status = 'Awaiting Approval'
+        ORDER BY t.updated_at DESC";
+    if($userRole === 'technician'){
+        $as = $pdo->prepare($apSql . " AND t.assigned_to=?");
+        // Techs only see their own — rewrite
+        $as = $pdo->prepare("SELECT t.*, u.name as tech_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.task_status='Awaiting Approval' AND t.assigned_to=? ORDER BY t.updated_at DESC");
+        $as->execute([$userId]);
     } else {
-        $s=$pdo->query("SELECT t.*,u.name as technician_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.task_status='Awaiting Approval' ORDER BY t.updated_at DESC");
+        $as = $pdo->prepare($apSql);
+        $as->execute([]);
     }
-    echo json_encode(['tasks'=>$s->fetchAll()]);
+    echo json_encode(['tasks' => $as->fetchAll()]);
     break;
 
 // ---- DAILY REPORT ----

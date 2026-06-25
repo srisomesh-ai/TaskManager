@@ -1478,13 +1478,12 @@ async function doLogout(){
 
 // ── Load Dashboard ────────────────────────────────────────────────────────
 async function loadDashboard(){
-  const isTech = currentUser?.role === 'technician';
-  if(isTech){ showPage('my-tasks'); return; }
+  if(currentUser?.role === 'technician'){ showPage('my-tasks'); return; }
 
   document.getElementById('dash-welcome').textContent =
     'Welcome, ' + (currentUser.name||'') + '. Here is today\'s snapshot.';
 
-  // Fetch all in parallel
+  // ── 1. Fetch everything in parallel ────────────────────────
   const [sRes, uRes, aRes, tRes, oRes] = await Promise.all([
     api('get_stats').catch(()=>({})),
     api('get_urgent_tasks').catch(()=>({})),
@@ -1493,225 +1492,236 @@ async function loadDashboard(){
     api('get_tasks',{status_group:'active',limit:500}).catch(()=>({}))
   ]);
 
-  const stats     = sRes.stats  || {};
-  const urgent    = uRes.tasks  || [];
-  const approvals = aRes.tasks  || [];
-  const techs     = tRes.users  || [];
-  const openTasks = oRes.tasks  || [];
+  const stats     = sRes.stats || {};
+  const urgent    = uRes.tasks || [];
+  const approvals = aRes.tasks || [];
+  const techs     = tRes.users || [];
+  const allActive = oRes.tasks || [];
 
-  // Debug: log workflow state counts
-  const wfCounts = {};
-  openTasks.forEach(t=>{ const s=t.workflow_state||'none'; wfCounts[s]=(wfCounts[s]||0)+1; });
-  console.log('[Dashboard] Tasks:', openTasks.length, 'Workflow states:', wfCounts);
+  // ── 2. Stat cards ───────────────────────────────────────────
+  const sv = (id, val) => {
+    const el = document.getElementById(id);
+    if(el) el.textContent = (val === null || val === undefined) ? '0' : val;
+  };
+  sv('s-total',        stats.total        || 0);
+  sv('s-open',         stats.open         || 0);
+  sv('s-closed',       stats.closed       || 0);
+  sv('s-cancelled',    stats.cancelled    || 0);
+  sv('s-demo',         stats.demo_sent    || 0);
+  sv('s-devices',      stats.devices_installed || 0);
+  sv('s-awaiting',     stats.awaiting_approval || 0);
+  sv('s-payment',      stats.payment_pending   || 0);
+  sv('s-troubleshoot', stats.troubleshoot_done || 0);
 
-  // ── Stat cards ────────────────────────────────────────────
-  const sv = (id,val) => { const e=document.getElementById(id); if(e) e.textContent=(val??0); };
-  sv('s-total',       stats.total);
-  sv('s-open',        stats.open);
-  sv('s-closed',      stats.closed);
-  sv('s-cancelled',   stats.cancelled);
-  sv('s-demo',        stats.demo_sent);
-  sv('s-devices',     stats.devices_installed);
-  sv('s-awaiting',    stats.awaiting_approval);
-  sv('s-payment',     stats.payment_pending);
-  sv('s-troubleshoot',stats.troubleshoot_done);
-
-  // Nav badges
-  const apprCount = parseInt(stats.awaiting_approval||0);
-  const urgCount  = urgent.filter(t=>parseInt(t.age_hours||0)>=24).length;
+  // ── 3. Nav sidebar badges ───────────────────────────────────
+  const apprCount = parseInt(stats.awaiting_approval || 0);
   const apprBadge = document.getElementById('approval-badge');
-  const urgBadge  = document.getElementById('urgent-badge');
-  if(apprBadge){ apprBadge.textContent=apprCount; apprBadge.style.display=apprCount?'':'none'; }
-  if(urgBadge){  urgBadge.textContent=urgCount;   urgBadge.style.display=urgCount?'':'none';   }
+  if(apprBadge){ apprBadge.textContent = apprCount; apprBadge.style.display = apprCount ? '' : 'none'; }
 
-  // ── Workflow state grouping ────────────────────────────────
-  // Merge approvals from dedicated endpoint + workflow filter (deduplicate by id)
-  const approveNowMap = {};
-  approvals.forEach(t=>{ approveNowMap[t.id]=t; });
-  openTasks.filter(t=>t.workflow_state==='approve_now').forEach(t=>{ approveNowMap[t.id]=t; });
-  const approveNow     = Object.values(approveNowMap);
+  const urgCount = urgent.filter(t => parseInt(t.age_hours||0) >= 24).length;
+  const urgBadge = document.getElementById('urgent-badge');
+  if(urgBadge){ urgBadge.textContent = urgCount; urgBadge.style.display = urgCount ? '' : 'none'; }
 
-  const paymentPending = openTasks.filter(t=>t.workflow_state==='payment_pending');
-  const techUpdated    = openTasks.filter(t=>t.workflow_state==='tech_updated');
-  const addingDone     = openTasks.filter(t=>t.workflow_state==='adding_done');
-  const readyToAdd     = openTasks.filter(t=>t.workflow_state==='ready_to_add');
+  // ── 4. Workflow groups ─────────────────────────────────────
+  const approveNow     = approvals; // from get_approvals — always accurate
+  const paymentPending = allActive.filter(t => t.workflow_state === 'payment_pending');
+  const techUpdated    = allActive.filter(t => t.workflow_state === 'tech_updated');
+  const critical       = urgent.filter(t => parseInt(t.age_hours||0) >= 48);
+  const warning        = urgent.filter(t => { const h=parseInt(t.age_hours||0); return h>=24 && h<48; });
 
-  console.log('[Dashboard] approveNow:', approveNow.length, 'paymentPending:', paymentPending.length, 'techUpdated:', techUpdated.length);
-
-  // ── Action banners ────────────────────────────────────────
-  const critical = urgent.filter(t=>parseInt(t.age_hours||0)>=48);
-  const warning  = urgent.filter(t=>{ const h=parseInt(t.age_hours||0); return h>=24&&h<48; });
+  // ── 5. Alert banners ───────────────────────────────────────
   let banners = '';
-  if(approveNow.length)     banners += `<div class="dash-alert" style="background:#F0F0FB;border-left:4px solid var(--purple);color:var(--purple)">🟣 <strong>${approveNow.length} task${approveNow.length>1?'s':''}</strong> waiting for your approval. <button class="dal-btn" style="background:var(--purple)" onclick="showPage('approvals')">Approve Now →</button></div>`;
-  if(paymentPending.length) banners += `<div class="dash-alert" style="background:var(--red-bg);border-left:4px solid var(--red);color:var(--red)">🔴 <strong>${paymentPending.length} task${paymentPending.length>1?'s':''}</strong> — installation done but payment not collected. <button class="dal-btn" style="background:var(--red)" onclick="filterByWorkflow('payment_pending')">View →</button></div>`;
-  if(techUpdated.length)    banners += `<div class="dash-alert" style="background:var(--amber-bg);border-left:4px solid var(--amber);color:#7a4500">🟠 <strong>${techUpdated.length} task${techUpdated.length>1?'s':''}</strong> updated by technician — not yet reviewed. <button class="dal-btn" style="background:var(--amber);color:#fff" onclick="filterByWorkflow('tech_updated')">Review →</button></div>`;
-  if(critical.length)       banners += `<div class="dash-alert" style="background:var(--red-bg);border-left:4px solid var(--red);color:var(--red)">🚨 <strong>${critical.length} task${critical.length>1?'s':''}</strong> open 48+ hours. <button class="dal-btn" style="background:var(--red)" onclick="showPage('urgent')">View →</button></div>`;
-  if(warning.length)        banners += `<div class="dash-alert" style="background:var(--amber-bg);border-left:4px solid var(--amber);color:#7a4500">⚠️ <strong>${warning.length} task${warning.length>1?'s':''}</strong> open 24+ hours. <button class="dal-btn" style="background:var(--amber);color:#fff" onclick="showPage('urgent')">View →</button></div>`;
-  document.getElementById('dash-banners').innerHTML = banners || '<div style="font-size:12px;color:var(--text3);padding:6px 0">✅ No urgent actions needed</div>';
+  if(approveNow.length)
+    banners += `<div class="dash-alert" style="background:#F0F0FB;border-left:4px solid var(--purple);color:var(--purple)">
+      🟣 <strong>${approveNow.length} task${approveNow.length>1?'s':''}</strong> waiting for approval.
+      <button class="dal-btn" style="background:var(--purple)" onclick="showPage('approvals')">Approve Now →</button>
+    </div>`;
+  if(paymentPending.length)
+    banners += `<div class="dash-alert" style="background:var(--red-bg);border-left:4px solid var(--red);color:var(--red)">
+      🔴 <strong>${paymentPending.length} task${paymentPending.length>1?'s':''}</strong> — device installed, payment not collected.
+      <button class="dal-btn" style="background:var(--red)" onclick="showPage('tasks')">View →</button>
+    </div>`;
+  if(techUpdated.length)
+    banners += `<div class="dash-alert" style="background:var(--amber-bg);border-left:4px solid var(--amber);color:#7a4500">
+      🟠 <strong>${techUpdated.length} task${techUpdated.length>1?'s':''}</strong> updated by technician — not reviewed yet.
+      <button class="dal-btn" style="background:var(--amber);color:#fff" onclick="showPage('tasks')">Review →</button>
+    </div>`;
+  if(critical.length)
+    banners += `<div class="dash-alert" style="background:var(--red-bg);border-left:4px solid var(--red);color:var(--red)">
+      🚨 <strong>${critical.length} task${critical.length>1?'s':''}</strong> open 48+ hours — critical.
+      <button class="dal-btn" style="background:var(--red)" onclick="showPage('urgent')">View →</button>
+    </div>`;
+  if(warning.length)
+    banners += `<div class="dash-alert" style="background:var(--amber-bg);border-left:4px solid var(--amber);color:#7a4500">
+      ⚠️ <strong>${warning.length} task${warning.length>1?'s':''}</strong> open 24+ hours.
+      <button class="dal-btn" style="background:var(--amber);color:#fff" onclick="showPage('urgent')">View →</button>
+    </div>`;
+  const bannersEl = document.getElementById('dash-banners');
+  if(bannersEl) bannersEl.innerHTML = banners || '<div style="font-size:12px;color:var(--text3);padding:6px 0">✅ No urgent actions right now</div>';
 
-  // ── Three action panels (Approve / Payment Overdue / Tech Updated) ──
-  const actionPanelsEl = document.getElementById('dash-action-panels');
-  if(actionPanelsEl){
-    const panels = [
-      {
-        state:'approve_now', tasks: approveNow,
-        bg:'linear-gradient(135deg,var(--purple),#9b8ef8)',
-        icon:'🟣', title:'Approve & Close',
-        emptyMsg:'No tasks awaiting approval',
-        rowFn: t => {
-          const price = parseFloat(t.price_to_collect||0);
-          const coll  = parseFloat(t.amount_collected||0);
-          const bal   = price - coll;
-          const paid  = bal <= 15;
-          return `<div class="dash-action-row" onclick="viewTask(${t.id})">
-            <div style="flex:1;min-width:0">
-              <div style="font-size:12px;font-weight:700;color:var(--text)">${t.customer_name||'–'} <span style="color:var(--text3);font-weight:400">· ${t.task_id}</span></div>
-              <div style="font-size:11px;color:var(--text3);margin-top:2px">${t.tech_name||'Unassigned'} · ${t.device_details||'–'}</div>
-            </div>
-            <div style="text-align:right;flex-shrink:0;margin:0 10px">
-              <div style="font-size:12px;font-weight:800;color:${paid?'var(--green)':'var(--red)'}">₹${coll.toLocaleString('en-IN')}</div>
-              <div style="font-size:10px;color:var(--text3)">${paid?'Fully paid':'₹'+bal.toLocaleString('en-IN')+' pending'}</div>
-            </div>
-            <button class="dash-approve-btn" onclick="event.stopPropagation();quickApprove(${t.id},this)"
-              ${!paid?'disabled title="Balance pending — cannot approve" style="opacity:.4;cursor:not-allowed"':''}>
-              ✅ Approve
-            </button>
-          </div>`;
-        }
-      },
-      {
-        state:'payment_pending', tasks: paymentPending,
-        bg:'linear-gradient(135deg,var(--red),#f97575)',
-        icon:'🔴', title:'Payment Pending',
-        emptyMsg:'No payment pending tasks',
-        rowFn: t => {
-          const price = parseFloat(t.price_to_collect||0);
-          // Time since install — from activity log not available here, use updated_at
-          return `<div class="dash-action-row" onclick="viewTask(${t.id})">
-            <div style="flex:1;min-width:0">
-              <div style="font-size:12px;font-weight:700;color:var(--text)">${t.customer_name||'–'} <span style="color:var(--text3);font-weight:400">· ${t.task_id}</span></div>
-              <div style="font-size:11px;color:var(--text3);margin-top:2px">${t.tech_name||'Unassigned'} · ${t.location||'–'}</div>
-            </div>
-            <div style="font-size:13px;font-weight:800;color:var(--red);flex-shrink:0">₹${price.toLocaleString('en-IN')}</div>
-          </div>`;
-        }
-      },
-      {
-        state:'tech_updated', tasks: techUpdated,
-        bg:'linear-gradient(135deg,var(--amber),#f5b942)',
-        icon:'🟠', title:'Tech Updated — Unseen',
-        emptyMsg:'No unseen updates',
-        rowFn: t => `<div class="dash-action-row" onclick="viewTask(${t.id})">
-          <div style="flex:1;min-width:0">
-            <div style="font-size:12px;font-weight:700;color:var(--text)">${t.customer_name||'–'} <span style="color:var(--text3);font-weight:400">· ${t.task_id}</span></div>
-            <div style="font-size:11px;color:var(--text3);margin-top:2px">${t.tech_name||'Unassigned'} · ${t.task_status}</div>
-          </div>
-          <span class="wf-badge wf-tech-updated">UPDATED</span>
-        </div>`
-      }
-    ].filter(p=>p.tasks.length > 0);
+  // ── 6. Action panels ───────────────────────────────────────
+  const panelsEl = document.getElementById('dash-action-panels');
+  if(panelsEl){
+    let panelsHtml = '';
 
-    // Always show panels, even if empty — so admin knows state
-    if(!panels.length && !approveNow.length && !paymentPending.length && !techUpdated.length){
-      actionPanelsEl.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0;text-align:center">✅ No pending actions</div>';
-    } else {
-      actionPanelsEl.innerHTML = panels.map(p=>`
-        <div class="dash-action-panel">
-          <div class="dash-action-hd" style="background:${p.bg};cursor:default">
-            <div class="dash-action-hd-title">${p.icon} ${p.title}</div>
-            <div style="display:flex;align-items:center;gap:8px">
-              <span class="dash-action-count">${p.tasks.length}</span>
-              ${p.state && p.state!=='approve_now'?`<button onclick="filterByWorkflow('${p.state}')" style="background:rgba(255,255,255,.25);color:#fff;border:none;padding:3px 8px;border-radius:5px;font-size:10px;font-weight:800;cursor:pointer">View All →</button>`:''}
-            </div>
-          </div>
-          <div class="dash-action-body">
-            ${p.tasks.slice(0,8).map(p.rowFn).join('')}
-            ${p.tasks.length>8?`<div style="padding:8px 16px;font-size:11px;color:var(--text3);text-align:center">+${p.tasks.length-8} more</div>`:''}
-          </div>
-        </div>`).join('');
+    // Approve & Close panel
+    if(approveNow.length){
+      panelsHtml += `<div class="dash-action-panel">
+        <div class="dash-action-hd" style="background:linear-gradient(135deg,#6C5CE7,#9b8ef8)">
+          <div class="dash-action-hd-title">🟣 Approve &amp; Close</div>
+          <span class="dash-action-count">${approveNow.length}</span>
+        </div>
+        <div class="dash-action-body">
+          ${approveNow.slice(0,6).map(t => {
+            const price = parseFloat(t.price_to_collect||0);
+            const coll  = parseFloat(t.amount_collected||0);
+            const bal   = price - coll;
+            const paid  = bal <= 15;
+            return `<div class="dash-action-row" onclick="viewTask(${t.id})">
+              <div style="flex:1;min-width:0">
+                <div style="font-size:12px;font-weight:700">${t.customer_name||'–'} <span style="color:var(--text3);font-weight:400">· ${t.task_id||''}</span></div>
+                <div style="font-size:11px;color:var(--text3);margin-top:2px">${t.tech_name||t.technician_name||'Unassigned'} · ${t.device_details||'–'}</div>
+              </div>
+              <div style="text-align:right;flex-shrink:0;margin:0 10px">
+                <div style="font-size:12px;font-weight:800;color:${paid?'var(--green)':'var(--red)'}">₹${coll.toLocaleString('en-IN')}</div>
+                <div style="font-size:10px;color:var(--text3)">${paid?'✅ Fully paid':'₹'+bal.toLocaleString('en-IN')+' due'}</div>
+              </div>
+              <button class="dash-approve-btn"
+                onclick="event.stopPropagation();quickApprove(${t.id},this)"
+                ${!paid?'disabled style="opacity:.4;cursor:not-allowed"':''}>
+                ✅ Approve
+              </button>
+            </div>`;
+          }).join('')}
+          ${approveNow.length>6?`<div style="padding:8px 16px;font-size:11px;color:var(--text3);text-align:center">+${approveNow.length-6} more — <a href="#" onclick="showPage('approvals');return false">See all</a></div>`:''}
+        </div>
+      </div>`;
     }
+
+    // Payment Pending panel
+    if(paymentPending.length){
+      panelsHtml += `<div class="dash-action-panel">
+        <div class="dash-action-hd" style="background:linear-gradient(135deg,#E74C3C,#f97575)">
+          <div class="dash-action-hd-title">🔴 Payment Pending</div>
+          <span class="dash-action-count">${paymentPending.length}</span>
+        </div>
+        <div class="dash-action-body">
+          ${paymentPending.slice(0,6).map(t => `<div class="dash-action-row" onclick="viewTask(${t.id})">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;font-weight:700">${t.customer_name||'–'} <span style="color:var(--text3);font-weight:400">· ${t.task_id||''}</span></div>
+              <div style="font-size:11px;color:var(--text3);margin-top:2px">${t.tech_name||t.technician_name||'Unassigned'} · ${t.location||'–'}</div>
+            </div>
+            <div style="font-size:13px;font-weight:800;color:var(--red);flex-shrink:0">₹${parseFloat(t.price_to_collect||0).toLocaleString('en-IN')}</div>
+          </div>`).join('')}
+        </div>
+      </div>`;
+    }
+
+    // Tech Updated panel
+    if(techUpdated.length){
+      panelsHtml += `<div class="dash-action-panel">
+        <div class="dash-action-hd" style="background:linear-gradient(135deg,#F39C12,#f5b942)">
+          <div class="dash-action-hd-title">🟠 Tech Updated — Unseen</div>
+          <span class="dash-action-count">${techUpdated.length}</span>
+        </div>
+        <div class="dash-action-body">
+          ${techUpdated.slice(0,6).map(t => `<div class="dash-action-row" onclick="viewTask(${t.id})">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;font-weight:700">${t.customer_name||'–'} <span style="color:var(--text3);font-weight:400">· ${t.task_id||''}</span></div>
+              <div style="font-size:11px;color:var(--text3);margin-top:2px">${t.tech_name||t.technician_name||'Unassigned'} · ${t.task_status}</div>
+            </div>
+            <span class="wf-badge wf-tech-updated">UPDATED</span>
+          </div>`).join('')}
+        </div>
+      </div>`;
+    }
+
+    panelsEl.innerHTML = panelsHtml || '';
   }
 
-  // ── Existing approvals panel (keep for backward compat) ───
+  // ── 7. Pending Approvals card (bottom) ─────────────────────
   const apBadge = document.getElementById('dash-appr-badge');
-  if(apBadge){ apBadge.textContent=approvals.length; apBadge.style.display=approvals.length?'':'none'; }
+  if(apBadge){ apBadge.textContent = approvals.length; apBadge.style.display = approvals.length ? '' : 'none'; }
   const apEl = document.getElementById('dash-approvals');
   if(apEl){
-    if(!approvals.length){
-      apEl.innerHTML = '<div class="empty"><div class="empty-icon">✅</div><div class="empty-txt">No pending approvals</div></div>';
-    } else {
-      apEl.innerHTML = approvals.slice(0,5).map(t=>{
-        const coll = parseFloat(t.amount_collected||0);
-        const price= parseFloat(t.price_to_collect||0);
-        const paid = (price-coll) <= 15;
-        return `<div class="appr-item">
-          <div class="appr-av">${(t.customer_name||'?').split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase()}</div>
-          <div style="flex:1;min-width:0">
-            <div class="appr-name">${t.customer_name||'–'}</div>
-            <div class="appr-meta">${t.task_id||''} · ${t.tech_name||'Unassigned'} · <span style="color:${paid?'var(--green)':'var(--red)'}">₹${coll.toLocaleString('en-IN')} ${paid?'✅':'⚠️'}</span></div>
-          </div>
-          <button class="appr-go" onclick="showPage('approvals')">Review</button>
-        </div>`;
-      }).join('');
-    }
+    apEl.innerHTML = !approvals.length
+      ? '<div class="empty"><div class="empty-icon">✅</div><div class="empty-txt">No pending approvals</div></div>'
+      : approvals.slice(0,5).map(t => {
+          const coll  = parseFloat(t.amount_collected||0);
+          const price = parseFloat(t.price_to_collect||0);
+          const paid  = (price - coll) <= 15;
+          const ini   = (t.customer_name||'?').split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
+          return `<div class="appr-item">
+            <div class="appr-av">${ini}</div>
+            <div style="flex:1;min-width:0">
+              <div class="appr-name">${t.customer_name||'–'}</div>
+              <div class="appr-meta">${t.task_id||''} · ${t.tech_name||t.technician_name||'–'} · <span style="color:${paid?'var(--green)':'var(--red)'}">₹${coll.toLocaleString('en-IN')} ${paid?'✅':'⚠️'}</span></div>
+            </div>
+            <button class="appr-go" onclick="event.stopPropagation();showPage('approvals')">Review</button>
+          </div>`;
+        }).join('');
   }
 
-  // ── Overdue panel ─────────────────────────────────────────
-  const overdueAll = [...critical,...warning];
+  // ── 8. Overdue Tasks card ──────────────────────────────────
+  const overdueAll = [...critical, ...warning];
   const ugBadge = document.getElementById('dash-urg-badge');
-  if(ugBadge){ ugBadge.textContent=overdueAll.length; ugBadge.style.display=overdueAll.length?'':'none'; }
+  if(ugBadge){ ugBadge.textContent = overdueAll.length; ugBadge.style.display = overdueAll.length ? '' : 'none'; }
   const ugEl = document.getElementById('dash-overdue');
   if(ugEl){
-    if(!overdueAll.length){
-      ugEl.innerHTML = '<div class="empty"><div class="empty-icon">🎉</div><div class="empty-txt">No overdue tasks!</div></div>';
-    } else {
-      ugEl.innerHTML = overdueAll.slice(0,5).map(t=>{
-        const h = parseInt(t.age_hours||0);
-        const crit = h>=48;
-        const col  = crit?'var(--red)':'var(--amber)';
-        return `<div class="urg-item" onclick="viewTask(${t.id})" style="cursor:pointer">
-          <div class="urg-dot" style="background:${col}"></div>
-          <div style="flex:1;min-width:0">
-            <div class="urg-name">${t.customer_name||'–'}</div>
-            <div class="urg-sub" style="color:${col}">${crit?'🚨 Critical':'⚠️ Warning'} · ${t.task_id||''}</div>
-          </div>
-          <div class="urg-age" style="color:${col}">${h}h</div>
-        </div>`;
-      }).join('');
-    }
+    ugEl.innerHTML = !overdueAll.length
+      ? '<div class="empty"><div class="empty-icon">🎉</div><div class="empty-txt">No overdue tasks</div></div>'
+      : overdueAll.slice(0,5).map(t => {
+          const h    = parseInt(t.age_hours||0);
+          const crit = h >= 48;
+          const col  = crit ? 'var(--red)' : 'var(--amber)';
+          return `<div class="urg-item" onclick="viewTask(${t.id})" style="cursor:pointer">
+            <div class="urg-dot" style="background:${col}"></div>
+            <div style="flex:1;min-width:0">
+              <div class="urg-name">${t.customer_name||'–'}</div>
+              <div class="urg-sub" style="color:${col}">${crit?'🚨 Critical':'⚠️ Warning'} · ${t.task_id||''}</div>
+            </div>
+            <div class="urg-age" style="color:${col}">${h}h</div>
+          </div>`;
+        }).join('');
   }
 
-  // ── Tech grid ─────────────────────────────────────────────
-  const COLORS = ['linear-gradient(135deg,#0E5C5C,#137272)','linear-gradient(135deg,#2E86DE,#5ba8f5)','linear-gradient(135deg,#6C5CE7,#9b8ef8)','linear-gradient(135deg,#E74C3C,#f97575)','linear-gradient(135deg,#F39C12,#f5b942)','linear-gradient(135deg,#27AE60,#4fd180)'];
-  // Count open tasks per technician (all non-closed statuses)
-  const openByTech = {};
-  openTasks.forEach(t=>{
+  // ── 9. Field Technicians grid ──────────────────────────────
+  const COLORS = [
+    'linear-gradient(135deg,#0E5C5C,#137272)',
+    'linear-gradient(135deg,#2E86DE,#5ba8f5)',
+    'linear-gradient(135deg,#6C5CE7,#9b8ef8)',
+    'linear-gradient(135deg,#E74C3C,#f97575)',
+    'linear-gradient(135deg,#F39C12,#f5b942)',
+    'linear-gradient(135deg,#27AE60,#4fd180)'
+  ];
+  // Count active tasks per technician
+  const byTech = {};
+  allActive.forEach(t => {
     if(t.assigned_to && t.task_status !== 'Closed' && t.task_status !== 'Cancelled'){
-      const key = String(t.assigned_to);
-      openByTech[key] = (openByTech[key]||0) + 1;
+      byTech[String(t.assigned_to)] = (byTech[String(t.assigned_to)]||0) + 1;
     }
   });
   const techEl = document.getElementById('dash-techs');
   if(techEl){
-    if(!techs.length){
-      techEl.innerHTML = '<div class="empty"><div class="empty-icon">👷</div><div class="empty-txt">No technicians yet</div></div>';
-    } else {
-      techEl.innerHTML = techs.map((t,i)=>{
-        const ini   = (t.name||'?').split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
-        const cnt   = openByTech[String(t.id)]||0;
-        const busy  = cnt>=3;
-        const col   = busy?'var(--amber)':'var(--green)';
-        const bgcol = busy?'var(--amber-bg)':'var(--green-bg)';
-        return `<div class="tech-item">
-          <div class="tech-av" style="background:${COLORS[i%COLORS.length]}">${ini}</div>
-          <div style="flex:1;min-width:0">
-            <div class="tech-name">${t.name}</div>
-            <div class="tech-status"><span class="tech-dot" style="background:${col}"></span><span style="color:${col};font-weight:600">${cnt} open</span></div>
-          </div>
-          <div class="tech-count" style="background:${bgcol};color:${col}">${cnt}</div>
-        </div>`;
-      }).join('');
-    }
+    techEl.innerHTML = !techs.length
+      ? '<div class="empty"><div class="empty-icon">👷</div><div class="empty-txt">No technicians yet</div></div>'
+      : techs.map((t, i) => {
+          const ini   = (t.name||'?').split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
+          const cnt   = byTech[String(t.id)] || 0;
+          const col   = cnt >= 3 ? 'var(--amber)' : 'var(--green)';
+          const bgcol = cnt >= 3 ? 'var(--amber-bg)' : 'var(--green-bg)';
+          return `<div class="tech-item">
+            <div class="tech-av" style="background:${COLORS[i % COLORS.length]}">${ini}</div>
+            <div style="flex:1;min-width:0">
+              <div class="tech-name">${t.name}</div>
+              <div class="tech-status">
+                <span class="tech-dot" style="background:${col}"></span>
+                <span style="color:${col};font-weight:600">${cnt} open</span>
+              </div>
+            </div>
+            <div class="tech-count" style="background:${bgcol};color:${col}">${cnt}</div>
+          </div>`;
+        }).join('');
   }
 }
 
