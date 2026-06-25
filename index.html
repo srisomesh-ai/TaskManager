@@ -2669,7 +2669,8 @@ function closeTaskDetail(){
   if(drawer)  drawer.style.transform = 'translateX(100%)';
   _detailTask = null;
   if(typeof _consentPollTimer !== 'undefined' && _consentPollTimer){
-    clearInterval(_consentPollTimer); _consentPollTimer = null;
+    clearInterval(_consentPollTimer);
+    _consentPollTimer = null;
   }
 }
 
@@ -3195,12 +3196,7 @@ async function handleAttendClick(taskId){
   }
 }
 
-// Clear poll timer when drawer closes
-const _origCloseDetail = closeTaskDetail;
-function closeTaskDetail(){
-  if(_consentPollTimer){ clearInterval(_consentPollTimer); _consentPollTimer = null; }
-  _origCloseDetail();
-}
+// Poll timer cleared in closeTaskDetail above
 
 // ── Check consent and update Attend button state on task open ─────────────
 async function checkAndUpdateAttendBtn(taskId){
