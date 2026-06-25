@@ -221,6 +221,154 @@ foreach ($followUps as $task) {
 }
 
 // ============================================================
+// JOB 4 — Payment reminder T+1 hour after installation
+// Finds tasks where device was installed but no payment yet
+// ============================================================
+$oneHourAgo = (clone $now)->modify('-1 hour')->format('Y-m-d H:i:s');
+$oneDayAgo  = (clone $now)->modify('-24 hours')->format('Y-m-d H:i:s');
+
+$unpaidTasks = $pdo->query("
+    SELECT t.*,
+           u.name  AS tech_name,
+           u.email AS tech_email,
+           c.email AS customer_email,
+           c.name  AS customer_name_col,
+           (SELECT MIN(di.saved_at) FROM task_device_installs di WHERE di.task_id=t.id) AS install_time
+    FROM tasks t
+    LEFT JOIN users u ON t.assigned_to=u.id
+    LEFT JOIN users c ON t.created_by=c.id
+    WHERE t.task_status NOT IN ('Closed','Cancelled','Awaiting Approval')
+      AND (t.amount_collected IS NULL OR t.amount_collected=0)
+      AND EXISTS (SELECT 1 FROM task_device_installs di2 WHERE di2.task_id=t.id AND di2.gps_serial_no IS NOT NULL)
+      AND t.assigned_to IS NOT NULL
+")->fetchAll();
+
+foreach($unpaidTasks as $task){
+    $installTime = $task['install_time'] ?? null;
+    if(!$installTime) continue;
+
+    $installDt = new DateTime($installTime, new DateTimeZone('Asia/Kolkata'));
+    $diffMins  = ($now->getTimestamp() - $installDt->getTimestamp()) / 60;
+
+    // T+1 hour reminder (between 60-90 mins since install)
+    if($diffMins >= 60 && $diffMins < 90){
+        // Check not already sent today
+        $alreadySent = $pdo->prepare("
+            SELECT COUNT(*) FROM task_activities
+            WHERE task_id=? AND activity_type='system'
+            AND remark LIKE '%T+1h payment reminder%'
+            AND DATE(created_at)=?");
+        $alreadySent->execute([$task['id'], $todayIST]);
+        if($alreadySent->fetchColumn() > 0) continue;
+
+        require_once __DIR__.'/mailer.php';
+        $price = number_format(floatval($task['price_to_collect']),0);
+
+        // Email to technician
+        if($task['tech_email']){
+            $techContent = '
+            <div class="greeting">Hi ' . htmlspecialchars($task['tech_name']) . ',</div>
+            <p style="font-size:14px;font-weight:700;color:#e07b00;margin-bottom:14px">💳 Payment Collection Reminder</p>
+            <div class="details">
+                <div class="row"><div class="label">Task</div><div class="value blue">' . $task['task_id'] . '</div></div>
+                <div class="row"><div class="label">Customer</div><div class="value">' . htmlspecialchars($task['customer_name']) . '</div></div>
+                <div class="row"><div class="label">Contact</div><div class="value highlight"><a href="tel:' . $task['contact_number'] . '" style="color:#1a3a6b;font-weight:800">' . $task['contact_number'] . '</a></div></div>
+                <div class="row"><div class="label">Amount Due</div><div class="value highlight">&#8377;' . $price . '</div></div>
+            </div>
+            <div style="background:#fff3cd;border:1.5px solid #e07b00;border-radius:8px;padding:14px;margin:14px 0">
+                <div style="font-size:13px;font-weight:800;color:#e07b00;margin-bottom:6px">⚠️ Payment Not Collected Yet</div>
+                <div style="font-size:13px;color:#1a1f2e">Installation was done 1+ hour ago but payment has not been recorded. Please collect &#8377;' . $price . ' from the customer immediately.</div>
+            </div>
+            <p style="font-size:12px;color:#4a5568">If customer is unable to pay now, record the payment commitment with a date in the task manager.</p>';
+            sendMail($task['tech_email'], $task['tech_name'],
+                '⚠️ Payment Pending — ' . $task['task_id'] . ' | ' . $task['customer_name'],
+                emailTemplate($techContent));
+        }
+
+        // Email to customer
+        if($task['email']){
+            $custContent = '
+            <div class="greeting">Dear ' . htmlspecialchars($task['customer_name']) . ',</div>
+            <p style="font-size:14px;color:#4a5568;margin-bottom:14px">
+                Your BharatGPS device has been successfully installed. Please complete your payment to activate full service.
+            </p>
+            <div class="details">
+                <div class="row"><div class="label">Task ID</div><div class="value blue">' . $task['task_id'] . '</div></div>
+                <div class="row"><div class="label">Service</div><div class="value">' . htmlspecialchars($task['device_details']??'GPS Service') . '</div></div>
+                <div class="row"><div class="label">Amount Due</div><div class="value highlight">&#8377;' . $price . '</div></div>
+            </div>
+            <p style="font-size:13px;color:#4a5568;margin-top:14px">Please complete your payment at the earliest. For assistance call <strong>09963222009</strong>.</p>';
+            sendMail($task['email'], $task['customer_name'],
+                'Payment Pending — BharatGPS ' . $task['task_id'],
+                emailTemplate($custContent));
+        }
+
+        $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,1,?,'system')")
+            ->execute([$task['id'], "⏰ T+1h payment reminder sent to technician and customer"]);
+        // Mark urgent
+        $pdo->prepare("UPDATE tasks SET is_urgent=1 WHERE id=?")->execute([$task['id']]);
+        $log[] = "T+1h payment reminder → {$task['task_id']}";
+    }
+
+    // T+24 hour final warning
+    if($diffMins >= 1440 && $diffMins < 1470){
+        $alreadySent = $pdo->prepare("
+            SELECT COUNT(*) FROM task_activities
+            WHERE task_id=? AND activity_type='system'
+            AND remark LIKE '%T+24h final payment warning%'");
+        $alreadySent->execute([$task['id']]);
+        if($alreadySent->fetchColumn() > 0) continue;
+
+        require_once __DIR__.'/mailer.php';
+        $price = number_format(floatval($task['price_to_collect']),0);
+
+        // Final warning to technician
+        if($task['tech_email']){
+            $finalTech = '
+            <div class="greeting">Hi ' . htmlspecialchars($task['tech_name']) . ',</div>
+            <p style="font-size:14px;font-weight:800;color:#c0392b;margin-bottom:14px">🚨 URGENT — Payment Not Received After 24 Hours</p>
+            <div class="details">
+                <div class="row"><div class="label">Task</div><div class="value blue">' . $task['task_id'] . '</div></div>
+                <div class="row"><div class="label">Customer</div><div class="value">' . htmlspecialchars($task['customer_name']) . '</div></div>
+                <div class="row"><div class="label">Contact</div><div class="value highlight"><a href="tel:' . $task['contact_number'] . '" style="color:#c0392b;font-weight:800">' . $task['contact_number'] . '</a></div></div>
+                <div class="row"><div class="label">Amount Due</div><div class="value highlight">&#8377;' . $price . '</div></div>
+            </div>
+            <div style="background:#fdecea;border:2px solid #c0392b;border-radius:8px;padding:14px;margin:14px 0">
+                <div style="font-size:13px;font-weight:800;color:#c0392b;margin-bottom:8px">Action Required Immediately</div>
+                <div style="font-size:13px;color:#1a1f2e;line-height:1.7">Payment has not been collected 24 hours after installation. Please contact the customer immediately and collect payment, or escalate to your manager for recovery of the GPS device.</div>
+            </div>';
+            sendMail($task['tech_email'], $task['tech_name'],
+                '🚨 24H Payment Overdue — ' . $task['task_id'],
+                emailTemplate($finalTech));
+        }
+
+        // Final warning to customer
+        if($task['email']){
+            $finalCust = '
+            <div class="greeting">Dear ' . htmlspecialchars($task['customer_name']) . ',</div>
+            <div style="background:#fdecea;border:2px solid #c0392b;border-radius:8px;padding:16px;margin-bottom:16px">
+                <div style="font-size:15px;font-weight:800;color:#c0392b;margin-bottom:8px">⚠️ Payment Not Received — Action Required</div>
+                <p style="font-size:13px;color:#1a1f2e;line-height:1.7">
+                    Your BharatGPS device (Task <strong>' . $task['task_id'] . '</strong>) was installed but payment of 
+                    <strong>&#8377;' . $price . '</strong> has not been received.
+                </p>
+            </div>
+            <p style="font-size:13px;color:#4a5568;line-height:1.7;margin-bottom:14px">
+                If payment is not received, <strong>the GPS device may be deactivated</strong> and our technician will be sent to recover the device from your vehicle.
+            </p>
+            <p style="font-size:13px;color:#4a5568">Please call us immediately at <strong>09963222009</strong> to resolve this.</p>';
+            sendMail($task['email'], $task['customer_name'],
+                '⚠️ IMPORTANT: Payment Due — BharatGPS ' . $task['task_id'],
+                emailTemplate($finalCust));
+        }
+
+        $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,1,?,'system')")
+            ->execute([$task['id'], "🚨 T+24h PAYMENT OVERDUE — Final warning sent to customer and technician. Device deactivation warning issued."]);
+        $log[] = "T+24h final warning → {$task['task_id']}";
+    }
+}
+
+// ============================================================
 // DONE
 // ============================================================
 echo json_encode([
@@ -229,5 +377,6 @@ echo json_encode([
     'reminders'   => count($unopen),
     'rated'       => count($unrated),
     'follow_ups'  => count($followUps),
+    'payment_rem' => count($unpaidTasks),
     'log'         => $log,
 ]);
