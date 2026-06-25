@@ -35,13 +35,12 @@ $activities = $a->fetchAll();
 
 // Handle dispute submission
 if($_SERVER['REQUEST_METHOD'] === 'POST'){
-    $feedback   = trim($_POST['feedback'] ?? '');
-    $actualInfo = trim($_POST['actual_info'] ?? '');
+    $feedback = trim($_POST['feedback'] ?? '');
 
-    if(!$feedback && !$actualInfo){
-        $error = 'Please describe what actually happened.';
+    if(!$feedback){
+        $error = 'Please tell us what happened.';
     } else {
-        $fullFeedback = $feedback . ($actualInfo ? "\n\nWhat actually happened: " . $actualInfo : '');
+        $fullFeedback = $feedback;
 
         // Log dispute in activity
         $pdo->prepare("INSERT INTO task_activities (task_id, user_id, remark, activity_type) VALUES (?, 0, ?, 'customer_dispute')")
@@ -266,14 +265,10 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:#1a1f2e;min-heig
       </p>
       <form method="POST">
         <div class="form-group">
-          <label>Which update is incorrect? *</label>
-          <textarea name="feedback" placeholder="e.g. The technician said he called me but I never received any call. My phone was on all day..." required><?= htmlspecialchars($_POST['feedback'] ?? '') ?></textarea>
+          <label>What do you want to tell us? *</label>
+          <textarea name="feedback" rows="5" placeholder="Tell us what actually happened..." required style="font-size:14px"><?= htmlspecialchars($_POST['feedback'] ?? '') ?></textarea>
         </div>
-        <div class="form-group">
-          <label>What actually happened?</label>
-          <textarea name="actual_info" placeholder="e.g. No one visited our location. The vehicle was ready and parked outside all day."><?= htmlspecialchars($_POST['actual_info'] ?? '') ?></textarea>
-        </div>
-        <button type="submit" class="btn btn-red">🚨 Submit Report — Notify Manager</button>
+        <button type="submit" class="btn btn-red">🚨 Submit — Notify Manager</button>
       </form>
     </div>
   </div>
