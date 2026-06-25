@@ -28,6 +28,17 @@ if(!$task){
     die('<h2 style="font-family:sans-serif;color:#c0392b;padding:40px">Link not found or expired. Please contact BharatGPS at 09963222009.</h2>');
 }
 
+// Check if dispute already submitted — token set to 'USED'
+if($task['feedback_token'] === 'USED'){
+    die('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Already Submitted</title></head>
+<body style="font-family:sans-serif;background:#f0f2f5;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0">
+<div style="background:#fff;border-radius:12px;padding:36px;max-width:400px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.1)">
+<div style="font-size:48px;margin-bottom:12px">✅</div>
+<h2 style="color:#1a3a6b;margin-bottom:8px">Already Submitted</h2>
+<p style="color:#4a5568;font-size:14px;line-height:1.7">Your report has already been received and is being reviewed by our management team.<br><br>For urgent matters call <strong>09963222009</strong>.</p>
+</div></body></html>');
+}
+
 // Fetch activity log (only remark + status_change — no system entries)
 $a = $pdo->prepare("SELECT a.*, u.name AS user_name FROM task_activities a LEFT JOIN users u ON a.user_id = u.id WHERE a.task_id = ? AND a.activity_type IN ('remark','status_change') ORDER BY a.created_at ASC");
 $a->execute([$task['id']]);
@@ -45,6 +56,10 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
         // Log dispute in activity
         $pdo->prepare("INSERT INTO task_activities (task_id, user_id, remark, activity_type) VALUES (?, 0, ?, 'customer_dispute')")
             ->execute([$task['id'], "🚨 CUSTOMER DISPUTE: " . $fullFeedback]);
+
+        // Immediately expire the token — link can never be used again
+        $pdo->prepare("UPDATE tasks SET feedback_token='USED' WHERE id=?")
+            ->execute([$task['id']]);
 
         // Fetch admin emails
         $admins = $pdo->query("SELECT name, email FROM users WHERE role IN ('admin','assigner') AND email IS NOT NULL AND email != ''")->fetchAll();
