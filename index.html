@@ -2220,10 +2220,10 @@ async function viewTask(id){
             <div style="font-size:14px;font-weight:800;color:var(--accent)">Update</div>
             <div style="font-size:11px;color:var(--text3);margin-top:3px">Call log & next step</div>
           </button>
-          <button onclick="openTechAttend(${t.id})" style="background:var(--accent);border:none;border-radius:10px;padding:16px 12px;text-align:center;cursor:pointer;transition:opacity .15s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
-            <div style="font-size:28px;margin-bottom:6px">🔧</div>
-            <div style="font-size:14px;font-weight:800;color:#fff">Attend</div>
-            <div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:3px">${t.device_details||'Start task'}</div>
+          <button onclick="handleAttendClick(${t.id})" id="td-attend-btn-${t.id}" style="background:var(--accent);border:none;border-radius:10px;padding:16px 12px;text-align:center;cursor:pointer;transition:opacity .15s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+            <div style="font-size:28px;margin-bottom:6px" id="td-attend-icon-${t.id}">🔧</div>
+            <div style="font-size:14px;font-weight:800;color:#fff" id="td-attend-label-${t.id}">Attend</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:3px" id="td-attend-sub-${t.id}">${t.device_details||'Start task'}</div>
           </button>
         </div>
       `;
@@ -2548,6 +2548,99 @@ async function adminCancelTask(taskId){
     closeTaskDetail();
     if(typeof loadTasks==='function') loadTasks();
   } else { alert(res.error||'Error'); }
+}
+
+// ════════════════════════════════════════════════════════
+// CONSENT FLOW — Attend button
+// ════════════════════════════════════════════════════════
+let _consentPollTimer = null;
+
+async function handleAttendClick(taskId){
+  // Check if consent already received
+  const check = await api('check_consent', {id: taskId}).catch(()=>({}));
+  if(check.consented){
+    // Consent already done — go straight to attend form
+    openTechAttend(taskId);
+    return;
+  }
+
+  // No consent yet — send consent request to customer
+  const btn = document.getElementById('td-attend-btn-' + taskId);
+  const icon  = document.getElementById('td-attend-icon-' + taskId);
+  const label = document.getElementById('td-attend-label-' + taskId);
+  const sub   = document.getElementById('td-attend-sub-' + taskId);
+
+  if(btn){ btn.disabled = true; btn.style.opacity = '.7'; }
+  if(icon)  icon.textContent  = '⏳';
+  if(label) label.textContent = 'Sending...';
+  if(sub)   sub.textContent   = 'Requesting consent';
+
+  const res = await api('send_consent', {}, 'POST', {id: taskId}).catch(()=>({}));
+
+  if(res.success){
+    // Update button to waiting state
+    if(btn){ btn.disabled = false; btn.style.opacity = '1'; btn.style.background = 'var(--saffron)'; }
+    if(icon)  icon.textContent  = '⏳';
+    if(label) label.textContent = 'Waiting...';
+    if(sub){
+      sub.textContent = res.email_sent
+        ? 'Consent email sent to customer'
+        : 'No email — share link manually';
+    }
+
+    // Show info toast in tech panel
+    const techPanel = document.getElementById('td-tech-actions');
+    if(techPanel){
+      const info = document.createElement('div');
+      info.style.cssText = 'background:var(--saffron-bg);border:1.5px solid var(--saffron);border-radius:8px;padding:12px 14px;margin-top:10px;font-size:12px;color:var(--text2);line-height:1.7';
+      info.innerHTML = res.email_sent
+        ? '<strong>📧 Consent email sent to customer.</strong><br>Waiting for customer to read T&C and confirm payment. This button will change to <strong>✅ Proceed with Installation</strong> automatically once confirmed.'
+        : '<strong>⚠️ Customer has no email on file.</strong><br>Share this link with customer manually:<br><span style="color:var(--accent2);word-break:break-all;font-size:11px">https://salmon-goldfish-110661.hostingersite.com/consent.php</span>';
+      techPanel.appendChild(info);
+    }
+
+    // Start polling every 8 seconds
+    if(_consentPollTimer) clearInterval(_consentPollTimer);
+    _consentPollTimer = setInterval(async ()=>{
+      const poll = await api('check_consent', {id: taskId}).catch(()=>({}));
+      if(poll.consented){
+        clearInterval(_consentPollTimer);
+        _consentPollTimer = null;
+        // Customer confirmed — change button to green proceed
+        if(btn){ btn.style.background = 'var(--green)'; btn.disabled = false; }
+        if(icon)  icon.textContent  = '✅';
+        if(label) label.textContent = 'Proceed!';
+        if(sub)   sub.textContent   = poll.name + ' confirmed';
+
+        // Update info toast
+        const techPanel = document.getElementById('td-tech-actions');
+        if(techPanel){
+          const existing = techPanel.querySelector('[data-consent-info]');
+          if(existing) existing.remove();
+          const done = document.createElement('div');
+          done.setAttribute('data-consent-info','1');
+          done.style.cssText = 'background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:12px 14px;margin-top:10px;font-size:12px;color:var(--green);line-height:1.7;font-weight:600';
+          done.innerHTML = '✅ <strong>Customer has confirmed!</strong><br>' + poll.name + ' agreed to T&C and payment. Click <strong>Proceed!</strong> to start installation.';
+          techPanel.appendChild(done);
+        }
+
+        // Change onclick to open attend directly
+        btn.setAttribute('onclick', 'openTechAttend(' + taskId + ')');
+      }
+    }, 8000);
+  } else {
+    if(btn){ btn.disabled = false; btn.style.opacity = '1'; }
+    if(icon)  icon.textContent  = '🔧';
+    if(label) label.textContent = 'Attend';
+    alert('Could not send consent request. Please try again.');
+  }
+}
+
+// Clear poll timer when drawer closes
+const _origCloseDetail = closeTaskDetail;
+function closeTaskDetail(){
+  if(_consentPollTimer){ clearInterval(_consentPollTimer); _consentPollTimer = null; }
+  _origCloseDetail();
 }
 
 </script>
