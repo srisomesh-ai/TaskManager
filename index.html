@@ -2038,26 +2038,28 @@ async function saveTask(){
   const contact  = document.getElementById('fm-contact').value.trim();
   if(!customer||!contact){ alert('Customer name and contact are required.'); return; }
   btn.textContent='Saving…'; btn.disabled=true;
-  const stdPrice     = parseFloat(document.getElementById('fm-price')?.value||0);
-  const collectPrice = parseFloat(document.getElementById('fm-price-collect')?.value||stdPrice||0);
+  // Use getDrawerTotal() so price_to_collect = (unit_price × qty) including GST
+  const {price: unitPrice, total: totalPrice, gstTotal, qty: deviceQty, stdPrice} = getDrawerTotal();
+  const discountGiven = Math.max(0, (stdPrice - unitPrice) * deviceQty);
+
   const payload = {
     customer_name:     customer,
     contact_number:    contact,
     email:             (document.getElementById('fm-email')?.value||'').trim(),
     location:          (document.getElementById('fm-location')?.value||'').trim(),
     device_details:    document.getElementById('fm-job')?.value||'',
-    device_qty:        parseInt(document.getElementById('fm-qty')?.value||1),
+    device_qty:        deviceQty,
     profile:           document.getElementById('fm-profile')?.value||'BGPT',
     lead_type:         document.getElementById('fm-lead-type')?.value||'New Lead',
     task_status:       document.getElementById('fm-status')?.value||'Open',
     payment_mode:      document.getElementById('fm-paymode')?.value||'',
-    price_to_collect:  collectPrice || stdPrice || 0,
+    price_to_collect:  totalPrice,   // ← qty × unit_price (+ GST if SBGT)
     amount_collected:  parseFloat(document.getElementById('fm-collected')?.value||0),
     general_notes:     (document.getElementById('fm-notes')?.value||'').trim(),
     assigned_to:       document.getElementById('fm-tech')?.value||null,
     is_urgent:         document.getElementById('fm-urgent')?.checked ? 1 : 0,
     // Discount tracking
-    discount_given:    Math.max(0, stdPrice - (collectPrice||stdPrice)),
+    discount_given:    discountGiven,
     discount_reason:   document.getElementById('fm-discount-reason')?.value||'',
     discount_incharge: document.getElementById('fm-discount-approver')?.value||'',
   };
