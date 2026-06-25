@@ -827,7 +827,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
   </div><!-- /main-layout -->
 
       <!-- ══════════════════ TASK DETAIL DRAWER ══════════════════ -->
-      <div id="task-detail-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:800" onclick="closeTaskDetail()"></div>
+      <div id="task-detail-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:800;cursor:pointer" onclick="closeTaskDetail()"></div>
       <div id="task-detail-drawer" style="
         position:fixed;right:0;top:0;bottom:0;width:600px;max-width:100vw;
         background:var(--bg);display:flex;flex-direction:column;
@@ -1719,26 +1719,37 @@ function renderActivityLog(activities){
   }
   authToken = token;
 
-  // Verify token
-  let res = null;
-  for(let i=0; i<3; i++){
+  // Try to restore from localStorage immediately while verifying
+  const savedUser = localStorage.getItem('bgps_user');
+  if(savedUser){
     try{
-      res = await api('verify_token');
-      if(res && res.valid) break;
-      if(res && res.error) break;
+      currentUser = JSON.parse(savedUser);
+      authToken = token;
+      startApp(); // Show app immediately from cache
     } catch(e){}
-    await new Promise(r=>setTimeout(r,1000));
   }
 
-  if(res && res.valid){
-    currentUser = res.user;
-    localStorage.setItem('bgps_user', JSON.stringify(currentUser));
-    startApp();
-  } else {
-    localStorage.removeItem('bgps_token');
-    localStorage.removeItem('bgps_user');
-    document.getElementById('login-screen').style.display='flex';
-    document.addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+  // Verify token in background — only logout if server says token is invalid
+  try{
+    const res = await api('verify_token');
+    if(res && res.valid){
+      currentUser = res.user;
+      localStorage.setItem('bgps_user', JSON.stringify(currentUser));
+      // If app wasn't shown yet (no savedUser), show now
+      if(!savedUser) startApp();
+    } else if(res && res.error){
+      // Server explicitly rejected — logout
+      localStorage.removeItem('bgps_token');
+      localStorage.removeItem('bgps_user');
+      authToken = ''; currentUser = null;
+      document.getElementById('app').classList.remove('show');
+      document.getElementById('login-screen').style.display='flex';
+      document.addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+    }
+    // If network error (no res) — stay logged in with cached user
+  } catch(e){
+    // Network error — stay logged in with cached user, don't logout
+    console.log('Token verify network error — staying logged in');
   }
 })();
 
@@ -1772,6 +1783,10 @@ async function loadTasks(){
   const tbody = document.getElementById('tasks-tbody');
   const res = await api('get_tasks', buildTaskParams()).catch(()=>({}));
   allTasks = res.tasks || [];
+  // Apply workflow filter if coming from dashboard Review button
+  if(window._pendingWorkflowFilter){
+    allTasks = applyWorkflowFilter(allTasks);
+  }
   filteredTasks = allTasks;
   taskCurrentPage = 1;
   renderTasksTable();
@@ -2588,15 +2603,46 @@ async function viewTask(id){
     techPanel.style.display = 'none';
   }
 
-  // ── ADMIN FOOTER ───────────────────────────────────────
-  if(isAdmin && !isLocked){
-    adFooter.style.display = 'flex';
-    adFooter.innerHTML = `
-      <button onclick="adminApproveTask(${t.id})" class="ts-btn" style="background:var(--green);color:#fff">✅ Approve & Close</button>
-      <button onclick="adminRejectTask(${t.id})" class="ts-btn" style="background:var(--red-bg);color:var(--red);border:1.5px solid var(--red)">❌ Reject</button>
-      <button onclick="adminCancelTask(${t.id})" class="ts-btn ts-btn-secondary">🚫 Cancel Task</button>
-    `;
-  } else if(isAdmin && t.task_status === 'Awaiting Approval'){
+  // ── ADMIN FOOTER — context-aware buttons ──────────────
+  // Approve & Close: only when Awaiting Approval AND payment done
+  // Reject: only when Awaiting Approval
+  // Cancel: only when adding is NOT done (before installation)
+  adFooter.innerHTML = '';
+  adFooter.style.display = 'none';
+
+  if(isAdmin){
+    const taskInstalls   = t.device_installs || [];
+    const taskQty        = parseInt(t.device_qty||1);
+    const taskAddingDone = taskInstalls.length >= taskQty && taskInstalls.every(d=>d.gps_serial_no&&d.name_on_server);
+    const taskPrice      = parseFloat(t.price_to_collect||0);
+    const taskCollected  = parseFloat(t.amount_collected||0);
+    const taskBalance    = taskPrice - taskCollected;
+    const taskFullyPaid  = taskBalance <= 15;
+
+    const btns = [];
+
+    // Approve & Close — only when submitted by tech AND payment done
+    if(t.task_status === 'Awaiting Approval'){
+      if(taskFullyPaid){
+        btns.push(`<button onclick="adminApproveTask(${t.id})" class="ts-btn" style="background:var(--green);color:#fff;flex:2">✅ Approve & Close</button>`);
+      } else {
+        btns.push(`<button disabled class="ts-btn" style="background:var(--surface2);color:var(--text3);flex:2;cursor:not-allowed" title="Cannot approve — ₹${taskBalance.toLocaleString('en-IN')} balance pending">⚠️ Balance Pending — Cannot Approve</button>`);
+      }
+      btns.push(`<button onclick="adminRejectTask(${t.id})" class="ts-btn" style="background:var(--red-bg);color:var(--red);border:1.5px solid var(--red)">❌ Reject</button>`);
+    }
+
+    // Cancel — only available BEFORE adding is done
+    if(!taskAddingDone && !isLocked){
+      btns.push(`<button onclick="adminCancelTask(${t.id})" class="ts-btn ts-btn-secondary">🚫 Cancel Task</button>`);
+    }
+
+    if(btns.length){
+      adFooter.style.display = 'flex';
+      adFooter.innerHTML = btns.join('');
+    }
+  }
+
+  if(false && isAdmin && t.task_status === 'Awaiting Approval'){
     adFooter.style.display = 'flex';
     adFooter.innerHTML = `
       <button onclick="adminApproveTask(${t.id})" class="ts-btn" style="background:var(--green);color:#fff">✅ Approve & Close</button>
@@ -2608,9 +2654,13 @@ async function viewTask(id){
 function closeTaskDetail(){
   const overlay = document.getElementById('task-detail-overlay');
   const drawer  = document.getElementById('task-detail-drawer');
-  if(overlay) overlay.style.display = 'none';
+  if(overlay){ overlay.style.display = 'none'; overlay.style.opacity='0'; }
   if(drawer)  drawer.style.transform = 'translateX(100%)';
   _detailTask = null;
+  // Clear any consent poll timer
+  if(typeof _consentPollTimer !== 'undefined' && _consentPollTimer){
+    clearInterval(_consentPollTimer); _consentPollTimer = null;
+  }
 }
 
 function openEditFromDetail(){
@@ -3796,17 +3846,15 @@ async function quickApprove(taskId, btn){
 
 function filterByWorkflow(state){
   showPage('all-tasks');
-  // After tasks load, filter them
-  setTimeout(()=>{
-    const badges = {'payment_pending':'Payment Pending','tech_updated':'Updated','approve_now':'Awaiting Approval'};
-    // Apply status filter if applicable
-    const statusMap = {'approve_now':'Awaiting Approval'};
-    if(statusMap[state]){
-      const sel = document.getElementById('filter-status');
-      if(sel){ sel.value=statusMap[state]; }
-      if(typeof applyFilters==='function') applyFilters();
-    }
-  }, 800);
+  // Store requested workflow filter
+  window._pendingWorkflowFilter = state;
+}
+
+function applyWorkflowFilter(tasks){
+  const state = window._pendingWorkflowFilter;
+  if(!state) return tasks;
+  window._pendingWorkflowFilter = null;
+  return tasks.filter(t => t.workflow_state === state);
 }
 
 </script>
