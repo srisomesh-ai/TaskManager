@@ -325,3 +325,49 @@ function sendTaskUpdateCustomer(array $task, string $remark, string $techName, a
         emailTemplate($emailContent)
     );
 }
+
+// ---- CONSENT REQUEST — sent to customer before installation ----
+function sendConsentRequest(array $task, string $techName): void {
+    if (empty($task['email'])) return;
+    $BASE_URL   = 'https://salmon-goldfish-110661.hostingersite.com';
+    $consentUrl = $BASE_URL . '/consent.php?token=' . urlencode($task['consent_token'] ?? '');
+    $price      = number_format(floatval($task['price_to_collect'] ?? 0), 0);
+
+    $emailContent = '
+    <div class="greeting">Dear ' . htmlspecialchars($task['customer_name']) . ',</div>
+    <p style="font-size:14px;color:#4a5568;margin-bottom:16px">
+        Your BharatGPS technician <strong>' . htmlspecialchars($techName) . '</strong>
+        is ready to begin your <strong>' . htmlspecialchars($task['device_details'] ?? 'GPS') . '</strong> installation.
+    </p>
+    <div style="background:#e8f5ec;border:2px solid #1a7a3a;border-radius:10px;padding:18px;margin-bottom:16px;text-align:center">
+        <div style="font-size:13px;font-weight:700;color:#1a7a3a;margin-bottom:8px">⚠️ Action Required Before Installation Begins</div>
+        <p style="font-size:13px;color:#1a1f2e;margin-bottom:14px;line-height:1.6">
+            Please read and accept our Terms &amp; Conditions and confirm your payment of
+            <strong style="font-size:18px;color:#1a7a3a">&#8377;' . $price . '</strong>.
+            The technician will wait for your confirmation.
+        </p>
+        <a href="' . $consentUrl . '"
+           style="display:inline-block;background:#1a7a3a;color:#fff;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:800;text-decoration:none">
+           &#10003; Read T&amp;C &amp; Confirm Payment
+        </a>
+        <p style="font-size:11px;color:#8a9ab0;margin-top:10px;word-break:break-all">
+            Can&#39;t click the button? Copy this link: ' . $consentUrl . '
+        </p>
+    </div>
+    <div class="details">
+        <div class="row"><div class="label">Task ID</div><div class="value blue">' . $task['task_id'] . '</div></div>
+        <div class="row"><div class="label">Service</div><div class="value">' . htmlspecialchars($task['device_details'] ?? 'GPS') . '</div></div>
+        <div class="row"><div class="label">Amount Agreed</div><div class="value highlight">&#8377;' . $price . '</div></div>
+        <div class="row"><div class="label">Technician</div><div class="value">' . htmlspecialchars($techName) . '</div></div>
+    </div>
+    <p style="font-size:12px;color:#8a9ab0;margin-top:16px">
+        For help call <strong>09963222009</strong>
+    </p>';
+
+    sendMail(
+        $task['email'],
+        $task['customer_name'],
+        'Action Required: Confirm Your GPS Installation — ' . $task['task_id'],
+        emailTemplate($emailContent)
+    );
+}
