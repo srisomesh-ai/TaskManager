@@ -2866,191 +2866,265 @@ async function checkAndUpdateAttendBtn(taskId){
 }
 
 // ════════════════════════════════════════════════════════
-// DEVICE INSTALLATION CARDS (inside Attend modal)
+// DEVICE INSTALLATION — IMEI Search + GPS Server Push
 // ════════════════════════════════════════════════════════
+const GPS_PROXY = 'gps_proxy.php';
 var _attendSavedDevices = {};
-var _attendUploads = {};
-var _attendTaskQty  = 1;
-var _attendTaskId   = null;
-
-var VEHICLE_TYPES = ['Car','Truck','Bus','Auto','Bike','JCB','Tractor','Van','Mini Truck','Other'];
-var GPS_SERVERS   = ['Server 1 — bharatgps.com','Server 2 — bharatgps.in','Server 3 — bharatgps.school','Server 4 — bharatgps.org'];
+var _attendTaskQty = 1;
+var _attendTaskId  = null;
 
 function renderAttendDeviceCards(){
   const container = document.getElementById('attend-device-cards');
   if(!container) return;
-  const qty = _attendTaskQty;
   let html = '';
-  for(let i=1; i<=qty; i++){
-    const saved = _attendSavedDevices[i] || null;
-    const isSaved = !!(saved && saved.gps_serial_no && saved.name_on_server && saved.server_name);
-    html += buildAttendDeviceCard(i, saved, isSaved, qty);
+  for(let i=1; i<=_attendTaskQty; i++){
+    const saved = _attendSavedDevices[i];
+    const done  = !!(saved && saved.pushed);
+    html += buildAttendDeviceCard(i, saved, done);
   }
   container.innerHTML = html;
+  checkAttendAllDevicesSaved();
 }
 
-function buildAttendDeviceCard(idx, saved, isSaved, total){
+function buildAttendDeviceCard(idx, saved, done){
+  const total = _attendTaskQty;
   const s = saved || {};
-  const vtOpts = VEHICLE_TYPES.map(v=>`<option value="${v}"${s.vehicle_type===v?' selected':''}>${v}</option>`).join('');
-  const srvOpts = ['', ...GPS_SERVERS].map(v=>`<option value="${v}"${s.server_name===v?' selected':''}>${v||'Select Server'}</option>`).join('');
-
-  return `
-  <div class="dev-card${isSaved?' saved':''}" id="attend-dev-card-${idx}">
+  if(done){
+    return `<div class="dev-card saved" id="attend-dev-card-${idx}" style="margin-bottom:14px">
+      <div class="dev-card-head">
+        <div class="dev-card-title">🚗 Device ${idx}${total>1?' of '+total:''}</div>
+        <span class="dev-saved-badge">✅ Added to Server</span>
+      </div>
+      <div class="dev-card-body">
+        <div style="background:var(--green-bg);border-radius:6px;padding:10px 12px;font-size:12px;line-height:1.9">
+          <div>📡 <strong>${escHtml(s.device_name||'')}</strong> · ${escHtml(s.server_name||'')}</div>
+          <div>🚗 <strong>${escHtml(s.plate_number||'')}</strong> · ${escHtml(s.vehicle_type||'')}</div>
+          <div>📟 IMEI: ${escHtml(s.imei||'')} · Owner: ${escHtml(s.object_owner||'')}</div>
+        </div>
+        <button class="ts-btn ts-btn-secondary" style="width:100%;margin-top:8px;font-size:12px" onclick="reopenDeviceCard(${idx})">✏️ Edit Device ${idx}</button>
+      </div>
+    </div>`;
+  }
+  return `<div class="dev-card" id="attend-dev-card-${idx}" style="margin-bottom:14px">
     <div class="dev-card-head">
       <div class="dev-card-title">🚗 Device ${idx}${total>1?' of '+total:''}</div>
-      ${isSaved
-        ? '<span class="dev-saved-badge">✅ Saved</span>'
-        : '<span style="font-size:11px;color:var(--text3)">Not saved yet</span>'}
+      <span style="font-size:11px;color:var(--text3)">Search IMEI below</span>
     </div>
     <div class="dev-card-body">
-      <div class="form-row">
-        <div class="form-group">
-          <label>Vehicle Number *</label>
-          <input type="text" id="adev-vn-${idx}" value="${escHtml(s.vehicle_number||'')}"
-            placeholder="AP31AB1234" oninput="this.value=this.value.toUpperCase()">
+      <div id="adev-step-search-${idx}">
+        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--accent2);margin-bottom:8px">① Enter IMEI Number</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <input type="text" id="adev-imei-input-${idx}" placeholder="Enter 15-digit IMEI..."
+            style="flex:1;padding:10px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:14px;outline:none;font-family:monospace"
+            onkeydown="if(event.key==='Enter') searchIMEI(${idx})">
+          <button class="ts-btn ts-btn-primary" onclick="searchIMEI(${idx})" id="adev-search-btn-${idx}">🔍 Search</button>
         </div>
-        <div class="form-group">
-          <label>Vehicle Type *</label>
-          <select id="adev-vt-${idx}"><option value="">Select</option>${vtOpts}</select>
-        </div>
+        <div id="adev-search-result-${idx}" style="margin-bottom:4px"></div>
       </div>
-      <div class="form-group" style="margin-bottom:12px">
-        <label>GPS Serial / IMEI *</label>
-        <input type="text" id="adev-imei-${idx}" value="${escHtml(s.gps_serial_no||'')}" placeholder="15-digit IMEI number">
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Name on Server *</label>
-          <input type="text" id="adev-nos-${idx}" value="${escHtml(s.name_on_server||'')}" placeholder="e.g. Ravi Kumar AP31AB1234">
-        </div>
-        <div class="form-group">
-          <label>GPS Server *</label>
-          <select id="adev-srv-${idx}">${srvOpts}</select>
-        </div>
-      </div>
-      <div class="form-row" style="margin-bottom:12px">
-        <div class="form-group">
-          <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:5px">RC Copy *</label>
-          <div class="upload-box${s.rc_photo?' done':''}" id="adev-rc-box-${idx}" onclick="adevPickFile('rc',${idx})">
-            <div class="upload-box-icon">${s.rc_photo?'✅':'📄'}</div>
-            <div class="upload-box-lbl" id="adev-rc-lbl-${idx}">${s.rc_photo?'RC Uploaded':'Upload RC / Photo'}</div>
+      <div id="adev-step-form-${idx}" style="display:none">
+        <div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px" id="adev-device-info-${idx}"></div>
+        <input type="hidden" id="adev-server-id-${idx}">
+        <input type="hidden" id="adev-device-id-${idx}">
+        <input type="hidden" id="adev-imei-${idx}">
+        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--accent2);margin-bottom:10px">② Fill Device Details</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Vehicle Number / Plate *</label>
+            <input type="text" id="adev-plate-${idx}" placeholder="AP31AB1234" oninput="this.value=this.value.toUpperCase()">
           </div>
-          <input type="file" id="adev-rc-file-${idx}" accept="image/*,.pdf" style="display:none" onchange="adevFilePicked('rc',${idx},this)">
-        </div>
-        <div class="form-group">
-          <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:5px">Selfie *</label>
-          <div class="upload-box${s.selfie_photo?' done':''}" id="adev-sl-box-${idx}" onclick="adevPickFile('selfie',${idx})">
-            <div class="upload-box-icon">${s.selfie_photo?'✅':'🤳'}</div>
-            <div class="upload-box-lbl" id="adev-sl-lbl-${idx}">${s.selfie_photo?'Selfie Uploaded':'Take Selfie'}</div>
+          <div class="form-group">
+            <label>Vehicle Type</label>
+            <select id="adev-vtype-${idx}">
+              <option value="">Select</option>
+              <option>Car</option><option>Truck</option><option>Bus</option>
+              <option>Auto</option><option>Bike</option><option>JCB</option>
+              <option>Tractor</option><option>Van</option><option>Mini Truck</option><option>Other</option>
+            </select>
           </div>
-          <input type="file" id="adev-sl-file-${idx}" accept="image/*" style="display:none" onchange="adevFilePicked('selfie',${idx},this)">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Name on Server *</label>
+            <input type="text" id="adev-name-${idx}" placeholder="e.g. Ravi Kumar AP31AB1234">
+          </div>
+          <div class="form-group">
+            <label>Owner / Manager</label>
+            <input type="text" id="adev-owner-${idx}" placeholder="Owner name">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Installation Date *</label>
+            <input type="date" id="adev-inst-date-${idx}" oninput="autoAttendExpiry(${idx})" onchange="autoAttendExpiry(${idx})">
+          </div>
+          <div class="form-group">
+            <label>Expiry Date (auto)</label>
+            <input type="date" id="adev-exp-date-${idx}" readonly style="background:var(--surface2);color:var(--accent2);font-weight:700;cursor:not-allowed">
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:12px">
+          <label>Registration / Asset No.</label>
+          <input type="text" id="adev-reg-${idx}" placeholder="Registration or asset number">
+        </div>
+        <div class="form-group" style="margin-bottom:12px">
+          <label>Additional Notes</label>
+          <textarea id="adev-notes-${idx}" rows="2" placeholder="Installation notes..."></textarea>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="ts-btn ts-btn-secondary" style="flex:1" onclick="resetIMEISearch(${idx})">← Back</button>
+          <button class="ts-btn ts-btn-primary" style="flex:2;background:var(--green)" onclick="pushDeviceToServer(${idx})" id="adev-push-btn-${idx}">🛰 Push to GPS Server</button>
         </div>
       </div>
-      <div class="form-group" style="margin-bottom:10px">
-        <label>Installation Remarks *</label>
-        <textarea id="adev-rem-${idx}" rows="2" placeholder="Describe how the device was installed...">${escHtml(s.remarks||'')}</textarea>
-      </div>
-      <button class="ts-btn${isSaved?' ts-btn-secondary':' ts-btn-primary'}" onclick="saveAttendDevice(${idx})" id="adev-save-btn-${idx}" style="width:100%">
-        ${isSaved?'✏️ Update Device '+idx:'💾 Save Device '+idx}
-      </button>
     </div>
   </div>`;
 }
 
-function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+function escHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 
-function adevPickFile(type, idx){
-  document.getElementById('adev-'+type.slice(0,2)+'-file-'+idx)?.click();
+function autoAttendExpiry(idx){
+  const d = document.getElementById('adev-inst-date-'+idx)?.value;
+  if(!d) return;
+  const exp = new Date(d); exp.setFullYear(exp.getFullYear()+1);
+  const el = document.getElementById('adev-exp-date-'+idx);
+  if(el) el.value = exp.toISOString().slice(0,10);
 }
 
-function adevFilePicked(type, idx, input){
-  const file = input.files[0];
-  if(!file) return;
-  _attendUploads[type+'-'+idx] = file;
-  const key = type==='rc' ? 'rc' : 'sl';
-  const box = document.getElementById('adev-'+key+'-box-'+idx);
-  const lbl = document.getElementById('adev-'+key+'-lbl-'+idx);
-  if(box){ box.classList.add('done'); box.querySelector('.upload-box-icon').textContent='✅'; }
-  if(lbl) lbl.textContent = file.name.slice(0,20) + (file.name.length>20?'…':'');
+function reopenDeviceCard(idx){
+  delete _attendSavedDevices[idx];
+  const card = document.getElementById('attend-dev-card-'+idx);
+  if(card) card.outerHTML = buildAttendDeviceCard(idx, null, false);
+  checkAttendAllDevicesSaved();
 }
 
-async function saveAttendDevice(idx){
-  const vn   = document.getElementById('adev-vn-'+idx)?.value.trim()||'';
-  const vt   = document.getElementById('adev-vt-'+idx)?.value||'';
-  const imei = document.getElementById('adev-imei-'+idx)?.value.trim()||'';
-  const nos  = document.getElementById('adev-nos-'+idx)?.value.trim()||'';
-  const srv  = document.getElementById('adev-srv-'+idx)?.value||'';
-  const rem  = document.getElementById('adev-rem-'+idx)?.value.trim()||'';
+function resetIMEISearch(idx){
+  document.getElementById('adev-step-search-'+idx).style.display='';
+  document.getElementById('adev-step-form-'+idx).style.display='none';
+  document.getElementById('adev-search-result-'+idx).innerHTML='';
+}
 
-  if(!vn)  { alert('Vehicle number is required.'); return; }
-  if(!vt)  { alert('Please select vehicle type.'); return; }
-  if(!imei){ alert('GPS Serial / IMEI is required.'); return; }
-  if(!nos) { alert('Name on server is required.'); return; }
-  if(!srv) { alert('Please select GPS server.'); return; }
-  if(!rem) { alert('Installation remarks are required.'); return; }
-
-  // Check uploads
-  const saved    = _attendSavedDevices[idx]||{};
-  const rcDone   = saved.rc_photo    || _attendUploads['rc-'+idx];
-  const selfDone = saved.selfie_photo|| _attendUploads['selfie-'+idx];
-  if(!rcDone)  { alert('RC Copy upload is required.'); return; }
-  if(!selfDone){ alert('Selfie upload is required.'); return; }
-
-  const btn = document.getElementById('adev-save-btn-'+idx);
-  if(btn){ btn.textContent='Saving…'; btn.disabled=true; }
-
+async function searchIMEI(idx){
+  const imei = document.getElementById('adev-imei-input-'+idx)?.value.trim();
+  if(!imei){ alert('Please enter an IMEI number.'); return; }
+  const btn=document.getElementById('adev-search-btn-'+idx);
+  const res =document.getElementById('adev-search-result-'+idx);
+  if(btn){ btn.textContent='Searching…'; btn.disabled=true; }
+  res.innerHTML='<div style="font-size:12px;color:var(--text3);padding:6px 0">🔍 Searching all 4 servers...</div>';
   try {
-    const res = await api('save_device_install',{},'POST',{
-      task_id:      _attendTaskId,
-      device_index: idx,
-      vehicle_number: vn,
-      vehicle_type:   vt,
-      gps_serial_no:  imei,
-      name_on_server: nos,
-      server_name:    srv,
-      remarks:        rem
-    });
-    if(!res.success){ alert(res.error||'Save failed'); if(btn){btn.disabled=false;btn.textContent='💾 Save Device '+idx;} return; }
-
-    // Upload files
-    for(const type of ['rc','selfie']){
-      const file = _attendUploads[type+'-'+idx];
-      if(file){
-        const fd = new FormData();
-        fd.append('file', file);
-        fd.append('task_id', _attendTaskId);
-        fd.append('doc_type', type+'_device_'+idx);
-        await fetch(API+'?action=upload_document',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd}).catch(()=>{});
-      }
+    const r = await fetch(GPS_PROXY+'?action=find&keyword='+encodeURIComponent(imei),{headers:{'X-Auth-Token':authToken}});
+    const data = await r.json();
+    if(btn){ btn.textContent='🔍 Search'; btn.disabled=false; }
+    if(!data.success){ res.innerHTML=`<div style="color:var(--red);font-size:12px">❌ ${data.error||'Search failed'}</div>`; return; }
+    if(!data.devices||!data.devices.length){
+      res.innerHTML='<div style="color:var(--red);font-size:12px">❌ No device found with this IMEI. Check the number and retry.</div>';
+      return;
     }
-
-    // Mark saved
-    _attendSavedDevices[idx] = {vehicle_number:vn,vehicle_type:vt,gps_serial_no:imei,name_on_server:nos,server_name:srv,remarks:rem,rc_photo:1,selfie_photo:1};
-
-    // Re-render this card as saved
-    const card = document.getElementById('attend-dev-card-'+idx);
-    if(card) card.outerHTML = buildAttendDeviceCard(idx, _attendSavedDevices[idx], true, _attendTaskQty);
-    checkAttendAllDevicesSaved();
-
+    if(data.devices.length===1){
+      res.innerHTML='<div style="color:var(--green);font-size:12px">✅ Device found! Fill the details below.</div>';
+      loadAttendDevice(idx, data.devices[0]);
+    } else {
+      window['_asr_'+idx] = data.devices;
+      res.innerHTML = '<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">'+data.devices.length+' devices found — tap to select:</div>'
+        + data.devices.map((d,i)=>`<div onclick="loadAttendDevice(${idx},window['_asr_${idx}'][${i}])"
+          style="padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;margin-bottom:6px;cursor:pointer;font-size:12px"
+          onmouseover="this.style.borderColor='var(--accent2)'" onmouseout="this.style.borderColor='var(--border)'">
+          <strong>${escHtml(d.name||'–')}</strong><br>
+          IMEI: ${escHtml(d.device_data?.imei||'–')} · ${escHtml(d._server_name||'–')}
+        </div>`).join('');
+    }
   } catch(e){
+    if(btn){ btn.textContent='🔍 Search'; btn.disabled=false; }
+    res.innerHTML='<div style="color:var(--red);font-size:12px">❌ Error: '+e.message+'</div>';
+  }
+}
+
+function loadAttendDevice(idx, device){
+  const dd = device.device_data||{};
+  document.getElementById('adev-server-id-'+idx).value = device._server_id||'';
+  document.getElementById('adev-device-id-'+idx).value = dd.id||device.id||'';
+  document.getElementById('adev-imei-'+idx).value       = dd.imei||'';
+  const infoEl = document.getElementById('adev-device-info-'+idx);
+  if(infoEl) infoEl.innerHTML=`<div style="font-weight:800;color:var(--text);margin-bottom:3px">📡 ${escHtml(device.name||'–')}</div>
+    <div style="color:var(--text3);font-size:11px">IMEI: <strong>${escHtml(dd.imei||'–')}</strong> &nbsp;·&nbsp; Server: <strong>${escHtml(device._server_name||'–')}</strong></div>`;
+  const sf=(id,v)=>{const el=document.getElementById(id);if(el&&v)el.value=v;};
+  sf('adev-name-'+idx,    device.name);
+  sf('adev-plate-'+idx,   dd.plate_number);
+  sf('adev-owner-'+idx,   dd.object_owner);
+  sf('adev-reg-'+idx,     dd.registration_number);
+  sf('adev-notes-'+idx,   dd.additional_notes);
+  const today = new Date().toISOString().slice(0,10);
+  sf('adev-inst-date-'+idx, (dd.installation_date&&dd.installation_date!=='0000-00-00') ? dd.installation_date : today);
+  autoAttendExpiry(idx);
+  document.getElementById('adev-step-search-'+idx).style.display='none';
+  document.getElementById('adev-step-form-'+idx).style.display='';
+}
+
+async function pushDeviceToServer(idx){
+  const serverId = document.getElementById('adev-server-id-'+idx)?.value;
+  const deviceId = document.getElementById('adev-device-id-'+idx)?.value;
+  const imei     = document.getElementById('adev-imei-'+idx)?.value;
+  const name     = document.getElementById('adev-name-'+idx)?.value.trim();
+  const plate    = document.getElementById('adev-plate-'+idx)?.value.trim().toUpperCase();
+  const vtype    = document.getElementById('adev-vtype-'+idx)?.value;
+  const owner    = document.getElementById('adev-owner-'+idx)?.value.trim();
+  const reg      = document.getElementById('adev-reg-'+idx)?.value.trim();
+  const instDate = document.getElementById('adev-inst-date-'+idx)?.value;
+  const expDate  = document.getElementById('adev-exp-date-'+idx)?.value;
+  const notes    = document.getElementById('adev-notes-'+idx)?.value.trim();
+  if(!plate){  alert('Vehicle number / plate is required.'); return; }
+  if(!name){   alert('Name on server is required.'); return; }
+  if(!instDate){alert('Installation date is required.'); return; }
+  const btn=document.getElementById('adev-push-btn-'+idx);
+  if(btn){ btn.textContent='Pushing…'; btn.disabled=true; }
+  try {
+    const fd=new FormData();
+    fd.append('server_id',           serverId);
+    fd.append('device_id',           deviceId);
+    fd.append('name',                name);
+    fd.append('plate_number',        plate);
+    fd.append('registration_number', reg);
+    fd.append('object_owner',        owner);
+    fd.append('installation_date',   instDate);
+    fd.append('expiration_date',     expDate);
+    fd.append('additional_notes',    notes+(vtype?' | Vehicle Type: '+vtype:''));
+    fd.append('comment',             'Installed via BharatGPS TaskManager — Task '+(_detailTask?.task_id||''));
+    const r = await fetch(GPS_PROXY+'?action=update',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd});
+    const data = await r.json();
+    if(btn){ btn.textContent='🛰 Push to GPS Server'; btn.disabled=false; }
+    if(data.success){
+      _attendSavedDevices[idx]={
+        pushed:true,server_id:serverId,device_id:deviceId,imei,
+        device_name:name,server_name:'Server '+serverId,
+        plate_number:plate,vehicle_type:vtype,object_owner:owner,
+        installation_date:instDate,expiration_date:expDate,
+      };
+      await api('save_device_install',{},'POST',{
+        task_id:_attendTaskId,device_index:idx,
+        vehicle_number:plate,vehicle_type:vtype||'',
+        gps_serial_no:imei,name_on_server:name,
+        server_name:'Server '+serverId,
+        remarks:notes||'GPS device added to server'
+      }).catch(()=>{});
+      const card=document.getElementById('attend-dev-card-'+idx);
+      if(card) card.outerHTML=buildAttendDeviceCard(idx,_attendSavedDevices[idx],true);
+      checkAttendAllDevicesSaved();
+    } else {
+      alert('❌ GPS Server error: '+(data.error||'Unknown error'));
+    }
+  } catch(e){
+    if(btn){ btn.textContent='🛰 Push to GPS Server'; btn.disabled=false; }
     alert('Error: '+e.message);
-    if(btn){ btn.disabled=false; btn.textContent='💾 Save Device '+idx; }
   }
 }
 
 function checkAttendAllDevicesSaved(){
-  const total = _attendTaskQty;
-  let allSaved = true;
-  for(let i=1; i<=total; i++){
-    const s = _attendSavedDevices[i];
-    if(!s || !s.gps_serial_no){ allSaved=false; break; }
-  }
-  // Show submit button only when all devices saved
-  const submitBtn = document.getElementById('attend-submit-btn');
-  if(submitBtn && allSaved){
-    submitBtn.style.display='';
-    submitBtn.textContent='✅ Submit — Request Approval';
-    submitBtn.style.background='var(--green)';
+  let allDone=true;
+  for(let i=1;i<=_attendTaskQty;i++){ if(!_attendSavedDevices[i]?.pushed){allDone=false;break;} }
+  const paySection=document.getElementById('attend-payment-section');
+  const submitBtn=document.getElementById('attend-submit-btn');
+  if(paySection) paySection.style.display=allDone?'':'none';
+  if(submitBtn){
+    submitBtn.style.display=allDone?'':'none';
+    if(allDone){ submitBtn.textContent='✅ Submit — Request Approval'; submitBtn.style.background='var(--green)'; }
   }
 }
 
