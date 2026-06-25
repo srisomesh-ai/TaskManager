@@ -1617,9 +1617,12 @@ async function loadDashboard(){
     } else {
       actionPanelsEl.innerHTML = panels.map(p=>`
         <div class="dash-action-panel">
-          <div class="dash-action-hd" style="background:${p.bg}" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
+          <div class="dash-action-hd" style="background:${p.bg};cursor:default">
             <div class="dash-action-hd-title">${p.icon} ${p.title}</div>
-            <span class="dash-action-count">${p.tasks.length}</span>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="dash-action-count">${p.tasks.length}</span>
+              ${p.state && p.state!=='approve_now'?`<button onclick="filterByWorkflow('${p.state}')" style="background:rgba(255,255,255,.25);color:#fff;border:none;padding:3px 8px;border-radius:5px;font-size:10px;font-weight:800;cursor:pointer">View All →</button>`:''}
+            </div>
           </div>
           <div class="dash-action-body">
             ${p.tasks.slice(0,8).map(p.rowFn).join('')}
@@ -4109,9 +4112,13 @@ async function quickApprove(taskId, btn){
 }
 
 function filterByWorkflow(state){
-  // Set filter BEFORE showPage so loadTasks picks it up
-  window._pendingWorkflowFilter = state;
+  // Navigate to tasks page — highlighted tasks will have UPDATED badge
   showPage('tasks');
+  // After tasks load, highlight by scrolling to first match
+  setTimeout(()=>{
+    const firstMatch = document.querySelector('tr.row-unseen, tr.row-approve, tr.row-payment-overdue');
+    if(firstMatch) firstMatch.scrollIntoView({behavior:'smooth', block:'center'});
+  }, 1200);
 }
 
 function applyWorkflowFilter(tasks){
