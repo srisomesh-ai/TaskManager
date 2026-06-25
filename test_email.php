@@ -1,43 +1,61 @@
 <?php
-// Quick email test — visit this URL to test Gmail SMTP
-// https://salmon-goldfish-110661.hostingersite.com/test_email.php?to=your@email.com
+require_once __DIR__ . '/api/db.php';
 require_once __DIR__ . '/api/mailer.php';
 
-$to   = $_GET['to'] ?? '';
-$test = filter_var($to, FILTER_VALIDATE_EMAIL) ? $to : '';
+$pdo = getDB();
+$to  = $_GET['to'] ?? '';
+$taskId = $_GET['task'] ?? '';
 
-echo "<pre style='font-family:monospace;padding:20px'>";
-echo "BharatGPS Email Test\n";
-echo "====================\n\n";
+echo "<pre style='font-family:monospace;font-size:13px;padding:20px;background:#1a1f2e;color:#e2e8f0;min-height:100vh'>";
+echo "BharatGPS — Email + Task Diagnostics\n";
+echo "=====================================\n\n";
 
-if(!$test){
-    echo "Usage: ?to=your@email.com\n";
-    echo "\nSMTP Config:\n";
-    echo "  Host: " . MAIL_HOST . "\n";
-    echo "  Port: " . MAIL_PORT . "\n";
-    echo "  From: " . MAIL_FROM . "\n";
-    echo "\nTesting socket connection...\n";
-    $socket = @fsockopen(MAIL_HOST, MAIL_PORT, $errno, $errstr, 10);
-    if($socket){
-        echo "✅ Socket to smtp.gmail.com:587 CONNECTED\n";
-        fclose($socket);
+// 1. SMTP connection test
+echo "1. SMTP Connection Test\n";
+$socket = @fsockopen('smtp.gmail.com', 587, $errno, $errstr, 10);
+if($socket){ 
+    echo "   ✅ smtp.gmail.com:587 CONNECTED\n"; 
+    fclose($socket); 
+} else { 
+    echo "   ❌ FAILED: $errstr ($errno)\n"; 
+    echo "   → Hostinger is blocking port 587\n\n";
+}
+
+// 2. Check task email field
+if($taskId){
+    echo "\n2. Task '$taskId' email check\n";
+    $s = $pdo->prepare("SELECT id, task_id, customer_name, email, feedback_token FROM tasks WHERE task_id=? OR id=? LIMIT 1");
+    $s->execute([$taskId, $taskId]);
+    $t = $s->fetch();
+    if($t){
+        echo "   Task ID:   " . $t['task_id'] . "\n";
+        echo "   Customer:  " . $t['customer_name'] . "\n";
+        echo "   Email:     " . ($t['email'] ?: '❌ EMPTY — no email stored') . "\n";
+        echo "   Token:     " . ($t['feedback_token'] ?: '❌ EMPTY') . "\n";
     } else {
-        echo "❌ Socket FAILED: $errstr ($errno)\n";
-        echo "   Hostinger may be blocking outbound SMTP port 587\n";
-    }
-} else {
-    echo "Sending test email to: $test\n\n";
-    $body = emailTemplate('<div class="greeting">Test Email</div><p style="font-size:14px;color:#4a5568">If you receive this, the email system is working correctly.</p>');
-    $result = sendMail($test, 'Test', 'BharatGPS Email Test — ' . date('H:i:s'), $body);
-    if($result){
-        echo "✅ Email SENT successfully to $test\n";
-        echo "   Check your inbox (may take 1-2 min)\n";
-    } else {
-        echo "❌ Email FAILED — check error log\n";
-        echo "   Common reasons:\n";
-        echo "   1. Port 587 blocked by Hostinger\n";
-        echo "   2. Gmail App Password wrong\n";
-        echo "   3. 2FA not enabled on Gmail\n";
+        echo "   ❌ Task not found\n";
     }
 }
+
+// 3. Send test email
+if($to && filter_var($to, FILTER_VALIDATE_EMAIL)){
+    echo "\n3. Sending test email to: $to\n";
+    $body = emailTemplate('
+        <div class="greeting">Test Email</div>
+        <p style="font-size:14px;color:#4a5568">
+            This is a test from BharatGPS task manager.<br>
+            If you receive this, Gmail SMTP is working correctly.
+        </p>
+        <div class="details">
+            <div class="row"><div class="label">Time</div><div class="value">' . date('d M Y H:i:s') . '</div></div>
+            <div class="row"><div class="label">Server</div><div class="value">Hostinger Shared</div></div>
+        </div>
+    ');
+    $result = sendMail($to, 'Test Recipient', 'BharatGPS Email Test — ' . date('H:i:s'), $body);
+    echo $result ? "   ✅ Email SENT — check inbox\n" : "   ❌ Email FAILED — check error_log\n";
+} else {
+    echo "\n3. To send a test email: ?to=your@email.com\n";
+}
+
+echo "\n\nUsage: ?to=your@email.com&task=BGT-XXXX\n";
 echo "</pre>";
