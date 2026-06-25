@@ -3354,6 +3354,21 @@ async function adminCancelTask(taskId){
 let _consentPollTimer = null;
 
 async function handleAttendClick(taskId){
+  // Confirmation before proceeding
+  const task = _detailTask;
+  const customerName = task?.customer_name || 'this customer';
+  const jobType      = task?.device_details || 'GPS Installation';
+  const location     = task?.location || '';
+
+  const confirmed = confirm(
+    '🔧 Ready for Installation?\n\n' +
+    'Customer: ' + customerName + '\n' +
+    'Job: ' + jobType + (location ? '\nLocation: ' + location : '') + '\n\n' +
+    'This will send a consent & payment confirmation request to the customer.\n\n' +
+    'Are you sure you are at the location and ready to proceed?'
+  );
+  if(!confirmed) return;
+
   // Check if consent already received
   const check = await api('check_consent', {id: taskId}).catch(()=>({}));
   if(check.consented){
