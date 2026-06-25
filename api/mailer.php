@@ -302,19 +302,25 @@ function sendTaskUpdateCustomer(array $task, string $remark, string $techName, a
     <!-- Full history -->
     ' . $historyHtml . '
 
-    <!-- Report false update button -->
-    ' . ($token ? '
-    <div style="background:#fff5f5;border:1.5px solid #c0392b;border-radius:8px;padding:14px;margin-top:16px">
-        <div style="font-size:12px;font-weight:800;color:#c0392b;margin-bottom:6px">⚠️ Is this update incorrect?</div>
-        <p style="font-size:12px;color:#7b1e14;margin-bottom:12px;line-height:1.6">
-            If the information above is false or incorrect, click below to report it.
-            Our management will be notified immediately.
+    <!-- Report false update button — always shown -->
+    <div style="background:#fff5f5;border:1.5px solid #c0392b;border-radius:8px;padding:16px;margin-top:20px">
+        <div style="font-size:13px;font-weight:800;color:#c0392b;margin-bottom:6px">⚠️ Is this update incorrect?</div>
+        <p style="font-size:12px;color:#7b1e14;margin-bottom:14px;line-height:1.7">
+            If the technician's update above is <strong>false or incorrect</strong>, you can report it directly.
+            Our management team will be notified immediately and action will be taken.
         </p>
-        <a href="' . $feedbackUrl . '" style="display:inline-block;background:#c0392b;color:#fff;padding:10px 20px;border-radius:7px;font-size:13px;font-weight:800;text-decoration:none">
+        ' . ($token ?
+        '<a href="' . $feedbackUrl . '"
+            style="display:inline-block;background:#c0392b;color:#fff;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:800;text-decoration:none;letter-spacing:.3px">
             🚨 Report False Update
         </a>
-        <div style="font-size:11px;color:#8a9ab0;margin-top:8px">Or copy this link: ' . $feedbackUrl . '</div>
-    </div>' : '') . '
+        <div style="font-size:11px;color:#8a9ab0;margin-top:10px;word-break:break-all">
+            Can't click? Copy this link: ' . $feedbackUrl . '
+        </div>'
+        :
+        '<div style="font-size:12px;color:#8a9ab0">Please call us at <strong>09963222009</strong> to report any incorrect information.</div>'
+        ) . '
+    </div>
 
     <p style="font-size:12px;color:#8a9ab0;margin-top:16px">
         For help, contact us at <strong>09963222009</strong> · <strong>info@bharatgps.com</strong>
