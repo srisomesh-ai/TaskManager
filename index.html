@@ -2038,21 +2038,28 @@ async function saveTask(){
   const contact  = document.getElementById('fm-contact').value.trim();
   if(!customer||!contact){ alert('Customer name and contact are required.'); return; }
   btn.textContent='Saving…'; btn.disabled=true;
+  const stdPrice     = parseFloat(document.getElementById('fm-price')?.value||0);
+  const collectPrice = parseFloat(document.getElementById('fm-price-collect')?.value||stdPrice||0);
   const payload = {
-    customer_name:    customer,
-    contact_number:   contact,
-    location:         document.getElementById('fm-location').value.trim(),
-    device_details:   document.getElementById('fm-job').value,
-    task_status:      document.getElementById('fm-status').value,
-    price_to_collect: parseFloat(document.getElementById('fm-price-collect')?.value || document.getElementById('fm-price')?.value || 0),
-    amount_collected: document.getElementById('fm-collected').value||0,
-    general_notes:    document.getElementById('fm-notes').value.trim(),
-    assigned_to:      document.getElementById('fm-tech')?.value||null,
-    gst_amount:       parseFloat(document.getElementById('fm-price')?.dataset?.gstAmount||0),
+    customer_name:     customer,
+    contact_number:    contact,
+    email:             (document.getElementById('fm-email')?.value||'').trim(),
+    location:          (document.getElementById('fm-location')?.value||'').trim(),
+    device_details:    document.getElementById('fm-job')?.value||'',
+    device_qty:        parseInt(document.getElementById('fm-qty')?.value||1),
+    profile:           document.getElementById('fm-profile')?.value||'BGPT',
+    lead_type:         document.getElementById('fm-lead-type')?.value||'New Lead',
+    task_status:       document.getElementById('fm-status')?.value||'Open',
+    payment_mode:      document.getElementById('fm-paymode')?.value||'',
+    price_to_collect:  collectPrice || stdPrice || 0,
+    amount_collected:  parseFloat(document.getElementById('fm-collected')?.value||0),
+    general_notes:     (document.getElementById('fm-notes')?.value||'').trim(),
+    assigned_to:       document.getElementById('fm-tech')?.value||null,
+    is_urgent:         document.getElementById('fm-urgent')?.checked ? 1 : 0,
     // Discount tracking
-    discount_given:   Math.max(0, parseFloat(document.getElementById('fm-price')?.value||0) - parseFloat(document.getElementById('fm-price-collect')?.value||document.getElementById('fm-price')?.value||0)),
-    discount_reason:  document.getElementById('fm-discount-reason')?.value||'',
-    discount_incharge:document.getElementById('fm-discount-approver')?.value||'',
+    discount_given:    Math.max(0, stdPrice - (collectPrice||stdPrice)),
+    discount_reason:   document.getElementById('fm-discount-reason')?.value||'',
+    discount_incharge: document.getElementById('fm-discount-approver')?.value||'',
   };
   // Append deferred payment metadata to notes
   if(window._payDeferredMeta){
