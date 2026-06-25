@@ -236,12 +236,15 @@ case 'get_tasks':
     // Build task ID list for bulk queries
     $taskIds = array_column($tasks, 'id');
 
+    // Ensure device installs table exists
+    try { $pdo->exec("CREATE TABLE IF NOT EXISTS task_device_installs (id INT AUTO_INCREMENT PRIMARY KEY, task_id INT NOT NULL, device_index INT DEFAULT 1, vehicle_number VARCHAR(50), vehicle_type VARCHAR(50), gps_serial_no VARCHAR(100), name_on_server VARCHAR(200), server_name VARCHAR(50), remarks TEXT, saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch(Exception $e){}
+
     // Bulk fetch: which tasks have device installs done
     $addingDoneIds = [];
     if(!empty($taskIds)){
         try {
             $in = implode(',', array_map('intval', $taskIds));
-            $diRows = $pdo->query("SELECT DISTINCT task_id FROM task_device_installs WHERE task_id IN ($in) AND gps_serial_no IS NOT NULL AND gps_serial_no != ''")->fetchAll();
+            $diRows = $pdo->query("SELECT DISTINCT task_id FROM task_device_installs WHERE task_id IN ($in) AND gps_serial_no IS NOT NULL AND gps_serial_no != ''")->fetchAll(PDO::FETCH_ASSOC);
             $addingDoneIds = array_column($diRows, 'task_id');
         } catch(Exception $e){ $addingDoneIds = []; }
     }

@@ -354,6 +354,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
           <div class="breadcrumb">Home / <b>Dashboard</b></div>
           <div class="pg-title">📊 Dashboard</div>
           <div class="pg-sub" id="dash-welcome">Welcome back.</div>
+          <button onclick="loadDashboard()" style="margin-top:8px;background:var(--accent);color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">🔄 Refresh</button>
         </div>
 
         <!-- ALERT BANNERS -->
@@ -1494,6 +1495,11 @@ async function loadDashboard(){
   const techs     = tRes.users  || [];
   const openTasks = oRes.tasks  || [];
 
+  // Debug: log workflow state counts
+  const wfCounts = {};
+  openTasks.forEach(t=>{ const s=t.workflow_state||'none'; wfCounts[s]=(wfCounts[s]||0)+1; });
+  console.log('[Dashboard] Tasks:', openTasks.length, 'Workflow states:', wfCounts);
+
   // ── Stat cards ────────────────────────────────────────────
   const sv = (id,val) => { const e=document.getElementById(id); if(e) e.textContent=(val??0); };
   sv('s-total',       stats.total);
@@ -1515,11 +1521,18 @@ async function loadDashboard(){
   if(urgBadge){  urgBadge.textContent=urgCount;   urgBadge.style.display=urgCount?'':'none';   }
 
   // ── Workflow state grouping ────────────────────────────────
-  const approveNow      = openTasks.filter(t=>t.workflow_state==='approve_now');
-  const paymentPending  = openTasks.filter(t=>t.workflow_state==='payment_pending');
-  const techUpdated     = openTasks.filter(t=>t.workflow_state==='tech_updated');
-  const addingDone      = openTasks.filter(t=>t.workflow_state==='adding_done');
-  const readyToAdd      = openTasks.filter(t=>t.workflow_state==='ready_to_add');
+  // Merge approvals from dedicated endpoint + workflow filter (deduplicate by id)
+  const approveNowMap = {};
+  approvals.forEach(t=>{ approveNowMap[t.id]=t; });
+  openTasks.filter(t=>t.workflow_state==='approve_now').forEach(t=>{ approveNowMap[t.id]=t; });
+  const approveNow     = Object.values(approveNowMap);
+
+  const paymentPending = openTasks.filter(t=>t.workflow_state==='payment_pending');
+  const techUpdated    = openTasks.filter(t=>t.workflow_state==='tech_updated');
+  const addingDone     = openTasks.filter(t=>t.workflow_state==='adding_done');
+  const readyToAdd     = openTasks.filter(t=>t.workflow_state==='ready_to_add');
+
+  console.log('[Dashboard] approveNow:', approveNow.length, 'paymentPending:', paymentPending.length, 'techUpdated:', techUpdated.length);
 
   // ── Action banners ────────────────────────────────────────
   const critical = urgent.filter(t=>parseInt(t.age_hours||0)>=48);
@@ -1594,8 +1607,9 @@ async function loadDashboard(){
       }
     ].filter(p=>p.tasks.length > 0);
 
-    if(!panels.length){
-      actionPanelsEl.innerHTML = '';
+    // Always show panels, even if empty — so admin knows state
+    if(!panels.length && !approveNow.length && !paymentPending.length && !techUpdated.length){
+      actionPanelsEl.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0;text-align:center">✅ No pending actions</div>';
     } else {
       actionPanelsEl.innerHTML = panels.map(p=>`
         <div class="dash-action-panel">
