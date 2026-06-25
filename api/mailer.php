@@ -306,7 +306,7 @@ function sendTaskUpdateCustomer(array $task, string $remark, string $techName, a
     <div style="background:#fff5f5;border:1.5px solid #c0392b;border-radius:8px;padding:16px;margin-top:20px">
         <div style="font-size:13px;font-weight:800;color:#c0392b;margin-bottom:6px">⚠️ Is this update incorrect?</div>
         <p style="font-size:12px;color:#7b1e14;margin-bottom:14px;line-height:1.7">
-            If the technician's update above is <strong>false or incorrect</strong>, you can report it directly.
+            If the technician&#39;s update above is <strong>false or incorrect</strong>, you can report it directly.
             Our management team will be notified immediately and action will be taken.
         </p>
         ' . ($token ?
@@ -315,7 +315,7 @@ function sendTaskUpdateCustomer(array $task, string $remark, string $techName, a
             🚨 Report False Update
         </a>
         <div style="font-size:11px;color:#8a9ab0;margin-top:10px;word-break:break-all">
-            Can't click? Copy this link: ' . $feedbackUrl . '
+            Can&#39;t click? Copy this link: ' . $feedbackUrl . '
         </div>'
         :
         '<div style="font-size:12px;color:#8a9ab0">Please call us at <strong>09963222009</strong> to report any incorrect information.</div>'
