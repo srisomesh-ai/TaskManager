@@ -206,6 +206,12 @@ case 'get_tasks':
     if (!empty($_GET['lead_type'])) { $where[]="t.lead_type=?";   $params[]=$_GET['lead_type']; }
     if (!empty($_GET['date_from'])) { $where[]="DATE(t.created_at)>=?"; $params[]=$_GET['date_from']; }
     if (!empty($_GET['date_to']))   { $where[]="DATE(t.created_at)<=?"; $params[]=$_GET['date_to']; }
+    // status_group filter: 'active' = exclude Closed/Cancelled
+    if (!empty($_GET['status_group'])) {
+        if($_GET['status_group'] === 'active'){
+            $where[] = "t.task_status NOT IN ('Closed','Cancelled')";
+        }
+    }
     if (!empty($_GET['search']))    {
         $q='%'.$_GET['search'].'%';
         $where[]="(t.customer_name LIKE ? OR t.contact_number LIKE ? OR t.task_id LIKE ? OR t.location LIKE ?)";
@@ -213,8 +219,12 @@ case 'get_tasks':
     }
 
     $limit = min(intval($_GET['limit'] ?? 500), 1000);
+    // Ensure admin_viewed_at column exists
+    try { $pdo->exec("ALTER TABLE tasks ADD COLUMN admin_viewed_at DATETIME DEFAULT NULL"); } catch(Exception $e){}
+
     $sql = "SELECT t.*,u.name as tech_name,u.name as technician_name,u.phone as tech_phone,c.name as creator_name,
-            (SELECT MAX(a.created_at) FROM task_activities a WHERE a.task_id=t.id AND a.activity_type='remark') as last_tech_activity
+            (SELECT MAX(a.created_at) FROM task_activities a WHERE a.task_id=t.id AND a.activity_type='remark') as last_tech_activity,
+            t.admin_viewed_at
             FROM tasks t
             LEFT JOIN users u ON t.assigned_to=u.id
             LEFT JOIN users c ON t.created_by=c.id"
@@ -223,38 +233,46 @@ case 'get_tasks':
     $s = $pdo->prepare($sql); $s->execute($params);
     $tasks = $s->fetchAll();
 
+    // Build task ID list for bulk queries
+    $taskIds = array_column($tasks, 'id');
+
+    // Bulk fetch: which tasks have device installs done
+    $addingDoneIds = [];
+    if(!empty($taskIds)){
+        try {
+            $in = implode(',', array_map('intval', $taskIds));
+            $diRows = $pdo->query("SELECT DISTINCT task_id FROM task_device_installs WHERE task_id IN ($in) AND gps_serial_no IS NOT NULL AND gps_serial_no != ''")->fetchAll();
+            $addingDoneIds = array_column($diRows, 'task_id');
+        } catch(Exception $e){ $addingDoneIds = []; }
+    }
+
     // Compute workflow_state for each task
     foreach($tasks as &$task){
-        $id = $task['id'];
+        $id           = $task['id'];
         $status       = $task['task_status']??'';
         $amtCollected = floatval($task['amount_collected']??0);
-        $price        = floatval($task['price_to_collect']??0);
-        $consentAt    = $task['customer_consent_at']??'';
+        $consentAt    = trim($task['customer_consent_at']??'');
         $consentToken = $task['consent_token']??'';
-
-        // Check device installs
-        try {
-            $di = $pdo->prepare("SELECT COUNT(*) FROM task_device_installs WHERE task_id=? AND gps_serial_no IS NOT NULL");
-            $di->execute([$id]);
-            $addingDone = $di->fetchColumn() > 0;
-        } catch(Exception $e){ $addingDone = false; }
-
-        // Check unseen tech update (activity after admin last viewed)
-        // We use a simple proxy: last remark activity timestamp vs task updated_at
+        $addingDone   = in_array($id, $addingDoneIds);
         $lastActivity = $task['last_tech_activity']??null;
         $adminViewed  = $task['admin_viewed_at']??null;
-        $hasUnseenUpdate = $lastActivity && (!$adminViewed || $lastActivity > $adminViewed);
+        $hasUnseenUpdate = $lastActivity && (!$adminViewed || strcmp($lastActivity, $adminViewed) > 0);
 
-        // Determine state (priority order)
+        // Priority order: most actionable first
         if($status === 'Awaiting Approval'){
             $task['workflow_state'] = 'approve_now';
+        } elseif($status === 'Closed' || $status === 'Cancelled'){
+            $task['workflow_state'] = '';
         } elseif($addingDone && $amtCollected <= 0){
             $task['workflow_state'] = 'payment_pending';
-        } elseif($addingDone && $amtCollected > 0){
-            $task['workflow_state'] = 'adding_done';
-        } elseif($consentAt){
-            $task['workflow_state'] = 'ready_to_add';
-        } elseif($consentToken && $consentToken !== 'USED'){
+        } elseif($consentAt !== ''){
+            // Consent done — ready to add (or adding done + paid = no badge needed)
+            if(!$addingDone){
+                $task['workflow_state'] = 'ready_to_add';
+            } else {
+                $task['workflow_state'] = ''; // adding done + paid, no extra badge
+            }
+        } elseif($consentToken && $consentToken !== 'USED' && $consentToken !== ''){
             $task['workflow_state'] = 'consent_sent';
         } elseif($hasUnseenUpdate){
             $task['workflow_state'] = 'tech_updated';
