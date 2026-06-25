@@ -1,4 +1,9 @@
 <?php
+// No caching — always serve fresh (prevents back button showing old form)
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
+
 // ============================================================
 // BHARATGPS — Customer Consent & Payment Commitment Page
 // Public URL — no login required
@@ -32,16 +37,78 @@ if(!$task){
 </div></body></html>');
 }
 
-// Already consented?
+// Already consented — show confirmation page and stop (handles back button + repeat link clicks)
 if(!empty($task['customer_consent_at'])){
-    die('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Already Confirmed</title></head>
-<body style="font-family:sans-serif;background:#f0f2f5;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:16px">
-<div style="background:#fff;border-radius:12px;padding:32px;max-width:420px;width:100%;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.1)">
-<div style="font-size:40px;margin-bottom:12px">✅</div>
-<h2 style="color:#1a7a3a;margin-bottom:8px">Already Confirmed</h2>
-<p style="color:#4a5568;font-size:14px">You have already provided your consent. Our technician will proceed with the installation shortly.<br><br>For help call <strong>09963222009</strong>.</p>
-</div></body></html>');
+    $consentTime = date('d M Y, h:i A', strtotime($task['customer_consent_at']));
+    $consentName = htmlspecialchars($task['customer_consent_name'] ?? $task['customer_name'] ?? 'You');
+    $consentPrice = number_format(floatval($task['price_to_collect']??0),0);
+    header('Cache-Control: no-store, no-cache, must-revalidate');
+    header('Pragma: no-cache');
+    die('<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<title>Already Confirmed — BharatGPS</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Segoe UI",sans-serif;background:#f0f2f5;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px}
+.card{background:#fff;border-radius:14px;padding:32px 24px;max-width:420px;width:100%;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.1)}
+.icon{font-size:56px;margin-bottom:16px}
+.title{font-size:20px;font-weight:800;color:#1a7a3a;margin-bottom:8px}
+.sub{font-size:14px;color:#4a5568;line-height:1.7;margin-bottom:20px}
+.detail-box{background:#e8f5ec;border:1.5px solid #1a7a3a;border-radius:8px;padding:14px 16px;text-align:left;margin-bottom:16px;font-size:13px;line-height:2}
+.detail-box strong{color:#1a7a3a}
+.note{font-size:12px;color:#8a9ab0;line-height:1.6}
+/* Loading state */
+.btn-submit:disabled{background:linear-gradient(135deg,#4a5568,#718096);cursor:not-allowed;box-shadow:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.btn-spinner{display:inline-block;width:16px;height:16px;border:2.5px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:8px}
+</style>
+<script>
+function handleConsentSubmit(btn){
+  // Validate checkboxes before showing loading
+  const terms = document.getElementById('chk_terms');
+  const pay   = document.getElementById('chk_pay');
+  const name  = document.querySelector('input[name="c_name"]');
+  const mobile= document.querySelector('input[name="c_mobile"]');
+  if(!name.value.trim()||!mobile.value.trim()||!terms.checked||!pay.checked){
+    return true; // Let form validation handle it
+  }
+  // Show loading state
+  btn.disabled = true;
+  btn.innerHTML = '<span class="btn-spinner"></span>Submitting — Please wait…';
+  // Prevent double submit on back button
+  window.history.replaceState(null,'','?token=<?= urlencode($token) ?>&submitted=1');
+  return true;
+}
+// If user navigated back to a submitted page, reload to get server check
+if(window.performance && window.performance.navigation.type === 2){
+  window.location.reload();
+}
+</script>
+</head>
+<body>
+<div class="card">
+  <div class="icon">✅</div>
+  <div class="title">Consent Already Submitted</div>
+  <div class="sub">
+    ' . $consentName . ', you have already confirmed your agreement.<br>
+    Our technician is proceeding with your installation.
+  </div>
+  <div class="detail-box">
+    <div><strong>Task ID:</strong> ' . htmlspecialchars($task['task_id']??'') . '</div>
+    <div><strong>Service:</strong> ' . htmlspecialchars($task['device_details']??'GPS Installation') . '</div>
+    <div><strong>Amount:</strong> ₹' . $consentPrice . '</div>
+    <div><strong>Confirmed at:</strong> ' . $consentTime . '</div>
+  </div>
+  <div class="note">
+    This link is now inactive. For help call <strong>09963222009</strong>
+  </div>
+</div>
+</body>
+</html>');
 }
 
 $submitted = false;
@@ -336,7 +403,9 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:#1a1f2e;min-heig
           <label for="chk_pay">I confirm that I will pay <strong>₹<?= $price ?></strong><?php if(!empty($task['payment_mode'])): ?> via <strong><?= htmlspecialchars($task['payment_mode']) ?></strong><?php endif; ?> <strong>immediately after installation</strong>.</label>
         </div>
 
-        <button type="submit" class="btn-submit">✅ I Agree — Proceed with Installation</button>
+        <button type="submit" class="btn-submit" id="consent-submit-btn" onclick="handleConsentSubmit(this)">
+          ✅ I Agree — Proceed with Installation
+        </button>
       </form>
 
       <p style="font-size:11px;color:#8a9ab0;text-align:center;margin-top:12px;line-height:1.6">
