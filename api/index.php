@@ -347,20 +347,44 @@ case 'update_task':
             $taskForEmail->execute([$id]);
             $taskData = $taskForEmail->fetch();
             if($taskData && !empty($taskData['email'])) {
-                // Regenerate token if missing OR previously used (expired after dispute)
-                if(empty($taskData['feedback_token']) || $taskData['feedback_token'] === 'USED'){
-                    $newToken = bin2hex(random_bytes(24));
-                    try { $pdo->prepare("ALTER TABLE tasks ADD COLUMN feedback_token VARCHAR(64) DEFAULT NULL")->execute(); } catch(Exception $ex){}
-                    $pdo->prepare("UPDATE tasks SET feedback_token=? WHERE id=?")->execute([$newToken, $id]);
-                    $taskData['feedback_token'] = $newToken;
+                $remark = $body['remark'];
+
+                // Filter: only email customer for relevant updates
+                // ✅ Call/visit updates (📞) — only BEFORE device adding is done
+                // ✅ Payment collected (💰) — always send
+                // ❌ Device push to server (🛰), system entries, consent logs — never send
+                $isPayment  = mb_strpos($remark,'💰')!==false;
+                $isDevPush  = mb_strpos($remark,'🛰')!==false;
+                $isSystem   = mb_strpos($remark,'⏰')!==false || mb_strpos($remark,'T+')!==false;
+                $isCall     = mb_strpos($remark,'📞')!==false;
+
+                // Check if adding is done
+                $addChk = $pdo->prepare("SELECT COUNT(*) FROM task_device_installs WHERE task_id=? AND gps_serial_no IS NOT NULL");
+                $addChk->execute([$id]);
+                $addingDone = $addChk->fetchColumn() > 0;
+
+                $shouldEmail = false;
+                if($isPayment)           $shouldEmail = true;
+                elseif($isDevPush)       $shouldEmail = false;
+                elseif($isSystem)        $shouldEmail = false;
+                elseif($isCall && !$addingDone) $shouldEmail = true;
+
+                if($shouldEmail){
+                    if(empty($taskData['feedback_token']) || $taskData['feedback_token']==='USED'){
+                        $newToken = bin2hex(random_bytes(24));
+                        try { $pdo->prepare("ALTER TABLE tasks ADD COLUMN feedback_token VARCHAR(64) DEFAULT NULL")->execute(); } catch(Exception $ex){}
+                        $pdo->prepare("UPDATE tasks SET feedback_token=? WHERE id=?")->execute([$newToken, $id]);
+                        $taskData['feedback_token'] = $newToken;
+                    }
+                    $updaterName = $pdo->prepare("SELECT name FROM users WHERE id=?");
+                    $updaterName->execute([$userId]);
+                    $updater = $updaterName->fetch();
+                    // Only send remark-type activities to customer (not system/push entries)
+                    $actStmt = $pdo->prepare("SELECT a.*, u.name AS user_name FROM task_activities a LEFT JOIN users u ON a.user_id=u.id WHERE a.task_id=? AND a.activity_type='remark' AND (a.remark LIKE '%📞%' OR a.remark LIKE '%💰%') ORDER BY a.created_at ASC");
+                    $actStmt->execute([$id]);
+                    $allActivities = $actStmt->fetchAll();
+                    sendTaskUpdateCustomer($taskData, $remark, $updater['name'] ?? 'BharatGPS Team', $allActivities);
                 }
-                $updaterName = $pdo->prepare("SELECT name FROM users WHERE id=?");
-                $updaterName->execute([$userId]);
-                $updater = $updaterName->fetch();
-                $actStmt = $pdo->prepare("SELECT a.*, u.name AS user_name FROM task_activities a LEFT JOIN users u ON a.user_id=u.id WHERE a.task_id=? ORDER BY a.created_at ASC");
-                $actStmt->execute([$id]);
-                $allActivities = $actStmt->fetchAll();
-                sendTaskUpdateCustomer($taskData, $body['remark'], $updater['name'] ?? 'BharatGPS Team', $allActivities);
             }
         } catch(Exception $e) {
             error_log('Update email error: ' . $e->getMessage());
