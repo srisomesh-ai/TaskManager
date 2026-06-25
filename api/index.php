@@ -97,14 +97,14 @@ case 'get_stats':
     if ($userRole === 'technician') {
         $s = $pdo->prepare("SELECT
             COUNT(*) total,
-            SUM(task_status IN ('Open','In Progress','Task Pending','Awaiting Approval')) open,
+            SUM(task_status IN ('Open','In Progress','Task Pending')) open,
             SUM(task_status='In Progress') in_progress,
             SUM(task_status='Task Pending') task_pending,
             SUM(task_status='Awaiting Approval') awaiting_approval,
             SUM(task_status='Closed') closed,
             SUM(task_status='Cancelled') cancelled,
             SUM(task_status='Demo Sent') demo_sent,
-            SUM(CASE WHEN task_status='Closed' AND device_details NOT IN ($troubleshoot_types) AND payment_status='Collected' THEN COALESCE(device_qty,1) ELSE 0 END) devices_installed,
+            SUM(CASE WHEN task_status='Closed' AND device_details NOT IN ($troubleshoot_types) THEN COALESCE(device_qty,1) ELSE 0 END) devices_installed,
             SUM(CASE WHEN task_status='Closed' AND device_details IN ($troubleshoot_types) THEN 1 ELSE 0 END) troubleshoot_done,
             SUM(CASE WHEN task_status='Awaiting Approval' AND (price_to_collect - COALESCE(amount_collected,0)) > 0 THEN 1 ELSE 0 END) payment_pending
             FROM tasks WHERE assigned_to=?");
@@ -113,14 +113,14 @@ case 'get_stats':
     } else {
         $r = $pdo->query("SELECT
             COUNT(*) total,
-            SUM(task_status IN ('Open','In Progress','Task Pending','Awaiting Approval')) open,
+            SUM(task_status IN ('Open','In Progress','Task Pending')) open,
             SUM(task_status='In Progress') in_progress,
             SUM(task_status='Task Pending') task_pending,
             SUM(task_status='Awaiting Approval') awaiting_approval,
             SUM(task_status='Closed') closed,
             SUM(task_status='Cancelled') cancelled,
             SUM(task_status='Demo Sent') demo_sent,
-            SUM(CASE WHEN task_status='Closed' AND device_details NOT IN ($troubleshoot_types) AND payment_status='Collected' THEN COALESCE(device_qty,1) ELSE 0 END) devices_installed,
+            SUM(CASE WHEN task_status='Closed' AND device_details NOT IN ($troubleshoot_types) THEN COALESCE(device_qty,1) ELSE 0 END) devices_installed,
             SUM(CASE WHEN task_status='Closed' AND device_details IN ($troubleshoot_types) THEN 1 ELSE 0 END) troubleshoot_done,
             SUM(CASE WHEN task_status='Awaiting Approval' AND (price_to_collect - COALESCE(amount_collected,0)) > 0 THEN 1 ELSE 0 END) payment_pending
             FROM tasks")->fetch();

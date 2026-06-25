@@ -1683,8 +1683,14 @@ async function loadDashboard(){
 
   // ── Tech grid ─────────────────────────────────────────────
   const COLORS = ['linear-gradient(135deg,#0E5C5C,#137272)','linear-gradient(135deg,#2E86DE,#5ba8f5)','linear-gradient(135deg,#6C5CE7,#9b8ef8)','linear-gradient(135deg,#E74C3C,#f97575)','linear-gradient(135deg,#F39C12,#f5b942)','linear-gradient(135deg,#27AE60,#4fd180)'];
+  // Count open tasks per technician (all non-closed statuses)
   const openByTech = {};
-  openTasks.forEach(t=>{ if(t.assigned_to) openByTech[t.assigned_to]=(openByTech[t.assigned_to]||0)+1; });
+  openTasks.forEach(t=>{
+    if(t.assigned_to && t.task_status !== 'Closed' && t.task_status !== 'Cancelled'){
+      const key = String(t.assigned_to);
+      openByTech[key] = (openByTech[key]||0) + 1;
+    }
+  });
   const techEl = document.getElementById('dash-techs');
   if(techEl){
     if(!techs.length){
@@ -1692,7 +1698,7 @@ async function loadDashboard(){
     } else {
       techEl.innerHTML = techs.map((t,i)=>{
         const ini   = (t.name||'?').split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
-        const cnt   = openByTech[t.id]||0;
+        const cnt   = openByTech[String(t.id)]||0;
         const busy  = cnt>=3;
         const col   = busy?'var(--amber)':'var(--green)';
         const bgcol = busy?'var(--amber-bg)':'var(--green-bg)';
