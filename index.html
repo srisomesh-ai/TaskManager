@@ -242,6 +242,10 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
 .upload-box.done{border-color:var(--green);background:var(--green-bg);border-style:solid}
 .upload-box-icon{font-size:20px;margin-bottom:4px}
 .upload-box-lbl{font-size:11px;font-weight:600;color:var(--text3)}
+
+.pm-mode-btn{transition:all .15s}
+.pm-mode-btn:hover{border-color:var(--accent2);background:var(--accent-light)}
+.pm-mode-btn.selected{border-color:var(--green);background:var(--green-bg);color:var(--green)}
 </style>
 </head>
 <body>
@@ -1102,6 +1106,67 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
           <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;flex-shrink:0;background:var(--surface);border-radius:0 0 14px 14px">
             <button class="ts-btn ts-btn-secondary" onclick="closeTechAttend()">Cancel</button>
             <button class="ts-btn ts-btn-primary" id="attend-submit-btn" onclick="submitTechAttend()" style="display:none">Submit</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAYMENT MODAL -->
+      <div class="modal-overlay" id="payment-modal" style="z-index:1000">
+        <div style="background:var(--surface);border-radius:14px;width:440px;max-width:calc(100vw - 24px);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 12px 48px rgba(0,0,0,.25)">
+          <div style="background:linear-gradient(135deg,#1a7a3a,#22c55e);padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+            <div>
+              <div style="font-size:15px;font-weight:800;color:#fff">💳 Collect Payment</div>
+              <div id="pm-subtitle" style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px">–</div>
+            </div>
+            <button onclick="closePaymentModal()" style="background:rgba(255,255,255,.2);border:none;color:#fff;width:30px;height:30px;border-radius:7px;font-size:17px;cursor:pointer">✕</button>
+          </div>
+          <div style="padding:18px 20px;overflow-y:auto;flex:1">
+            <input type="hidden" id="pm-task-id">
+
+            <!-- Agreed payment info -->
+            <div id="pm-agreed-box" style="background:var(--accent-light);border:1.5px solid var(--accent2);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px"></div>
+
+            <!-- Amount -->
+            <div class="form-group" style="margin-bottom:14px">
+              <label>Amount Collected (₹) *</label>
+              <input type="number" id="pm-amount" placeholder="Enter amount" min="1" oninput="updatePmBalance()" style="font-size:18px;font-weight:700">
+              <div id="pm-balance" style="font-size:12px;margin-top:5px;color:var(--text2)"></div>
+            </div>
+
+            <!-- Payment mode -->
+            <div class="form-group" style="margin-bottom:14px">
+              <label>Payment Mode *</label>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" id="pm-mode-btns">
+                <button type="button" class="pm-mode-btn" data-mode="Cash"         onclick="selectPmMode('Cash')"         style="padding:10px;border:2px solid var(--border);border-radius:8px;background:var(--surface);cursor:pointer;font-size:13px;font-weight:700">💵 Cash</button>
+                <button type="button" class="pm-mode-btn" data-mode="UPI"          onclick="selectPmMode('UPI')"          style="padding:10px;border:2px solid var(--border);border-radius:8px;background:var(--surface);cursor:pointer;font-size:13px;font-weight:700">📱 UPI</button>
+                <button type="button" class="pm-mode-btn" data-mode="Bank Transfer" onclick="selectPmMode('Bank Transfer')" style="padding:10px;border:2px solid var(--border);border-radius:8px;background:var(--surface);cursor:pointer;font-size:13px;font-weight:700">🏦 Bank Transfer</button>
+                <button type="button" class="pm-mode-btn" data-mode="Cheque"       onclick="selectPmMode('Cheque')"       style="padding:10px;border:2px solid var(--border);border-radius:8px;background:var(--surface);cursor:pointer;font-size:13px;font-weight:700">📝 Cheque</button>
+              </div>
+              <input type="hidden" id="pm-mode">
+            </div>
+
+            <!-- Mismatch warning -->
+            <div id="pm-mismatch-box" style="display:none;background:#fff3cd;border:1.5px solid #e07b00;border-radius:8px;padding:12px 14px;margin-bottom:14px">
+              <div style="font-size:12px;font-weight:800;color:#e07b00;margin-bottom:6px">⚠️ Payment Mode Changed</div>
+              <div id="pm-mismatch-msg" style="font-size:12px;color:#5a3e00;margin-bottom:10px"></div>
+              <button type="button" onclick="confirmModeOverride()" style="width:100%;padding:9px;background:#e07b00;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:800;cursor:pointer" id="pm-override-btn"></button>
+            </div>
+
+            <!-- Cash deposit warning -->
+            <div id="pm-cash-warning" style="display:none;background:#fdecea;border:1.5px solid var(--red);border-radius:8px;padding:12px 14px;margin-bottom:14px">
+              <div style="font-size:12px;font-weight:800;color:var(--red);margin-bottom:4px">⏰ Cash Deposit Reminder</div>
+              <div style="font-size:12px;color:#7a1e14;line-height:1.6">You have <strong>24 hours</strong> to deposit this cash to the office or company account. A reminder email will be sent to you tomorrow morning.</div>
+            </div>
+
+            <!-- Notes -->
+            <div class="form-group">
+              <label>Payment Notes (optional)</label>
+              <input type="text" id="pm-notes" placeholder="e.g. UPI ref: 123456789">
+            </div>
+          </div>
+          <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0;background:var(--surface);border-radius:0 0 14px 14px">
+            <button class="ts-btn ts-btn-secondary" onclick="closePaymentModal()" style="flex:1">Cancel</button>
+            <button class="ts-btn ts-btn-primary" id="pm-save-btn" onclick="savePayment()" style="flex:2;background:var(--green)">💰 Save Payment</button>
           </div>
         </div>
       </div>
@@ -2662,6 +2727,17 @@ async function submitTechAttend(){
   const status = document.getElementById('attend-install-status').value;
   if(!status){ alert('Please select installation status.'); return; }
 
+  // Block submit if no payment collected (for completed tasks with price > 0)
+  if(status === 'completed'){
+    const price     = parseFloat(_detailTask?.price_to_collect||0);
+    const collected = parseFloat(_detailTask?.amount_collected||0)
+                    + parseFloat(document.getElementById('attend-amount')?.value||0);
+    if(price > 0 && collected <= 0){
+      alert('⚠️ Payment must be collected before submitting for approval.\n\nPlease collect payment first using the payment button.');
+      return;
+    }
+  }
+
   const btn = document.getElementById('attend-submit-btn');
   if(btn){ btn.disabled=true; btn.textContent='Submitting…'; }
 
@@ -2868,34 +2944,68 @@ function closeTaskDetail(){
 
 // ── Check consent and update Attend button state on task open ─────────────
 async function checkAndUpdateAttendBtn(taskId){
-  const res = await api('check_consent', {id: taskId}).catch(()=>({}));
   const btn    = document.getElementById('td-attend-btn-'  + taskId);
   const icon   = document.getElementById('td-attend-icon-' + taskId);
   const label  = document.getElementById('td-attend-label-'+ taskId);
   const sub    = document.getElementById('td-attend-sub-'  + taskId);
   const status = document.getElementById('td-consent-status-' + taskId);
+  if(!btn) return;
 
-  if(res.consented){
-    // Customer already confirmed — show green proceed button
-    if(btn){
-      btn.style.background = 'var(--green)';
-      btn.setAttribute('onclick', 'openTechAttend(' + taskId + ')');
-    }
-    if(icon)   icon.textContent  = '✅';
-    if(label)  label.textContent = 'Proceed!';
-    if(sub)    sub.textContent   = 'Customer confirmed';
-    if(status) status.innerHTML  = `
-      <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--green);line-height:1.6">
-        ✅ <strong>${res.name||'Customer'}</strong> has confirmed T&amp;C and payment commitment.<br>
-        <span style="font-size:10px;color:var(--text3)">Confirmed at: ${(res.consented_at||'').replace('T',' ').slice(0,16)}</span>
+  const t = _detailTask;
+
+  // STATE 3: Adding done, payment pending — show Update Payment Status
+  const installs = t?.device_installs || [];
+  const qty      = parseInt(t?.device_qty||1);
+  const addingDone = installs.length >= qty && installs.every(d=>d.gps_serial_no && d.name_on_server);
+  const paid       = parseFloat(t?.amount_collected||0) > 0;
+
+  if(addingDone && !paid){
+    btn.style.background = 'var(--saffron)';
+    btn.style.border     = 'none';
+    btn.setAttribute('onclick', 'openPaymentModal(' + taskId + ')');
+    if(icon)  icon.textContent  = '💳';
+    if(label) label.textContent = 'Update Payment';
+    if(sub)   sub.textContent   = 'Payment pending';
+    if(status) status.innerHTML = `
+      <div style="background:var(--saffron-bg);border:1.5px solid var(--saffron);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--saffron);line-height:1.6">
+        💳 Adding complete. <strong>Payment pending.</strong><br>
+        <span style="font-size:10px;color:var(--text3)">Tap to collect payment</span>
       </div>`;
-  } else {
-    // Check if consent was sent but not yet confirmed — look at activity log
-    // (consent_token exists means request was sent)
-    // We don't need to re-check this — just leave button as default Attend
-    // If token was sent before, show a waiting status
-    if(status) status.innerHTML = '';
+    return;
   }
+
+  // STATE 3 done: paid — hide attend button entirely
+  if(addingDone && paid){
+    btn.style.display = 'none';
+    if(status) status.innerHTML = '';
+    return;
+  }
+
+  // STATE 2: Consent received, adding not done yet — Proceed to Adding
+  const res = await api('check_consent', {id: taskId}).catch(()=>({}));
+  if(res.consented){
+    btn.style.background = 'var(--green)';
+    btn.style.border     = 'none';
+    btn.setAttribute('onclick', 'openTechAttend(' + taskId + ')');
+    if(icon)  icon.textContent  = '➕';
+    if(label) label.textContent = 'Proceed to Adding';
+    if(sub)   sub.textContent   = 'Customer confirmed';
+    if(status) status.innerHTML = `
+      <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--green);line-height:1.6">
+        ✅ <strong>${res.name||'Customer'}</strong> confirmed T&amp;C and payment.<br>
+        <span style="font-size:10px;color:var(--text3)">Confirmed: ${(res.consented_at||'').replace('T',' ').slice(0,16)}</span>
+      </div>`;
+    return;
+  }
+
+  // STATE 1: Default — Attend (send consent)
+  btn.style.background = 'var(--accent)';
+  btn.style.display    = '';
+  btn.setAttribute('onclick', 'handleAttendClick(' + taskId + ')');
+  if(icon)  icon.textContent  = '🔧';
+  if(label) label.textContent = 'Attend';
+  if(sub)   sub.textContent   = t?.device_details||'Start task';
+  if(status) status.innerHTML = '';
 }
 
 // ════════════════════════════════════════════════════════
@@ -3226,6 +3336,18 @@ async function pushDeviceToServer(idx){
         server_name:'Server '+serverId,
         remarks:notes||'GPS device added to server'
       }).catch(()=>{});
+
+      // Log to activity log
+      const serverLabels=['','bharatgps.com','bharatgps.in','bharatgps.school','bharatgps.org'];
+      const pushRemark = `🛰 Device added to GPS server` +
+        ` | IMEI: ${imei}` +
+        ` | Name: ${name}` +
+        ` | Plate: ${plate}` +
+        (vtype ? ` | Type: ${vtype}` : '') +
+        ` | Server: ${serverLabels[parseInt(serverId)||0]||'Server '+serverId}` +
+        ` | Installed: ${instDate} | Expires: ${expDate}`;
+      await api('update_task',{},'POST',{id:_attendTaskId, remark: pushRemark}).catch(()=>{});
+
       const card=document.getElementById('attend-dev-card-'+idx);
       if(card) card.outerHTML=buildAttendDeviceCard(idx,_attendSavedDevices[idx],true);
       checkAttendAllDevicesSaved();
@@ -3247,6 +3369,174 @@ function checkAttendAllDevicesSaved(){
   if(submitBtn){
     submitBtn.style.display=allDone?'':'none';
     if(allDone){ submitBtn.textContent='✅ Submit — Request Approval'; submitBtn.style.background='var(--green)'; }
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// PAYMENT MODAL
+// ════════════════════════════════════════════════════════
+let _pmAgreedMode   = '';   // what customer originally agreed to
+let _pmSelectedMode = '';   // what technician selected
+let _pmOverrideConfirmed = false;
+
+function openPaymentModal(taskId){
+  const t = _detailTask;
+  if(!t) return;
+
+  document.getElementById('pm-task-id').value = taskId;
+  document.getElementById('pm-amount').value  = '';
+  document.getElementById('pm-notes').value   = '';
+  document.getElementById('pm-mode').value    = '';
+  document.getElementById('pm-mismatch-box').style.display  = 'none';
+  document.getElementById('pm-cash-warning').style.display  = 'none';
+  document.querySelectorAll('.pm-mode-btn').forEach(b=>b.classList.remove('selected'));
+  _pmSelectedMode = '';
+  _pmOverrideConfirmed = false;
+
+  // What customer agreed to
+  _pmAgreedMode = t.payment_mode || '';
+  const price   = parseFloat(t.price_to_collect||0);
+  const coll    = parseFloat(t.amount_collected||0);
+  const bal     = price - coll;
+
+  document.getElementById('pm-subtitle').textContent = t.task_id + ' · ' + t.customer_name;
+  document.getElementById('pm-agreed-box').innerHTML = `
+    <div style="font-size:11px;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Customer Payment Agreement</div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+      <span style="color:var(--text3)">Agreed Mode</span>
+      <strong>${_pmAgreedMode || '—'}</strong>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+      <span style="color:var(--text3)">Total Price</span>
+      <strong>₹${price.toLocaleString('en-IN')}</strong>
+    </div>
+    <div style="display:flex;justify-content:space-between">
+      <span style="color:var(--text3)">Balance Due</span>
+      <strong style="color:var(--red)">₹${bal.toLocaleString('en-IN')}</strong>
+    </div>`;
+
+  document.getElementById('pm-balance').textContent = '';
+  document.getElementById('payment-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('pm-amount').focus(), 200);
+}
+
+function closePaymentModal(){
+  document.getElementById('payment-modal').classList.remove('open');
+}
+
+function updatePmBalance(){
+  const t     = _detailTask;
+  if(!t) return;
+  const price = parseFloat(t.price_to_collect||0);
+  const prev  = parseFloat(t.amount_collected||0);
+  const now   = parseFloat(document.getElementById('pm-amount').value||0);
+  const bal   = price - prev - now;
+  const el    = document.getElementById('pm-balance');
+  if(!el) return;
+  el.innerHTML = bal > 0
+    ? `<span style="color:var(--red)">₹${bal.toLocaleString('en-IN')} still due after this</span>`
+    : `<span style="color:var(--green);font-weight:700">✅ Fully paid</span>`;
+}
+
+function selectPmMode(mode){
+  _pmSelectedMode = mode;
+  _pmOverrideConfirmed = false;
+  document.getElementById('pm-mode').value = mode;
+  document.querySelectorAll('.pm-mode-btn').forEach(b=>{
+    b.classList.toggle('selected', b.dataset.mode === mode);
+  });
+
+  const mismatchBox  = document.getElementById('pm-mismatch-box');
+  const cashWarning  = document.getElementById('pm-cash-warning');
+  const mismatchMsg  = document.getElementById('pm-mismatch-msg');
+  const overrideBtn  = document.getElementById('pm-override-btn');
+
+  // Check mismatch — only for direct modes (ignore deferred)
+  const directModes = ['Cash','UPI','Bank Transfer','Cheque'];
+  const agreedDirect = directModes.includes(_pmAgreedMode);
+  const mismatch = agreedDirect && _pmAgreedMode && _pmAgreedMode !== mode;
+
+  if(mismatch){
+    mismatchBox.style.display = '';
+    mismatchMsg.textContent = `Customer confirmed payment via ${_pmAgreedMode} when this task was created. You selected ${mode}. What happened?`;
+    overrideBtn.textContent = `${mode} — Customer doesn't have ${_pmAgreedMode}, will pay by ${mode}`;
+    cashWarning.style.display = 'none'; // hide until override confirmed
+  } else {
+    mismatchBox.style.display = 'none';
+    // Show cash warning if cash selected
+    cashWarning.style.display = (mode === 'Cash') ? '' : 'none';
+  }
+}
+
+function confirmModeOverride(){
+  _pmOverrideConfirmed = true;
+  document.getElementById('pm-mismatch-box').style.display = 'none';
+  // Show cash warning if cash
+  if(_pmSelectedMode === 'Cash'){
+    document.getElementById('pm-cash-warning').style.display = '';
+  }
+}
+
+async function savePayment(){
+  const taskId = document.getElementById('pm-task-id').value;
+  const amount = parseFloat(document.getElementById('pm-amount').value||0);
+  const mode   = document.getElementById('pm-mode').value;
+  const notes  = document.getElementById('pm-notes').value.trim();
+
+  if(!amount || amount <= 0){ alert('Please enter the amount collected.'); return; }
+  if(!mode){ alert('Please select a payment mode.'); return; }
+
+  // If mismatch not resolved
+  const directModes = ['Cash','UPI','Bank Transfer','Cheque'];
+  const agreedDirect = directModes.includes(_pmAgreedMode);
+  const mismatch = agreedDirect && _pmAgreedMode && _pmAgreedMode !== mode;
+  if(mismatch && !_pmOverrideConfirmed){
+    alert('Please confirm the reason for payment mode change first.');
+    return;
+  }
+
+  const btn = document.getElementById('pm-save-btn');
+  if(btn){ btn.textContent='Saving…'; btn.disabled=true; }
+
+  // Build remark for activity log
+  const prev     = parseFloat(_detailTask?.amount_collected||0);
+  const total    = prev + amount;
+  const price    = parseFloat(_detailTask?.price_to_collect||0);
+  const balance  = price - total;
+  const override = (mismatch && _pmOverrideConfirmed)
+    ? ` | Mode override: Customer agreed ${_pmAgreedMode}, paid by ${mode}` : '';
+  const cashNote = (mode==='Cash') ? ' | Cash to be deposited within 24 hours' : '';
+
+  const remark = `💰 Payment collected: ₹${amount.toLocaleString('en-IN')} via ${mode}` +
+    (notes ? ` (${notes})` : '') +
+    ` | Total collected: ₹${total.toLocaleString('en-IN')}` +
+    (balance > 0 ? ` | Balance due: ₹${balance.toLocaleString('en-IN')}` : ' | Fully paid') +
+    override + cashNote;
+
+  // Set cash reminder if cash mode
+  let reminderDate = null;
+  if(mode === 'Cash'){
+    const d = new Date(); d.setDate(d.getDate()+1);
+    reminderDate = d.toISOString().slice(0,10);
+  }
+
+  const body = {
+    id:               taskId,
+    amount_collected: total,
+    payment_mode:     mode,
+    remark:           remark,
+  };
+  if(reminderDate) body.reminder_date = reminderDate;
+
+  const res = await api('update_task',{},'POST',body).catch(()=>({}));
+  if(btn){ btn.textContent='💰 Save Payment'; btn.disabled=false; }
+
+  if(res.success){
+    closePaymentModal();
+    await viewTask(taskId);           // refresh detail drawer
+    if(typeof renderMyTasks==='function') renderMyTasks();
+  } else {
+    alert(res.error || 'Save failed. Please try again.');
   }
 }
 
