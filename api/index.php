@@ -337,6 +337,15 @@ case 'update_task':
             $taskForEmail->execute([$id]);
             $taskData = $taskForEmail->fetch();
             if($taskData && !empty($taskData['email'])) {
+                // Ensure feedback_token exists — generate if missing
+                if(empty($taskData['feedback_token'])){
+                    $newToken = bin2hex(random_bytes(24));
+                    try {
+                        $pdo->prepare("ALTER TABLE tasks ADD COLUMN feedback_token VARCHAR(64) UNIQUE DEFAULT NULL")->execute();
+                    } catch(Exception $e){}
+                    $pdo->prepare("UPDATE tasks SET feedback_token=? WHERE id=?")->execute([$newToken, $id]);
+                    $taskData['feedback_token'] = $newToken;
+                }
                 $updaterName = $pdo->prepare("SELECT name FROM users WHERE id=?");
                 $updaterName->execute([$userId]);
                 $updater = $updaterName->fetch();
