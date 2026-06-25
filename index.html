@@ -229,6 +229,19 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
 .tu-card-title{font-size:12px;font-weight:800;color:var(--text);margin-bottom:2px}
 .tu-card-sub{font-size:10px;color:var(--text3);line-height:1.3}
 .tu-card.selected .tu-card-title{color:var(--accent)}
+
+/* DEVICE INSTALL CARDS */
+.dev-card{background:var(--surface);border:2px solid var(--border);border-radius:10px;margin-bottom:12px;overflow:hidden;transition:border-color .2s}
+.dev-card.saved{border-color:var(--green)}
+.dev-card-head{background:var(--surface2);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
+.dev-card-title{font-size:13px;font-weight:800;color:var(--text)}
+.dev-card-body{padding:14px}
+.dev-saved-badge{background:var(--green-bg);color:var(--green);font-size:10px;font-weight:800;padding:2px 8px;border-radius:6px}
+.upload-box{border:2px dashed var(--border);border-radius:8px;padding:12px;text-align:center;cursor:pointer;transition:all .15s;background:var(--surface2)}
+.upload-box:hover{border-color:var(--accent2);background:var(--accent-light)}
+.upload-box.done{border-color:var(--green);background:var(--green-bg);border-style:solid}
+.upload-box-icon{font-size:20px;margin-bottom:4px}
+.upload-box-lbl{font-size:11px;font-weight:600;color:var(--text3)}
 </style>
 </head>
 <body>
@@ -990,37 +1003,15 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
               <input type="hidden" id="attend-install-status">
             </div>
 
-            <!-- SECTION: COMPLETED -->
+            <!-- SECTION: COMPLETED — Device Installation Process -->
             <div id="attend-section-completed" style="display:none">
-              <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--green);margin-bottom:12px;padding-top:4px;border-top:1px solid var(--border)">② Installation Details</div>
+              <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--green);margin-bottom:14px;padding-top:4px;border-top:1px solid var(--border)">② Device Installation Details</div>
 
-              <div class="form-row">
-                <div class="form-group">
-                  <label>Vehicle Number *</label>
-                  <input type="text" id="attend-vehicle-no" placeholder="e.g. AP39AB1234" style="text-transform:uppercase">
-                </div>
-                <div class="form-group">
-                  <label>GPS Serial / IMEI *</label>
-                  <input type="text" id="attend-imei" placeholder="IMEI or Serial number">
-                </div>
-              </div>
-              <div class="form-row">
-                <div class="form-group">
-                  <label>Server Name</label>
-                  <input type="text" id="attend-server" placeholder="e.g. S1, S2, S3">
-                </div>
-                <div class="form-group">
-                  <label>Name on Server</label>
-                  <input type="text" id="attend-server-name" placeholder="Name added on server">
-                </div>
-              </div>
-              <div class="form-group" style="margin-bottom:14px">
-                <label>Work Done *</label>
-                <textarea id="attend-work-done" rows="2" placeholder="e.g. GPS installed on dashboard, wired to ignition, tested successfully..."></textarea>
-              </div>
+              <!-- Device cards container — one per device qty -->
+              <div id="attend-device-cards"></div>
 
-              <!-- Payment collection -->
-              <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:14px;margin-bottom:12px">
+              <!-- Payment collection — shown after devices -->
+              <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:14px;margin-bottom:12px;margin-top:4px">
                 <div style="font-size:12px;font-weight:800;color:var(--green);margin-bottom:10px">💰 Payment Collection</div>
                 <div class="form-row">
                   <div class="form-group">
@@ -1041,13 +1032,13 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
                 <div id="attend-balance-line" style="font-size:12px;color:var(--text2);margin-top:6px"></div>
               </div>
 
-              <div class="form-group">
-                <label>Additional Remarks</label>
-                <textarea id="attend-remarks-completed" rows="2" placeholder="Any notes, observations or follow-up..."></textarea>
+              <div class="form-group" style="margin-bottom:12px">
+                <label>Overall Work Remarks *</label>
+                <textarea id="attend-work-done" rows="2" placeholder="Overall installation notes, any observations..."></textarea>
               </div>
 
               <div style="background:var(--accent-light);border:1.5px solid var(--accent);border-radius:8px;padding:10px 14px;margin-top:4px;font-size:12px;color:var(--accent2)">
-                ℹ️ Task will move to <strong>Awaiting Approval</strong> after submission.
+                ℹ️ Save each device below, then submit to request approval.
               </div>
             </div>
 
@@ -2554,7 +2545,7 @@ function openTechAttend(taskId){
   const dateEl=document.getElementById('attend-postpone-date'); if(dateEl) dateEl.value='';
   const balEl=document.getElementById('attend-balance-line'); if(balEl) balEl.textContent='';
 
-  // Fill task summary
+  // Fill task summary + init device cards
   if(_detailTask){
     const price = parseFloat(_detailTask.price_to_collect||0);
     const coll  = parseFloat(_detailTask.amount_collected||0);
@@ -2565,6 +2556,11 @@ function openTechAttend(taskId){
     document.getElementById('attend-title').textContent = '🔧 ' + (_detailTask.device_details||'Installation');
     document.getElementById('attend-subtitle').textContent = _detailTask.customer_name + ' · ' + (_detailTask.location||'');
     if(amtEl) amtEl.placeholder = `Max: ₹${bal.toLocaleString('en-IN')}`;
+    // Init device cards state
+    _attendTaskId  = _detailTask.id;
+    _attendTaskQty = parseInt(_detailTask.device_qty||1);
+    _attendSavedDevices = {};
+    _attendUploads = {};
   }
 
   document.getElementById('tech-attend-modal').classList.add('open');
@@ -2601,7 +2597,15 @@ function selectAttendStatus(status){
   if(header) header.style.background = submitLabels[status].bg;
   if(submitBtn){ submitBtn.textContent = submitLabels[status].txt; submitBtn.style.display=''; }
 
-  if(status==='completed') updateAttendBalance();
+  if(status==='completed'){
+    updateAttendBalance();
+    // Render device installation cards
+    renderAttendDeviceCards();
+    // Hide submit until all devices saved
+    const submitBtn = document.getElementById('attend-submit-btn');
+    if(submitBtn && _attendTaskQty > 0) submitBtn.style.display='none';
+    checkAttendAllDevicesSaved();
+  }
 }
 
 function closeTechAttend(){
@@ -2632,32 +2636,33 @@ async function submitTechAttend(){
   let parts = [];
 
   if(status === 'completed'){
-    const vehicleNo  = document.getElementById('attend-vehicle-no').value.trim().toUpperCase();
-    const imei       = document.getElementById('attend-imei').value.trim();
-    const server     = document.getElementById('attend-server').value.trim();
-    const serverName = document.getElementById('attend-server-name').value.trim();
-    const workDone   = document.getElementById('attend-work-done').value.trim();
-    const amount     = parseFloat(document.getElementById('attend-amount').value||0);
-    const payMode    = document.getElementById('attend-pay-mode').value;
-    const remarks    = document.getElementById('attend-remarks-completed').value.trim();
+    // Check all devices saved
+    for(let i=1; i<=_attendTaskQty; i++){
+      const s = _attendSavedDevices[i];
+      if(!s||!s.gps_serial_no){
+        alert(`Please save Device ${i} details before submitting.`);
+        btn.disabled=false; btn.textContent='✅ Submit — Request Approval'; return;
+      }
+    }
+    const workDone = document.getElementById('attend-work-done').value.trim();
+    const amount   = parseFloat(document.getElementById('attend-amount').value||0);
+    const payMode  = document.getElementById('attend-pay-mode').value;
 
-    if(!vehicleNo){ alert('Please enter the vehicle number.'); btn.disabled=false; btn.textContent='✅ Submit — Request Approval'; return; }
-    if(!imei)     { alert('Please enter the GPS Serial / IMEI.'); btn.disabled=false; btn.textContent='✅ Submit — Request Approval'; return; }
-    if(!workDone) { alert('Please describe the work done.'); btn.disabled=false; btn.textContent='✅ Submit — Request Approval'; return; }
+    if(!workDone){ alert('Please enter overall work remarks.'); btn.disabled=false; btn.textContent='✅ Submit — Request Approval'; return; }
 
+    // Build remark from all saved devices
     parts = ['🔧 Installation completed'];
-    parts.push('Vehicle No: ' + vehicleNo);
-    parts.push('GPS IMEI: ' + imei);
-    if(server)     parts.push('Server: ' + server);
-    if(serverName) parts.push('Name on server: ' + serverName);
+    for(let i=1; i<=_attendTaskQty; i++){
+      const s = _attendSavedDevices[i]||{};
+      parts.push(`Device ${i}: ${s.vehicle_number||''} (${s.vehicle_type||''}) | IMEI: ${s.gps_serial_no||''} | Server: ${s.server_name||''} | Name: ${s.name_on_server||''}`);
+    }
     parts.push('Work done: ' + workDone);
-    if(remarks)    parts.push('Note: ' + remarks);
 
-    body.task_status   = 'Awaiting Approval';
-    body.gps_serial_no = imei||null;
-    body.server_name   = server||null;
-    body.name_on_server= serverName||null;
-    body.vehicle_no    = vehicleNo||null;
+    body.task_status    = 'Awaiting Approval';
+    body.gps_serial_no  = _attendSavedDevices[1]?.gps_serial_no||null;
+    body.server_name    = _attendSavedDevices[1]?.server_name||null;
+    body.name_on_server = _attendSavedDevices[1]?.name_on_server||null;
+    body.vehicle_no     = _attendSavedDevices[1]?.vehicle_number||null;
     if(amount > 0){
       body.amount_collected = (parseFloat(_detailTask?.amount_collected||0)) + amount;
     }
@@ -2857,6 +2862,195 @@ async function checkAndUpdateAttendBtn(taskId){
     // We don't need to re-check this — just leave button as default Attend
     // If token was sent before, show a waiting status
     if(status) status.innerHTML = '';
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// DEVICE INSTALLATION CARDS (inside Attend modal)
+// ════════════════════════════════════════════════════════
+var _attendSavedDevices = {};
+var _attendUploads = {};
+var _attendTaskQty  = 1;
+var _attendTaskId   = null;
+
+var VEHICLE_TYPES = ['Car','Truck','Bus','Auto','Bike','JCB','Tractor','Van','Mini Truck','Other'];
+var GPS_SERVERS   = ['Server 1 — bharatgps.com','Server 2 — bharatgps.in','Server 3 — bharatgps.school','Server 4 — bharatgps.org'];
+
+function renderAttendDeviceCards(){
+  const container = document.getElementById('attend-device-cards');
+  if(!container) return;
+  const qty = _attendTaskQty;
+  let html = '';
+  for(let i=1; i<=qty; i++){
+    const saved = _attendSavedDevices[i] || null;
+    const isSaved = !!(saved && saved.gps_serial_no && saved.name_on_server && saved.server_name);
+    html += buildAttendDeviceCard(i, saved, isSaved, qty);
+  }
+  container.innerHTML = html;
+}
+
+function buildAttendDeviceCard(idx, saved, isSaved, total){
+  const s = saved || {};
+  const vtOpts = VEHICLE_TYPES.map(v=>`<option value="${v}"${s.vehicle_type===v?' selected':''}>${v}</option>`).join('');
+  const srvOpts = ['', ...GPS_SERVERS].map(v=>`<option value="${v}"${s.server_name===v?' selected':''}>${v||'Select Server'}</option>`).join('');
+
+  return `
+  <div class="dev-card${isSaved?' saved':''}" id="attend-dev-card-${idx}">
+    <div class="dev-card-head">
+      <div class="dev-card-title">🚗 Device ${idx}${total>1?' of '+total:''}</div>
+      ${isSaved
+        ? '<span class="dev-saved-badge">✅ Saved</span>'
+        : '<span style="font-size:11px;color:var(--text3)">Not saved yet</span>'}
+    </div>
+    <div class="dev-card-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Vehicle Number *</label>
+          <input type="text" id="adev-vn-${idx}" value="${escHtml(s.vehicle_number||'')}"
+            placeholder="AP31AB1234" oninput="this.value=this.value.toUpperCase()">
+        </div>
+        <div class="form-group">
+          <label>Vehicle Type *</label>
+          <select id="adev-vt-${idx}"><option value="">Select</option>${vtOpts}</select>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>GPS Serial / IMEI *</label>
+        <input type="text" id="adev-imei-${idx}" value="${escHtml(s.gps_serial_no||'')}" placeholder="15-digit IMEI number">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Name on Server *</label>
+          <input type="text" id="adev-nos-${idx}" value="${escHtml(s.name_on_server||'')}" placeholder="e.g. Ravi Kumar AP31AB1234">
+        </div>
+        <div class="form-group">
+          <label>GPS Server *</label>
+          <select id="adev-srv-${idx}">${srvOpts}</select>
+        </div>
+      </div>
+      <div class="form-row" style="margin-bottom:12px">
+        <div class="form-group">
+          <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:5px">RC Copy *</label>
+          <div class="upload-box${s.rc_photo?' done':''}" id="adev-rc-box-${idx}" onclick="adevPickFile('rc',${idx})">
+            <div class="upload-box-icon">${s.rc_photo?'✅':'📄'}</div>
+            <div class="upload-box-lbl" id="adev-rc-lbl-${idx}">${s.rc_photo?'RC Uploaded':'Upload RC / Photo'}</div>
+          </div>
+          <input type="file" id="adev-rc-file-${idx}" accept="image/*,.pdf" style="display:none" onchange="adevFilePicked('rc',${idx},this)">
+        </div>
+        <div class="form-group">
+          <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:5px">Selfie *</label>
+          <div class="upload-box${s.selfie_photo?' done':''}" id="adev-sl-box-${idx}" onclick="adevPickFile('selfie',${idx})">
+            <div class="upload-box-icon">${s.selfie_photo?'✅':'🤳'}</div>
+            <div class="upload-box-lbl" id="adev-sl-lbl-${idx}">${s.selfie_photo?'Selfie Uploaded':'Take Selfie'}</div>
+          </div>
+          <input type="file" id="adev-sl-file-${idx}" accept="image/*" style="display:none" onchange="adevFilePicked('selfie',${idx},this)">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:10px">
+        <label>Installation Remarks *</label>
+        <textarea id="adev-rem-${idx}" rows="2" placeholder="Describe how the device was installed...">${escHtml(s.remarks||'')}</textarea>
+      </div>
+      <button class="ts-btn${isSaved?' ts-btn-secondary':' ts-btn-primary'}" onclick="saveAttendDevice(${idx})" id="adev-save-btn-${idx}" style="width:100%">
+        ${isSaved?'✏️ Update Device '+idx:'💾 Save Device '+idx}
+      </button>
+    </div>
+  </div>`;
+}
+
+function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+
+function adevPickFile(type, idx){
+  document.getElementById('adev-'+type.slice(0,2)+'-file-'+idx)?.click();
+}
+
+function adevFilePicked(type, idx, input){
+  const file = input.files[0];
+  if(!file) return;
+  _attendUploads[type+'-'+idx] = file;
+  const key = type==='rc' ? 'rc' : 'sl';
+  const box = document.getElementById('adev-'+key+'-box-'+idx);
+  const lbl = document.getElementById('adev-'+key+'-lbl-'+idx);
+  if(box){ box.classList.add('done'); box.querySelector('.upload-box-icon').textContent='✅'; }
+  if(lbl) lbl.textContent = file.name.slice(0,20) + (file.name.length>20?'…':'');
+}
+
+async function saveAttendDevice(idx){
+  const vn   = document.getElementById('adev-vn-'+idx)?.value.trim()||'';
+  const vt   = document.getElementById('adev-vt-'+idx)?.value||'';
+  const imei = document.getElementById('adev-imei-'+idx)?.value.trim()||'';
+  const nos  = document.getElementById('adev-nos-'+idx)?.value.trim()||'';
+  const srv  = document.getElementById('adev-srv-'+idx)?.value||'';
+  const rem  = document.getElementById('adev-rem-'+idx)?.value.trim()||'';
+
+  if(!vn)  { alert('Vehicle number is required.'); return; }
+  if(!vt)  { alert('Please select vehicle type.'); return; }
+  if(!imei){ alert('GPS Serial / IMEI is required.'); return; }
+  if(!nos) { alert('Name on server is required.'); return; }
+  if(!srv) { alert('Please select GPS server.'); return; }
+  if(!rem) { alert('Installation remarks are required.'); return; }
+
+  // Check uploads
+  const saved    = _attendSavedDevices[idx]||{};
+  const rcDone   = saved.rc_photo    || _attendUploads['rc-'+idx];
+  const selfDone = saved.selfie_photo|| _attendUploads['selfie-'+idx];
+  if(!rcDone)  { alert('RC Copy upload is required.'); return; }
+  if(!selfDone){ alert('Selfie upload is required.'); return; }
+
+  const btn = document.getElementById('adev-save-btn-'+idx);
+  if(btn){ btn.textContent='Saving…'; btn.disabled=true; }
+
+  try {
+    const res = await api('save_device_install',{},'POST',{
+      task_id:      _attendTaskId,
+      device_index: idx,
+      vehicle_number: vn,
+      vehicle_type:   vt,
+      gps_serial_no:  imei,
+      name_on_server: nos,
+      server_name:    srv,
+      remarks:        rem
+    });
+    if(!res.success){ alert(res.error||'Save failed'); if(btn){btn.disabled=false;btn.textContent='💾 Save Device '+idx;} return; }
+
+    // Upload files
+    for(const type of ['rc','selfie']){
+      const file = _attendUploads[type+'-'+idx];
+      if(file){
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('task_id', _attendTaskId);
+        fd.append('doc_type', type+'_device_'+idx);
+        await fetch(API+'?action=upload_document',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd}).catch(()=>{});
+      }
+    }
+
+    // Mark saved
+    _attendSavedDevices[idx] = {vehicle_number:vn,vehicle_type:vt,gps_serial_no:imei,name_on_server:nos,server_name:srv,remarks:rem,rc_photo:1,selfie_photo:1};
+
+    // Re-render this card as saved
+    const card = document.getElementById('attend-dev-card-'+idx);
+    if(card) card.outerHTML = buildAttendDeviceCard(idx, _attendSavedDevices[idx], true, _attendTaskQty);
+    checkAttendAllDevicesSaved();
+
+  } catch(e){
+    alert('Error: '+e.message);
+    if(btn){ btn.disabled=false; btn.textContent='💾 Save Device '+idx; }
+  }
+}
+
+function checkAttendAllDevicesSaved(){
+  const total = _attendTaskQty;
+  let allSaved = true;
+  for(let i=1; i<=total; i++){
+    const s = _attendSavedDevices[i];
+    if(!s || !s.gps_serial_no){ allSaved=false; break; }
+  }
+  // Show submit button only when all devices saved
+  const submitBtn = document.getElementById('attend-submit-btn');
+  if(submitBtn && allSaved){
+    submitBtn.style.display='';
+    submitBtn.textContent='✅ Submit — Request Approval';
+    submitBtn.style.background='var(--green)';
   }
 }
 
