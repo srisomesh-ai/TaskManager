@@ -263,6 +263,7 @@ case 'create_task':
             $body['outstation_travel_paid_by']??null,
             $body['outstation_customer_travel_amount']??null,
             $body['outstation_claim_cap']??null,
+            $fbToken,
         ]);
     // Override status for yellow outstation
     if (!empty($body['outstation_travel_paid_by']) && $body['outstation_travel_paid_by']==='COMPANY') {
@@ -339,7 +340,11 @@ case 'update_task':
                 $updaterName = $pdo->prepare("SELECT name FROM users WHERE id=?");
                 $updaterName->execute([$userId]);
                 $updater = $updaterName->fetch();
-                sendTaskUpdateCustomer($taskData, $body['remark'], $updater['name'] ?? 'BharatGPS Team');
+                // Fetch full activity log for history in email
+                $actStmt = $pdo->prepare("SELECT a.*, u.name AS user_name FROM task_activities a LEFT JOIN users u ON a.user_id=u.id WHERE a.task_id=? ORDER BY a.created_at ASC");
+                $actStmt->execute([$id]);
+                $allActivities = $actStmt->fetchAll();
+                sendTaskUpdateCustomer($taskData, $body['remark'], $updater['name'] ?? 'BharatGPS Team', $allActivities);
             }
         } catch(Exception $e) {
             error_log('Update email error: ' . $e->getMessage());
