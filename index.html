@@ -1630,7 +1630,7 @@ async function loadDashboard(){
               <div style="font-size:12px;font-weight:700">${t.customer_name||'–'} <span style="color:var(--text3);font-weight:400">· ${t.task_id||''}</span></div>
               <div style="font-size:11px;color:var(--text3);margin-top:2px">${t.tech_name||t.technician_name||'Unassigned'} · ${t.task_status}</div>
             </div>
-            <span class="wf-badge wf-tech-updated">UPDATED</span>
+            <button onclick="event.stopPropagation();markTaskViewed(${t.id},this)" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:10px;font-weight:700;cursor:pointer;color:var(--text2)">✓ Done</button>
           </div>`).join('')}
         </div>
       </div>`;
@@ -2623,6 +2623,14 @@ let _detailTask = null;
 function openTaskDetail(id){ viewTask(id); }
 
 async function viewTask(id){
+  // Mark as viewed — clears UPDATED badge for admin/assigner
+  if(currentUser?.role === 'admin' || currentUser?.role === 'assigner'){
+    api('mark_viewed',{},'POST',{id}).catch(()=>{});
+    // Also clear locally so dashboard refreshes correctly
+    window._viewedTaskIds = window._viewedTaskIds || new Set();
+    window._viewedTaskIds.add(parseInt(id));
+  }
+
   // Show overlay + drawer
   const overlay = document.getElementById('task-detail-overlay');
   const drawer  = document.getElementById('task-detail-drawer');
@@ -4106,6 +4114,16 @@ function onPriceCollectChange(){
     if(discSection) discSection.style.display = 'none';
   }
   checkTaskFormReady();
+}
+
+// Mark a task as viewed — clears UPDATED badge without opening it
+async function markTaskViewed(id, btn){
+  if(btn){ btn.textContent='✓'; btn.disabled=true; btn.style.opacity='.5'; }
+  await api('mark_viewed',{},'POST',{id}).catch(()=>{});
+  window._viewedTaskIds = window._viewedTaskIds || new Set();
+  window._viewedTaskIds.add(parseInt(id));
+  // Reload dashboard to reflect change
+  setTimeout(()=>loadDashboard(), 300);
 }
 
 </script>
