@@ -233,6 +233,11 @@ case 'get_task':
     $a=$pdo->prepare("SELECT a.*,u.name as user_name FROM task_activities a LEFT JOIN users u ON a.user_id=u.id WHERE a.task_id=? ORDER BY a.created_at ASC"); $a->execute([$id]); $task['activities']=$a->fetchAll();
     $d=$pdo->prepare("SELECT * FROM task_documents WHERE task_id=?"); $d->execute([$id]); $task['documents']=$d->fetchAll();
     $p=$pdo->prepare("SELECT p.*,u.name as collector_name FROM payments p LEFT JOIN users u ON p.collected_by=u.id WHERE p.task_id=?"); $p->execute([$id]); $task['payments']=$p->fetchAll();
+    // Include device installs so frontend knows if already added
+    try {
+        $di=$pdo->prepare("SELECT * FROM task_device_installs WHERE task_id=? ORDER BY device_index ASC");
+        $di->execute([$id]); $task['device_installs']=$di->fetchAll();
+    } catch(Exception $e){ $task['device_installs']=[]; }
     echo json_encode(['task'=>$task]);
     break;
 
