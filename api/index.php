@@ -958,6 +958,69 @@ case 'inv_get_settings':
     echo json_encode(['success'=>true,'settings'=>$out]);
     break;
 
+
+// ============================================================
+// SEND CONSENT REQUEST — technician clicks Attend
+// Generates consent_token, sends email to customer
+// ============================================================
+case 'send_consent':
+    $id = intval($body['id'] ?? 0);
+    if(!$id){ echo json_encode(['error'=>'Task ID required']); break; }
+
+    // Ensure columns exist
+    try { $pdo->prepare("ALTER TABLE tasks ADD COLUMN consent_token VARCHAR(64) DEFAULT NULL")->execute(); } catch(Exception $e){}
+    try { $pdo->prepare("ALTER TABLE tasks ADD COLUMN customer_consent_at DATETIME DEFAULT NULL")->execute(); } catch(Exception $e){}
+    try { $pdo->prepare("ALTER TABLE tasks ADD COLUMN customer_consent_name VARCHAR(200) DEFAULT NULL")->execute(); } catch(Exception $e){}
+    try { $pdo->prepare("ALTER TABLE tasks ADD COLUMN customer_consent_mobile VARCHAR(20) DEFAULT NULL")->execute(); } catch(Exception $e){}
+
+    $taskStmt = $pdo->prepare("SELECT t.*, u.name as tech_name, u.email as tech_email FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?");
+    $taskStmt->execute([$id]);
+    $taskRow  = $taskStmt->fetch();
+    if(!$taskRow){ echo json_encode(['error'=>'Task not found']); break; }
+
+    // Generate fresh consent token
+    $cToken = bin2hex(random_bytes(24));
+    $pdo->prepare("UPDATE tasks SET consent_token=?, customer_consent_at=NULL WHERE id=?")->execute([$cToken, $id]);
+    $taskRow['consent_token'] = $cToken;
+
+    // Send email to customer
+    $sent = false;
+    try {
+        require_once __DIR__.'/mailer.php';
+        if(!empty($taskRow['email'])){
+            sendConsentRequest($taskRow, $taskRow['tech_name'] ?? 'BharatGPS Team');
+            $sent = true;
+        }
+    } catch(Exception $e){ error_log('Consent email: '.$e->getMessage()); }
+
+    // Log in activity
+    $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'system')")
+        ->execute([$id, $userId, "📩 Consent request sent to customer" . ($sent ? " via email" : " (no email on file)")]);
+
+    echo json_encode(['success'=>true, 'email_sent'=>$sent, 'has_email'=>!empty($taskRow['email'])]);
+    break;
+
+// ============================================================
+// CHECK CONSENT — poll to see if customer has confirmed
+// ============================================================
+case 'check_consent':
+    $id = intval($body['id'] ?? $_GET['id'] ?? 0);
+    if(!$id){ echo json_encode(['error'=>'Task ID required']); break; }
+    $cs = $pdo->prepare("SELECT customer_consent_at, customer_consent_name, customer_consent_mobile FROM tasks WHERE id=?");
+    $cs->execute([$id]);
+    $crow = $cs->fetch();
+    if($crow && !empty($crow['customer_consent_at'])){
+        echo json_encode([
+            'consented'   => true,
+            'consented_at'=> $crow['customer_consent_at'],
+            'name'        => $crow['customer_consent_name'],
+            'mobile'      => $crow['customer_consent_mobile'],
+        ]);
+    } else {
+        echo json_encode(['consented'=>false]);
+    }
+    break;
+
 default:
     http_response_code(404);
     echo json_encode(['error'=>'Unknown action: '.$action]);
