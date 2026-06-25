@@ -558,8 +558,8 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
             <div style="padding:16px 20px;border-bottom:1px solid var(--border)">
               <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--accent2);margin-bottom:12px">👤 Customer & Lead</div>
               <div class="form-row">
-                <div class="form-group"><label>Customer Name *</label><input type="text" id="fm-customer" placeholder="Full name"></div>
-                <div class="form-group"><label>Contact Number *</label><input type="tel" id="fm-contact" placeholder="10-digit mobile"></div>
+                <div class="form-group"><label>Customer Name *</label><input type="text" id="fm-customer" placeholder="Full name" oninput="checkTaskFormReady()"></div>
+                <div class="form-group"><label>Contact Number *</label><input type="tel" id="fm-contact" oninput="checkTaskFormReady()" placeholder="10-digit mobile"></div>
               </div>
               <div class="form-row">
                 <div class="form-group"><label>Email ID</label><input type="email" id="fm-email" placeholder="Optional"></div>
@@ -587,7 +587,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
               <div class="form-row">
                 <div class="form-group">
                   <label>Job Type</label>
-                  <select id="fm-job" onchange="setModalJobPrice(this.value)">
+                  <select id="fm-job" onchange="setModalJobPrice(this.value);checkTaskFormReady()">
                     <option value="">Select Job Type</option>
                     <option value="Basic/Normal">Basic/Normal GPS</option>
                     <option value="Engine Status">Engine Status GPS</option>
@@ -606,9 +606,45 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
                 <div class="form-group"><label>Device Qty</label><input type="number" id="fm-qty" value="1" min="1" oninput="updateModalGST()"></div>
               </div>
               <div class="form-group" style="margin-bottom:12px">
-                <label>Price to Collect (₹) <span id="fm-price-hint" style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none"></span></label>
-                <input type="number" id="fm-price" placeholder="Auto-filled from job type" step="0.01" oninput="updateModalGST()">
+                <label>Standard Price (₹) <span id="fm-price-hint" style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none"></span></label>
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+                  <input type="number" id="fm-price" placeholder="Auto-filled from job type" step="0.01" readonly
+                    style="flex:1;background:var(--surface2);color:var(--text3);cursor:not-allowed;border-color:var(--border)"
+                    title="Standard price — not editable">
+                  <span style="font-size:11px;color:var(--text3);white-space:nowrap">🔒 Standard</span>
+                </div>
+                <label style="margin-top:4px;display:block">Price to Collect (₹) <span style="font-size:10px;color:var(--text3);font-weight:400">(can discount)</span></label>
+                <input type="number" id="fm-price-collect" placeholder="Enter amount to collect" step="0.01"
+                  oninput="onPriceCollectChange()" style="margin-bottom:6px">
                 <div id="fm-gst-box" style="display:none;margin-top:6px;background:var(--surface2);border-radius:6px;padding:8px 12px;font-size:11px;color:var(--text2);line-height:1.9"></div>
+                <!-- Discount section — shown when price to collect < standard price -->
+                <div id="fm-discount-section" style="display:none;background:var(--amber-bg);border:1.5px solid var(--amber);border-radius:8px;padding:12px 14px;margin-top:8px">
+                  <div style="font-size:11px;font-weight:800;color:var(--saffron);margin-bottom:10px">💸 Discount Applied — Details Required</div>
+                  <div id="fm-discount-amount" style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:10px"></div>
+                  <div class="form-group" style="margin-bottom:8px">
+                    <label style="font-size:11px">Discount Reason *</label>
+                    <select id="fm-discount-reason" onchange="checkTaskFormReady()" style="width:100%;padding:8px 10px;border:1.5px solid var(--amber);border-radius:6px;font-size:13px;outline:none">
+                      <option value="">Select reason</option>
+                      <option value="Existing customer request">Existing customer request</option>
+                      <option value="New customer bargaining">New customer bargaining</option>
+                      <option value="Bulk order discount">Bulk order discount</option>
+                      <option value="Promotional offer">Promotional offer</option>
+                      <option value="Service complaint resolution">Service complaint resolution</option>
+                      <option value="Management decision">Management decision</option>
+                    </select>
+                  </div>
+                  <div class="form-group" style="margin-bottom:0">
+                    <label style="font-size:11px">Approved By *</label>
+                    <select id="fm-discount-approver" onchange="checkTaskFormReady()" style="width:100%;padding:8px 10px;border:1.5px solid var(--amber);border-radius:6px;font-size:13px;outline:none">
+                      <option value="">Select approver</option>
+                      <option value="Raghavendra Manoj">Raghavendra Manoj</option>
+                      <option value="Gummidi Lohita">Gummidi Lohita</option>
+                      <option value="Tanuja">Tanuja</option>
+                      <option value="Somesh">Somesh</option>
+                      <option value="Sri Mam">Sri Mam</option>
+                    </select>
+                  </div>
+                </div>
               </div>
               <div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:12px 14px">
                 <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px">💳 How will the customer pay?</div>
@@ -678,7 +714,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
           </div>
           <div id="task-modal-footer" style="padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0;background:var(--surface)">
             <button class="ts-btn ts-btn-secondary" onclick="closeTaskModal()">Close</button>
-            <button class="ts-btn ts-btn-primary" id="task-save-btn" onclick="saveTask()" style="display:none">✅ Create Task</button>
+            <button class="ts-btn ts-btn-primary" id="task-save-btn" onclick="saveTask()" disabled style="opacity:.4;cursor:not-allowed;transition:all .2s">✅ Create Task</button>
           </div>
         </div>
       </div>
@@ -2008,11 +2044,15 @@ async function saveTask(){
     location:         document.getElementById('fm-location').value.trim(),
     device_details:   document.getElementById('fm-job').value,
     task_status:      document.getElementById('fm-status').value,
-    price_to_collect: parseFloat(document.getElementById('fm-price')?.dataset?.totalAmount || document.getElementById('fm-price')?.value || 0),
+    price_to_collect: parseFloat(document.getElementById('fm-price-collect')?.value || document.getElementById('fm-price')?.value || 0),
     amount_collected: document.getElementById('fm-collected').value||0,
     general_notes:    document.getElementById('fm-notes').value.trim(),
     assigned_to:      document.getElementById('fm-tech')?.value||null,
     gst_amount:       parseFloat(document.getElementById('fm-price')?.dataset?.gstAmount||0),
+    // Discount tracking
+    discount_given:   Math.max(0, parseFloat(document.getElementById('fm-price')?.value||0) - parseFloat(document.getElementById('fm-price-collect')?.value||document.getElementById('fm-price')?.value||0)),
+    discount_reason:  document.getElementById('fm-discount-reason')?.value||'',
+    discount_incharge:document.getElementById('fm-discount-approver')?.value||'',
   };
   // Append deferred payment metadata to notes
   if(window._payDeferredMeta){
@@ -2216,6 +2256,7 @@ function confirmPayMode(){
   }
   document.getElementById('pay-confirm-modal').classList.remove('open');
   _pendingPayMode = null;
+  checkTaskFormReady();
 }
 
 function cancelPayMode(){
@@ -2256,27 +2297,40 @@ function toggleModalTravelAmt(){
 }
 
 function setModalJobPrice(job){
-  const base=JOB_PRICES[job];
-  const priceEl=document.getElementById('fm-price');
-  const hintEl=document.getElementById('fm-price-hint');
-  if(base!==undefined && base>0){
-    priceEl.value=base;
-    if(hintEl) hintEl.textContent='(auto-filled — BGPT price excl. GST)';
+  const base    = JOB_PRICES[job];
+  const priceEl = document.getElementById('fm-price');
+  const collectEl= document.getElementById('fm-price-collect');
+  const hintEl  = document.getElementById('fm-price-hint');
+  if(base !== undefined && base > 0){
+    if(priceEl)   priceEl.value   = base; // Standard price — locked
+    if(collectEl) collectEl.value = base; // Default collect = standard
+    if(hintEl)    hintEl.textContent = '(standard BGPT price — excl. GST)';
     updateModalGST();
+    if(document.getElementById('fm-discount-section'))
+      document.getElementById('fm-discount-section').style.display = 'none';
+  } else if(base === 0){
+    if(priceEl)   priceEl.value   = '';
+    if(collectEl) collectEl.value = '';
+    if(hintEl)    hintEl.textContent = '(manual entry required)';
+    const gstBox = document.getElementById('fm-gst-box'); if(gstBox) gstBox.style.display='none';
   } else {
-    if(priceEl) priceEl.value='';
-    if(hintEl) hintEl.textContent=base===0?'(enter manually)':'';
-    const gstBox=document.getElementById('fm-gst-box'); if(gstBox) gstBox.style.display='none';
+    if(priceEl)   priceEl.value   = '';
+    if(collectEl) collectEl.value = '';
+    if(hintEl)    hintEl.textContent = '';
+    const gstBox = document.getElementById('fm-gst-box'); if(gstBox) gstBox.style.display='none';
   }
+  checkTaskFormReady();
 }
 
 function getDrawerTotal(){
-  // Returns the true total (unit price × qty + GST if SBGT)
-  const profile = document.getElementById('fm-profile')?.value||'BGPT';
-  const price   = parseFloat(document.getElementById('fm-price')?.value||0);
-  const qty     = parseInt(document.getElementById('fm-qty')?.value||1);
-  const gst     = profile==='SBGT' ? price*0.18 : 0;
-  return { price, qty, gst, total: (price+gst)*qty, gstTotal: gst*qty };
+  // Returns the true total using price-to-collect (may be discounted from standard)
+  const profile     = document.getElementById('fm-profile')?.value||'BGPT';
+  const stdPrice    = parseFloat(document.getElementById('fm-price')?.value||0);
+  const collectPrice= parseFloat(document.getElementById('fm-price-collect')?.value||stdPrice||0);
+  const price       = collectPrice || stdPrice; // Use collect price if set
+  const qty         = parseInt(document.getElementById('fm-qty')?.value||1);
+  const gst         = profile==='SBGT' ? price*0.18 : 0;
+  return { price, stdPrice, qty, gst, total: (price+gst)*qty, gstTotal: gst*qty };
 }
 
 function updateModalGST(){
@@ -4038,6 +4092,59 @@ function applyWorkflowFilter(tasks){
   if(!state) return tasks;
   window._pendingWorkflowFilter = null;
   return tasks.filter(t => t.workflow_state === state);
+}
+
+// ════════════════════════════════════════════════════════
+// CREATE TASK FORM — validation + discount system
+// ════════════════════════════════════════════════════════
+
+// Check if mandatory fields are filled → enable/disable save button
+function checkTaskFormReady(){
+  const customer = (document.getElementById('fm-customer')?.value||'').trim();
+  const contact  = (document.getElementById('fm-contact')?.value||'').trim();
+  const job      = document.getElementById('fm-job')?.value||'';
+  const payMode  = document.getElementById('fm-paymode')?.value||'';
+
+  // Check discount fields if discount section is visible
+  const discSection = document.getElementById('fm-discount-section');
+  let discOk = true;
+  if(discSection && discSection.style.display !== 'none'){
+    const discReason   = document.getElementById('fm-discount-reason')?.value||'';
+    const discApprover = document.getElementById('fm-discount-approver')?.value||'';
+    discOk = !!(discReason && discApprover);
+  }
+
+  const ready = !!(customer && contact && job && payMode && discOk);
+  const btn   = document.getElementById('task-save-btn');
+  if(btn){
+    btn.disabled    = !ready;
+    btn.style.opacity    = ready ? '1'    : '0.4';
+    btn.style.cursor     = ready ? 'pointer' : 'not-allowed';
+  }
+}
+
+// Called when price-to-collect changes — check for discount
+function onPriceCollectChange(){
+  updateModalGST();
+  const stdPrice     = parseFloat(document.getElementById('fm-price')?.value||0);
+  const collectPrice = parseFloat(document.getElementById('fm-price-collect')?.value||0);
+  const discSection  = document.getElementById('fm-discount-section');
+  const discAmt      = document.getElementById('fm-discount-amount');
+
+  if(stdPrice > 0 && collectPrice > 0 && collectPrice < stdPrice - 0.5){
+    const diff = stdPrice - collectPrice;
+    if(discSection) discSection.style.display = '';
+    if(discAmt) discAmt.innerHTML =
+      `Discount: <span style="color:var(--red)">₹${diff.toLocaleString('en-IN',{minimumFractionDigits:2})}</span> off standard price of ₹${stdPrice.toLocaleString('en-IN')}`;
+    // Reset discount fields
+    const dr = document.getElementById('fm-discount-reason');
+    const da = document.getElementById('fm-discount-approver');
+    if(dr && !dr.value) dr.value = '';
+    if(da && !da.value) da.value = '';
+  } else {
+    if(discSection) discSection.style.display = 'none';
+  }
+  checkTaskFormReady();
 }
 
 </script>

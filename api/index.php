@@ -1126,6 +1126,27 @@ case 'mark_viewed':
     break;
 
 
+case 'verify_token':
+    // Validate the auth token and return user info
+    $tok = $_SERVER['HTTP_X_AUTH_TOKEN'] ?? '';
+    if(!$tok){ echo json_encode(['valid'=>false,'error'=>'No token']); break; }
+    $vs = $pdo->prepare("SELECT id,name,email,role,phone FROM users WHERE auth_token=? AND is_active=1");
+    $vs->execute([$tok]);
+    $vu = $vs->fetch();
+    if($vu){
+        $pdo->prepare("UPDATE users SET last_active=NOW() WHERE id=?")->execute([$vu['id']]);
+        echo json_encode(['valid'=>true,'user'=>$vu]);
+    } else {
+        echo json_encode(['valid'=>false,'error'=>'Invalid token']);
+    }
+    break;
+
+case 'logout':
+    $tok = $_SERVER['HTTP_X_AUTH_TOKEN'] ?? '';
+    if($tok) $pdo->prepare("UPDATE users SET auth_token=NULL WHERE auth_token=?")->execute([$tok]);
+    echo json_encode(['success'=>true]);
+    break;
+
 default:
     http_response_code(404);
     echo json_encode(['error'=>'Unknown action: '.$action]);
