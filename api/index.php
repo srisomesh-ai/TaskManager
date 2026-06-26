@@ -374,15 +374,41 @@ case 'create_task':
         $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'assignment')")->execute([$newId,$userId,"Task assigned to ".$tn->fetchColumn()]);
     }
     echo json_encode(['success'=>true,'task_id'=>$taskId,'id'=>$newId]);
-    // Send emails
-    if ($at && !empty($body['email'])) {
-        try {
-            require_once __DIR__.'/mailer.php';
-            $tr=$pdo->prepare("SELECT * FROM tasks WHERE id=?"); $tr->execute([$newId]); $td=$tr->fetch();
-            $tech=$pdo->prepare("SELECT name,email,phone FROM users WHERE id=?"); $tech->execute([$at]); $tc=$tech->fetch();
-            if ($td) sendTaskCreatedCustomer($td, $tc['name']??'', $tc['phone']??'');
-            if ($tc && $tc['email']) sendTaskCreatedTech($td, $tc['email'], $tc['name']);
-        } catch(Exception $e) {}
+
+    // Send emails — independently (customer and tech are separate)
+    try {
+        require_once __DIR__.'/mailer.php';
+        $tr = $pdo->prepare("SELECT * FROM tasks WHERE id=?");
+        $tr->execute([$newId]);
+        $td = $tr->fetch();
+
+        if($td){
+            // Email technician if assigned
+            if($at){
+                $techQ = $pdo->prepare("SELECT name,email,phone FROM users WHERE id=?");
+                $techQ->execute([$at]);
+                $tc = $techQ->fetch();
+                if($tc && !empty($tc['email'])){
+                    sendTaskCreatedTech($td, $tc['email'], $tc['name']);
+                }
+            }
+
+            // Email customer if email provided
+            if(!empty($td['email'])){
+                $techName  = '';
+                $techPhone = '';
+                if($at){
+                    $techQ2 = $pdo->prepare("SELECT name,phone FROM users WHERE id=?");
+                    $techQ2->execute([$at]);
+                    $tc2 = $techQ2->fetch();
+                    $techName  = $tc2['name']  ?? '';
+                    $techPhone = $tc2['phone'] ?? '';
+                }
+                sendTaskCreatedCustomer($td, $techName, $techPhone);
+            }
+        }
+    } catch(Exception $e){
+        error_log('Create task email error: ' . $e->getMessage());
     }
     break;
 
