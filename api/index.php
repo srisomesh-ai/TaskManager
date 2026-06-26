@@ -216,10 +216,11 @@ case 'get_tasks':
     $limit = min(intval($_GET['limit'] ?? 500), 1000);
     // Ensure admin_viewed_at column exists
     try { $pdo->exec("ALTER TABLE tasks ADD COLUMN admin_viewed_at DATETIME DEFAULT NULL"); } catch(Exception $e){}
+    try { $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cash_deposit_status VARCHAR(20) DEFAULT NULL"); } catch(Exception $e){}
 
     $sql = "SELECT t.*,u.name as tech_name,u.name as technician_name,u.phone as tech_phone,c.name as creator_name,
             (SELECT MAX(a.created_at) FROM task_activities a WHERE a.task_id=t.id AND a.activity_type='remark') as last_tech_activity,
-            t.admin_viewed_at
+            t.admin_viewed_at,t.cash_deposit_status
             FROM tasks t
             LEFT JOIN users u ON t.assigned_to=u.id
             LEFT JOIN users c ON t.created_by=c.id"
@@ -261,6 +262,8 @@ case 'get_tasks':
             $task['workflow_state'] = 'approve_now';
         } elseif($status === 'Closed' || $status === 'Cancelled'){
             $task['workflow_state'] = '';
+        } elseif($addingDone && $amtCollected > 0 && ($task['cash_deposit_status']??'') === 'pending'){
+            $task['workflow_state'] = 'cash_pending_deposit';
         } elseif($addingDone && $amtCollected <= 0){
             $task['workflow_state'] = 'payment_pending';
         } elseif($status === 'Task Pending' && $consentAt !== ''){
@@ -421,7 +424,9 @@ case 'update_task':
                // Balance sheet linkage fields
                'gps_serial_no','name_on_server','server_name','invoice_no','payment_received_on','payment_transaction_details','gst_amount','pending_reason','discount_reason','discount_incharge','profile',
                // Outstation fields
-               'outstation_location','outstation_travel_paid_by','outstation_customer_travel_amount','outstation_claim_cap','outstation_claim_submitted','outstation_claim_status'];
+               'outstation_location','outstation_travel_paid_by','outstation_customer_travel_amount','outstation_claim_cap','outstation_claim_submitted','outstation_claim_status',
+               // Cash deposit tracking
+               'cash_deposit_status'];
     if (in_array($userRole,['admin','assigner'])) $fields=array_merge($fields,['customer_name','contact_number','email','location','lead_type','device_qty','price_to_collect','assigned_to']);
     $sets=[]; $vals=[];
     foreach ($fields as $f) {

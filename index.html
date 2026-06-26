@@ -1700,7 +1700,8 @@ async function loadDashboard(){
   // ── 4. Workflow groups ─────────────────────────────────────
   const approveNow     = approvals; // from get_approvals — always accurate
   const paymentPending = allActive.filter(t => t.workflow_state === 'payment_pending');
-  const techUpdated    = allActive.filter(t => t.workflow_state === 'tech_updated');
+  const techUpdated      = allActive.filter(t => t.workflow_state === 'tech_updated');
+  const cashPending      = allActive.filter(t => t.workflow_state === 'cash_pending_deposit');
   const critical       = urgent.filter(t => parseInt(t.age_hours||0) >= 48);
   const warning        = urgent.filter(t => { const h=parseInt(t.age_hours||0); return h>=24 && h<48; });
 
@@ -1720,6 +1721,11 @@ async function loadDashboard(){
     banners += `<div class="dash-alert" style="background:var(--amber-bg);border-left:4px solid var(--amber);color:#7a4500">
       🟠 <strong>${techUpdated.length} task${techUpdated.length>1?'s':''}</strong> updated by technician — not reviewed yet.
       <button class="dal-btn" style="background:var(--amber);color:#fff" onclick="showPage('tasks')">Review →</button>
+    </div>`;
+  if(cashPending.length)
+    banners += `<div class="dash-alert" style="background:var(--amber-bg);border-left:4px solid var(--amber);color:var(--saffron)">
+      🏦 <strong>${cashPending.length} technician${cashPending.length>1?'s':''}</strong> collected cash — deposit not yet confirmed.
+      <button class="dal-btn" style="background:var(--saffron);color:#fff" onclick="showPage('tasks')">View →</button>
     </div>`;
   if(critical.length)
     banners += `<div class="dash-alert" style="background:var(--red-bg);border-left:4px solid var(--red);color:var(--red)">
@@ -2623,6 +2629,7 @@ function getWorkflowBadge(t){
     'consent_sent':            '<span class="wf-badge" style="background:var(--blue-bg);color:var(--blue)">CONSENT SENT</span>',
     'ready_to_add':            '<span class="wf-badge" style="background:var(--green-bg);color:var(--green)">READY TO ADD</span>',
     'postponed_after_consent': '<span class="wf-badge" style="background:#fdecea;color:#c0392b;animation:pulse-badge 1.5s infinite">⏸️ POSTPONED</span>',
+    'cash_pending_deposit':    '<span class="wf-badge" style="background:var(--amber-bg);color:var(--saffron);animation:pulse-badge 1.5s infinite">🏦 DEPOSIT PENDING</span>',
     'payment_pending':         '<span class="wf-badge wf-payment-pending">PAYMENT PENDING</span>',
     'approve_now':             '<span class="wf-badge wf-approve-now">APPROVE NOW</span>',
   };
@@ -3664,6 +3671,25 @@ async function checkAndUpdateAttendBtn(taskId){
   const addingDone = installs.length >= qty && installs.every(d=>d.gps_serial_no && d.name_on_server);
   const paid       = parseFloat(t?.amount_collected||0) > 0;
 
+  // STATE 3b: Cash collected but deposit not yet confirmed
+  if(addingDone && paid && t?.cash_deposit_status === 'pending'){
+    btn.className     = 'ts-btn';
+    btn.style.background = 'var(--saffron)';
+    btn.style.border  = 'none';
+    btn.style.display = '';
+    btn.setAttribute('onclick','openCashDepositModal('+t.id+')');
+    if(icon)  icon.textContent  = '🏦';
+    if(label) label.textContent = 'Confirm Cash Deposit';
+    if(sub)   sub.textContent   = 'Deposit cash & submit for approval';
+    if(status) status.innerHTML = `
+      <div style="background:var(--amber-bg);border:1.5px solid var(--amber);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--saffron);line-height:1.7">
+        🏦 <strong>Cash Deposit Pending</strong><br>
+        You collected cash. Please deposit and confirm within 24 hours.<br>
+        <span style="font-size:10px;color:var(--text3)">Once confirmed, task will be submitted for approval.</span>
+      </div>`;
+    return;
+  }
+
   if(addingDone && !paid){
     btn.style.background = 'var(--saffron)';
     btn.style.border     = 'none';
@@ -4288,6 +4314,8 @@ async function savePayment(){
   } else if(mode==='Cash'){
     const d=new Date(); d.setDate(d.getDate()+1);
     body.reminder_date = d.toISOString().slice(0,10);
+    // Mark cash as pending deposit — tech must confirm deposit separately
+    body.cash_deposit_status = 'pending';
   }
 
   const res = await api('update_task',{},'POST',body).catch(()=>({}));
@@ -4627,5 +4655,96 @@ async function loadApprovalsPage(){
 async function loadApprovals(){ return loadApprovalsPage(); }
 
 </script>
+
+<!-- ═══════════════════════════════════════════
+     CASH DEPOSIT CONFIRMATION MODAL
+═══════════════════════════════════════════ -->
+<div id="cash-deposit-overlay" class="modal-overlay" onclick="closeCashDepositModal()" style="display:none"></div>
+<div id="cash-deposit-modal" class="modal" style="display:none;max-width:480px">
+  <div class="modal-hd">
+    <div>
+      <div class="modal-title">🏦 Confirm Cash Deposit</div>
+      <div id="cd-subtitle" class="modal-sub"></div>
+    </div>
+    <button class="modal-close" onclick="closeCashDepositModal()">✕</button>
+  </div>
+  <div class="modal-body" style="padding:16px 20px 20px">
+
+    <!-- Amount summary -->
+    <div id="cd-amount-box" style="background:var(--green-bg);border:2px solid var(--green);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:13px;color:var(--green);font-weight:700">Cash Collected</span>
+      <span id="cd-amount" style="font-size:20px;font-weight:900;color:var(--green)">₹0</span>
+    </div>
+
+    <!-- Deposit method -->
+    <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--accent2);margin-bottom:10px">① How did you deposit the cash?</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px" id="cd-method-grid">
+      <div class="cd-method-btn" data-method="Cash Handed Over" onclick="selectDepositMethod(this)">
+        <div style="font-size:22px;margin-bottom:4px">💵</div>
+        <div style="font-size:12px;font-weight:800">Cash Handed Over</div>
+        <div style="font-size:10px;color:var(--text3)">Gave to office person</div>
+      </div>
+      <div class="cd-method-btn" data-method="Bank Transfer" onclick="selectDepositMethod(this)">
+        <div style="font-size:22px;margin-bottom:4px">🏦</div>
+        <div style="font-size:12px;font-weight:800">Bank Transfer</div>
+        <div style="font-size:10px;color:var(--text3)">NEFT / IMPS / RTGS</div>
+      </div>
+      <div class="cd-method-btn" data-method="ATM Deposit" onclick="selectDepositMethod(this)">
+        <div style="font-size:22px;margin-bottom:4px">🏧</div>
+        <div style="font-size:12px;font-weight:800">ATM Deposit</div>
+        <div style="font-size:10px;color:var(--text3)">Cash at ATM machine</div>
+      </div>
+      <div class="cd-method-btn" data-method="UPI Transfer" onclick="selectDepositMethod(this)">
+        <div style="font-size:22px;margin-bottom:4px">📱</div>
+        <div style="font-size:12px;font-weight:800">UPI Transfer</div>
+        <div style="font-size:10px;color:var(--text3)">PhonePe / GPay / Paytm</div>
+      </div>
+    </div>
+    <input type="hidden" id="cd-method">
+
+    <!-- Cash Handed Over → who received -->
+    <div id="cd-handover-box" style="display:none;margin-bottom:14px">
+      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--accent2);margin-bottom:8px">② Handed over to *</div>
+      <select id="cd-handover-person" class="ts-select" style="width:100%">
+        <option value="">— Select person —</option>
+        <option>Lohitha</option>
+        <option>Manoj</option>
+        <option>Tanuja</option>
+        <option>Sri Mam</option>
+      </select>
+    </div>
+
+    <!-- Bank / ATM / UPI → date + reference -->
+    <div id="cd-ref-box" style="display:none;margin-bottom:14px">
+      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--accent2);margin-bottom:8px">② Deposit Details *</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Date of Deposit *</label>
+          <input type="date" id="cd-date" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>Reference / UTR Number *</label>
+          <input type="text" id="cd-ref" class="form-input" placeholder="Ref/UTR number">
+        </div>
+      </div>
+    </div>
+
+    <!-- Remarks -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--accent2);margin-bottom:8px">③ Remarks (optional)</div>
+      <textarea id="cd-remarks" rows="2" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;resize:none" placeholder="Any additional notes..."></textarea>
+    </div>
+
+    <button id="cd-submit-btn" class="ts-btn ts-btn-primary" style="width:100%;padding:14px;font-size:14px;background:var(--green)" onclick="saveCashDeposit()">
+      ✅ Confirm Deposit &amp; Submit for Approval
+    </button>
+  </div>
+</div>
+
+<style>
+.cd-method-btn{border:2px solid var(--border);border-radius:10px;padding:12px 10px;text-align:center;cursor:pointer;transition:all .15s;background:var(--surface)}
+.cd-method-btn:hover{border-color:var(--accent);background:var(--accent-light)}
+.cd-method-btn.selected{border-color:var(--green);background:var(--green-bg)}
+</style>
 </body>
 </html>
