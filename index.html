@@ -1118,6 +1118,12 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
             <div style="margin-bottom:18px">
               <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--accent2);margin-bottom:8px">② Select response type — message will auto-fill:</div>
               <!-- CALL UPDATES -->
+              <!-- Consent notice banner — shown when customer has already consented -->
+              <div id="tu-consent-notice" style="display:none;background:var(--amber-bg);border:1.5px solid var(--amber);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--saffron);line-height:1.6">
+                ⚠️ <strong>Customer has already consented.</strong> Only vehicle-related updates are available.<br>
+                <span style="font-size:11px;color:var(--text3)">Selecting a vehicle card will reset consent — customer must consent again before installation.</span>
+              </div>
+
               <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);margin-bottom:5px">📞 Call Updates</div>
               <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:12px" id="tu-response-cards">
 
@@ -1221,6 +1227,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
               <input type="hidden" id="tch-cust-resp">
               <input type="hidden" id="tch-next-step">
               <input type="hidden" id="tch-remind-when">
+              <input type="hidden" id="tu-consent-active" value="0">
             </div>
 
             <!-- STEP 3: Editable message (pre-filled from card) -->
@@ -3310,7 +3317,11 @@ function openTechUpdate(taskId){
   document.getElementById('tch-remind-when').value = '';
 
   // Reset cards
-  document.querySelectorAll('.tu-card').forEach(c=>c.classList.remove('selected'));
+  document.querySelectorAll('.tu-card').forEach(c=>{
+    c.classList.remove('selected');
+    c.style.opacity = '';
+    c.style.pointerEvents = '';
+  });
   document.getElementById('tu-reminder-box').style.display='none';
   document.getElementById('tu-nextstep-box').style.display='none';
   document.getElementById('tu-reminder-date').value='';
@@ -3320,6 +3331,48 @@ function openTechUpdate(taskId){
     document.getElementById('tu-task-ref').textContent =
       (_detailTask.task_id||'') + ' · ' + (_detailTask.customer_name||'');
   }
+
+  // If customer has already consented — restrict to vehicle-related cards only
+  const consentDone = !!(
+    _detailTask?.customer_consent_at ||
+    (_detailTask?.workflow_state === 'ready_to_add') ||
+    (_detailTask?.workflow_state === 'consent_sent')
+  );
+
+  const vehicleCards = ['Visited — vehicle not ready', 'Called — rescheduled', 'Come Tomorrow'];
+
+  if(consentDone){
+    // Show a notice banner
+    const noticeEl = document.getElementById('tu-consent-notice');
+    if(noticeEl) noticeEl.style.display = '';
+
+    // Dim all cards except vehicle-related ones
+    document.querySelectorAll('.tu-card').forEach(c=>{
+      const resp = (c.dataset.resp||'').toLowerCase();
+      const isVehicle = vehicleCards.some(v => resp.includes(v.toLowerCase()));
+      if(!isVehicle){
+        c.style.opacity = '0.25';
+        c.style.pointerEvents = 'none';
+      } else {
+        c.style.opacity = '1';
+        c.style.pointerEvents = '';
+        // Add highlight border
+        c.style.borderColor = 'var(--saffron)';
+        c.style.background  = 'var(--saffron-bg)';
+      }
+    });
+  } else {
+    // Normal mode — restore all cards
+    const noticeEl = document.getElementById('tu-consent-notice');
+    if(noticeEl) noticeEl.style.display = 'none';
+    document.querySelectorAll('.tu-card').forEach(c=>{
+      c.style.borderColor = '';
+      c.style.background  = '';
+    });
+  }
+
+  // Store consent state for submit handler
+  document.getElementById('tu-consent-active').value = consentDone ? '1' : '0';
 
   document.getElementById('tech-update-modal').classList.add('open');
   setTimeout(()=>document.getElementById('tch-discussed').focus(), 200);
@@ -3400,8 +3453,19 @@ async function submitTechUpdate(){
   if(nextStep)   parts.push('Next step: ' + nextStep);
   if(remindDate) parts.push('Follow-up: ' + remindDate);
 
+  const consentWasActive = document.getElementById('tu-consent-active')?.value === '1';
   const body = { id: taskId, remark: parts.join(' | ') };
   if(remindDate) body.reminder_date = remindDate;
+
+  // If consent was active and tech selected a vehicle card — reset consent
+  // so technician needs to Attend again and get fresh consent from customer
+  if(consentWasActive){
+    body.consent_token            = '';   // clear token — button resets to Attend
+    body.customer_consent_at      = '';   // clear consent timestamp
+    body.customer_consent_name    = '';
+    body.customer_consent_mobile  = '';
+    body.task_status              = 'Open'; // back to open
+  }
 
   _tuSubmitting = true;
   const btn = document.getElementById('tu-save-btn');
@@ -3413,6 +3477,9 @@ async function submitTechUpdate(){
       closeTechUpdate();
       await viewTask(taskId);
       if(typeof renderMyTasks === 'function') renderMyTasks();
+      if(consentWasActive){
+        showToast('✅ Update saved — Attend button reset for fresh consent');
+      }
     } else {
       alert(res.error || 'Update failed. Please try again.');
     }

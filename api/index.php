@@ -426,7 +426,9 @@ case 'update_task':
                // Outstation fields
                'outstation_location','outstation_travel_paid_by','outstation_customer_travel_amount','outstation_claim_cap','outstation_claim_submitted','outstation_claim_status',
                // Cash deposit tracking
-               'cash_deposit_status'];
+               'cash_deposit_status',
+               // Consent reset (when vehicle unavailable after consent)
+               'consent_token','customer_consent_at','customer_consent_name','customer_consent_mobile'];
     if (in_array($userRole,['admin','assigner'])) $fields=array_merge($fields,['customer_name','contact_number','email','location','lead_type','device_qty','price_to_collect','assigned_to']);
     $sets=[]; $vals=[];
     foreach ($fields as $f) {
