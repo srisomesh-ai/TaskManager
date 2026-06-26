@@ -2827,7 +2827,8 @@ function renderMyTasks(){
                    : isWarn  ? `<span class="age-badge" style="background:#fff3e0;color:#e07b00">⚠️ ${age}h</span>`
                    : age > 0 ? `<span style="color:var(--text3);font-size:11px">${age}h</span>` : '–';
     const urgentBadge = isUrgentTask ? `<span class="urgent-badge-row">🚨 Urgent</span>` : '';
-    return `<tr class="${rowClass}" style="border-bottom:1px solid var(--border);cursor:pointer;${rowStyle}" onclick="viewTask(${t.id})">
+    const closedStyle = ['Closed','Cancelled'].includes(t.task_status) ? 'opacity:.55;' : '';
+    return `<tr class="${rowClass}" style="border-bottom:1px solid var(--border);cursor:pointer;${rowStyle}${closedStyle}" onclick="viewTask(${t.id})">
       <td style="padding:9px 12px;color:var(--text3);font-size:11px">${start+i+1}</td>
       <td style="padding:9px 12px"><span class="task-id">${t.task_id||'–'}</span>${urgentBadge}</td>
       <td style="padding:9px 12px"><div class="cust-name" style="max-width:130px">${t.customer_name||'–'}</div></td>
@@ -2891,6 +2892,14 @@ async function viewTask(id){
   const isTech     = currentUser?.role === 'technician';
   const isAssigned = String(t.assigned_to) === String(currentUser?.id);
   const isLocked   = ['Awaiting Approval','Closed','Cancelled'].includes(t.task_status);
+
+  // Visual gray header for closed/cancelled tasks
+  const drawerHdr = document.getElementById('task-detail-header');
+  if(drawerHdr){
+    if(t.task_status === 'Closed')    drawerHdr.style.background = 'linear-gradient(135deg,#4a5568,#718096)';
+    else if(t.task_status === 'Cancelled') drawerHdr.style.background = 'linear-gradient(135deg,#718096,#8a9ab0)';
+    else                              drawerHdr.style.background = '';
+  }
 
   // ── HEADER ────────────────────────────────────────────
   document.getElementById('td-task-id').textContent  = t.task_id || '–';
@@ -3060,6 +3069,18 @@ async function viewTask(id){
 
     const btns = [];
 
+    // ── CLOSED task — nothing to do, show closed banner ──────────────────
+    if(t.task_status === 'Closed'){
+      adFooter.style.display = 'flex';
+      adFooter.innerHTML = `
+        <div style="width:100%;background:var(--surface2);border:2px solid var(--border);border-radius:10px;padding:14px 16px;text-align:center">
+          <div style="font-size:22px;margin-bottom:6px">✅</div>
+          <div style="font-size:14px;font-weight:800;color:var(--text3)">Task Closed</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:4px">This task has been completed and closed. No further action required.</div>
+        </div>`;
+      return;
+    }
+
     if(t.task_status === 'Awaiting Approval'){
 
       // ── Payment verification panel ──────────────────────────────────────
@@ -3141,8 +3162,10 @@ async function viewTask(id){
         btns.push(`<button onclick="adminSendBackTask(${t.id},'${t.task_id}')" class="ts-btn" style="background:var(--amber-bg);color:var(--saffron);border:1.5px solid var(--amber)">↩️ Send Back to Tech</button>`);
       }
 
-      // Delete
-      btns.push(`<button onclick="adminDeleteTask(${t.id})" class="ts-btn" style="background:var(--red-bg);color:var(--red);border:1.5px solid var(--red)">🗑️ Delete</button>`);
+      // Delete — ONLY before adding starts (before any device installed)
+      if(!taskAddingDone){
+        btns.push(`<button onclick="adminDeleteTask(${t.id})" class="ts-btn" style="background:var(--red-bg);color:var(--red);border:1.5px solid var(--red)">🗑️ Delete</button>`);
+      }
 
       if(btns.length){
         adFooter.style.display = 'flex';
