@@ -2178,12 +2178,21 @@ function statusPill(s){
 }
 
 function payPill(t){
-  const price = parseFloat(t.price_to_collect||0);
-  const coll  = parseFloat(t.amount_collected||0);
+  const price      = parseFloat(t.price_to_collect||0);
+  const coll       = parseFloat(t.amount_collected||0);
+  const installs   = t.device_installs || [];
+  const qty        = parseInt(t.device_qty||1);
+  const addingDone = installs.length >= qty && installs.every(function(d){return d.gps_serial_no && d.name_on_server;});
+
+  // Show dash until installation is done — no payment context before that
+  if(!addingDone && ['Open','In Progress','Task Pending'].includes(t.task_status)){
+    return '<span class="pay-pill" style="background:#f0f2f5;color:#8a9ab0">–</span>';
+  }
   if(price === 0) return '<span class="pay-pill" style="background:#f0f2f5;color:#8a9ab0">–</span>';
-  if(coll >= price) return '<span class="pay-pill" style="background:#e8f5ec;color:#1a7a3a">✅ Paid</span>';
-  if(coll > 0) return `<span class="pay-pill" style="background:#fff3e0;color:#e07b00">Partial</span>`;
-  return '<span class="pay-pill" style="background:#fdecea;color:#c0392b">Unpaid</span>';
+  if(coll >= price - 15) return '<span class="pay-pill" style="background:#e8f5ec;color:#1a7a3a">✅ Paid</span>';
+  if(coll > 0) return '<span class="pay-pill" style="background:#fff3e0;color:#e07b00">⚠️ Partial</span>';
+  if(addingDone) return '<span class="pay-pill" style="background:#fdecea;color:#c0392b">❌ Unpaid</span>';
+  return '<span class="pay-pill" style="background:#f0f2f5;color:#8a9ab0">–</span>';
 }
 
 function renderTasksTable(){
@@ -2909,31 +2918,47 @@ async function viewTask(id){
   const editBtn = document.getElementById('td-edit-btn');
   if(editBtn) editBtn.style.display = isAdmin ? '' : 'none';
 
-  // ── WORKFLOW STEPPER ───────────────────────────────────
-  const steps = ['Open','In Progress','Task Pending','Awaiting Approval','Closed'];
-  const stepIdx = steps.indexOf(t.task_status);
+  // ── RICH ICON TIMELINE ─────────────────────────────────
   const cancelled = t.task_status === 'Cancelled';
-  document.getElementById('td-stepper').innerHTML = `
-    <div style="display:flex;align-items:center;gap:0;overflow-x:auto;padding-bottom:2px">
-      ${cancelled
-        ? '<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;color:var(--text3)">❌ Task Cancelled</div>'
-        : steps.map((s,i)=>{
-            const done   = i < stepIdx;
-            const active = i === stepIdx;
-            const color  = active ? 'var(--accent)' : done ? 'var(--green)' : 'var(--text3)';
-            const bg     = active ? 'var(--accent)' : done ? 'var(--green)' : 'var(--surface2)';
-            const txtCol = (active || done) ? '#fff' : 'var(--text3)';
-            return `<div style="display:flex;align-items:center;flex-shrink:0">
-              <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
-                <div style="width:28px;height:28px;border-radius:50%;background:${bg};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:${txtCol}">${done?'✓':i+1}</div>
-                <div style="font-size:9px;font-weight:700;color:${color};white-space:nowrap;max-width:70px;text-align:center;line-height:1.2">${s}</div>
-              </div>
-              ${i<steps.length-1?`<div style="width:30px;height:2px;background:${done?'var(--green)':'var(--border)'};margin:0 2px;margin-bottom:12px;flex-shrink:0"></div>`:''}
-            </div>`;
-          }).join('')
-      }
-    </div>
-  `;
+  const isClosed  = t.task_status === 'Closed';
+  const stepAddingDone = (t.device_installs||[]).length >= parseInt(t.device_qty||1)
+                      && (t.device_installs||[]).every(function(d){return d.gps_serial_no && d.name_on_server;});
+  const stepHasTechAct = !!(t.last_tech_activity || t.consent_token || t.customer_consent_at
+                         || ['In Progress','Task Pending','Awaiting Approval','Closed'].includes(t.task_status));
+  const stepPayDone = parseFloat(t.amount_collected||0) >= parseFloat(t.price_to_collect||0) - 15
+                   && parseFloat(t.price_to_collect||0) > 0;
+
+  var stagesDef = [
+    {icon:'📋', label:'Created',      done:true,           active:!stepHasTechAct},
+    {icon:'🔧', label:'Tech Working', done:stepHasTechAct, active:stepHasTechAct && !stepAddingDone},
+    {icon:'🛰', label:'Installed',    done:stepAddingDone, active:stepAddingDone && !stepPayDone && !isClosed},
+    {icon:'💰', label:'Payment',      done:stepPayDone,    active:stepPayDone && !isClosed},
+    {icon:'🎯', label:'Closed',       done:isClosed,       active:false}
+  ];
+
+  function buildStepper(stages, isCancelled){
+    if(isCancelled) return '<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;color:var(--text3)">❌ Task Cancelled</div>';
+    var html = '<div style="display:flex;align-items:center;width:100%;padding:2px 0">';
+    for(var si=0;si<stages.length;si++){
+      var sg=stages[si];
+      var cBg=sg.done?'var(--green)':sg.active?'var(--accent)':'#e2e8f0';
+      var lCol=sg.done?'var(--green)':sg.active?'var(--accent)':'var(--text3)';
+      var ico=sg.done?'✅':sg.icon;
+      var pulse=sg.active&&!sg.done?'animation:pulse-badge 1.5s infinite;':'';
+      var lineBg=si<stages.length-1&&(stages[si+1].done||stages[si+1].active)?'var(--green)':'#e2e8f0';
+      html+='<div style="display:flex;align-items:center;flex:'+(si<stages.length-1?'1':'0')+'">';
+      html+='<div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0">';
+      html+='<div style="width:34px;height:34px;border-radius:50%;background:'+cBg+';display:flex;align-items:center;justify-content:center;font-size:16px;'+pulse+'">'+ico+'</div>';
+      html+='<div style="font-size:9px;font-weight:700;color:'+lCol+';white-space:nowrap;text-align:center;margin-top:2px">'+sg.label+'</div>';
+      html+='</div>';
+      if(si<stages.length-1) html+='<div style="flex:1;height:3px;background:'+lineBg+';margin:0 3px;margin-bottom:16px;border-radius:2px"></div>';
+      html+='</div>';
+    }
+    return html+'</div>';
+  }
+
+  document.getElementById('td-stepper').innerHTML = buildStepper(stagesDef, cancelled);
+
 
   // ── TASK INFO GRID ─────────────────────────────────────
   const infoItems = [
