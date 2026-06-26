@@ -5,11 +5,11 @@
 
 define('MAIL_HOST',     'smtp.gmail.com');
 define('MAIL_PORT',     587);
-define('MAIL_USER',     'sales@bharatgps.com');       // ← Gmail address
-define('MAIL_PASS',     'rxeumqjrhyrzeeye');  // ← 16-char App Password (not Gmail login password)
-define('MAIL_FROM',     'sales@bharatgps.com');
-define('MAIL_FROM_NAME','Bharat GPS Task Manager');
-define('MAIL_REPLY_TO', 'sales@bharatgps.com');
+define('MAIL_USER',     'info@bharatgps.com');        // ← Gmail address (App Password is for this account)
+define('MAIL_PASS',     'rxeumqjrhyrzeeye');          // ← 16-char App Password for info@bharatgps.com
+define('MAIL_FROM',     'info@bharatgps.com');        // Must match MAIL_USER for Gmail SMTP
+define('MAIL_FROM_NAME','BharatGPS Task Manager');
+define('MAIL_REPLY_TO', 'sales@bharatgps.com');       // Replies go to sales@
 
 function sendMail(string $toEmail, string $toName, string $subject, string $htmlBody): bool {
     if (!$toEmail || !filter_var($toEmail, FILTER_VALIDATE_EMAIL)) return false;
