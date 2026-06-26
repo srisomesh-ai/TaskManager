@@ -3152,17 +3152,48 @@ async function viewTask(id){
       // Non-approval state buttons
       const btns = [];
 
+      // ── Admin can close task directly if adding done + fully paid ──────
+      // Even if technician hasn't formally submitted via Awaiting Approval
+      if(taskAddingDone && taskFullyPaid && !['Closed','Cancelled'].includes(t.task_status)){
+        // Show payment verify panel first
+        const verifyHtml = `<div style="background:var(--surface2);border-radius:10px;padding:12px 14px;margin-bottom:10px;width:100%">
+          <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--accent2);margin-bottom:8px">💰 Payment Verification</div>
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+            <span style="color:var(--text3)">Total Price</span><strong>₹${taskPrice.toLocaleString('en-IN')}</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+            <span style="color:var(--text3)">Collected</span><strong style="color:var(--green)">₹${taskCollected.toLocaleString('en-IN')}</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:13px">
+            <span style="color:var(--text3)">Mode</span><strong>${t.payment_mode||'–'}</strong>
+          </div>
+          <div style="margin-top:8px;padding:8px 10px;background:var(--green-bg);border-radius:6px;font-size:12px;color:var(--green);font-weight:700">
+            ✅ Device installed &amp; payment fully received
+          </div>
+        </div>`;
+        adFooter.style.display = 'flex';
+        adFooter.style.flexDirection = 'column';
+        adFooter.innerHTML = verifyHtml;
+        const closeRow = document.createElement('div');
+        closeRow.style.cssText = 'display:flex;gap:8px;width:100%';
+        closeRow.innerHTML = `
+          <button onclick="adminSendBackTask(${t.id},'${t.task_id}')" class="ts-btn" style="background:var(--amber-bg);color:var(--saffron);border:1.5px solid var(--amber);flex:1">↩️ Send Back</button>
+          <button onclick="adminApproveTask(${t.id})" class="ts-btn" style="background:var(--green);color:#fff;flex:2">✅ Confirm &amp; Close Task</button>`;
+        adFooter.appendChild(closeRow);
+        return;
+      }
+
       // Cancel — only before adding done
       if(!taskAddingDone && !isLocked){
         btns.push(`<button onclick="adminCancelTask(${t.id})" class="ts-btn ts-btn-secondary">🚫 Cancel Task</button>`);
       }
 
-      // Send Back — if task was returned / in progress after rejection
+      // Send Back — if in progress after rejection and adding done
       if(['In Progress','Task Pending','Open'].includes(t.task_status) && taskAddingDone){
         btns.push(`<button onclick="adminSendBackTask(${t.id},'${t.task_id}')" class="ts-btn" style="background:var(--amber-bg);color:var(--saffron);border:1.5px solid var(--amber)">↩️ Send Back to Tech</button>`);
       }
 
-      // Delete — ONLY before adding starts (before any device installed)
+      // Delete — ONLY before adding starts
       if(!taskAddingDone){
         btns.push(`<button onclick="adminDeleteTask(${t.id})" class="ts-btn" style="background:var(--red-bg);color:var(--red);border:1.5px solid var(--red)">🗑️ Delete</button>`);
       }
@@ -3621,7 +3652,7 @@ async function adminRejectTask(taskId){
 
 async function adminSendBackTask(taskId, taskRef){
   // Show inline send-back panel in the drawer
-  const footer = document.getElementById('task-admin-footer');
+  const footer = document.getElementById('td-admin-footer');
   if(!footer) return;
 
   footer.innerHTML = `
@@ -3644,7 +3675,7 @@ async function confirmSendBack(taskId){
   const reason = document.getElementById('sendback-reason')?.value.trim();
   if(!reason){ alert('Please enter a reason / instructions for the technician.'); return; }
 
-  const btn = document.querySelector('#task-admin-footer button:last-child');
+  const btn = document.querySelector('#td-admin-footer button:last-child');
   if(btn){ btn.textContent = 'Sending…'; btn.disabled = true; }
 
   const res = await api('update_task',{},'POST',{
