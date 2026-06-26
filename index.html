@@ -3056,39 +3056,99 @@ async function viewTask(id){
     const taskCollected  = parseFloat(t.amount_collected||0);
     const taskBalance    = taskPrice - taskCollected;
     const taskFullyPaid  = taskBalance <= 15;
+    const cashPending    = (t.cash_deposit_status === 'pending');
 
     const btns = [];
 
-    // Approve & Close — only when submitted by tech AND payment done
     if(t.task_status === 'Awaiting Approval'){
-      if(taskFullyPaid){
-        btns.push(`<button onclick="adminApproveTask(${t.id})" class="ts-btn" style="background:var(--green);color:#fff;flex:2">✅ Approve & Close</button>`);
-      } else {
-        btns.push(`<button disabled class="ts-btn" style="background:var(--surface2);color:var(--text3);flex:2;cursor:not-allowed" title="Cannot approve — ₹${taskBalance.toLocaleString('en-IN')} balance pending">⚠️ Balance Pending — Cannot Approve</button>`);
-      }
-      btns.push(`<button onclick="adminRejectTask(${t.id})" class="ts-btn" style="background:var(--red-bg);color:var(--red);border:1.5px solid var(--red)">❌ Reject</button>`);
-    }
 
-    // Cancel — only available BEFORE adding is done
-    if(!taskAddingDone && !isLocked){
-      btns.push(`<button onclick="adminCancelTask(${t.id})" class="ts-btn ts-btn-secondary">🚫 Cancel Task</button>`);
-    }
+      // ── Payment verification panel ──────────────────────────────────────
+      const payVerifyHtml = `
+        <div style="background:var(--surface2);border-radius:10px;padding:14px 16px;margin-bottom:12px;width:100%">
+          <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--accent2);margin-bottom:10px">💰 Payment Verification — Cross Check Before Approval</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;margin-bottom:10px">
+            <div style="background:var(--card);border-radius:7px;padding:9px 11px">
+              <div style="color:var(--text3);font-size:10px;margin-bottom:2px">Total Price</div>
+              <div style="font-weight:800;color:var(--text)">₹${taskPrice.toLocaleString('en-IN')}</div>
+            </div>
+            <div style="background:var(--card);border-radius:7px;padding:9px 11px">
+              <div style="color:var(--text3);font-size:10px;margin-bottom:2px">Collected by Tech</div>
+              <div style="font-weight:800;color:${taskFullyPaid?'var(--green)':'var(--red)'}">₹${taskCollected.toLocaleString('en-IN')}</div>
+            </div>
+            <div style="background:var(--card);border-radius:7px;padding:9px 11px">
+              <div style="color:var(--text3);font-size:10px;margin-bottom:2px">Payment Mode</div>
+              <div style="font-weight:700">${t.payment_mode||'–'}</div>
+            </div>
+            <div style="background:var(--card);border-radius:7px;padding:9px 11px">
+              <div style="color:var(--text3);font-size:10px;margin-bottom:2px">Balance Due</div>
+              <div style="font-weight:800;color:${taskFullyPaid?'var(--green)':'var(--red)'}">
+                ${taskFullyPaid?'✅ Fully Paid':'₹'+taskBalance.toLocaleString('en-IN')+' pending'}
+              </div>
+            </div>
+          </div>
+          ${cashPending ? `<div style="background:var(--amber-bg);border:1.5px solid var(--amber);border-radius:7px;padding:9px 12px;font-size:12px;color:var(--saffron);font-weight:700;margin-bottom:8px">
+            🏦 Cash deposit not yet confirmed by technician
+          </div>` : ''}
+          ${t.payment_mode==='Cash' && !cashPending ? `<div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:7px;padding:9px 12px;font-size:12px;color:var(--green);font-weight:700;margin-bottom:8px">
+            ✅ Cash deposit confirmed by technician
+          </div>` : ''}
+        </div>`;
 
-    // Delete — admin only, always available (for testing/cleanup)
-    btns.push(`<button onclick="adminDeleteTask(${t.id})" class="ts-btn" style="background:var(--red-bg);color:var(--red);border:1.5px solid var(--red)">🗑️ Delete</button>`);
-
-    if(btns.length){
       adFooter.style.display = 'flex';
-      adFooter.innerHTML = btns.join('');
-    }
-  }
+      adFooter.innerHTML = payVerifyHtml;
 
-  if(false && isAdmin && t.task_status === 'Awaiting Approval'){
-    adFooter.style.display = 'flex';
-    adFooter.innerHTML = `
-      <button onclick="adminApproveTask(${t.id})" class="ts-btn" style="background:var(--green);color:#fff">✅ Approve & Close</button>
-      <button onclick="adminRejectTask(${t.id})" class="ts-btn" style="background:var(--red-bg);color:var(--red);border:1.5px solid var(--red)">❌ Send Back</button>
-    `;
+      const btnRow = document.createElement('div');
+      btnRow.style.cssText = 'display:flex;gap:8px;width:100%;flex-wrap:wrap';
+
+      // Approve & Close
+      if(taskFullyPaid){
+        const approveBtn = document.createElement('button');
+        approveBtn.className = 'ts-btn';
+        approveBtn.style.cssText = 'background:var(--green);color:#fff;flex:2;min-width:140px';
+        approveBtn.innerHTML = '✅ Approve & Close';
+        approveBtn.onclick = () => adminApproveTask(t.id);
+        btnRow.appendChild(approveBtn);
+      } else {
+        const blockBtn = document.createElement('button');
+        blockBtn.className = 'ts-btn';
+        blockBtn.style.cssText = 'background:var(--surface2);color:var(--text3);flex:2;cursor:not-allowed';
+        blockBtn.disabled = true;
+        blockBtn.innerHTML = `⚠️ ₹${taskBalance.toLocaleString('en-IN')} balance pending`;
+        btnRow.appendChild(blockBtn);
+      }
+
+      // Send Back to Technician
+      const sendBackBtn = document.createElement('button');
+      sendBackBtn.className = 'ts-btn';
+      sendBackBtn.style.cssText = 'background:var(--amber-bg);color:var(--saffron);border:1.5px solid var(--amber);flex:1;min-width:120px';
+      sendBackBtn.innerHTML = '↩️ Send Back';
+      sendBackBtn.onclick = () => adminSendBackTask(t.id, t.task_id);
+      btnRow.appendChild(sendBackBtn);
+
+      adFooter.appendChild(btnRow);
+
+    } else {
+      // Non-approval state buttons
+      const btns = [];
+
+      // Cancel — only before adding done
+      if(!taskAddingDone && !isLocked){
+        btns.push(`<button onclick="adminCancelTask(${t.id})" class="ts-btn ts-btn-secondary">🚫 Cancel Task</button>`);
+      }
+
+      // Send Back — if task was returned / in progress after rejection
+      if(['In Progress','Task Pending','Open'].includes(t.task_status) && taskAddingDone){
+        btns.push(`<button onclick="adminSendBackTask(${t.id},'${t.task_id}')" class="ts-btn" style="background:var(--amber-bg);color:var(--saffron);border:1.5px solid var(--amber)">↩️ Send Back to Tech</button>`);
+      }
+
+      // Delete
+      btns.push(`<button onclick="adminDeleteTask(${t.id})" class="ts-btn" style="background:var(--red-bg);color:var(--red);border:1.5px solid var(--red)">🗑️ Delete</button>`);
+
+      if(btns.length){
+        adFooter.style.display = 'flex';
+        adFooter.innerHTML = btns.join('');
+      }
+    }
   }
 }
 
@@ -3533,13 +3593,53 @@ async function adminApproveTask(taskId){
 }
 
 async function adminRejectTask(taskId){
-  const reason = prompt('Reason for rejection (sent back to technician):');
-  if(!reason) return;
-  const res = await api('update_task',{},'POST',{id:taskId,task_status:'In Progress',remark:'❌ Rejected: '+reason}).catch(()=>({}));
+  adminSendBackTask(taskId, _detailTask?.task_id||'');
+}
+
+async function adminSendBackTask(taskId, taskRef){
+  // Show inline send-back panel in the drawer
+  const footer = document.getElementById('task-admin-footer');
+  if(!footer) return;
+
+  footer.innerHTML = `
+    <div style="background:var(--amber-bg);border:2px solid var(--amber);border-radius:10px;padding:16px;width:100%">
+      <div style="font-size:13px;font-weight:800;color:var(--saffron);margin-bottom:10px">↩️ Send Back to Technician</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Task <strong>${taskRef}</strong> will be sent back to the technician for correction. They will be notified.</div>
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Reason / Instructions for Technician *</div>
+      <textarea id="sendback-reason" rows="3" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;resize:none;margin-bottom:10px"
+        placeholder="e.g. Payment details are incorrect / IMEI number missing / Please re-verify vehicle number..."></textarea>
+      <div style="display:flex;gap:8px">
+        <button class="ts-btn ts-btn-secondary" style="flex:1" onclick="viewTask(${taskId})">← Cancel</button>
+        <button class="ts-btn" style="flex:2;background:var(--saffron);color:#fff" onclick="confirmSendBack(${taskId})">↩️ Send Back</button>
+      </div>
+    </div>`;
+  footer.style.display = 'flex';
+  setTimeout(()=>document.getElementById('sendback-reason')?.focus(), 100);
+}
+
+async function confirmSendBack(taskId){
+  const reason = document.getElementById('sendback-reason')?.value.trim();
+  if(!reason){ alert('Please enter a reason / instructions for the technician.'); return; }
+
+  const btn = document.querySelector('#task-admin-footer button:last-child');
+  if(btn){ btn.textContent = 'Sending…'; btn.disabled = true; }
+
+  const res = await api('update_task',{},'POST',{
+    id: taskId,
+    task_status: 'In Progress',
+    remark: '↩️ Sent back by admin — ' + reason,
+    cash_deposit_status: '', // clear deposit status so tech can resubmit
+  }).catch(()=>({}));
+
   if(res.success){
     closeTaskDetail();
+    showToast('↩️ Task sent back to technician');
     if(typeof loadTasks==='function') loadTasks();
-  } else { alert(res.error||'Error'); }
+    if(typeof loadDashboard==='function') loadDashboard();
+  } else {
+    alert(res.error||'Error sending back');
+    if(btn){ btn.textContent='↩️ Send Back'; btn.disabled=false; }
+  }
 }
 
 async function adminCancelTask(taskId){
