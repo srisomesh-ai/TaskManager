@@ -371,3 +371,53 @@ function sendConsentRequest(array $task, string $techName): void {
         emailTemplate($emailContent)
     );
 }
+
+// ── Cancellation email to customer ────────────────────────────────────────
+function sendCancelCustomer($task, $reason, $details, $techName){
+    if(empty($task['email'])) return;
+
+    $price    = number_format(floatval($task['price_to_collect']??0), 0);
+    $service  = htmlspecialchars($task['device_details']??'GPS Installation');
+    $customer = htmlspecialchars($task['customer_name']??'');
+    $taskId   = htmlspecialchars($task['task_id']??'');
+
+    $content = '
+    <div class="greeting">Dear ' . $customer . ',</div>
+    <p style="font-size:14px;color:#4a5568;margin-bottom:14px;line-height:1.7">
+        We are writing to inform you that your BharatGPS installation request has been 
+        <strong style="color:#E74C3C">cancelled</strong>.
+    </p>
+    <div class="details">
+        <div class="row"><div class="label">Task ID</div><div class="value blue">' . $taskId . '</div></div>
+        <div class="row"><div class="label">Service</div><div class="value">' . $service . '</div></div>
+        <div class="row"><div class="label">Reason</div><div class="value">' . htmlspecialchars($reason) . '</div></div>
+        ' . ($details ? '<div class="row"><div class="label">Details</div><div class="value">' . htmlspecialchars($details) . '</div></div>' : '') . '
+        <div class="row"><div class="label">Technician</div><div class="value">' . htmlspecialchars($techName) . '</div></div>
+    </div>
+    <div style="background:#FCE9E7;border:1.5px solid #E74C3C;border-radius:8px;padding:14px 16px;margin:16px 0">
+        <div style="font-size:12px;font-weight:800;color:#E74C3C;margin-bottom:6px">❓ Was this a mistake?</div>
+        <div style="font-size:13px;color:#1a1f2e;line-height:1.7">
+            If you did not request this cancellation or if this was done in error, 
+            please raise a dispute using the button below. Our team will review and 
+            restore your installation immediately.
+        </div>
+    </div>
+    <p style="font-size:13px;color:#4a5568;line-height:1.7">
+        If you still wish to get BharatGPS installed, use the reschedule button below 
+        and we will set up a new appointment for you.
+    </p>
+    <p style="font-size:13px;color:#4a5568;margin-top:12px">
+        For immediate assistance call <strong>09963222009</strong>.
+    </p>';
+
+    $content .= customerActionButtons($task);
+
+    $content .= customerActionButtons($task);
+    sendMail(
+        $task['email'],
+        $customer,
+        '❌ Installation Cancelled — ' . $taskId . ' | ' . $customer,
+        emailTemplate($content)
+    );
+}
+

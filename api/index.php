@@ -449,6 +449,7 @@ case 'update_task':
                 elseif($isDevPush)                    $shouldEmail = false;
                 elseif($isSystem)                     $shouldEmail = false;
                 elseif($isPostpone && $hadConsent)    $shouldEmail = true;  // Postpone after consent
+                elseif($isCancel)                     $shouldEmail = true;  // Cancellation always
                 elseif($isCall && !$addingDone)       $shouldEmail = true;
 
                 if($shouldEmail){
@@ -466,17 +467,22 @@ case 'update_task':
                     $actStmt->execute([$id]);
                     $allActivities = $actStmt->fetchAll();
                     // Use specific postpone template if this is a postponement
+                    require_once __DIR__.'/mailer.php';
+                    $techNm = $pdo->prepare("SELECT name FROM users WHERE id=?");
+                    $techNm->execute([$taskData['assigned_to']??0]);
+                    $tName  = $techNm->fetchColumn() ?: 'BharatGPS Technician';
+
                     if($isPostpone && $hadConsent){
-                        require_once __DIR__.'/mailer.php';
-                        // Extract postpone details from remark
-                        $pReason  = ''; $pDetails = ''; $pDate = '';
-                        if(preg_match('/Reason: ([^|]+)/', $remark, $m)) $pReason  = trim($m[1]);
-                        if(preg_match('/Details: ([^|]+)/', $remark, $m)) $pDetails = trim($m[1]);
-                        if(preg_match('/Reschedule date: ([^|]+)/', $remark, $m)) $pDate = trim($m[1]);
-                        $techNameRow = $pdo->prepare("SELECT name FROM users WHERE id=?");
-                        $techNameRow->execute([$taskData['assigned_to']??0]);
-                        $tName = $techNameRow->fetchColumn() ?: 'BharatGPS Technician';
+                        $pReason=''; $pDetails=''; $pDate='';
+                        if(preg_match('/Reason: ([^|]+)/', $remark, $m))          $pReason  = trim($m[1]);
+                        if(preg_match('/Details: ([^|]+)/', $remark, $m))          $pDetails = trim($m[1]);
+                        if(preg_match('/Reschedule date: ([^|]+)/', $remark, $m))  $pDate    = trim($m[1]);
                         sendPostponeCustomer($taskData, $pReason, $pDetails, $pDate, $tName);
+                    } elseif($isCancel){
+                        $cReason=''; $cDetails='';
+                        if(preg_match('/Reason: ([^|]+)/', $remark, $m))   $cReason  = trim($m[1]);
+                        if(preg_match('/Details: ([^|]+)/', $remark, $m))  $cDetails = trim($m[1]);
+                        sendCancelCustomer($taskData, $cReason, $cDetails, $tName);
                     } else {
                         sendTaskUpdateCustomer($taskData, $remark, $updater['name'] ?? 'BharatGPS Team', $allActivities);
                     }
