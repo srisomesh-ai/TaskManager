@@ -4900,6 +4900,71 @@ async function loadApprovalsPage(){
 
 async function loadApprovals(){ return loadApprovalsPage(); }
 
+// ════════════════════════════════════════════════════════
+// QUICK TASK — Send enquiry link via WhatsApp
+// ════════════════════════════════════════════════════════
+const QT_ENQUIRY_URL = 'https://salmon-goldfish-110661.hostingersite.com/enquiry.php';
+
+function openQuickTask(){
+  document.getElementById('qt-name').value     = '';
+  document.getElementById('qt-phone').value    = '';
+  document.getElementById('qt-discount').value = '0';
+  document.getElementById('qt-link-box').style.display = 'none';
+  document.getElementById('quick-task-overlay').style.display = 'block';
+  document.getElementById('quick-task-modal').style.display   = 'flex';
+  setTimeout(()=>document.getElementById('qt-name').focus(), 100);
+}
+
+function closeQuickTask(){
+  document.getElementById('quick-task-overlay').style.display = 'none';
+  document.getElementById('quick-task-modal').style.display   = 'none';
+}
+
+function getQtLink(){
+  const name     = document.getElementById('qt-name').value.trim();
+  const phone    = document.getElementById('qt-phone').value.trim().replace(/\D/g,'');
+  const discount = parseInt(document.getElementById('qt-discount')?.value||0);
+  let url = QT_ENQUIRY_URL + '?name=' + encodeURIComponent(name) + '&phone=' + encodeURIComponent(phone);
+  if(discount > 0) url += '&disc=' + discount;
+  return { name, phone, discount, url };
+}
+
+function sendQuickTask(){
+  const { name, phone, discount, url } = getQtLink();
+  if(!name){ alert('Please enter the customer name.'); document.getElementById('qt-name').focus(); return; }
+  if(!phone || phone.length < 10){ alert('Please enter a valid 10-digit mobile number.'); document.getElementById('qt-phone').focus(); return; }
+
+  document.getElementById('qt-link-box').style.display = '';
+  document.getElementById('qt-link-text').textContent  = url;
+
+  const discountLine = discount > 0 ? '🎁 Special offer: ₹' + discount + ' OFF per device — applied automatically!\n\n' : '';
+  const msg = encodeURIComponent(
+    'Hello ' + name + '! 👋\n\n' +
+    'Thank you for your interest in BharatGPS Tracker.\n\n' +
+    discountLine +
+    '📋 Please fill your details to book your GPS installation:\n\n' +
+    url + '\n\n' +
+    'The form takes 2 minutes. Our team will contact you to schedule.\n\n' +
+    'For help call: 9849849824\n🌐 bharatgpstracker.com'
+  );
+
+  window.open('https://wa.me/91' + phone + '?text=' + msg, '_blank');
+  closeQuickTask();
+  showToast('📱 WhatsApp opened — send the message to ' + name);
+}
+
+function copyQtLink(e){
+  e.preventDefault();
+  const { name, phone, url } = getQtLink();
+  if(!name && !phone){ alert('Enter customer name and phone first.'); return; }
+  navigator.clipboard?.writeText(url).then(()=>showToast('✅ Link copied!')).catch(()=>{
+    const ta = document.createElement('textarea');
+    ta.value = url; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+    showToast('✅ Link copied!');
+  });
+}
+
 </script>
 
 <!-- ═══════════════════════════════════════════
@@ -5017,9 +5082,17 @@ async function loadApprovals(){ return loadApprovalsPage(); }
       <input type="text" id="qt-name" class="form-input" placeholder="e.g. Ramesh Kumar" style="width:100%">
     </div>
 
-    <div class="form-group" style="margin-bottom:16px">
+    <div class="form-group" style="margin-bottom:12px">
       <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:5px">Mobile Number *</label>
       <input type="tel" id="qt-phone" class="form-input" placeholder="10-digit mobile number" style="width:100%" maxlength="10">
+    </div>
+
+    <div class="form-group" style="margin-bottom:16px">
+      <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:5px">Discount Amount (₹)</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="number" id="qt-discount" class="form-input" placeholder="0" min="0" max="5000" value="0" style="width:120px">
+        <span style="font-size:12px;color:var(--text3)">₹ off per device (0 = no discount)</span>
+      </div>
     </div>
 
     <div id="qt-link-box" style="display:none;background:var(--surface2);border-radius:8px;padding:12px 14px;margin-bottom:14px;word-break:break-all;font-size:12px;color:var(--text3)">
