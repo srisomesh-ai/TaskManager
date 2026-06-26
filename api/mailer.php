@@ -374,6 +374,22 @@ function sendConsentRequest(array $task, string $techName): void {
 }
 
 // ── Cancellation email to customer ────────────────────────────────────────
+function customerActionButtons($task){
+    $token = $task['feedback_token'] ?? '';
+    if(!$token || $token === 'USED') return '';
+    $base          = 'https://salmon-goldfish-110661.hostingersite.com/feedback.php?token=' . urlencode($token);
+    $disputeUrl    = $base . '&mode=dispute';
+    $rescheduleUrl = $base . '&mode=reschedule';
+    return '
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid #e0e0e0">
+      <div style="font-size:12px;color:#8A9A98;text-align:center;margin-bottom:12px">What would you like to do?</div>
+      <div style="text-align:center">
+        <a href="' . $disputeUrl . '" style="display:inline-block;margin:4px;padding:11px 20px;background:#E74C3C;color:#fff;text-decoration:none;border-radius:8px;font-size:13px;font-weight:800">&#9888;&#65039; Raise Dispute</a>
+        <a href="' . $rescheduleUrl . '" style="display:inline-block;margin:4px;padding:11px 20px;background:#0E5C5C;color:#fff;text-decoration:none;border-radius:8px;font-size:13px;font-weight:800">&#128260; Reschedule Installation</a>
+      </div>
+    </div>';
+}
+
 function sendCancelCustomer($task, $reason, $details, $techName){
     if(empty($task['email'])) return;
 
@@ -410,8 +426,6 @@ function sendCancelCustomer($task, $reason, $details, $techName){
     <p style="font-size:13px;color:#4a5568;margin-top:12px">
         For immediate assistance call <strong>9849849824</strong>.
     </p>';
-
-    $content .= customerActionButtons($task);
 
     $content .= customerActionButtons($task);
     sendMail(
