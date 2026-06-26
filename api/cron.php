@@ -297,7 +297,7 @@ foreach($unpaidTasks as $task){
                 <div class="row"><div class="label">Service</div><div class="value">' . htmlspecialchars($task['device_details']??'GPS Service') . '</div></div>
                 <div class="row"><div class="label">Amount Due</div><div class="value highlight">&#8377;' . $price . '</div></div>
             </div>
-            <p style="font-size:13px;color:#4a5568;margin-top:14px">Please complete your payment at the earliest. For assistance call <strong>09963222009</strong>.</p>';
+            <p style="font-size:13px;color:#4a5568;margin-top:14px">Please complete your payment at the earliest. For assistance call <strong>9849849824</strong>.</p>';
             sendMail($task['email'], $task['customer_name'],
                 'Payment Pending — BharatGPS ' . $task['task_id'],
                 emailTemplate($custContent));
@@ -356,7 +356,7 @@ foreach($unpaidTasks as $task){
             <p style="font-size:13px;color:#4a5568;line-height:1.7;margin-bottom:14px">
                 If payment is not received, <strong>the GPS device may be deactivated</strong> and our technician will be sent to recover the device from your vehicle.
             </p>
-            <p style="font-size:13px;color:#4a5568">Please call us immediately at <strong>09963222009</strong> to resolve this.</p>';
+            <p style="font-size:13px;color:#4a5568">Please call us immediately at <strong>9849849824</strong> to resolve this.</p>';
             sendMail($task['email'], $task['customer_name'],
                 '⚠️ IMPORTANT: Payment Due — BharatGPS ' . $task['task_id'],
                 emailTemplate($finalCust));

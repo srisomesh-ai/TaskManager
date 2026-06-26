@@ -109,9 +109,10 @@ body{font-family:Calibri,Arial,sans-serif;background:#f0f2f5;color:#1a1f2e}
 </div>
 <div class="body">' . $content . '</div>
 <div class="footer">
-<p>📍 Bharat GPS Tracker · Visakhapatnam<br>
-📞 9849849824 · support@bharatgps.com<br>
-<span style="color:#b0b8c8">This is an automated message. Please do not reply.</span></p>
+<p>📍 Bharat GPS Tracker · Visakhapatnam, India<br>
+📞 9849849824 &nbsp;·&nbsp; ✉️ sales@bharatgps.com<br>
+🌐 <a href="https://bharatgpstracker.com" style="color:#0E5C5C">https://bharatgpstracker.com</a><br>
+<span style="color:#b0b8c8;font-size:11px">This is an automated message from BharatGPS Task Manager.</span></p>
 </div>
 </div></body></html>';
 }
