@@ -1057,76 +1057,107 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
 
             <!-- STEP 1: What happened -->
             <div style="margin-bottom:18px">
-              <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--accent2);margin-bottom:8px">① What happened?</div>
-              <textarea id="tch-discussed" rows="3" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;resize:vertical;transition:border .2s" onfocus="this.style.borderColor='var(--accent2)'" onblur="this.style.borderColor='var(--border)'" placeholder="Write what happened — called customer, visited location, issue found..."></textarea>
+              <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--accent2);margin-bottom:8px">① Select what happened — message auto-fills below</div>
             </div>
 
             <!-- STEP 2: Customer Response Cards -->
             <div style="margin-bottom:18px">
-              <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--accent2);margin-bottom:8px">② How did the customer respond?</div>
-              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px" id="tu-response-cards">
+              <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--accent2);margin-bottom:8px">② Select response type — message will auto-fill:</div>
+              <!-- CALL UPDATES -->
+              <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);margin-bottom:5px">📞 Call Updates</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:12px" id="tu-response-cards">
 
-                <div class="tu-card" data-resp="Called — customer answered" data-next="Follow up as discussed" data-remind="24" onclick="selectTuCard(this)" style="border-color:#27AE60">
-                  <div class="tu-card-icon">📞</div>
-                  <div class="tu-card-title">Called — Answered</div>
-                  <div class="tu-card-sub">Customer picked up</div>
-                </div>
-
-                <div class="tu-card" data-resp="Not answering call" data-next="Retry call in 2 hours" data-remind="2" onclick="selectTuCard(this)" style="border-color:#c0392b">
+                <div class="tu-card" data-resp="No answer"
+                  data-prefill="I called the customer but there was no answer. Will retry again shortly."
+                  data-next="Retry call in 2 hours" data-remind="2"
+                  onclick="selectTuCard(this)" style="border-color:#c0392b">
                   <div class="tu-card-icon">📵</div>
-                  <div class="tu-card-title">Not Answering</div>
-                  <div class="tu-card-sub">Retry in 2 hours</div>
+                  <div class="tu-card-title">No Answer</div>
+                  <div class="tu-card-sub">Nobody picked up</div>
                 </div>
 
-                <div class="tu-card" data-resp="Asked to call back later" data-next="Call back as requested" data-remind="4" onclick="selectTuCard(this)" style="border-color:#e07b00">
+                <div class="tu-card" data-resp="Call back later"
+                  data-prefill="I called the customer. They picked up and asked me to call back later as they are busy right now."
+                  data-next="Call back as requested" data-remind="4"
+                  onclick="selectTuCard(this)" style="border-color:#e07b00">
                   <div class="tu-card-icon">⏰</div>
                   <div class="tu-card-title">Call Back Later</div>
-                  <div class="tu-card-sub">Reminder in 4h</div>
+                  <div class="tu-card-sub">They asked me to call later</div>
                 </div>
 
-                <div class="tu-card" data-resp="Visited — customer present" data-next="Proceed with work" data-remind="0" onclick="selectTuCard(this)" style="border-color:#0E5C5C">
-                  <div class="tu-card-icon">🏠</div>
-                  <div class="tu-card-title">Visited — Present</div>
-                  <div class="tu-card-sub">Customer at location</div>
-                </div>
-
-                <div class="tu-card" data-resp="Visited — customer not available" data-next="Revisit or call to reschedule" data-remind="24" onclick="selectTuCard(this)" style="border-color:#8A9A98">
-                  <div class="tu-card-icon">🚪</div>
-                  <div class="tu-card-title">Visited — Not Available</div>
-                  <div class="tu-card-sub">Not found at location</div>
-                </div>
-
-                <div class="tu-card" data-resp="Come tomorrow" data-next="Visit tomorrow" data-remind="24" onclick="selectTuCard(this)" style="border-color:#1a56a0">
+                <div class="tu-card" data-resp="Called — come tomorrow"
+                  data-prefill="I called the customer. They confirmed availability and asked me to come tomorrow for the installation."
+                  data-next="Visit customer tomorrow" data-remind="24"
+                  onclick="selectTuCard(this)" style="border-color:#1a56a0">
                   <div class="tu-card-icon">📅</div>
                   <div class="tu-card-title">Come Tomorrow</div>
-                  <div class="tu-card-sub">Will visit tomorrow</div>
+                  <div class="tu-card-sub">Called, come tomorrow</div>
                 </div>
 
-                <div class="tu-card" data-resp="Vehicle not ready" data-next="Follow up when vehicle is ready" data-remind="48" onclick="selectTuCard(this)" style="border-color:#d4680a">
-                  <div class="tu-card-icon">🚗</div>
-                  <div class="tu-card-title">Vehicle Not Ready</div>
-                  <div class="tu-card-sub">Follow up in 2 days</div>
-                </div>
-
-                <div class="tu-card" data-resp="Payment issue — will resolve" data-next="Follow up on payment tomorrow" data-remind="24" onclick="selectTuCard(this)" style="border-color:#5b2d8e">
-                  <div class="tu-card-icon">💰</div>
-                  <div class="tu-card-title">Payment Issue</div>
-                  <div class="tu-card-sub">Follow up tomorrow</div>
-                </div>
-
-                <div class="tu-card" data-resp="Rescheduled by customer" data-next="Visit on rescheduled date" data-remind="24" onclick="selectTuCard(this)" style="border-color:#0d7377">
+                <div class="tu-card" data-resp="Called — rescheduled"
+                  data-prefill="I called the customer. They requested to reschedule the installation. New date agreed and will be updated."
+                  data-next="Visit on rescheduled date" data-remind="24"
+                  onclick="selectTuCard(this)" style="border-color:#0d7377">
                   <div class="tu-card-icon">🗓️</div>
                   <div class="tu-card-title">Rescheduled</div>
-                  <div class="tu-card-sub">New date agreed</div>
+                  <div class="tu-card-sub">Called, new date agreed</div>
                 </div>
 
-                <div class="tu-card" data-resp="Issue resolved" data-next="Task complete" data-remind="0" onclick="selectTuCard(this)" style="border-color:#27AE60">
+                <div class="tu-card" data-resp="Called — payment issue"
+                  data-prefill="I called the customer. They mentioned a concern regarding the payment. Will follow up to resolve this before visiting."
+                  data-next="Follow up on payment" data-remind="24"
+                  onclick="selectTuCard(this)" style="border-color:#5b2d8e">
+                  <div class="tu-card-icon">💰</div>
+                  <div class="tu-card-title">Payment Issue</div>
+                  <div class="tu-card-sub">Called, payment concern</div>
+                </div>
+
+              </div>
+
+              <!-- VISIT UPDATES -->
+              <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);margin-bottom:5px">🏠 Visit Updates</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:12px">
+
+                <div class="tu-card" data-resp="Visited — customer present"
+                  data-prefill="I visited the customer location. The customer was present and we discussed the installation details."
+                  data-next="Proceed with installation" data-remind="0"
+                  onclick="selectTuCard(this)" style="border-color:#0E5C5C">
+                  <div class="tu-card-icon">🏠</div>
+                  <div class="tu-card-title">Customer Present</div>
+                  <div class="tu-card-sub">Visited, customer there</div>
+                </div>
+
+                <div class="tu-card" data-resp="Visited — not available"
+                  data-prefill="I visited the customer location but the customer was not available at the address provided."
+                  data-next="Call customer to reschedule" data-remind="24"
+                  onclick="selectTuCard(this)" style="border-color:#8A9A98">
+                  <div class="tu-card-icon">🚪</div>
+                  <div class="tu-card-title">Not Available</div>
+                  <div class="tu-card-sub">Visited, nobody there</div>
+                </div>
+
+                <div class="tu-card" data-resp="Visited — vehicle not ready"
+                  data-prefill="I visited the customer location. The vehicle was not available or ready for installation. Customer asked to reschedule when the vehicle is ready."
+                  data-next="Follow up when vehicle is ready" data-remind="48"
+                  onclick="selectTuCard(this)" style="border-color:#d4680a">
+                  <div class="tu-card-icon">🚗</div>
+                  <div class="tu-card-title">Vehicle Not Ready</div>
+                  <div class="tu-card-sub">Visited, vehicle missing</div>
+                </div>
+
+                <div class="tu-card" data-resp="Visited — work done"
+                  data-prefill="I visited the customer location and the work has been completed successfully."
+                  data-next="Task complete" data-remind="0"
+                  onclick="selectTuCard(this)" style="border-color:#27AE60">
                   <div class="tu-card-icon">✅</div>
-                  <div class="tu-card-title">Issue Resolved</div>
-                  <div class="tu-card-sub">Problem fixed</div>
+                  <div class="tu-card-title">Work Done</div>
+                  <div class="tu-card-sub">Visited, issue resolved</div>
                 </div>
 
-                <div class="tu-card" data-resp="Other — see remarks" data-next="See remarks below" data-remind="24" onclick="selectTuCard(this)" style="border-color:#8A9A98">
+                <div class="tu-card" data-resp="Other"
+                  data-prefill=""
+                  data-next="" data-remind="0"
+                  onclick="selectTuCard(this)" style="border-color:#8A9A98">
                   <div class="tu-card-icon">💬</div>
                   <div class="tu-card-title">Other</div>
                   <div class="tu-card-sub">See remarks below</div>
@@ -1138,7 +1169,16 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
               <input type="hidden" id="tch-remind-when">
             </div>
 
-            <!-- STEP 3: Auto reminder confirmation (shown after card select) -->
+            <!-- STEP 3: Editable message (pre-filled from card) -->
+            <div style="margin-bottom:16px">
+              <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--accent2);margin-bottom:8px">③ Message — edit if needed</div>
+              <textarea id="tch-discussed" rows="3"
+                style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;resize:vertical;transition:border .2s"
+                onfocus="this.style.borderColor='var(--accent2)'" onblur="this.style.borderColor='var(--border)'"
+                placeholder="Select a card above — message will appear here. You can edit before sending."></textarea>
+            </div>
+
+            <!-- STEP 4: Auto reminder confirmation (shown after card select) -->
             <div id="tu-reminder-box" style="display:none;border-radius:8px;padding:12px 14px;margin-bottom:16px;border:1.5px solid var(--green);background:var(--green-bg)">
               <div style="display:flex;align-items:center;gap:10px">
                 <span style="font-size:20px">⏰</span>
@@ -3037,15 +3077,26 @@ function selectTuCard(card){
   document.querySelectorAll('.tu-card').forEach(c=>c.classList.remove('selected'));
   card.classList.add('selected');
 
-  const resp        = card.dataset.resp || '';
-  const nextStep    = card.dataset.next || '';
-  const remindHours = card.dataset.remind || '0';
-  const remindLabel = card.dataset.remindLabel || '';
+  const resp        = card.dataset.resp    || '';
+  const nextStep    = card.dataset.next    || '';
+  const remindHours = card.dataset.remind  || '0';
+  const prefill     = card.dataset.prefill || '';
 
   // Store values
-  document.getElementById('tch-cust-resp').value  = resp;
-  document.getElementById('tch-next-step').value  = nextStep;
+  document.getElementById('tch-cust-resp').value   = resp;
+  document.getElementById('tch-next-step').value   = nextStep;
   document.getElementById('tch-remind-when').value = remindHours;
+
+  // Pre-fill the "What happened?" textarea
+  const textarea = document.getElementById('tch-discussed');
+  if(textarea){
+    textarea.value = prefill;
+    // Move cursor to end so technician can add more
+    if(prefill){
+      textarea.focus();
+      textarea.setSelectionRange(prefill.length, prefill.length);
+    }
+  }
 
   // Show reminder box — no override, system handles it
   const remBox = document.getElementById('tu-reminder-box');
