@@ -322,8 +322,8 @@ window.addEventListener('popstate', function(){ history.pushState(null, '', wind
 
   <div class="card">
     <h3>👤 Your Details</h3>
-    <div class="f"><label>Full Name <span class="req">*</span></label><input type="text" name="name" placeholder="e.g. Ravi Kumar" required value="<?= htmlspecialchars($_POST['name'] ?? $REF_NAME) ?>"></div>
-    <div class="f"><label>WhatsApp / Mobile <span class="req">*</span></label><input type="tel" name="phone" placeholder="9876543210" required value="<?= htmlspecialchars($_POST['phone']??'') ?>"></div>
+    <div class="f"><label>Full Name <span class="req">*</span></label><input type="text" name="name" placeholder="e.g. Ravi Kumar" required value="<?= htmlspecialchars($_POST['name'] ?? $_GET['name'] ?? $REF_NAME) ?>"></div>
+    <div class="f"><label>WhatsApp / Mobile <span class="req">*</span></label><input type="tel" name="phone" placeholder="9876543210" required value="<?= htmlspecialchars($_POST['phone'] ?? $_GET['phone'] ?? '') ?>"></div>
     <div class="f"><label>Email ID <span class="req">*</span></label><input type="email" name="email" placeholder="your@email.com" required value="<?= htmlspecialchars($_POST['email']??'') ?>"></div>
     <div class="f"><label>Your Location / Area <span class="req">*</span></label><input type="text" name="location" placeholder="e.g. Maddilapalem, Visakhapatnam" required required value="<?= htmlspecialchars($_POST['location']??'') ?>"></div>
   </div>

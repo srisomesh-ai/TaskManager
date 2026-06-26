@@ -337,7 +337,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
       <div class="tb-user-role" id="tb-role">–</div>
     </div>
     <div class="tb-avatar" id="tb-avatar">?</div>
-    <button class="tb-btn admin-only" onclick="openCreateModal()">⚡ Quick Task</button>
+    <button class="tb-btn admin-only" onclick="openQuickTask()">⚡ Quick Task</button>
     <button class="tb-btn" onclick="doLogout()">↩ Logout</button>
   </div>
 
@@ -4992,5 +4992,52 @@ async function loadApprovals(){ return loadApprovalsPage(); }
 .cd-method-btn:hover{border-color:var(--accent);background:var(--accent-light)}
 .cd-method-btn.selected{border-color:var(--green);background:var(--green-bg)}
 </style>
+
+<!-- ═══════════════════════════════════════════════
+     QUICK TASK MODAL — Send enquiry link via WhatsApp
+═══════════════════════════════════════════════ -->
+<div class="modal-overlay" id="quick-task-overlay" onclick="closeQuickTask()" style="display:none"></div>
+<div class="modal" id="quick-task-modal" style="display:none;max-width:420px">
+  <div class="modal-hd">
+    <div>
+      <div class="modal-title">⚡ Quick Task</div>
+      <div class="modal-sub">Send enquiry link to customer via WhatsApp</div>
+    </div>
+    <button class="modal-close" onclick="closeQuickTask()">✕</button>
+  </div>
+  <div class="modal-body" style="padding:20px">
+
+    <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:#1a6b3a;line-height:1.7">
+      📱 Enter customer details → WhatsApp message opens with the enquiry link.<br>
+      Customer fills the form → task is created automatically.
+    </div>
+
+    <div class="form-group" style="margin-bottom:12px">
+      <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:5px">Customer Name *</label>
+      <input type="text" id="qt-name" class="form-input" placeholder="e.g. Ramesh Kumar" style="width:100%">
+    </div>
+
+    <div class="form-group" style="margin-bottom:16px">
+      <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:5px">Mobile Number *</label>
+      <input type="tel" id="qt-phone" class="form-input" placeholder="10-digit mobile number" style="width:100%" maxlength="10">
+    </div>
+
+    <div id="qt-link-box" style="display:none;background:var(--surface2);border-radius:8px;padding:12px 14px;margin-bottom:14px;word-break:break-all;font-size:12px;color:var(--text3)">
+      <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Enquiry Link</div>
+      <div id="qt-link-text" style="color:var(--accent);font-size:11px"></div>
+    </div>
+
+    <div style="display:flex;gap:10px">
+      <button class="ts-btn ts-btn-secondary" style="flex:1" onclick="closeQuickTask()">Cancel</button>
+      <button class="ts-btn" style="flex:2;background:#25D366;color:#fff;font-size:14px" onclick="sendQuickTask()">
+        📱 Send via WhatsApp
+      </button>
+    </div>
+
+    <div style="margin-top:12px;text-align:center;font-size:11px;color:var(--text3)">
+      Or copy the link: <a id="qt-copy-link" href="#" onclick="copyQtLink(event)" style="color:var(--accent);font-weight:700">Copy Link</a>
+    </div>
+  </div>
+</div>
 </body>
 </html>
