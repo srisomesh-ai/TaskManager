@@ -104,8 +104,13 @@ body{font-family:Calibri,Arial,sans-serif;background:#f0f2f5;color:#1a1f2e}
 </style></head><body>
 <div class="wrap">
 <div class="header">
-<div style="background:#fff;border-radius:10px;padding:8px 18px;display:inline-block;margin-bottom:8px"><img src="https://salmon-goldfish-110661.hostingersite.com/logo.png" alt="BharatGPS Tracker" style="height:42px;width:auto;display:block"></div>
-<div style="color:rgba(255,255,255,.7);font-size:11px;letter-spacing:1px;font-weight:600">TASK MANAGER NOTIFICATION</div>
+<table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 8px auto">
+<tr><td style="background:#ffffff;border-radius:10px;padding:8px 20px;line-height:0">
+<img src="https://salmon-goldfish-110661.hostingersite.com/logo.png" alt="BharatGPS Tracker"
+  width="180" height="40"
+  style="display:block;width:180px;height:40px;max-width:180px;border:0;outline:none">
+</td></tr></table>
+<div style="color:rgba(255,255,255,.75);font-size:11px;letter-spacing:1px;font-weight:600">TASK MANAGER NOTIFICATION</div>
 </div>
 <div class="body">' . $content . '</div>
 <div class="footer">

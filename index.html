@@ -4417,7 +4417,7 @@ async function savePayment(){
   const chequePart  = (mode==='Cheque' && chqNo) ? ` | Cheque No: ${chqNo}${chqBank?' ('+chqBank+')':''}` : '';
   const cashDep     = (mode==='Cash') ? ' | ⏰ Cash to be deposited within 24 hours' : '';
   const balPart     = (!isFullyPaid && balReason) ? ` | Balance reason: ${balReason} | Collect by: ${balDate}` : '';
-  const fullPaidPart= isFullyPaid && bal > 0 ? ` (₹${bal} rounding accepted)` : '';
+  const fullPaidPart= isFullyPaid && bal > 0 ? ` (₹${Math.round(bal * 100) / 100} rounding accepted)` : '';
 
   const remark = `💰 Payment collected: ₹${amount.toLocaleString('en-IN')} via ${mode}${fullPaidPart}`
     + (notes ? ` | Ref: ${notes}` : '')
