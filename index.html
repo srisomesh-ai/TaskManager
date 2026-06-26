@@ -3582,11 +3582,14 @@ async function checkAndUpdateAttendBtn(taskId){
     return;
   }
 
-  // STATE 2: Consent received, adding not done yet — Proceed to Adding
+  // Check consent status from server
   const res = await api('check_consent', {id: taskId}).catch(()=>({}));
+
+  // STATE 2: Consent received — Proceed to Adding
   if(res.consented){
     btn.style.background = 'var(--green)';
     btn.style.border     = 'none';
+    btn.style.display    = '';
     btn.setAttribute('onclick', 'openTechAttend(' + taskId + ')');
     if(icon)  icon.textContent  = '➕';
     if(label) label.textContent = 'Proceed to Adding';
@@ -3599,7 +3602,19 @@ async function checkAndUpdateAttendBtn(taskId){
     return;
   }
 
-  // STATE 1: Default — Attend (send consent)
+  // STATE 1b: Consent email already sent — waiting for customer
+  if(res.sent){
+    btn.style.display = 'none'; // hide attend button
+    if(status) status.innerHTML = `
+      <div style="background:var(--blue-bg);border:1.5px solid var(--blue);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--blue);line-height:1.7">
+        ⏳ <strong>Waiting for Customer</strong><br>
+        Consent email has been sent. Waiting for the customer to confirm.<br>
+        <span style="font-size:10px;color:var(--text3)">The button will unlock automatically once customer confirms.</span>
+      </div>`;
+    return;
+  }
+
+  // STATE 1: No consent sent yet — show Attend button
   btn.style.background = 'var(--accent)';
   btn.style.display    = '';
   btn.setAttribute('onclick', 'handleAttendClick(' + taskId + ')');

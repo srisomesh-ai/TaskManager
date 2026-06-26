@@ -1189,7 +1189,12 @@ case 'check_consent':
             'mobile'      => $crow['customer_consent_mobile'],
         ]);
     } else {
-        echo json_encode(['consented'=>false]);
+        // Check if consent was sent but not yet confirmed
+        $ts = $pdo->prepare("SELECT consent_token FROM tasks WHERE id=?");
+        $ts->execute([$id]);
+        $trow = $ts->fetch();
+        $sent = !empty($trow['consent_token']) && $trow['consent_token'] !== 'USED';
+        echo json_encode(['consented'=>false, 'sent'=>$sent]);
     }
     break;
 
