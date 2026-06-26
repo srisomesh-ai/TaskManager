@@ -288,6 +288,22 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
 .dash-alert{padding:10px 14px;border-radius:8px;margin-bottom:8px;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
 
 
+/* ── Urgent task styles (technician view) ── */
+@keyframes urgent-pulse{0%,100%{box-shadow:0 0 0 0 rgba(231,76,60,.4)}70%{box-shadow:0 0 0 8px rgba(231,76,60,0)}}
+.urgent-row{background:#fff5f5 !important;border-left:3px solid var(--red) !important}
+.urgent-row:hover{background:#fdecea !important}
+.urgent-badge-row{display:inline-flex;align-items:center;gap:4px;background:var(--red);color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:10px;text-transform:uppercase;letter-spacing:.3px;animation:urgent-pulse 1.5s infinite;vertical-align:middle;margin-left:4px}
+.priority-section{background:linear-gradient(135deg,#fff5f5,#fdecea);border:2px solid var(--red);border-radius:12px;padding:14px 16px;margin-bottom:16px}
+.priority-section-title{font-size:12px;font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.priority-card{background:#fff;border-radius:10px;margin-bottom:8px;border-left:4px solid var(--red);box-shadow:0 2px 8px rgba(231,76,60,.15);cursor:pointer;transition:transform .15s}
+.priority-card:hover{transform:translateX(4px)}
+.priority-card:last-child{margin-bottom:0}
+.priority-card-body{padding:10px 14px;display:flex;align-items:center;gap:10px}
+.priority-card-info{flex:1;min-width:0}
+.priority-card-name{font-size:13px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.priority-card-sub{font-size:11px;color:var(--text3);margin-top:2px}
+.priority-card-age{font-size:12px;font-weight:800;color:var(--red);flex-shrink:0;text-align:right}
+
 </style>
 </head>
 <body>
@@ -333,7 +349,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
       <div class="nav-sec">Main</div>
       <div class="nav-item active" id="nav-dashboard" onclick="showPage('dashboard')"><span class="nav-icon">📊</span> Dashboard</div>
       <div class="nav-item" id="nav-tasks" onclick="showPage('tasks')"><span class="nav-icon">📋</span> All Tasks</div>
-      <div class="nav-item" id="nav-my-tasks" onclick="showPage('my-tasks')"><span class="nav-icon">🙋</span> My Tasks</div>
+      <div class="nav-item" id="nav-my-tasks" onclick="showPage('my-tasks')"><span class="nav-icon">🙋</span> My Tasks <span class="nav-badge" id="my-tasks-nav-badge" style="display:none;background:var(--red);color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:10px;margin-left:4px">0</span></div>
       <div class="nav-item" id="nav-urgent" onclick="showPage('urgent')"><span class="nav-icon">🚨</span> Urgent Tasks <span class="nav-badge" id="urgent-badge">0</span></div>
       <div class="nav-item admin-only" id="nav-approvals" onclick="showPage('approvals')"><span class="nav-icon">✅</span> Approvals <span class="nav-badge" id="approval-badge">0</span></div>
       <div class="nav-sec">Reports</div>
@@ -869,6 +885,12 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
             <option>Cancelled</option>
           </select>
           <button class="ts-btn ts-btn-secondary" onclick="clearMyFilters()">✕ Clear</button>
+        </div>
+
+        <!-- PRIORITY / URGENT SECTION -->
+        <div id="my-priority-section" style="display:none;margin-bottom:14px" class="priority-section">
+          <div class="priority-section-title">🚨 Action Required — Priority Tasks</div>
+          <div id="my-priority-list"></div>
         </div>
 
         <!-- TASK TABLE -->
@@ -2678,6 +2700,17 @@ async function loadMyTasks(){
 
   myPage = 1;
   renderMyTasks();
+
+  // Urgent badge on sidebar nav
+  const urgentTasks = myAllTasks.filter(t => {
+    const open = ['Open','In Progress','Task Pending'].includes(t.task_status);
+    return open && (t.is_urgent=='1' || getAgeHours(t.created_at) >= 24);
+  });
+  const navBadge = document.getElementById('my-tasks-nav-badge');
+  if(navBadge){
+    navBadge.textContent = urgentTasks.length;
+    navBadge.style.display = urgentTasks.length ? '' : 'none';
+  }
 }
 
 function filterMyTasks(status){
@@ -2735,6 +2768,38 @@ function renderMyTasks(){
   if(prev) prev.disabled = myPage === 1;
   if(next) next.disabled = myPage >= total;
 
+  // ── Priority section (urgent tasks at top) ───────────────────────────
+  const prioritySec  = document.getElementById('my-priority-section');
+  const priorityList = document.getElementById('my-priority-list');
+  const urgentAll = myAllTasks.filter(t => {
+    const open = ['Open','In Progress','Task Pending'].includes(t.task_status);
+    return open && (t.is_urgent=='1' || getAgeHours(t.created_at) >= 24);
+  });
+  if(prioritySec && priorityList){
+    if(urgentAll.length && !status && !search){
+      prioritySec.style.display = '';
+      priorityList.innerHTML = urgentAll.slice(0,5).map(t => {
+        const age  = getAgeHours(t.created_at);
+        const crit = t.is_urgent=='1' || age>=48;
+        return `<div class="priority-card" onclick="viewTask(${t.id})">
+          <div class="priority-card-body">
+            <div style="font-size:24px;flex-shrink:0">${crit?'🚨':'⚠️'}</div>
+            <div class="priority-card-info">
+              <div class="priority-card-name">${t.customer_name||'–'} <span style="font-size:10px;color:var(--text3);font-weight:400">· ${t.task_id||''}</span></div>
+              <div class="priority-card-sub">${t.device_details||'–'} · ${t.location||'–'}</div>
+            </div>
+            <div class="priority-card-age">
+              ${crit?'🚨 URGENT':'⚠️ '+age+'h'}<br>
+              <span style="font-size:10px;color:var(--text3);font-weight:400">${t.task_status}</span>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+    } else {
+      prioritySec.style.display = 'none';
+    }
+  }
+
   if(!slice.length){
     tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:48px;color:var(--text3)">
       <div style="font-size:36px;margin-bottom:10px">📋</div>
@@ -2746,15 +2811,18 @@ function renderMyTasks(){
 
   tbody.innerHTML = slice.map((t,i)=>{
     const age      = openSt.includes(t.task_status) ? getAgeHours(t.created_at) : 0;
-    const isCrit   = age >= 48;
-    const isUrgent = age >= 24 && age < 48;
-    const rowStyle = isCrit ? 'background:#fff5f5' : isUrgent ? 'background:#fffbf0' : '';
+    const isUrgentTask = t.is_urgent=='1' || age >= 24;
+    const isCrit   = t.is_urgent=='1' || age >= 48;
+    const isWarn   = !isCrit && age >= 24;
+    const rowClass = isCrit ? 'urgent-row' : isWarn ? '' : '';
+    const rowStyle = isWarn ? 'background:#fffbf0' : '';
     const ageTxt   = isCrit  ? `<span class="age-badge" style="background:#fdecea;color:#c0392b">🚨 ${age}h</span>`
-                   : isUrgent? `<span class="age-badge" style="background:#fff3e0;color:#e07b00">⚠️ ${age}h</span>`
+                   : isWarn  ? `<span class="age-badge" style="background:#fff3e0;color:#e07b00">⚠️ ${age}h</span>`
                    : age > 0 ? `<span style="color:var(--text3);font-size:11px">${age}h</span>` : '–';
-    return `<tr style="border-bottom:1px solid var(--border);cursor:pointer;${rowStyle}" onclick="viewTask(${t.id})">
+    const urgentBadge = isUrgentTask ? `<span class="urgent-badge-row">🚨 Urgent</span>` : '';
+    return `<tr class="${rowClass}" style="border-bottom:1px solid var(--border);cursor:pointer;${rowStyle}" onclick="viewTask(${t.id})">
       <td style="padding:9px 12px;color:var(--text3);font-size:11px">${start+i+1}</td>
-      <td style="padding:9px 12px"><span class="task-id">${t.task_id||'–'}</span></td>
+      <td style="padding:9px 12px"><span class="task-id">${t.task_id||'–'}</span>${urgentBadge}</td>
       <td style="padding:9px 12px"><div class="cust-name" style="max-width:130px">${t.customer_name||'–'}</div></td>
       <td style="padding:9px 12px;color:var(--text2);font-size:12px">${t.contact_number||'–'}</td>
       <td style="padding:9px 12px;color:var(--text2);font-size:12px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.location||'–'}</td>
