@@ -5,11 +5,11 @@
 
 define('MAIL_HOST',     'smtp.gmail.com');
 define('MAIL_PORT',     587);
-define('MAIL_USER',     'info@bharatgps.com');       // ← Gmail address
+define('MAIL_USER',     'sales@bharatgps.com');       // ← Gmail address
 define('MAIL_PASS',     'rxeumqjrhyrzeeye');  // ← 16-char App Password (not Gmail login password)
-define('MAIL_FROM',     'info@bharatgps.com');
+define('MAIL_FROM',     'sales@bharatgps.com');
 define('MAIL_FROM_NAME','Bharat GPS Task Manager');
-define('MAIL_REPLY_TO', 'info@bharatgps.com');
+define('MAIL_REPLY_TO', 'sales@bharatgps.com');
 
 function sendMail(string $toEmail, string $toName, string $subject, string $htmlBody): bool {
     if (!$toEmail || !filter_var($toEmail, FILTER_VALIDATE_EMAIL)) return false;
@@ -110,7 +110,7 @@ body{font-family:Calibri,Arial,sans-serif;background:#f0f2f5;color:#1a1f2e}
 <div class="body">' . $content . '</div>
 <div class="footer">
 <p>📍 Bharat GPS Tracker · Visakhapatnam<br>
-📞 09963222009 · support@bharatgps.com<br>
+📞 9849849824 · support@bharatgps.com<br>
 <span style="color:#b0b8c8">This is an automated message. Please do not reply.</span></p>
 </div>
 </div></body></html>';
@@ -204,7 +204,7 @@ function sendTaskClosedCustomer(array $task): void {
         ' . ($balance > 0 ? '<div class="row"><div class="label">Balance Due</div><div class="value" style="color:#c0392b;font-weight:700">₹' . number_format($balance, 0) . '</div></div>' : '') . '
     </div>
     <p style="font-size:14px;font-weight:700;color:#1a3a6b;margin-top:16px">Thank you for choosing Bharat GPS Tracker! 🙏</p>
-    <p style="font-size:13px;color:#4a5568;margin-top:6px">For any support, call us at <strong>09963222009</strong>.</p>';
+    <p style="font-size:13px;color:#4a5568;margin-top:6px">For any support, call us at <strong>9849849824</strong>.</p>';
 
     sendMail(
         $task['email'],
@@ -315,7 +315,7 @@ function sendTaskUpdateCustomer(array $task, string $remark, string $techName, a
     ' . $historyHtml . '
 
     <p style="font-size:12px;color:#8a9ab0;margin-top:16px">
-        For help contact us at <strong>09963222009</strong> · <strong>info@bharatgps.com</strong>
+        For help contact us at <strong>9849849824</strong> · <strong>sales@bharatgps.com</strong>
     </p>';
 
     sendMail(
@@ -361,7 +361,7 @@ function sendConsentRequest(array $task, string $techName): void {
         <div class="row"><div class="label">Technician</div><div class="value">' . htmlspecialchars($techName) . '</div></div>
     </div>
     <p style="font-size:12px;color:#8a9ab0;margin-top:16px">
-        For help call <strong>09963222009</strong>
+        For help call <strong>9849849824</strong>
     </p>';
 
     sendMail(
@@ -407,7 +407,7 @@ function sendCancelCustomer($task, $reason, $details, $techName){
         and we will set up a new appointment for you.
     </p>
     <p style="font-size:13px;color:#4a5568;margin-top:12px">
-        For immediate assistance call <strong>09963222009</strong>.
+        For immediate assistance call <strong>9849849824</strong>.
     </p>';
 
     $content .= customerActionButtons($task);

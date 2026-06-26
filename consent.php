@@ -33,7 +33,7 @@ if(!$task){
 <div style="background:#fff;border-radius:12px;padding:32px;max-width:420px;width:100%;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.1)">
 <div style="font-size:40px;margin-bottom:12px">❌</div>
 <h2 style="color:#c0392b;margin-bottom:8px">Link Expired or Invalid</h2>
-<p style="color:#4a5568;font-size:14px">This consent link is no longer valid. Please contact your technician or call <strong>09963222009</strong>.</p>
+<p style="color:#4a5568;font-size:14px">This consent link is no longer valid. Please contact your technician or call <strong>9849849824</strong>.</p>
 </div></body></html>');
 }
 
@@ -104,7 +104,7 @@ if(window.performance && window.performance.navigation.type === 2){
     <div><strong>Confirmed at:</strong> ' . $consentTime . '</div>
   </div>
   <div class="note">
-    This link is now inactive. For help call <strong>09963222009</strong>
+    This link is now inactive. For help call <strong>9849849824</strong> or email <a href='mailto:sales@bharatgps.com'>sales@bharatgps.com</a>
   </div>
 </div>
 </body>
@@ -270,7 +270,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:#1a1f2e;min-heig
       <strong>Installation will now proceed.</strong><br><br>
       Please ensure your vehicle is available and accessible.<br><br>
       <strong>Task ID: <?= $taskId ?></strong><br>
-      For any help call <strong>09963222009</strong>
+      For any help call <strong>9849849824</strong>
     </div>
   </div>
 
@@ -418,7 +418,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:#1a1f2e;min-heig
 <?php endif; ?>
 
   <div class="footer">
-    BharatGPS · 09963222009 · info@bharatgps.com<br>
+    BharatGPS · 9849849824 · sales@bharatgps.com<br>
     Task <?= $taskId ?> · <?= date('d M Y') ?>
   </div>
 </div>

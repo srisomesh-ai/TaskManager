@@ -27,7 +27,7 @@ $s->execute([$token]);
 $task = $s->fetch();
 
 if(!$task){
-    die('<h2 style="font-family:sans-serif;color:#c0392b;padding:40px">Link not found or expired. Call 09963222009.</h2>');
+    die('<h2 style="font-family:sans-serif;color:#c0392b;padding:40px">Link not found or expired. Call 9849849824.</h2>');
 }
 
 // Already used check
@@ -38,7 +38,7 @@ if($task['feedback_token'] === 'USED'){
 <div style="background:#fff;border-radius:14px;padding:32px;max-width:400px;width:100%;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.1)">
 <div style="font-size:48px;margin-bottom:12px">✅</div>
 <h2 style="color:#0E5C5C;margin-bottom:8px">Already Submitted</h2>
-<p style="color:#4a5568;font-size:14px;line-height:1.7">Your message has been received and is being reviewed by our team.<br><br>For urgent matters call <strong>09963222009</strong>.</p>
+<p style="color:#4a5568;font-size:14px;line-height:1.7">Your message has been received and is being reviewed by our team.<br><br>For urgent matters call <strong>9849849824</strong>.</p>
 </div></body></html>');
 }
 
@@ -165,11 +165,11 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:#16201F;min-heig
       <?php if($isReschedule): ?>
         Your reschedule request has been sent to our team.<br><br>
         We will call you shortly to confirm the new date and time.<br><br>
-        For urgent queries call <strong>09963222009</strong>.
+        For urgent queries call <strong>9849849824</strong>.
       <?php else: ?>
         Your dispute has been recorded and sent to our management team.<br><br>
         We will review and take action within <strong>24 hours</strong>.<br><br>
-        For urgent matters call <strong>09963222009</strong>.
+        For urgent matters call <strong>9849849824</strong>.
       <?php endif; ?>
     </div>
   </div>
@@ -230,8 +230,9 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:#16201F;min-heig
 <?php endif; ?>
 
   <div class="footer">
-    BharatGPS · 09963222009 · info@bharatgps.com<br>
-    This link is private to you. Do not share it with others.
+    BharatGPS Tracker · 📞 9849849824 · ✉️ sales@bharatgps.com<br>
+    <a href="https://bharatgpstracker.com" style="color:var(--teal)">https://bharatgpstracker.com</a><br>
+    <span style="font-size:11px">This link is private to you. Do not share it.</span>
   </div>
 </div>
 
