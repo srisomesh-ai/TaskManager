@@ -4910,14 +4910,12 @@ function openQuickTask(){
   document.getElementById('qt-phone').value    = '';
   document.getElementById('qt-discount').value = '0';
   document.getElementById('qt-link-box').style.display = 'none';
-  document.getElementById('quick-task-overlay').style.display = 'block';
-  document.getElementById('quick-task-modal').style.display   = 'flex';
+  document.getElementById('quick-task-overlay').style.display = 'flex';
   setTimeout(()=>document.getElementById('qt-name').focus(), 100);
 }
 
 function closeQuickTask(){
   document.getElementById('quick-task-overlay').style.display = 'none';
-  document.getElementById('quick-task-modal').style.display   = 'none';
 }
 
 function getQtLink(){
@@ -5061,8 +5059,8 @@ function copyQtLink(e){
 <!-- ═══════════════════════════════════════════════
      QUICK TASK MODAL — Send enquiry link via WhatsApp
 ═══════════════════════════════════════════════ -->
-<div class="modal-overlay" id="quick-task-overlay" onclick="closeQuickTask()" style="display:none"></div>
-<div class="modal" id="quick-task-modal" style="display:none;max-width:420px">
+<div id="quick-task-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;padding:16px" onclick="closeQuickTask()">
+<div id="quick-task-modal" onclick="event.stopPropagation()" style="background:#fff;border-radius:14px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden;display:flex;flex-direction:column">
   <div class="modal-hd">
     <div>
       <div class="modal-title">⚡ Quick Task</div>
