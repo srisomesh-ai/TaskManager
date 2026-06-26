@@ -1262,6 +1262,20 @@ case 'get_signal':
     break;
 
 // ---- VERIFY TOKEN ----
+case 'delete_task':
+    if($userRole !== 'admin'){ echo json_encode(['error'=>'Admin only']); break; }
+    $did = intval($body['id'] ?? 0);
+    if(!$did){ echo json_encode(['error'=>'Invalid ID']); break; }
+    try {
+        $pdo->prepare("DELETE FROM task_device_installs WHERE task_id=?")->execute([$did]);
+        $pdo->prepare("DELETE FROM task_activities WHERE task_id=?")->execute([$did]);
+        $pdo->prepare("DELETE FROM tasks WHERE id=?")->execute([$did]);
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){
+        echo json_encode(['error'=>$e->getMessage()]);
+    }
+    break;
+
 case 'verify_token':
     // Validate the auth token and return user info
     $tok = $_SERVER['HTTP_X_AUTH_TOKEN'] ?? '';

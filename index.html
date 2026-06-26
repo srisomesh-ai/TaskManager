@@ -2963,6 +2963,9 @@ async function viewTask(id){
       btns.push(`<button onclick="adminCancelTask(${t.id})" class="ts-btn ts-btn-secondary">🚫 Cancel Task</button>`);
     }
 
+    // Delete — admin only, always available (for testing/cleanup)
+    btns.push(`<button onclick="adminDeleteTask(${t.id})" class="ts-btn" style="background:var(--red-bg);color:var(--red);border:1.5px solid var(--red)">🗑️ Delete</button>`);
+
     if(btns.length){
       adFooter.style.display = 'flex';
       adFooter.innerHTML = btns.join('');
@@ -4421,6 +4424,19 @@ function showUpdateToast(msg){
 
 // Start polling after login
 const _origStartApp = typeof startApp === 'function' ? startApp : null;
+
+async function adminDeleteTask(id){
+  if(!confirm('⚠️ Delete this task permanently?\n\nThis will remove the task, all activity logs, device installs and consent records.\n\nType OK to confirm.')) return;
+  const res = await api('delete_task',{},'POST',{id}).catch(()=>({}));
+  if(res.success){
+    closeTaskDetail();
+    showToast('🗑️ Task deleted');
+    if(typeof loadTasks==='function') loadTasks();
+    if(typeof loadDashboard==='function') loadDashboard();
+  } else {
+    alert('Error: ' + (res.error||'Could not delete'));
+  }
+}
 
 </script>
 </body>
