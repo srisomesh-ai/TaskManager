@@ -904,12 +904,44 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
         </div>
       </div><!-- /page-my-tasks -->
       <div class="page" id="page-urgent">
-        <div class="pg-header"><div class="breadcrumb">Home / <b>Urgent Tasks</b></div><div class="pg-title">🚨 Urgent Tasks</div></div>
-        <div class="card"><div style="padding:40px;text-align:center;color:var(--text3)">Coming soon</div></div>
+        <div class="pg-header"><div class="breadcrumb">Home / <b>Urgent Tasks</b></div><div class="pg-title">🚨 Urgent Tasks</div><div class="pg-sub">Tasks marked urgent or open 24h+</div></div>
+        <div class="card" style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr style="background:var(--surface2);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)">
+              <th style="padding:10px 12px;text-align:left;font-weight:700">#</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700">Task ID</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700">Customer</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700">Contact</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700">Service</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700">Status</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700">Technician</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700">Amount</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700">Age</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700">Action</th>
+            </tr></thead>
+            <tbody id="urgent-tbody"><tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text3)">Loading...</td></tr></tbody>
+          </table>
+        </div>
       </div>
       <div class="page" id="page-approvals">
-        <div class="pg-header"><div class="breadcrumb">Home / <b>Approvals</b></div><div class="pg-title">✅ Approvals</div></div>
-        <div class="card"><div style="padding:40px;text-align:center;color:var(--text3)">Coming soon</div></div>
+        <div class="pg-header"><div class="breadcrumb">Home / <b>Approvals</b></div><div class="pg-title">✅ Approvals</div><div class="pg-sub">Tasks submitted by technicians awaiting approval</div></div>
+        <div class="card" style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr style="background:var(--surface2);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)">
+              <th style="padding:10px 12px;text-align:left;font-weight:700">#</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700">Task ID</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700">Customer</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700">Contact</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700">Service</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700">Technician</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700">Amount</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700">Payment</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700">Approve</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700">View</th>
+            </tr></thead>
+            <tbody id="approvals-tbody"><tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text3)">Loading...</td></tr></tbody>
+          </table>
+        </div>
       </div>
       <div class="page" id="page-daily-report">
         <div class="pg-header"><div class="breadcrumb">Home / <b>Daily Report</b></div><div class="pg-title">📅 Daily Report</div></div>
@@ -1536,6 +1568,8 @@ function showPage(name, opts={}){
     dashboard:  loadDashboard,
     tasks:      loadTasksPage,
     'my-tasks': loadMyTasks,
+    urgent:     loadUrgentPage,
+    approvals:  loadApprovalsPage,
   };
   if(loaders[name]) loaders[name]();
 }
@@ -2626,7 +2660,9 @@ async function loadMyTasks(){
     : `Tasks assigned to ${currentUser?.name||'you'}`;
 
   // Fetch my tasks (API enforces assigned_to for technician role server-side)
-  const res = await api('get_tasks', {limit: 500}).catch(()=>({}));
+  // For admin/assigner — only show tasks assigned to them
+  const myParams = isTech2 ? {limit:500} : {limit:500, assigned_to: currentUser.id};
+  const res = await api('get_tasks', myParams).catch(()=>({}));
   myAllTasks = res.tasks || [];
 
   // Fetch my stats
@@ -4452,6 +4488,75 @@ async function adminDeleteTask(id){
     alert('Error: ' + (res.error||'Could not delete'));
   }
 }
+
+async function loadUrgentPage(){
+  const tbody = document.getElementById('urgent-tbody');
+  if(tbody) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading...</td></tr>';
+
+  // Fetch: tasks marked urgent OR open 24h+
+  const res = await api('get_urgent_tasks').catch(()=>({}));
+  const tasks = res.tasks || [];
+
+  if(!tbody) return;
+  if(!tasks.length){
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:48px;color:var(--text3)"><div style="font-size:36px;margin-bottom:10px">🎉</div><div style="font-size:14px;font-weight:700">No urgent tasks</div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = tasks.map((t,i)=>{
+    const h   = parseInt(t.age_hours||0);
+    const crit= h>=48 || t.is_urgent=='1';
+    const col = crit?'#c0392b':'#e07b00';
+    const bg  = crit?'#fff5f5':'#fffbf0';
+    return `<tr style="border-bottom:1px solid var(--border);cursor:pointer;background:${bg}" onclick="viewTask(${t.id})">
+      <td style="padding:9px 12px;color:var(--text3);font-size:11px">${i+1}</td>
+      <td style="padding:9px 12px"><span class="task-id">${t.task_id||'–'}</span></td>
+      <td style="padding:9px 12px"><div class="cust-name">${t.customer_name||'–'}</div></td>
+      <td style="padding:9px 12px;font-size:12px;color:var(--text2)">${t.contact_number||'–'}</td>
+      <td style="padding:9px 12px;font-size:12px;color:var(--text2)">${t.device_details||'–'}</td>
+      <td style="padding:9px 12px">${statusPill(t.task_status)}</td>
+      <td style="padding:9px 12px;font-size:12px;color:var(--text2)">${t.tech_name||'Unassigned'}</td>
+      <td style="padding:9px 12px;font-weight:700;color:var(--green)">₹${parseFloat(t.price_to_collect||0).toLocaleString('en-IN')}</td>
+      <td style="padding:9px 12px"><span style="font-size:12px;font-weight:800;color:${col}">${crit?'🚨':'⚠️'} ${h}h</span></td>
+      <td style="padding:9px 12px"><button class="act-btn act-view" onclick="viewTask(${t.id})">👁</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function loadApprovalsPage(){
+  const tbody = document.getElementById('approvals-tbody');
+  if(tbody) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading...</td></tr>';
+
+  const res = await api('get_approvals').catch(()=>({}));
+  const tasks = res.tasks || [];
+
+  if(!tbody) return;
+  if(!tasks.length){
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:48px;color:var(--text3)"><div style="font-size:36px;margin-bottom:10px">✅</div><div style="font-size:14px;font-weight:700">No tasks awaiting approval</div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = tasks.map((t,i)=>{
+    const price = parseFloat(t.price_to_collect||0);
+    const coll  = parseFloat(t.amount_collected||0);
+    const bal   = price - coll;
+    const paid  = bal <= 15;
+    return `<tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="viewTask(${t.id})">
+      <td style="padding:9px 12px;color:var(--text3);font-size:11px">${i+1}</td>
+      <td style="padding:9px 12px"><span class="task-id">${t.task_id||'–'}</span></td>
+      <td style="padding:9px 12px"><div class="cust-name">${t.customer_name||'–'}</div></td>
+      <td style="padding:9px 12px;font-size:12px;color:var(--text2)">${t.contact_number||'–'}</td>
+      <td style="padding:9px 12px;font-size:12px;color:var(--text2)">${t.device_details||'–'}</td>
+      <td style="padding:9px 12px;font-size:12px;color:var(--text2)">${t.tech_name||'Unassigned'}</td>
+      <td style="padding:9px 12px;font-weight:700;color:var(--green)">₹${price.toLocaleString('en-IN')}</td>
+      <td style="padding:9px 12px;font-weight:700;color:${paid?'var(--green)':'var(--red)'}">
+        ${paid?'✅ Paid':'⚠️ ₹'+bal.toLocaleString('en-IN')+' due'}
+      </td>
+      <td style="padding:9px 12px"><button class="act-btn act-view" onclick="event.stopPropagation();quickApprove(${t.id},this)" ${!paid?'disabled style="opacity:.4"':''}>✅ Approve</button></td>
+      <td style="padding:9px 12px"><button class="act-btn act-view" onclick="viewTask(${t.id})">👁</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function loadApprovals(){ return loadApprovalsPage(); }
 
 </script>
 </body>

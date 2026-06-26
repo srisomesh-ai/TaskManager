@@ -626,7 +626,7 @@ case 'get_urgent_tasks':
         FROM tasks t
         LEFT JOIN users u ON t.assigned_to = u.id
         WHERE t.task_status IN ('Open','In Progress','Task Pending')
-        AND t.created_at <= DATE_SUB(NOW(), INTERVAL 24 HOUR)";
+        AND (t.is_urgent=1 OR t.created_at <= DATE_SUB(NOW(), INTERVAL 24 HOUR))";
     if($userRole === 'technician'){
         $us = $pdo->prepare($urgSql . " AND t.assigned_to=? ORDER BY t.created_at ASC");
         $us->execute([$userId]);
