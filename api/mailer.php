@@ -374,6 +374,53 @@ function sendConsentRequest(array $task, string $techName): void {
 }
 
 // ── Cancellation email to customer ────────────────────────────────────────
+
+// ── Postponement email to customer (after consent) ────────────────────────
+function sendPostponeCustomer($task, $reason, $details, $rescheduleDate, $techName){
+    if(empty($task['email'])) return;
+
+    $price      = number_format(floatval($task['price_to_collect']??0), 0);
+    $service    = htmlspecialchars($task['device_details']??'GPS Installation');
+    $customer   = htmlspecialchars($task['customer_name']??'');
+    $taskId     = htmlspecialchars($task['task_id']??'');
+    $reschedule = $rescheduleDate ? date('d M Y', strtotime($rescheduleDate)) : 'To be confirmed';
+
+    $content = '
+    <div class="greeting">Dear ' . $customer . ',</div>
+    <p style="font-size:14px;color:#4a5568;margin-bottom:14px;line-height:1.7">
+        Your BharatGPS installation scheduled for today has been
+        <strong style="color:#e07b00">postponed</strong>. We sincerely apologise for any inconvenience.
+    </p>
+    <div class="details">
+        <div class="row"><div class="label">Task ID</div><div class="value blue">' . $taskId . '</div></div>
+        <div class="row"><div class="label">Service</div><div class="value">' . $service . '</div></div>
+        <div class="row"><div class="label">Reason</div><div class="value">' . htmlspecialchars($reason) . '</div></div>
+        ' . ($details ? '<div class="row"><div class="label">Details</div><div class="value">' . htmlspecialchars($details) . '</div></div>' : '') . '
+        <div class="row"><div class="label">Rescheduled For</div><div class="value highlight">' . $reschedule . '</div></div>
+        <div class="row"><div class="label">Technician</div><div class="value">' . htmlspecialchars($techName) . '</div></div>
+    </div>
+    <div style="background:#fff3e0;border:1.5px solid #e07b00;border-radius:8px;padding:16px;margin:16px 0">
+        <div style="font-size:13px;font-weight:800;color:#e07b00;margin-bottom:8px">&#129309; Is Everything Okay?</div>
+        <div style="font-size:13px;color:#1a1f2e;line-height:1.7">
+            If your vehicle was unavailable or you needed more time — no worries at all.<br><br>
+            <strong>Simply reply to this email</strong> and let us know a convenient time.
+        </div>
+    </div>
+    <p style="font-size:13px;color:#4a5568;margin-top:12px">
+        For immediate assistance call <strong>9849849824</strong>.
+    </p>';
+
+    $content .= customerActionButtons($task);
+
+    sendMail(
+        $task['email'],
+        $customer,
+        '&#9208; Installation Postponed — ' . $taskId . ' | Rescheduled: ' . $reschedule,
+        emailTemplate($content)
+    );
+}
+
+
 function customerActionButtons($task){
     $token = $task['feedback_token'] ?? '';
     if(!$token || $token === 'USED') return '';
