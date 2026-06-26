@@ -228,12 +228,15 @@ button{font-family:inherit;cursor:pointer}
   transition:border .2s}
 .form-select:focus,.form-input:focus,.form-textarea:focus{border-color:var(--teal)}
 .form-textarea{resize:vertical;min-height:80px}
-.response-cards{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
-.resp-card{padding:10px 8px;border:1.5px solid var(--border);border-radius:10px;
-  font-size:12px;font-weight:600;color:var(--text2);text-align:center;
-  cursor:pointer;transition:all .15s;background:var(--card)}
-.resp-card.selected{border-color:var(--teal);background:var(--teal-light);color:var(--teal)}
+.response-cards{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:4px}
+.resp-card{padding:8px 4px;border:1.5px solid var(--border);border-radius:8px;
+  text-align:center;cursor:pointer;transition:all .15s;background:var(--card);
+  display:flex;flex-direction:column;align-items:center;gap:2px}
+.resp-card.selected{border-color:var(--teal);background:var(--teal-light)}
 .resp-card:active{transform:scale(.96)}
+.resp-icon{font-size:18px;line-height:1}
+.resp-title{font-size:10px;font-weight:700;color:var(--text);line-height:1.2}
+.resp-sub{font-size:9px;color:var(--text3);line-height:1.2;display:none}
 .submit-btn{width:100%;padding:15px;border-radius:12px;border:none;
   font-size:15px;font-weight:800;color:#fff;background:var(--teal);
   box-shadow:0 4px 14px rgba(14,92,92,.3);transition:opacity .2s;margin-top:8px}
@@ -834,16 +837,22 @@ function openUpdateModal(taskId){
         <label class="form-label">What happened? *</label>
         <div class="response-cards" id="response-cards">
           ${[
-            ['Called — Customer answered','📞'],
-            ['Called — No answer','📵'],
-            ['Visited — Customer present','🏠'],
-            ['Visited — Not available','🚪'],
-            ['Customer requested reschedule','📅'],
-            ['Issue resolved','✅'],
-          ].map(([txt,icon])=>`
-            <div class="resp-card" onclick="selectResp(this,'${txt}')">
-              <div style="font-size:20px;margin-bottom:4px">${icon}</div>
-              <div>${txt}</div>
+            ['📞','Called — Answered',     'Customer picked up the call'],
+            ['📵','Not Answering',         'Will retry in 2 hours'],
+            ['⏰','Call Back Later',        'Customer asked to call back'],
+            ['🏠','Visited — Present',     'Customer was at location'],
+            ['🚪','Visited — Not Available','Customer not found at location'],
+            ['📅','Come Tomorrow',         'Will visit tomorrow'],
+            ['🚗','Vehicle Not Ready',     'Vehicle unavailable / in workshop'],
+            ['💰','Payment Issue',         'Customer has payment concern'],
+            ['🗓️','Rescheduled',           'New date agreed with customer'],
+            ['✅','Issue Resolved',        'Problem fixed / task done'],
+            ['❓','Other',                 'See remarks below'],
+          ].map(([icon,title,sub])=>`
+            <div class="resp-card" onclick="selectResp(this,'${title}')">
+              <div class="resp-icon">${icon}</div>
+              <div class="resp-title">${title}</div>
+              <div class="resp-sub">${sub}</div>
             </div>`).join('')}
         </div>
       </div>
