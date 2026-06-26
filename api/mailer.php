@@ -80,9 +80,9 @@ function emailTemplate(string $content): string {
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:Calibri,Arial,sans-serif;background:#f0f2f5;color:#1a1f2e}
 .wrap{max-width:560px;margin:24px auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1)}
-.header{background:linear-gradient(135deg,#1a3a6b,#2451a3);padding:24px 28px;text-align:center}
-.header img{height:60px;object-fit:contain}
-.header h1{color:#fff;font-size:18px;font-weight:700;margin-top:10px}
+.header{background:linear-gradient(135deg,#0E5C5C,#137272);padding:20px 28px;text-align:center}
+.header img{height:60px;object-fit:contain;display:block;margin:0 auto}
+.header h1{color:#fff;font-size:13px;font-weight:700;margin-top:8px;letter-spacing:1px;opacity:.7}
 .body{padding:28px}
 .greeting{font-size:16px;font-weight:700;color:#1a1f2e;margin-bottom:16px}
 .divider{border:none;border-top:2px solid #e8eef8;margin:16px 0}
@@ -104,8 +104,8 @@ body{font-family:Calibri,Arial,sans-serif;background:#f0f2f5;color:#1a1f2e}
 </style></head><body>
 <div class="wrap">
 <div class="header">
-<h1>Bharat GPS Tracker</h1>
-<div style="color:rgba(255,255,255,.7);font-size:12px;margin-top:4px">India\'s Best Vehicle Tracking System</div>
+<img src="https://salmon-goldfish-110661.hostingersite.com/logo.png" alt="BharatGPS Tracker" style="height:58px;width:auto;display:block;margin:0 auto">
+<div style="color:rgba(255,255,255,.6);font-size:11px;margin-top:8px;letter-spacing:1px">TASK MANAGER NOTIFICATION</div>
 </div>
 <div class="body">' . $content . '</div>
 <div class="footer">

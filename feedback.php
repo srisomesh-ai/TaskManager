@@ -151,7 +151,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:#16201F;min-heig
 <body>
 
 <div class="header">
-  <div class="header-title">🛰 BharatGPS</div>
+  <div class="header-title"><img src="https://salmon-goldfish-110661.hostingersite.com/logo.png" alt="BharatGPS Tracker" style="height:36px;width:auto;vertical-align:middle"></div>
   <div class="header-sub"><?= htmlspecialchars($task['task_id']) ?> · <?= htmlspecialchars($task['customer_name']) ?></div>
 </div>
 

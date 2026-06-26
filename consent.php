@@ -195,7 +195,7 @@ $techName = htmlspecialchars($task['tech_name'] ?? 'BharatGPS Technician');
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:#1a1f2e;min-height:100vh}
-.header{background:#1a3a6b;padding:14px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:10}
+.header{background:linear-gradient(135deg,#0E5C5C,#137272);padding:12px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:10}
 .header-flag{display:flex;flex-direction:column;gap:2px}
 .header-flag span{display:block;width:14px;height:3px;border-radius:2px}
 .header-flag span:nth-child(1){background:#ff9933}
@@ -251,7 +251,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:#1a1f2e;min-heig
 <body>
 
 <div class="header">
-  <div class="header-flag"><span></span><span></span><span></span></div>
+  <img src="https://salmon-goldfish-110661.hostingersite.com/logo.png" alt="BharatGPS" style="height:36px;width:auto;flex-shrink:0">
   <div>
     <div class="header-title">🛰 BharatGPS</div>
     <div class="header-sub">Service Consent & Payment Confirmation</div>
