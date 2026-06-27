@@ -1592,6 +1592,9 @@ function showPage(name, opts={}){
   if(nav)  nav.classList.add('active');
   localStorage.setItem('bgps_last_page', name);
   if(opts.status) window._taskFilter = opts.status;
+  // Auto-close sidebar on mobile after navigation
+  const sidebar = document.getElementById('sidebar');
+  if(sidebar) sidebar.classList.remove('open');
   // Load page data
   const loaders = {
     dashboard:  loadDashboard,
