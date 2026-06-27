@@ -797,6 +797,15 @@ function toast(msg){
 // ── INIT ─────────────────────────────────────────────
 setToday();
 loadEntries();
+// Auto-sync existing entries silently on load
+setTimeout(async()=>{
+  try {
+    const res = await bsApi('bs_resync_all',{},'POST',{}).catch(()=>({}));
+    if(res.success && res.updated > 0){
+      loadEntries(); // reload after sync
+    }
+  } catch(e){}
+}, 1500);
 </script>
 </body>
 </html>
