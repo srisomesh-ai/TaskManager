@@ -317,7 +317,13 @@ case 'create_task':
     if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     $year = date('Y');
     $cnt  = $pdo->query("SELECT COUNT(*) FROM tasks WHERE task_id LIKE 'ID-$year-%'")->fetchColumn();
-    $taskId = "ID-$year-".str_pad($cnt+1,4,'0',STR_PAD_LEFT);
+    // Check for task ID offset (set via admin panel to start from a specific number)
+    $idOffset = 0;
+    try {
+        $offRow = $pdo->query("SELECT key_value FROM app_settings WHERE key_name='task_id_offset'")->fetch();
+        if($offRow) $idOffset = intval($offRow['key_value']);
+    } catch(Exception $e){}
+    $taskId = "ID-$year-".str_pad($cnt+1+$idOffset,4,'0',STR_PAD_LEFT);
     $at  = !empty($body['assigned_to']) ? intval($body['assigned_to']) : null;
     $rd  = !empty($body['reminder_date']) ? $body['reminder_date'] : null;
     $prd = !empty($body['payment_reminder_date']) ? $body['payment_reminder_date'] : null;
@@ -1121,6 +1127,20 @@ case 'bs_resync_all':
     break;
 
 // ── USER MANAGEMENT ──────────────────────────────────────────
+case 'delete_user':
+    if ($userRole!=='admin') { http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
+    $uid = intval($body['id']??0);
+    if(!$uid) { echo json_encode(['error'=>'Missing user id']); break; }
+    // Safety: cannot delete yourself
+    if($uid === $cu['id']) { echo json_encode(['error'=>'Cannot delete your own account']); break; }
+    try {
+        $pdo->prepare("DELETE FROM users WHERE id=?")->execute([$uid]);
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){
+        echo json_encode(['error'=>'Cannot delete user — they may have tasks assigned. Try disabling instead.']);
+    }
+    break;
+
 case 'create_user':
     if ($userRole!=='admin') { http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
     $name  = trim($body['name']??'');
@@ -1485,14 +1505,19 @@ case 'admin_wipe':
             $pdo->exec("DELETE FROM tasks");
             echo json_encode(['success'=>true,'message'=>'All tasks, activities and device installs deleted.']);
         } elseif($type === 'reset_ids'){
-            // Reset auto increment — only if tasks table is empty
-            $cnt = $pdo->query("SELECT COUNT(*) FROM tasks")->fetchColumn();
-            if($cnt > 0){
-                echo json_encode(['error'=>'Cannot reset IDs while tasks exist. Wipe tasks first.']);
-            } else {
-                $pdo->exec("ALTER TABLE tasks AUTO_INCREMENT = 1");
-                echo json_encode(['success'=>true,'message'=>'Task counter reset. Next task will be ID-'.date('Y').'-0001.']);
-            }
+            // Set task counter to a specific start number
+            $startNum = intval($body['start_num'] ?? 1);
+            if($startNum < 1) $startNum = 1;
+            // Create settings table if not exists
+            $pdo->exec("CREATE TABLE IF NOT EXISTS app_settings (key_name VARCHAR(100) PRIMARY KEY, key_value TEXT, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            // Count current tasks this year to calculate offset
+            $year = date('Y');
+            $curCount = intval($pdo->query("SELECT COUNT(*) FROM tasks WHERE task_id LIKE 'ID-$year-%'")->fetchColumn());
+            // offset = startNum - 1 - curCount (so next task = curCount + offset + 1 = startNum)
+            $offset = max(0, $startNum - 1 - $curCount);
+            $pdo->prepare("INSERT INTO app_settings (key_name,key_value) VALUES ('task_id_offset',?) ON DUPLICATE KEY UPDATE key_value=VALUES(key_value)")->execute([$offset]);
+            $nextId = 'ID-'.$year.'-'.str_pad($startNum, 4, '0', STR_PAD_LEFT);
+            echo json_encode(['success'=>true,'message'=>"Task counter set. Next task will be $nextId.", 'next'=>$nextId]);
         } else {
             echo json_encode(['error'=>'Unknown wipe type']);
         }
