@@ -738,7 +738,9 @@ case 'get_daily_report':
                 'visited'   => intval($q($pdo,"SELECT COUNT(DISTINCT a.task_id) FROM task_activities a JOIN tasks t ON a.task_id=t.id WHERE t.assigned_to=? AND DATE(a.created_at)=? AND (a.remark LIKE ? OR a.remark LIKE ?)",[$tid,$date,'%Visited%','%Called%'])->fetchColumn()),
                 'installed' => intval($q($pdo,"SELECT COUNT(*) FROM task_device_installs di JOIN tasks t ON di.task_id=t.id WHERE t.assigned_to=? AND DATE(di.saved_at)=? AND di.gps_serial_no IS NOT NULL",[$tid,$date])->fetchColumn()),
                 // Collected = tasks closed today by this technician (management confirmed)
-                'collected' => floatval($q($pdo,"SELECT COALESCE(SUM(t.amount_collected),0) FROM tasks t WHERE t.assigned_to=? AND DATE(t.closed_at)=? AND t.amount_collected>0",[$tid,$date])->fetchColumn()),
+                'collected'    => floatval($q($pdo,"SELECT COALESCE(SUM(t.amount_collected),0) FROM tasks t WHERE t.assigned_to=? AND DATE(t.closed_at)=? AND t.amount_collected>0",[$tid,$date])->fetchColumn()),
+                // Cash holding = tech collected but task NOT yet closed (pending with tech)
+                'cash_holding' => floatval($q($pdo,"SELECT COALESCE(SUM(t.amount_collected),0) FROM tasks t WHERE t.assigned_to=? AND t.task_status NOT IN ('Closed','Cancelled') AND t.amount_collected>0",[$tid])->fetchColumn()),
             ];
         }
 
@@ -749,7 +751,7 @@ case 'get_daily_report':
         $balancePending     = $q($pdo,"SELECT COALESCE(SUM(price_to_collect - amount_collected),0) FROM tasks WHERE task_status NOT IN ('Closed','Cancelled') AND price_to_collect > amount_collected + 15")->fetchColumn();
 
         // ── New tasks today ────────────────────────────────────
-        $newTasks = $q($pdo,"SELECT t.task_id,t.customer_name,t.device_details,u.name as tech_name,t.price_to_collect FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE DATE(t.created_at)=? ORDER BY t.created_at DESC",[$date])->fetchAll();
+        $newTasks = $q($pdo,"SELECT t.id,t.task_id,t.customer_name,t.device_details,u.name as tech_name,t.price_to_collect FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE DATE(t.created_at)=? ORDER BY t.created_at DESC",[$date])->fetchAll();
 
         // ── Activity log ───────────────────────────────────────
         $activities = $q($pdo,"SELECT a.created_at,a.remark,u.name as user_name,t.task_id,t.customer_name FROM task_activities a JOIN tasks t ON a.task_id=t.id LEFT JOIN users u ON a.user_id=u.id WHERE DATE(a.created_at)=? ORDER BY a.created_at DESC",[$date])->fetchAll();

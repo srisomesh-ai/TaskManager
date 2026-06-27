@@ -5075,9 +5075,13 @@ async function loadDailyReport(){
             </div>
             <div style="background:${t.collected>0?'var(--green-bg)':'var(--surface2)'};border-radius:7px;padding:8px;text-align:center">
               <div style="font-size:12px;font-weight:900;color:${t.collected>0?'var(--green)':'var(--text3)'}">${t.collected>0?'₹'+parseFloat(t.collected).toLocaleString('en-IN'):'₹0'}</div>
-              <div style="font-size:10px;color:var(--text3);font-weight:600">Collected</div>
+              <div style="font-size:10px;color:var(--text3);font-weight:600">Confirmed</div>
             </div>
           </div>
+          ${t.cash_holding>0?`<div style="margin-top:8px;background:var(--amber-bg);border:1.5px solid var(--amber);border-radius:7px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between">
+            <span style="font-size:11px;font-weight:700;color:var(--amber)">💰 Cash Holding</span>
+            <span style="font-size:14px;font-weight:900;color:var(--amber)">₹${parseFloat(t.cash_holding).toLocaleString('en-IN')}</span>
+          </div>`:''}
         </div>`;
       }).join('')}
     </div>`;
@@ -5110,9 +5114,9 @@ async function loadDailyReport(){
   const newTasks = res.new_tasks || [];
   document.getElementById('dr-new-tasks').innerHTML = newTasks.length
     ? newTasks.map(t=>`
-      <div style="padding:9px 18px;border-bottom:1px solid var(--border);cursor:pointer" onclick="viewTask(0)" >
+      <div style="padding:9px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''" onclick="viewTask(${t.id})" >
         <div style="font-size:12px;font-weight:700">${t.customer_name||'–'} <span style="color:var(--text3);font-weight:400">· ${t.task_id}</span></div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">${t.device_details||'–'} · ${t.tech_name||'Unassigned'}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${t.device_details||'–'} · ${t.tech_name||'Unassigned'} · <span style="color:var(--accent)">₹${parseFloat(t.price_to_collect||0).toLocaleString('en-IN')}</span></div>
       </div>`).join('')
     : '<div style="padding:18px;text-align:center;color:var(--text3);font-size:13px">No tasks created today</div>';
 
