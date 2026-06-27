@@ -304,9 +304,7 @@ async function setTaskCounter(){
 }
 
 async function deleteUser(id, name){
-  if(!confirm('⚠️ Permanently delete user "'+name+'"?
-
-This cannot be undone. If they have tasks assigned, deletion will fail — disable them instead.')) return;
+  if(!confirm('Delete user ' + name + '? Cannot be undone.')) return;
   const res = await admApi('delete_user',{},'POST',{id}).catch(()=>({}));
   if(res.success){ toast('🗑️ User deleted'); adminLoadUsers(); }
   else toast('❌ '+(res.error||'Delete failed'));
