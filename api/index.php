@@ -126,15 +126,10 @@ case 'get_stats':
 // ---- GET USERS ----
 case 'get_users':
     $role = $_GET['role'] ?? '';
-    if ($role && $role !== 'all') {
-        // Specific role — only active (for dropdowns in task manager)
+    if ($role) {
         $s = $pdo->prepare("SELECT id,name,email,role,phone,is_active,last_active FROM users WHERE role=? AND is_active=1 ORDER BY name");
         $s->execute([$role]);
-    } elseif ($role === 'all') {
-        // Admin panel — return ALL users including inactive
-        $s = $pdo->query("SELECT id,name,email,role,phone,is_active,last_active FROM users ORDER BY role,name");
     } else {
-        // No role filter — only active
         $s = $pdo->query("SELECT id,name,email,role,phone,is_active,last_active FROM users WHERE is_active=1 ORDER BY role,name");
     }
     echo json_encode(['users'=>$s->fetchAll()]);
