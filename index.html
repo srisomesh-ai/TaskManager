@@ -966,8 +966,76 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
         </div>
       </div>
       <div class="page" id="page-daily-report">
-        <div class="pg-header"><div class="breadcrumb">Home / <b>Daily Report</b></div><div class="pg-title">📅 Daily Report</div></div>
-        <div class="card"><div style="padding:40px;text-align:center;color:var(--text3)">Coming soon</div></div>
+        <div class="pg-header">
+          <div class="breadcrumb">Home / <b>Daily Report</b></div>
+          <div class="pg-title">📅 Daily Report</div>
+          <div class="pg-sub">Daily snapshot of tasks, technicians, payments and activity</div>
+        </div>
+
+        <!-- Date selector + Export -->
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:8px">
+            <label style="font-size:12px;font-weight:700;color:var(--text3)">Date:</label>
+            <input type="date" id="dr-date" class="form-input" style="width:160px" onchange="loadDailyReport()">
+          </div>
+          <button class="ts-btn ts-btn-secondary" onclick="loadDailyReport()">🔄 Refresh</button>
+          <button class="ts-btn ts-btn-secondary" onclick="exportDailyCSV()" style="margin-left:auto">⬇️ Export CSV</button>
+        </div>
+
+        <!-- Summary Cards -->
+        <div id="dr-stats" style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px"></div>
+
+        <!-- Technician Performance -->
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-hd">
+            <div class="card-title"><span class="card-dot" style="background:var(--accent)"></span> Technician Performance</div>
+          </div>
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse" id="dr-tech-table">
+              <thead><tr style="background:var(--surface2);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)">
+                <th style="padding:10px 14px;text-align:left;font-weight:700">Technician</th>
+                <th style="padding:10px 14px;text-align:center;font-weight:700">Assigned</th>
+                <th style="padding:10px 14px;text-align:center;font-weight:700">Visited</th>
+                <th style="padding:10px 14px;text-align:center;font-weight:700">Installed</th>
+                <th style="padding:10px 14px;text-align:right;font-weight:700">Collected</th>
+                <th style="padding:10px 14px;text-align:center;font-weight:700">Status</th>
+              </tr></thead>
+              <tbody id="dr-tech-tbody"><tr><td colspan="6" style="padding:30px;text-align:center;color:var(--text3)">Loading...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Payment Summary -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+          <div class="card">
+            <div class="card-hd"><div class="card-title"><span class="card-dot" style="background:var(--green)"></span> Payment Summary</div></div>
+            <div id="dr-payment-summary" style="padding:14px 18px"></div>
+          </div>
+          <div class="card">
+            <div class="card-hd"><div class="card-title"><span class="card-dot" style="background:var(--blue)"></span> New Tasks Today</div></div>
+            <div id="dr-new-tasks" style="padding:6px 0;max-height:220px;overflow-y:auto"></div>
+          </div>
+        </div>
+
+        <!-- Activity Log -->
+        <div class="card">
+          <div class="card-hd">
+            <div class="card-title"><span class="card-dot" style="background:var(--purple)"></span> Activity Log</div>
+            <div style="font-size:11px;color:var(--text3)" id="dr-activity-count">0 activities</div>
+          </div>
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse">
+              <thead><tr style="background:var(--surface2);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)">
+                <th style="padding:9px 14px;text-align:left;font-weight:700;white-space:nowrap">Time</th>
+                <th style="padding:9px 14px;text-align:left;font-weight:700">Task</th>
+                <th style="padding:9px 14px;text-align:left;font-weight:700">Customer</th>
+                <th style="padding:9px 14px;text-align:left;font-weight:700">Update</th>
+                <th style="padding:9px 14px;text-align:left;font-weight:700">By</th>
+              </tr></thead>
+              <tbody id="dr-activity-tbody"><tr><td colspan="5" style="padding:30px;text-align:center;color:var(--text3)">Select a date to load</td></tr></tbody>
+            </table>
+          </div>
+        </div>
       </div>
       <div class="page" id="page-balance-sheet">
         <div class="pg-header"><div class="breadcrumb">Home / <b>Balance Sheet</b></div><div class="pg-title">💰 Balance Sheet</div></div>
@@ -1597,11 +1665,12 @@ function showPage(name, opts={}){
   if(sidebar) sidebar.classList.remove('open');
   // Load page data
   const loaders = {
-    dashboard:  loadDashboard,
-    tasks:      loadTasksPage,
-    'my-tasks': loadMyTasks,
-    urgent:     loadUrgentPage,
-    approvals:  loadApprovalsPage,
+    dashboard:     loadDashboard,
+    tasks:         loadTasksPage,
+    'my-tasks':    loadMyTasks,
+    urgent:        loadUrgentPage,
+    approvals:     loadApprovalsPage,
+    'daily-report':loadDailyReport,
   };
   if(loaders[name]) loaders[name]();
 }
@@ -4902,6 +4971,139 @@ async function loadApprovalsPage(){
 }
 
 async function loadApprovals(){ return loadApprovalsPage(); }
+// ════════════════════════════════════════════════════════
+// DAILY REPORT
+// ════════════════════════════════════════════════════════
+let _drData = null; // cache for CSV export
+
+async function loadDailyReport(){
+  // Set today's date if not set
+  const dateEl = document.getElementById('dr-date');
+  if(dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0,10);
+  const date = dateEl?.value || new Date().toISOString().slice(0,10);
+
+  // Show loading
+  document.getElementById('dr-stats').innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--text3)">⏳ Loading...</div>';
+  document.getElementById('dr-tech-tbody').innerHTML = '<tr><td colspan="6" style="padding:30px;text-align:center;color:var(--text3)">Loading...</td></tr>';
+  document.getElementById('dr-activity-tbody').innerHTML = '<tr><td colspan="5" style="padding:30px;text-align:center;color:var(--text3)">Loading...</td></tr>';
+
+  const res = await api('get_daily_report',{date}).catch(()=>({}));
+  if(!res.summary){ document.getElementById('dr-stats').innerHTML='<div style="color:var(--red);padding:20px">Failed to load. Try again.</div>'; return; }
+  _drData = res;
+
+  // ── 1. Summary cards ─────────────────────────────────
+  const s = res.summary;
+  const statCards = [
+    {icon:'📋', label:'Created Today',   val:s.tasks_created||0,  color:'var(--blue)'},
+    {icon:'🛰', label:'Installed Today', val:s.installed||0,      color:'var(--accent)'},
+    {icon:'💰', label:'Collected',       val:'₹'+parseFloat(s.cash_collected||0).toLocaleString('en-IN'), color:'var(--green)'},
+    {icon:'⏳', label:'Open Tasks',      val:s.pending_tasks||0,  color:'var(--amber)'},
+    {icon:'🚨', label:'Urgent',          val:s.urgent_tasks||0,   color:'var(--red)'},
+  ];
+  document.getElementById('dr-stats').innerHTML = statCards.map(c=>`
+    <div class="stat-card" style="border-bottom:3px solid ${c.color}">
+      <div class="stat-ghost">${c.icon}</div>
+      <div class="stat-val" style="color:${c.color}">${c.val}</div>
+      <div class="stat-lbl">${c.label}</div>
+    </div>`).join('');
+
+  // ── 2. Technician performance ─────────────────────────
+  const techs = res.tech_perf || [];
+  if(!techs.length){
+    document.getElementById('dr-tech-tbody').innerHTML = '<tr><td colspan="6" style="padding:30px;text-align:center;color:var(--text3)">No technicians found</td></tr>';
+  } else {
+    document.getElementById('dr-tech-tbody').innerHTML = techs.map(t=>{
+      const status = t.installed > 0 ? ['🟢','Done'] : t.activities > 0 ? ['🟡','Active'] : ['🔴','No Activity'];
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:11px 14px;font-weight:700">${t.name}</td>
+        <td style="padding:11px 14px;text-align:center">${t.assigned}</td>
+        <td style="padding:11px 14px;text-align:center">${t.visited}</td>
+        <td style="padding:11px 14px;text-align:center">
+          ${t.installed > 0 ? `<span style="background:var(--green-bg);color:var(--green);padding:2px 9px;border-radius:10px;font-weight:800">${t.installed}</span>` : '<span style="color:var(--text3)">0</span>'}
+        </td>
+        <td style="padding:11px 14px;text-align:right;font-weight:800;color:${t.collected>0?'var(--green)':'var(--text3)'}">
+          ${t.collected>0?'₹'+parseFloat(t.collected).toLocaleString('en-IN'):'–'}
+        </td>
+        <td style="padding:11px 14px;text-align:center">
+          <span style="font-size:13px">${status[0]}</span>
+          <span style="font-size:11px;color:var(--text3);margin-left:4px">${status[1]}</span>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ── 3. Payment summary ────────────────────────────────
+  const payRows = res.pay_rows || [];
+  const modeMap = {Cash:'💵',UPI:'📱','Bank Transfer':'🏦',Cheque:'📝','ATM Deposit':'🏧'};
+  let payHtml = payRows.length
+    ? payRows.map(r=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:13px;color:var(--text2)">${modeMap[r.payment_mode]||'💳'} ${r.payment_mode||'Other'} <span style="font-size:11px;color:var(--text3)">(${r.cnt} task${r.cnt>1?'s':''})</span></span>
+        <span style="font-weight:800;color:var(--green)">₹${parseFloat(r.total).toLocaleString('en-IN')}</span>
+      </div>`).join('') : '<div style="color:var(--text3);font-size:13px;padding:8px 0">No payments recorded today</div>';
+
+  if(res.cash_pending_deposit > 0) payHtml += `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:13px;color:var(--saffron)">🏦 Cash Pending Deposit</span>
+      <span style="font-weight:800;color:var(--saffron)">₹${parseFloat(res.cash_pending_deposit).toLocaleString('en-IN')}</span>
+    </div>`;
+  if(res.balance_pending > 0) payHtml += `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0">
+      <span style="font-size:13px;color:var(--red)">⚠️ Balance Pending (all tasks)</span>
+      <span style="font-weight:800;color:var(--red)">₹${parseFloat(res.balance_pending).toLocaleString('en-IN')}</span>
+    </div>`;
+
+  document.getElementById('dr-payment-summary').innerHTML = `<div style="padding:4px 0">${payHtml}</div>`;
+
+  // ── 4. New tasks today ────────────────────────────────
+  const newTasks = res.new_tasks || [];
+  document.getElementById('dr-new-tasks').innerHTML = newTasks.length
+    ? newTasks.map(t=>`
+      <div style="padding:9px 18px;border-bottom:1px solid var(--border);cursor:pointer" onclick="viewTask(0)" >
+        <div style="font-size:12px;font-weight:700">${t.customer_name||'–'} <span style="color:var(--text3);font-weight:400">· ${t.task_id}</span></div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${t.device_details||'–'} · ${t.tech_name||'Unassigned'}</div>
+      </div>`).join('')
+    : '<div style="padding:18px;text-align:center;color:var(--text3);font-size:13px">No tasks created today</div>';
+
+  // ── 5. Activity log ───────────────────────────────────
+  const acts = res.activities || [];
+  document.getElementById('dr-activity-count').textContent = acts.length + ' activities';
+  if(!acts.length){
+    document.getElementById('dr-activity-tbody').innerHTML = '<tr><td colspan="5" style="padding:30px;text-align:center;color:var(--text3)">No activities recorded</td></tr>';
+    return;
+  }
+  document.getElementById('dr-activity-tbody').innerHTML = acts.map(a=>{
+    const t   = new Date(a.created_at);
+    const tm  = t.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
+    const rem = (a.remark||'').length > 80 ? a.remark.slice(0,80)+'…' : a.remark;
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:9px 14px;font-size:12px;color:var(--text3);white-space:nowrap">${tm}</td>
+      <td style="padding:9px 14px"><span class="task-id" style="font-size:11px">${a.task_id||'–'}</span></td>
+      <td style="padding:9px 14px;font-size:12px;font-weight:600;white-space:nowrap">${a.customer_name||'–'}</td>
+      <td style="padding:9px 14px;font-size:12px;color:var(--text2);max-width:320px">${rem}</td>
+      <td style="padding:9px 14px;font-size:12px;color:var(--text3);white-space:nowrap">${a.user_name||'System'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function exportDailyCSV(){
+  if(!_drData){ alert('Load the report first.'); return; }
+  const date = document.getElementById('dr-date')?.value || 'report';
+  const acts = _drData.activities || [];
+  const rows = [['Time','Task ID','Customer','Update','By']];
+  acts.forEach(a=>{
+    const t = new Date(a.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
+    rows.push([t, a.task_id||'', a.customer_name||'', '"'+(a.remark||'').replace(/"/g,"'")+'"', a.user_name||'System']);
+  });
+  const csv = rows.map(r=>r.join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href=url; a.download='daily-report-'+date+'.csv'; a.click();
+  URL.revokeObjectURL(url);
+  showToast('✅ CSV downloaded');
+}
+
 
 // ════════════════════════════════════════════════════════
 // QUICK TASK — Send enquiry link via WhatsApp

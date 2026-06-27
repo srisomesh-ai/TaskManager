@@ -664,6 +664,76 @@ case 'get_approvals':
     break;
 
 // ---- DAILY REPORT ----
+case 'get_daily_report':
+    $date = $_GET['date'] ?? date('Y-m-d');
+    $dateStart = $date . ' 00:00:00';
+    $dateEnd   = $date . ' 23:59:59';
+
+    // ── Summary counts ──────────────────────────────────────────────
+    $summary = [];
+    $summary['tasks_created']  = $pdo->prepare("SELECT COUNT(*) FROM tasks WHERE DATE(created_at)=?")->execute([$date]) ? $pdo->query("SELECT COUNT(*) FROM tasks WHERE DATE(created_at)='$date'")->fetchColumn() : 0;
+    $summary['installed']      = $pdo->query("SELECT COUNT(*) FROM task_device_installs WHERE DATE(created_at)='$date' AND gps_serial_no IS NOT NULL")->fetchColumn();
+    $summary['cash_collected'] = $pdo->query("SELECT COALESCE(SUM(amount_collected),0) FROM tasks WHERE DATE(updated_at)='$date' AND amount_collected>0")->fetchColumn();
+    $summary['pending_tasks']  = $pdo->query("SELECT COUNT(*) FROM tasks WHERE task_status IN ('Open','In Progress','Task Pending')")->fetchColumn();
+    $summary['urgent_tasks']   = $pdo->query("SELECT COUNT(*) FROM tasks WHERE task_status IN ('Open','In Progress','Task Pending') AND (is_urgent=1 OR created_at <= DATE_SUB(NOW(), INTERVAL 24 HOUR))")->fetchColumn();
+
+    // ── Technician performance ──────────────────────────────────────
+    $techs = $pdo->query("SELECT id,name FROM users WHERE role='technician' AND is_active=1 ORDER BY name")->fetchAll();
+    $techPerf = [];
+    foreach($techs as $tech){
+        $tid = $tech['id'];
+        // Assigned tasks (total open assigned to this tech)
+        $assigned = $pdo->prepare("SELECT COUNT(*) FROM tasks WHERE assigned_to=? AND task_status NOT IN ('Closed','Cancelled')")->execute([$tid]) ? 0 : 0;
+        $s1=$pdo->prepare("SELECT COUNT(*) FROM tasks WHERE assigned_to=? AND task_status NOT IN ('Closed','Cancelled')");
+        $s1->execute([$tid]); $assigned=$s1->fetchColumn();
+        // Activities today
+        $s2=$pdo->prepare("SELECT COUNT(*) FROM task_activities a JOIN tasks t ON a.task_id=t.id WHERE t.assigned_to=? AND DATE(a.created_at)=?");
+        $s2->execute([$tid,$date]); $activities=$s2->fetchColumn();
+        // Visited today (any call/visit remark)
+        $s3=$pdo->prepare("SELECT COUNT(DISTINCT a.task_id) FROM task_activities a JOIN tasks t ON a.task_id=t.id WHERE t.assigned_to=? AND DATE(a.created_at)=? AND (a.remark LIKE '%Visited%' OR a.remark LIKE '%Called%' OR a.remark LIKE '%📞%' OR a.remark LIKE '%🏠%')");
+        $s3->execute([$tid,$date]); $visited=$s3->fetchColumn();
+        // Installed today
+        $s4=$pdo->prepare("SELECT COUNT(*) FROM task_device_installs di JOIN tasks t ON di.task_id=t.id WHERE t.assigned_to=? AND DATE(di.created_at)=? AND di.gps_serial_no IS NOT NULL");
+        $s4->execute([$tid,$date]); $installed=$s4->fetchColumn();
+        // Collected today
+        $s5=$pdo->prepare("SELECT COALESCE(SUM(t.amount_collected),0) FROM tasks t JOIN task_activities a ON a.task_id=t.id WHERE t.assigned_to=? AND DATE(a.created_at)=? AND a.remark LIKE '%💰%'");
+        $s5->execute([$tid,$date]); $collected=$s5->fetchColumn();
+
+        $techPerf[] = [
+            'id'        => $tid,
+            'name'      => $tech['name'],
+            'assigned'  => intval($assigned),
+            'visited'   => intval($visited),
+            'installed' => intval($installed),
+            'collected' => floatval($collected),
+            'activities'=> intval($activities),
+        ];
+    }
+
+    // ── Payment summary ─────────────────────────────────────────────
+    $payRows = $pdo->query("SELECT payment_mode, SUM(amount_collected) as total, COUNT(*) as cnt FROM tasks WHERE DATE(updated_at)='$date' AND amount_collected>0 GROUP BY payment_mode")->fetchAll();
+    $cashPendingDeposit = $pdo->query("SELECT COALESCE(SUM(amount_collected),0) FROM tasks WHERE cash_deposit_status='pending' AND payment_mode='Cash'")->fetchColumn();
+    $balancePending     = $pdo->query("SELECT COALESCE(SUM(price_to_collect - amount_collected),0) FROM tasks WHERE task_status NOT IN ('Closed','Cancelled') AND price_to_collect > amount_collected + 15")->fetchColumn();
+
+    // ── New tasks today ─────────────────────────────────────────────
+    $newTasks = $pdo->query("SELECT t.task_id,t.customer_name,t.device_details,u.name as tech_name,t.price_to_collect FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE DATE(t.created_at)='$date' ORDER BY t.created_at DESC")->fetchAll();
+
+    // ── Activity log ─────────────────────────────────────────────────
+    $activities = $pdo->query("SELECT a.created_at,a.remark,u.name as user_name,t.task_id,t.customer_name FROM task_activities a JOIN tasks t ON a.task_id=t.id LEFT JOIN users u ON a.user_id=u.id WHERE DATE(a.created_at)='$date' AND a.remark NOT LIKE '%⏰%' ORDER BY a.created_at ASC")->fetchAll();
+
+    echo json_encode([
+        'summary'    => $summary,
+        'tech_perf'  => $techPerf,
+        'pay_rows'   => $payRows,
+        'cash_pending_deposit' => floatval($cashPendingDeposit),
+        'balance_pending'      => floatval($balancePending),
+        'new_tasks'  => $newTasks,
+        'activities' => $activities,
+        'date'       => $date,
+    ]);
+    break;
+
+
 case 'daily_report':
     $date=$_GET['date']??date('Y-m-d');
     $s=$pdo->prepare("SELECT t.*,u.name as technician_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE DATE(t.created_at)=? ORDER BY t.created_at DESC"); $s->execute([$date]);
