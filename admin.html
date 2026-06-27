@@ -199,11 +199,7 @@ async function adminWipeData(type){
 async function adminLoadUsers(){
   const el = document.getElementById('admin-users-list');
   el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Loading…</div>';
-  const res = await admApi('get_users', {role:'all'}).catch(e=>{return {error: e.message};});
-  if(res.error){
-    el.innerHTML='<div style="padding:20px;text-align:center;color:var(--red);font-size:13px">❌ '+res.error+'</div>';
-    return;
-  }
+  const res = await admApi('get_users', {role:'all'}).catch(()=>({}));
   const users = res.users || [];
   if(!users.length){ el.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3)">No users found</div>'; return; }
   el.innerHTML = users.map(u=>{
@@ -317,8 +313,8 @@ async function toggleUserActive(id, currentActive){
   else toast('❌ '+(res.error||'Failed'));
 }
 
-// Auto-load on open — small delay to ensure token is ready
-setTimeout(adminLoadUsers, 300);
+// Auto-load on open
+adminLoadUsers();
 </script>
 </body>
 </html>
