@@ -2669,7 +2669,7 @@ function getRowClass(t){
 }
 
 
-function openEditModal(id){viewTask(id);}
+function openEditModal(id){viewTaskInEditDrawer(id);}
 
 async function _fillTechDropdown(selId,selectedId=null){
   const sel=document.getElementById(selId);if(!sel)return;
@@ -3255,11 +3255,11 @@ function closeTaskDetail(){
 
 function openEditFromDetail(){
   if(!_detailTask) return;
+  const taskIdToEdit = _detailTask.id; // save BEFORE closeTaskDetail clears _detailTask
   closeTaskDetail();
-  // Open in the create/edit drawer
+  // Open in the create/edit drawer after drawer slides out
   setTimeout(()=> {
-    editingTaskId = null;
-    viewTaskInEditDrawer(_detailTask.id);
+    viewTaskInEditDrawer(taskIdToEdit);
   }, 320);
 }
 
