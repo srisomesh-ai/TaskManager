@@ -451,6 +451,29 @@ case 'update_task':
     if (isset($body['task_status'])&&$body['task_status']==='Closed'&&$existing['task_status']!=='Closed') $sets[]="closed_at=NOW()";
     if ($sets) { $vals[]=$id; $pdo->prepare("UPDATE tasks SET ".implode(',',$sets)." WHERE id=?")->execute($vals); }
 
+    // Auto-blacklist: task cancelled AFTER consent was given
+    if(isset($body['task_status']) && $body['task_status']==='Cancelled'
+       && $existing['task_status']!=='Cancelled'
+       && !empty($existing['customer_consent_at'])){
+        try {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS blacklist_entries (id INT AUTO_INCREMENT PRIMARY KEY, customer_name VARCHAR(200) NULL, phone VARCHAR(20) NULL, email VARCHAR(200) NULL, task_id VARCHAR(20) NULL, task_db_id INT NULL, reason TEXT NULL, added_by VARCHAR(100) NULL, added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, status VARCHAR(20) DEFAULT 'active', cleared_by VARCHAR(100) NULL, cleared_reason TEXT NULL, cleared_at TIMESTAMP NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            $blChk=$pdo->prepare("SELECT id FROM blacklist_entries WHERE status='active' AND (phone=? OR (email=? AND email IS NOT NULL AND email != ''))");
+            $blChk->execute([$existing['customer_contact']??'',$existing['customer_email']??'']);
+            if(!$blChk->fetch()){
+                $pdo->prepare("INSERT INTO blacklist_entries (customer_name,phone,email,task_id,task_db_id,reason,added_by) VALUES (?,?,?,?,?,?,?)")
+                    ->execute([
+                        $existing['customer_name']??null,
+                        $existing['customer_contact']??null,
+                        $existing['customer_email']??null,
+                        $existing['task_id']??null,
+                        $id,
+                        'Cancelled after consent — '.($body['cancel_reason']??'No reason given'),
+                        $cu['name']??'System',
+                    ]);
+            }
+        } catch(Exception $e){ error_log('Blacklist auto-add error: '.$e->getMessage()); }
+    }
+
     // ── SYNC PAYMENT TO BS ENTRY ─────────────────────────────────────
     // Received is ONLY confirmed when task is Closed (management approved)
     try {
@@ -1171,6 +1194,86 @@ case 'update_user':
     if(!$sets) { echo json_encode(['error'=>'Nothing to update']); break; }
     $vals[]=$uid;
     $pdo->prepare("UPDATE users SET ".implode(',',$sets)." WHERE id=?")->execute($vals);
+    echo json_encode(['success'=>true]);
+    break;
+
+// ============================================================
+// BLACKLIST
+// ============================================================
+case 'check_blacklist':
+    // Read-only lookup — safe to run without strict auth
+    // Returns found:false silently if table doesn't exist yet
+    $blPhone = trim($_GET['phone'] ?? '');
+    $blEmail = trim($_GET['email'] ?? '');
+    if(!$blPhone && !$blEmail){ echo json_encode(['found'=>false]); break; }
+    try {
+        $blWhere=[]; $blVals=[];
+        if($blPhone){ $blWhere[]="phone=?"; $blVals[]=$blPhone; }
+        if($blEmail){ $blWhere[]="email=?"; $blVals[]=$blEmail; }
+        $blStmt=$pdo->prepare("SELECT * FROM blacklist_entries WHERE status='active' AND (".implode(' OR ',$blWhere).") ORDER BY added_at DESC LIMIT 1");
+        $blStmt->execute($blVals);
+        $blRow=$blStmt->fetch();
+        echo json_encode($blRow ? ['found'=>true,'entry'=>$blRow] : ['found'=>false]);
+    } catch(Exception $blE){
+        echo json_encode(['found'=>false]);
+    }
+    break;
+
+case 'get_blacklist':
+    if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    // Create table if not exists (runs on first load of blacklist page)
+    $pdo->exec("CREATE TABLE IF NOT EXISTS blacklist_entries (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        customer_name VARCHAR(200) NULL,
+        phone VARCHAR(20) NULL,
+        email VARCHAR(200) NULL,
+        task_id VARCHAR(20) NULL,
+        task_db_id INT NULL,
+        reason TEXT NULL,
+        added_by VARCHAR(100) NULL,
+        added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        status VARCHAR(20) DEFAULT 'active',
+        cleared_by VARCHAR(100) NULL,
+        cleared_reason TEXT NULL,
+        cleared_at TIMESTAMP NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $blSearch = trim($_GET['search'] ?? '');
+    $blStatus = $_GET['status'] ?? 'active';
+    $blSql = "SELECT * FROM blacklist_entries";
+    $blW=[]; $blV=[];
+    if($blStatus !== 'all'){ $blW[]="status=?"; $blV[]=$blStatus; }
+    if($blSearch){ $blW[]="(phone LIKE ? OR email LIKE ? OR customer_name LIKE ?)"; $blV[]="%$blSearch%"; $blV[]="%$blSearch%"; $blV[]="%$blSearch%"; }
+    if($blW) $blSql .= " WHERE ".implode(' AND ',$blW);
+    $blSql .= " ORDER BY added_at DESC";
+    $blS=$pdo->prepare($blSql); $blS->execute($blV);
+    echo json_encode(['entries'=>$blS->fetchAll()]);
+    break;
+
+case 'add_blacklist':
+    if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    $pdo->exec("CREATE TABLE IF NOT EXISTS blacklist_entries (id INT AUTO_INCREMENT PRIMARY KEY, customer_name VARCHAR(200) NULL, phone VARCHAR(20) NULL, email VARCHAR(200) NULL, task_id VARCHAR(20) NULL, task_db_id INT NULL, reason TEXT NULL, added_by VARCHAR(100) NULL, added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, status VARCHAR(20) DEFAULT 'active', cleared_by VARCHAR(100) NULL, cleared_reason TEXT NULL, cleared_at TIMESTAMP NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $blPhone = trim($body['phone'] ?? '');
+    $blEmail = trim($body['email'] ?? '');
+    if(!$blPhone && !$blEmail){ echo json_encode(['error'=>'Phone or email required']); break; }
+    $pdo->prepare("INSERT INTO blacklist_entries (customer_name,phone,email,task_id,task_db_id,reason,added_by) VALUES (?,?,?,?,?,?,?)")
+        ->execute([
+            $body['customer_name'] ?? null,
+            $blPhone ?: null,
+            $blEmail ?: null,
+            $body['task_id'] ?? null,
+            !empty($body['task_db_id']) ? intval($body['task_db_id']) : null,
+            $body['reason'] ?? null,
+            $cu['name'] ?? 'System',
+        ]);
+    echo json_encode(['success'=>true]);
+    break;
+
+case 'clear_blacklist':
+    if($userRole!=='admin'){ http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
+    $blId = intval($body['id']??0);
+    if(!$blId){ echo json_encode(['error'=>'Missing id']); break; }
+    $pdo->prepare("UPDATE blacklist_entries SET status='cleared', cleared_by=?, cleared_reason=?, cleared_at=NOW() WHERE id=?")
+        ->execute([$cu['name']??'Admin', $body['reason']??'Cleared by management', $blId]);
     echo json_encode(['success'=>true]);
     break;
 

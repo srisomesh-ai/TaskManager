@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Blacklist — BharatGPS</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --accent:#0E5C5C;--accent2:#137272;
+  --red:#c0392b;--red-bg:#fdecea;
+  --green:#1a7a3a;--green-bg:#e8f5ec;
+  --amber:#e07b00;--amber-bg:#fff3e0;
+  --text:#1a1f2e;--text2:#4a5568;--text3:#8a9ab0;
+  --border:#e2e8f0;--surface:#fff;--surface2:#f7f8fa;
+  --shadow:0 2px 10px rgba(0,0,0,.08);
+}
+body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:var(--text);padding:20px}
+.pg-title{font-size:20px;font-weight:900;margin-bottom:4px}
+.pg-sub{font-size:13px;color:var(--text3);margin-bottom:18px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.stat{background:#fff;border-radius:10px;padding:14px;box-shadow:var(--shadow);text-align:center}
+.stat-v{font-size:22px;font-weight:900}
+.stat-l{font-size:11px;color:var(--text3);font-weight:600;margin-top:2px}
+.card{background:#fff;border-radius:12px;box-shadow:var(--shadow);margin-bottom:14px;overflow:hidden}
+.card-hd{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px}
+.card-title{font-size:13px;font-weight:800}
+.toolbar{display:flex;gap:8px;padding:10px 14px;background:var(--surface2);border-bottom:1px solid var(--border);flex-wrap:wrap}
+input.tb,select.tb{padding:7px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;outline:none;background:#fff}
+input.tb:focus,select.tb:focus{border-color:var(--accent)}
+.btn{padding:7px 14px;border:none;border-radius:6px;font-size:12px;font-weight:800;cursor:pointer}
+.btn-red{background:var(--red);color:#fff}
+.btn-green{background:var(--green);color:#fff}
+.btn-accent{background:var(--accent);color:#fff}
+.btn-sm{padding:5px 9px;font-size:11px}
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead tr{background:var(--surface2)}
+th{padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);white-space:nowrap;border-bottom:2px solid var(--border)}
+td{padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:hover td{background:#f7f9fc}
+.b-act{background:var(--red-bg);color:var(--red);padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700}
+.b-clr{background:var(--green-bg);color:var(--green);padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700}
+.b-auto{background:#f0eaf8;color:#5b2d8e;padding:2px 6px;border-radius:5px;font-size:10px;font-weight:700}
+.b-man{background:var(--amber-bg);color:var(--amber);padding:2px 6px;border-radius:5px;font-size:10px;font-weight:700}
+/* modal */
+.ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;padding:16px}
+.ov.open{display:flex}
+.mb{background:#fff;border-radius:12px;width:100%;max-width:440px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.mh{padding:14px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
+.mh-title{font-size:14px;font-weight:800}
+.mc{padding:16px}
+.fg{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.fg label{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase}
+.fg input,.fg select,.fg textarea{padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;outline:none}
+.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--red)}
+.btn-row{display:flex;gap:8px}
+#bl-toast{position:fixed;bottom:20px;right:20px;background:#1a1f2e;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:700;z-index:9999;opacity:0;transform:translateY(10px);transition:all .3s;pointer-events:none}
+#bl-toast.show{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+<div class="pg-title">🚫 Blacklist</div>
+<div class="pg-sub">Customers blocked from installation — auto-added when task cancelled after consent</div>
+
+<div class="stats">
+  <div class="stat" style="border-top:3px solid var(--red)">
+    <div class="stat-v" style="color:var(--red)" id="s-active">–</div>
+    <div class="stat-l">Active</div>
+  </div>
+  <div class="stat" style="border-top:3px solid #5b2d8e">
+    <div class="stat-v" style="color:#5b2d8e" id="s-auto">–</div>
+    <div class="stat-l">Auto-Added</div>
+  </div>
+  <div class="stat" style="border-top:3px solid var(--green)">
+    <div class="stat-v" style="color:var(--green)" id="s-cleared">–</div>
+    <div class="stat-l">Cleared</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-hd">
+    <div class="card-title">🚫 Blacklisted Customers</div>
+    <button class="btn btn-red btn-sm" onclick="openAdd()">+ Add Manually</button>
+  </div>
+  <div class="toolbar">
+    <input class="tb" id="bl-search" placeholder="🔍 Name, phone, email…" oninput="load()" style="min-width:200px">
+    <select class="tb" id="bl-status" onchange="load()">
+      <option value="active">Active</option>
+      <option value="cleared">Cleared</option>
+      <option value="all">All</option>
+    </select>
+    <button class="btn btn-accent btn-sm" onclick="load()">🔄 Refresh</button>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th>#</th><th>Name</th><th>Phone</th><th>Email</th>
+        <th>Task</th><th>Reason</th><th>Added By</th>
+        <th>Date</th><th>Type</th><th>Status</th><th>Action</th>
+      </tr></thead>
+      <tbody id="bl-body"><tr><td colspan="11" style="padding:30px;text-align:center;color:var(--text3)">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ADD MODAL -->
+<div class="ov" id="add-ov" onclick="if(event.target===this)closeAdd()">
+  <div class="mb">
+    <div class="mh"><span class="mh-title">🚫 Add to Blacklist</span><button class="btn btn-sm" style="background:var(--surface2)" onclick="closeAdd()">✕</button></div>
+    <div class="mc">
+      <div class="fg"><label>Customer Name</label><input type="text" id="a-name" placeholder="Full name"></div>
+      <div class="fg"><label>Phone Number *</label><input type="tel" id="a-phone" placeholder="10-digit mobile"></div>
+      <div class="fg"><label>Email</label><input type="email" id="a-email" placeholder="customer@email.com"></div>
+      <div class="fg"><label>Task ID (if any)</label><input type="text" id="a-task" placeholder="ID-2026-0001"></div>
+      <div class="fg"><label>Reason *</label><textarea id="a-reason" rows="3" placeholder="Why blacklisting this customer?"></textarea></div>
+      <div class="btn-row">
+        <button class="btn btn-sm" style="flex:1;background:var(--surface2);color:var(--text);border:1.5px solid var(--border)" onclick="closeAdd()">Cancel</button>
+        <button class="btn btn-red" style="flex:2" onclick="addManual()">🚫 Add to Blacklist</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CLEAR MODAL -->
+<div class="ov" id="clr-ov" onclick="if(event.target===this)closeClear()">
+  <div class="mb">
+    <div class="mh"><span class="mh-title">✅ Clear from Blacklist</span><button class="btn btn-sm" style="background:var(--surface2)" onclick="closeClear()">✕</button></div>
+    <div class="mc">
+      <div id="clr-info" style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:12px;font-size:13px;line-height:1.7"></div>
+      <div class="fg"><label>Reason for clearing *</label>
+        <textarea id="clr-reason" rows="3" placeholder="e.g. Customer paid in full, Written confirmation received…"></textarea>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-sm" style="flex:1;background:var(--surface2);color:var(--text);border:1.5px solid var(--border)" onclick="closeClear()">Cancel</button>
+        <button class="btn btn-green" style="flex:2" onclick="confirmClear()">✅ Clear from Blacklist</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="bl-toast"></div>
+
+<script>
+const API = 'api/index.php';
+const TOKEN = (()=>{ const p=new URLSearchParams(window.location.search); return p.get('token')||localStorage.getItem('bgps_token')||''; })();
+
+async function req(action, params={}, method='GET', body=null){
+  let url = API+'?action='+action;
+  if(method==='GET') url += '&'+new URLSearchParams(params);
+  const opts = {method, headers:{'X-Auth-Token':TOKEN}};
+  if(body){ opts.headers['Content-Type']='application/json'; opts.body=JSON.stringify(body); }
+  const r = await fetch(url, opts);
+  return r.json();
+}
+
+function toast(msg){ const el=document.getElementById('bl-toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),3000); }
+
+let _entries=[], _clearId=null;
+
+async function load(){
+  const search = document.getElementById('bl-search').value.trim();
+  const status = document.getElementById('bl-status').value;
+  document.getElementById('bl-body').innerHTML = '<tr><td colspan="11" style="padding:30px;text-align:center;color:var(--text3)">Loading…</td></tr>';
+  const res = await req('get_blacklist',{search,status}).catch(()=>({}));
+  if(res.error){ document.getElementById('bl-body').innerHTML=`<tr><td colspan="11" style="padding:24px;text-align:center;color:var(--red)">❌ ${res.error}</td></tr>`; return; }
+  _entries = res.entries||[];
+
+  // Stats — load all for counts
+  const all = await req('get_blacklist',{status:'all'}).catch(()=>({entries:[]}));
+  const allE = all.entries||[];
+  document.getElementById('s-active').textContent  = allE.filter(e=>e.status==='active').length;
+  document.getElementById('s-auto').textContent    = allE.filter(e=>e.status==='active'&&e.task_id).length;
+  document.getElementById('s-cleared').textContent = allE.filter(e=>e.status==='cleared').length;
+
+  if(!_entries.length){ document.getElementById('bl-body').innerHTML='<tr><td colspan="11" style="padding:30px;text-align:center;color:var(--text3)">No entries found</td></tr>'; return; }
+
+  document.getElementById('bl-body').innerHTML = _entries.map((e,i)=>{
+    const date  = e.added_at ? new Date(e.added_at).toLocaleDateString('en-IN') : '–';
+    const type  = e.task_id ? '<span class="b-auto">Auto</span>' : '<span class="b-man">Manual</span>';
+    const stat  = e.status==='active' ? '<span class="b-act">Active</span>' : '<span class="b-clr">Cleared</span>';
+    const rsn   = (e.reason||'–').length>50 ? e.reason.slice(0,50)+'…' : (e.reason||'–');
+    return `<tr>
+      <td>${i+1}</td>
+      <td style="font-weight:700;white-space:nowrap">${e.customer_name||'–'}</td>
+      <td style="font-weight:700;color:var(--accent)">${e.phone||'–'}</td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.email||'–'}</td>
+      <td style="font-size:11px;font-weight:700;color:var(--accent)">${e.task_id||'–'}</td>
+      <td style="max-width:160px;color:var(--text2)">${rsn}</td>
+      <td style="white-space:nowrap;color:var(--text3)">${e.added_by||'–'}</td>
+      <td style="white-space:nowrap">${date}</td>
+      <td>${type}</td>
+      <td>${stat}</td>
+      <td>${e.status==='active'
+        ? `<button class="btn btn-green btn-sm" onclick="openClear(${e.id})">✅ Clear</button>`
+        : `<span style="font-size:11px;color:var(--text3)">${e.cleared_by||'–'}</span>`}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ADD
+function openAdd(){ document.getElementById('add-ov').classList.add('open'); }
+function closeAdd(){ document.getElementById('add-ov').classList.remove('open'); }
+async function addManual(){
+  const phone  = document.getElementById('a-phone').value.trim();
+  const email  = document.getElementById('a-email').value.trim();
+  const reason = document.getElementById('a-reason').value.trim();
+  if(!phone && !email){ toast('⚠️ Phone or email required'); return; }
+  if(!reason){ toast('⚠️ Reason required'); return; }
+  const res = await req('add_blacklist',{},'POST',{
+    customer_name: document.getElementById('a-name').value.trim()||null,
+    phone:phone||null, email:email||null,
+    task_id: document.getElementById('a-task').value.trim()||null,
+    reason,
+  }).catch(()=>({}));
+  if(res.success){
+    toast('🚫 Added to blacklist'); closeAdd(); load();
+    ['a-name','a-phone','a-email','a-task','a-reason'].forEach(id=>document.getElementById(id).value='');
+  } else toast('❌ '+(res.error||'Failed'));
+}
+
+// CLEAR
+function openClear(id){
+  _clearId=id;
+  const e=_entries.find(x=>+x.id===+id);
+  document.getElementById('clr-info').innerHTML = e
+    ? `<b>Name:</b> ${e.customer_name||'–'}<br><b>Phone:</b> ${e.phone||'–'}<br><b>Email:</b> ${e.email||'–'}<br><b>Reason:</b> ${e.reason||'–'}`
+    : '';
+  document.getElementById('clr-reason').value='';
+  document.getElementById('clr-ov').classList.add('open');
+}
+function closeClear(){ document.getElementById('clr-ov').classList.remove('open'); }
+async function confirmClear(){
+  const reason=document.getElementById('clr-reason').value.trim();
+  if(!reason){ toast('⚠️ Enter reason for clearing'); return; }
+  const res=await req('clear_blacklist',{},'POST',{id:_clearId,reason}).catch(()=>({}));
+  if(res.success){ toast('✅ Cleared'); closeClear(); load(); }
+  else toast('❌ '+(res.error||'Failed'));
+}
+
+// Auto-load
+setTimeout(load, 300);
+</script>
+</body>
+</html>
