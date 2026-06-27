@@ -487,7 +487,7 @@ function renderTable(){
     return `<tr>
       <td><input type="checkbox" ${chk} onchange="toggleSel(${e.id},this)"></td>
       <td>${n}</td><td>${e.date||'–'}</td><td>${tp}</td>
-      <td>${e.task_id||e.task_no||'–'}</td><td>${e.invoice_no||'–'}</td>
+      <td>${e.task_id ? '<span style="font-weight:700;color:var(--accent)">' + e.task_id + '</span>' : e.task_no || '–'}</td><td>${e.invoice_no||'–'}</td>
       <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis">${e.name_on_server||'–'}</td>
       <td>${e.server_name||'–'}</td><td>${e.device_model||e.service_type||'–'}</td><td>${e.qty||'–'}</td>
       <td style="font-weight:700">₹${parseFloat(e.total_price||0).toLocaleString('en-IN')}</td>
@@ -497,8 +497,8 @@ function renderTable(){
       <td>${e.technician_name||'–'}</td><td>${e.location||'–'}</td>
       <td>
         <button class="act-btn" onclick="viewEntry(${e.id})" title="View">👁</button>
-        <button class="act-btn" onclick="editEntry(${e.id})" title="Edit">✏️</button>
-        <button class="act-btn" onclick="delEntry(${e.id})" title="Delete">🗑️</button>
+        <button class="act-btn" onclick="editEntry(${e.id})" title="Edit payment details">✏️</button>
+        ${e.task_db_id ? '<span title="Auto-created from task — protected audit record" style="font-size:13px;padding:3px 5px;opacity:.6">🔒</span>' : '<button class="act-btn" onclick="delEntry('+e.id+')" title="Delete">🗑️</button>'}
         <button class="act-btn" onclick="waEntry(${e.id})" title="WhatsApp">📱</button>
       </td>
     </tr>`;
@@ -548,6 +548,8 @@ function closeView(){ document.getElementById('bs-view-ov').classList.remove('op
 // ── EDIT ────────────────────────────────────────────
 function editEntry(id){
   const e=allEntries.find(x=>+x.id===+id); if(!e) return;
+  const isLocked = !!e.task_db_id;
+  const lockedNote = isLocked ? '<div style="background:var(--amber-bg);border:1.5px solid var(--amber);border-radius:7px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--amber);font-weight:700">🔒 Audit Record — Only payment fields can be updated. Device/price details are locked.</div>' : '';
   const fields=[
     {id:'payment_status',label:'Payment Status',type:'select',opts:['paid','partially_paid','pending']},
     {id:'payment_received',label:'Amount Received',type:'number'},
@@ -562,6 +564,7 @@ function editEntry(id){
     {id:'remarks',label:'Remarks',type:'text'},
   ];
   document.getElementById('bs-edit-body').innerHTML=`
+    ${lockedNote}
     <div class="bs-fg" style="margin-bottom:14px">
       ${fields.map(f=>`<div class="fg"><label>${f.label}</label>
         ${f.type==='select'
