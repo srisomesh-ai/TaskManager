@@ -388,7 +388,12 @@ tr:hover td{background:#f7f9fc}
 const API = 'api/index.php';
 // Get auth token from parent window (task manager) or localStorage
 const AUTH_TOKEN = (()=>{
-  try{ return window.parent?.authToken || localStorage.getItem('bgps_token') || ''; }catch(e){ return localStorage.getItem('bgps_token')||''; }
+  // Read from URL param (passed by parent iframe src)
+  const params = new URLSearchParams(window.location.search);
+  const urlToken = params.get('token');
+  if(urlToken) return urlToken;
+  // Fallback to localStorage
+  return localStorage.getItem('bgps_token') || '';
 })();
 
 async function bsApi(action, params={}, method='GET', body=null){

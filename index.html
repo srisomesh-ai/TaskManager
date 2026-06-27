@@ -1038,9 +1038,8 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
         </div>
       </div>
       <div class="page" id="page-balance-sheet" style="padding:0;display:flex;flex-direction:column">
-        <iframe id="bs-iframe" src="balance-sheet.html"
-          style="flex:1;width:100%;border:none;min-height:calc(100vh - 120px)"
-          onload="syncBsAuth(this)">
+        <iframe id="bs-iframe" src="about:blank"
+          style="flex:1;width:100%;border:none;min-height:calc(100vh - 120px)">
         </iframe>
       </div>
 
@@ -1674,7 +1673,7 @@ function showPage(name, opts={}){
     urgent:          loadUrgentPage,
     approvals:       loadApprovalsPage,
     'daily-report':  loadDailyReport,
-    'balance-sheet': ()=>{ syncBsAuth(document.getElementById('bs-iframe')); },
+    'balance-sheet': syncBsAuth,
   };
   if(loaders[name]) loaders[name]();
 }
@@ -4976,13 +4975,11 @@ async function loadApprovalsPage(){
 
 async function loadApprovals(){ return loadApprovalsPage(); }
 
-function syncBsAuth(iframe){
-  // Pass current auth token into the balance sheet iframe
-  try {
-    if(iframe.contentWindow && authToken){
-      iframe.contentWindow.authToken = authToken;
-    }
-  } catch(e){}
+function syncBsAuth(){
+  const iframe = document.getElementById('bs-iframe');
+  if(!iframe) return;
+  // Pass token as URL param — works same-origin
+  iframe.src = 'balance-sheet.html?token=' + encodeURIComponent(authToken||'');
 }
 // ════════════════════════════════════════════════════════
 // DAILY REPORT
