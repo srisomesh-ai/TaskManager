@@ -11,6 +11,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
 
 require_once __DIR__ . '/db.php';
 
+// Ensure blacklist table exists
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS blacklist_entries (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        customer_name VARCHAR(200),
+        phone VARCHAR(20),
+        email VARCHAR(200),
+        task_id VARCHAR(20),
+        task_db_id INT,
+        reason TEXT,
+        added_by VARCHAR(100),
+        added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        status VARCHAR(20) DEFAULT 'active',
+        cleared_by VARCHAR(100),
+        cleared_reason TEXT,
+        cleared_at TIMESTAMP NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+} catch(Exception $e){}
+
 $action = $_GET['action'] ?? '';
 $method = $_SERVER['REQUEST_METHOD'];
 $body   = [];
@@ -28,7 +47,7 @@ try { $pdo->exec("ALTER TABLE tasks ADD COLUMN admin_viewed_at DATETIME DEFAULT 
 
 
 // Auth
-$skipAuth = ['login','ping','verify_pin'];
+$skipAuth = ['login','ping','verify_pin','check_blacklist'];
 $cu = null; $userId = null; $userRole = null;
 if (!in_array($action, $skipAuth)) {
     if ($token) {
