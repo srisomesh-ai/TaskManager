@@ -145,6 +145,7 @@ tr:hover td{background:#f7f9fc}
     </div>
     <button class="bs-btn" onclick="clearFilters()">✕ Clear</button>
     <button class="bs-btn bs-btn-p" onclick="exportXLS()">⬇️ Excel</button>
+    <button class="bs-btn" onclick="resyncAll()" style="background:#5b2d8e;color:#fff;border-color:#5b2d8e" title="Sync all payment data from task manager">🔄 Sync Payments</button>
     <button class="bs-btn bs-btn-g" id="bs-wa-btn" onclick="sendWA()" style="display:none">📱 WA Report</button>
   </div>
   <div class="bs-table-wrap">
@@ -611,6 +612,17 @@ function sendWA(){
 }
 
 // ── EXPORT ───────────────────────────────────────────
+async function resyncAll(){
+  if(!confirm('This will sync all payment data from Task Manager into Balance Sheet. Continue?')) return;
+  const res = await bsApi('bs_resync_all',{},'POST',{}).catch(()=>({}));
+  if(res.success){
+    toast('✅ Synced '+res.updated+' entries from Task Manager');
+    loadEntries();
+  } else {
+    toast('❌ '+(res.error||'Sync failed'));
+  }
+}
+
 function exportXLS(){
   const data=getFiltered();
   const rows=data.map((e,i)=>({'#':i+1,'Date':e.date,'Type':e.type,'Task':e.task_id||e.task_no,'Invoice':e.invoice_no,

@@ -1082,6 +1082,36 @@ case 'bs_from_task':
     echo json_encode(['success'=>true,'id'=>$newId,'task_id'=>$t['task_id']]);
     break;
 
+// ── BS RESYNC ALL — fix existing entries from task data ──────
+case 'bs_resync_all':
+    if ($userRole !== 'admin') { http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
+    try {
+        // Get all BS entries that are linked to a task
+        $rows = $pdo->query("SELECT b.id, b.task_db_id, t.price_to_collect, t.amount_collected, t.payment_mode
+            FROM balance_sheet_entries b
+            JOIN tasks t ON b.task_db_id = t.id
+            WHERE b.task_db_id IS NOT NULL")->fetchAll();
+        $count = 0;
+        foreach ($rows as $r) {
+            $recv  = floatval($r['amount_collected']??0);
+            $total = floatval($r['price_to_collect']??0);
+            $pend  = max(0, $total - $recv);
+            if ($total <= 0 || $recv <= 0)  $ps = 'pending';
+            elseif ($recv >= $total - 15)   $ps = 'paid';
+            else                             $ps = 'partially_paid';
+            $pdo->prepare("UPDATE balance_sheet_entries SET
+                payment_received=?, pending_payment=?, payment_status=?,
+                payment_mode=?, total_price=?, updated_at=NOW()
+                WHERE id=?")
+                ->execute([$recv, $pend, $ps, $r['payment_mode'], $total, $r['id']]);
+            $count++;
+        }
+        echo json_encode(['success'=>true, 'updated'=>$count]);
+    } catch(Exception $e) {
+        echo json_encode(['error'=>$e->getMessage()]);
+    }
+    break;
+
 // ============================================================
 // FINANCE PORTAL ACTIONS
 // ============================================================
