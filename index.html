@@ -2329,27 +2329,6 @@ async function saveTask(){
   const customer = document.getElementById('fm-customer').value.trim();
   const contact  = document.getElementById('fm-contact').value.trim();
   if(!customer||!contact){ alert('Customer name and contact are required.'); return; }
-  // Block if blacklisted customer and not acknowledged
-  if(!_blAcknowledged && !editingTaskId){
-    const email = document.getElementById('fm-email')?.value?.trim()||'';
-    const params = {};
-    if(contact) params.phone = contact;
-    if(email)   params.email = email;
-    if(contact || email){
-      const blRes = await api('check_blacklist', params).catch(()=>({}));
-      if(blRes.found && blRes.entry){
-        const e = blRes.entry;
-        const date = e.added_at ? new Date(e.added_at).toLocaleDateString('en-IN') : '–';
-        document.getElementById('bl-popup-name').textContent   = e.customer_name||'–';
-        document.getElementById('bl-popup-task').textContent   = e.task_id||'Manual entry';
-        document.getElementById('bl-popup-date').textContent   = date;
-        document.getElementById('bl-popup-reason').textContent = e.reason||'–';
-        document.getElementById('bl-popup-by').textContent     = e.added_by||'–';
-        document.getElementById('bl-popup-overlay').style.display = 'flex';
-        return; // block save until user decides
-      }
-    }
-  }
   btn.textContent='Saving…'; btn.disabled=true;
   // Use getDrawerTotal() so price_to_collect = (unit_price × qty) including GST
   const {price: unitPrice, total: totalPrice, gstTotal, qty: deviceQty, stdPrice} = getDrawerTotal();
@@ -5212,10 +5191,7 @@ function filterDrActivity(){
 // ════════════════════════════════════════════════════════
 // BLACKLIST CHECK — onblur in create task form → popup
 // ════════════════════════════════════════════════════════
-let _blAcknowledged = false; // tracks if user confirmed proceed on blacklisted customer
-
 async function checkBlacklist(field){
-  _blAcknowledged = false; // reset on each check
   const phone = document.getElementById('fm-contact')?.value?.trim() || '';
   const email = document.getElementById('fm-email')?.value?.trim() || '';
   const params = {};
@@ -5226,26 +5202,17 @@ async function checkBlacklist(field){
   if(res.found && res.entry){
     const e = res.entry;
     const date = e.added_at ? new Date(e.added_at).toLocaleDateString('en-IN') : '–';
-    document.getElementById('bl-popup-name').textContent   = e.customer_name||'–';
-    document.getElementById('bl-popup-task').textContent   = e.task_id||'Manual entry';
-    document.getElementById('bl-popup-date').textContent   = date;
-    document.getElementById('bl-popup-reason').textContent = e.reason||'–';
-    document.getElementById('bl-popup-by').textContent     = e.added_by||'–';
+    // Show popup
+    document.getElementById('bl-popup-name').textContent    = e.customer_name||'–';
+    document.getElementById('bl-popup-task').textContent    = e.task_id||'Manual entry';
+    document.getElementById('bl-popup-date').textContent    = date;
+    document.getElementById('bl-popup-reason').textContent  = e.reason||'–';
+    document.getElementById('bl-popup-by').textContent      = e.added_by||'–';
     document.getElementById('bl-popup-overlay').style.display = 'flex';
   }
 }
 
 function closeBlacklistPopup(){
-  // Cancel — clear phone and email fields
-  document.getElementById('fm-contact').value = '';
-  if(document.getElementById('fm-email')) document.getElementById('fm-email').value = '';
-  document.getElementById('bl-popup-overlay').style.display = 'none';
-  _blAcknowledged = false;
-}
-
-function proceedBlacklist(){
-  // Admin chose to proceed — acknowledge and close popup
-  _blAcknowledged = true;
   document.getElementById('bl-popup-overlay').style.display = 'none';
 }
 
@@ -5511,9 +5478,9 @@ function copyQtLink(e){
       <!-- Buttons -->
       <div style="display:flex;gap:10px">
         <button onclick="closeBlacklistPopup()" style="flex:1;padding:11px;background:var(--surface2);color:var(--text);border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">
-          ✕ Cancel
+          ✕ Cancel Task
         </button>
-        <button onclick="proceedBlacklist()" style="flex:1;padding:11px;background:var(--red);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">
+        <button onclick="closeBlacklistPopup()" style="flex:1;padding:11px;background:var(--red);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">
           ⚠️ Proceed Anyway
         </button>
       </div>
