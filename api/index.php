@@ -439,6 +439,35 @@ case 'update_task':
     }
     if (isset($body['task_status'])&&$body['task_status']==='Closed'&&$existing['task_status']!=='Closed') $sets[]="closed_at=NOW()";
     if ($sets) { $vals[]=$id; $pdo->prepare("UPDATE tasks SET ".implode(',',$sets)." WHERE id=?")->execute($vals); }
+
+    // ── SYNC PAYMENT TO BS ENTRY ─────────────────────────────────────
+    // If this task has a linked BS entry, sync payment fields
+    try {
+        $bsCheck = $pdo->prepare("SELECT bs_entry_id FROM tasks WHERE id=?");
+        $bsCheck->execute([$id]); $bsRow = $bsCheck->fetch();
+        if (!empty($bsRow['bs_entry_id'])) {
+            $tLatest = $pdo->prepare("SELECT * FROM tasks WHERE id=?");
+            $tLatest->execute([$id]); $tL = $tLatest->fetch();
+            if ($tL) {
+                $recv3  = floatval($tL['amount_collected']??0);
+                $total3 = floatval($tL['price_to_collect']??0);
+                $pend3  = max(0, $total3-$recv3);
+                $ps3    = 'pending';
+                if ($recv3 >= $total3-15) $ps3 = 'paid';
+                elseif ($recv3 > 0)       $ps3 = 'partially_paid';
+                $pdo->prepare("UPDATE balance_sheet_entries SET
+                    payment_received=?,pending_payment=?,payment_status=?,
+                    payment_mode=?,total_price=?,updated_at=NOW()
+                    WHERE id=?")
+                    ->execute([$recv3,$pend3,$ps3,
+                               $tL['payment_mode']??null,$total3,
+                               $bsRow['bs_entry_id']]);
+            }
+        }
+    } catch(Exception $bsSync) {
+        error_log('BS sync error: '.$bsSync->getMessage());
+    }
+    // ── END SYNC ─────────────────────────────────────────────────────
     if (!empty($body['remark'])) {
         $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'remark')")->execute([$id,$userId,$body['remark']]);
     }
@@ -795,6 +824,93 @@ case 'save_device_install':
     if ($idx===1) {
         $pdo->prepare("UPDATE tasks SET gps_serial_no=?,name_on_server=?,server_name=? WHERE id=?")->execute([trim($body['gps_serial_no']??''),trim($body['name_on_server']??''),trim($body['server_name']??''),$tid]);
     }
+
+    // ── AUTO-CREATE BALANCE SHEET ENTRY ─────────────────────────────
+    // Once ALL devices are installed → create BS entry if not already exists
+    try {
+        // Ensure bs_entry_id column exists
+        try { $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS bs_entry_id INT NULL"); } catch(Exception $e2){}
+        try { $pdo->exec("CREATE TABLE IF NOT EXISTS balance_sheet_entries (id INT AUTO_INCREMENT PRIMARY KEY, type VARCHAR(20) DEFAULT 'sales', profile VARCHAR(10) DEFAULT 'BGPT', task_id VARCHAR(20) NULL, task_db_id INT NULL, date DATE NOT NULL, invoice_no VARCHAR(50), gps_serial_no VARCHAR(100), customer_type VARCHAR(50), name_on_server TEXT, server_name VARCHAR(50), device_model VARCHAR(100), service_type VARCHAR(100), license_plan VARCHAR(100), qty DECIMAL(10,2) DEFAULT 1, unit_price DECIMAL(10,2) DEFAULT 0, gst DECIMAL(10,2) DEFAULT 0, total_price DECIMAL(10,2) DEFAULT 0, payment_status VARCHAR(50), payment_received DECIMAL(10,2) DEFAULT 0, pending_payment DECIMAL(10,2) DEFAULT 0, payment_mode VARCHAR(50), payment_received_on DATE NULL, payment_transaction_details TEXT, pending_reason VARCHAR(100), discount_given DECIMAL(10,2) DEFAULT 0, discount_reason TEXT, discount_incharge VARCHAR(100), payment_reminder_date DATE NULL, technician_name VARCHAR(100), location VARCHAR(200), remarks TEXT, created_by_code VARCHAR(50), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch(Exception $e2){}
+
+        // Fetch full task details
+        $tr2 = $pdo->prepare("SELECT t.*,u.name as tech_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?");
+        $tr2->execute([$tid]); $t2 = $tr2->fetch();
+
+        if ($t2 && !$t2['bs_entry_id']) {
+            // Check all devices installed
+            $totalQty = intval($t2['device_qty']??1);
+            $doneCount = $pdo->prepare("SELECT COUNT(*) FROM task_device_installs WHERE task_id=? AND gps_serial_no IS NOT NULL AND gps_serial_no != ''");
+            $doneCount->execute([$tid]);
+            $installedCount = intval($doneCount->fetchColumn());
+
+            if ($installedCount >= $totalQty) {
+                // All devices installed — create BS entry
+                // Collect all installed names and serials
+                $diRows = $pdo->prepare("SELECT gps_serial_no, name_on_server, server_name FROM task_device_installs WHERE task_id=? ORDER BY device_index ASC");
+                $diRows->execute([$tid]);
+                $installs = $diRows->fetchAll();
+                $allSerials = implode(', ', array_filter(array_column($installs, 'gps_serial_no')));
+                $allNames   = implode(', ', array_filter(array_column($installs, 'name_on_server')));
+                $serverName = $installs[0]['server_name'] ?? $t2['server_name'] ?? null;
+
+                $qty2  = floatval($t2['device_qty']??1);
+                $total2= floatval($t2['price_to_collect']??0);
+                $unit2 = $qty2>0 ? $total2/$qty2 : $total2;
+                $recv2 = floatval($t2['amount_collected']??0);
+                $pend2 = max(0, $total2-$recv2);
+                $profile2 = $t2['profile']??'BGPT';
+
+                // Determine payment status
+                $pStatus = 'pending';
+                if ($recv2 >= $total2-15) $pStatus = 'paid';
+                elseif ($recv2 > 0)       $pStatus = 'partially_paid';
+
+                $pdo->prepare("INSERT INTO balance_sheet_entries
+                    (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,
+                     name_on_server,server_name,device_model,qty,unit_price,gst,total_price,
+                     payment_status,payment_received,pending_payment,payment_mode,
+                     payment_received_on,payment_transaction_details,
+                     discount_given,discount_reason,discount_incharge,payment_reminder_date,
+                     technician_name,location,remarks,created_by_code)
+                    VALUES ('sales',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    ON DUPLICATE KEY UPDATE
+                     payment_received=VALUES(payment_received),
+                     pending_payment=VALUES(pending_payment),
+                     payment_status=VALUES(payment_status),
+                     updated_at=NOW()"
+                )->execute([
+                    $profile2, $t2['task_id'], $tid,
+                    date('Y-m-d'),
+                    $allSerials ?: null,
+                    $t2['lead_type']??null,
+                    $allNames ?: $t2['name_on_server'] ?: null,
+                    $serverName,
+                    $t2['device_details']??null,
+                    $qty2, $unit2,
+                    floatval($t2['gst_amount']??0), $total2,
+                    $pStatus, $recv2, $pend2,
+                    $t2['payment_mode']??null,
+                    !empty($t2['payment_received_on'])?$t2['payment_received_on']:null,
+                    $t2['payment_transaction_details']??null,
+                    floatval($t2['discount_given']??0),
+                    $t2['discount_reason']??null, $t2['discount_incharge']??null,
+                    !empty($t2['payment_reminder_date'])?$t2['payment_reminder_date']:null,
+                    $t2['tech_name']??null, $t2['location']??null,
+                    $t2['general_notes']??null,
+                    $cu['name']??'system',
+                ]);
+                $newBsId = $pdo->lastInsertId();
+                if ($newBsId) {
+                    $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$newBsId, $tid]);
+                }
+            }
+        }
+    } catch(Exception $bsEx) {
+        // BS creation failure must NOT break the install save
+        error_log('BS auto-create error: '.$bsEx->getMessage());
+    }
+    // ── END AUTO-CREATE BS ──────────────────────────────────────────
+
     echo json_encode(['success'=>true]);
     break;
 
