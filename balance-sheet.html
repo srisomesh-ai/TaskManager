@@ -797,16 +797,14 @@ function toast(msg){
 setToday();
 loadEntries();
 
-// Auto-sync payment data every 5 minutes — silently in background
-async function silentSync(){
+// One-time sync on load to correct any existing data
+// After this, BS stays in sync via update_task hook in api/index.php
+setTimeout(async()=>{
   try {
     const res = await bsApi('bs_resync_all',{},'POST',{}).catch(()=>({}));
     if(res.success && res.updated > 0) loadEntries();
   } catch(e){}
-}
-// Run once on load after 2s, then every 5 minutes
-setTimeout(silentSync, 2000);
-setInterval(silentSync, 5 * 60 * 1000);
+}, 2000);
 </script>
 </body>
 </html>
