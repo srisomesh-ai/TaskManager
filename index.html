@@ -589,6 +589,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
               </div>
               <div class="form-row">
                 <div class="form-group"><label>Email ID</label><input type="email" id="fm-email" placeholder="Optional" onblur="checkBlacklist('email')"></div>
+                <div id="bl-inline-warn" style="display:none;background:var(--red-bg);border:1.5px solid var(--red);border-radius:8px;padding:12px 14px;margin-bottom:2px;grid-column:1/-1"></div>
                 <div class="form-group"><label>Location / Area</label><input type="text" id="fm-location" placeholder="City, area, landmark"></div>
               </div>
               <div class="form-row">
@@ -5273,7 +5274,7 @@ function copyQtLink(e){
 }
 
 // ══════════════════════════════════════════════════════════
-// BLACKLIST CHECK
+// BLACKLIST CHECK — shows inline inside the task form
 // ══════════════════════════════════════════════════════════
 let _blAcknowledged = false;
 
@@ -5281,36 +5282,61 @@ async function checkBlacklist(field){
   _blAcknowledged = false;
   const phone = (document.getElementById('fm-contact')?.value||'').trim();
   const email = (document.getElementById('fm-email')?.value||'').trim();
+  const warn  = document.getElementById('bl-inline-warn');
   const params = {};
   if(field==='phone' && phone) params.phone = phone;
   if(field==='email' && email) params.email = email;
-  if(!Object.keys(params).length) return;
+  if(!Object.keys(params).length){ if(warn) warn.style.display='none'; return; }
   const res = await api('check_blacklist', params).catch(()=>({found:false}));
-  if(res.found && res.entry) showBlacklistPopup(res.entry);
+  if(res.found && res.entry){
+    const e   = res.entry;
+    const date = e.added_at ? new Date(e.added_at).toLocaleDateString('en-IN') : '-';
+    warn.style.display = 'block';
+    warn.innerHTML = `<div style="display:flex;align-items:flex-start;gap:10px">
+      <span style="font-size:22px;flex-shrink:0">🚫</span>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:800;color:var(--red);margin-bottom:6px">Blacklisted Customer</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.8">
+          <b>Name:</b> ${e.customer_name||'-'} &nbsp;·&nbsp;
+          <b>Task:</b> ${e.task_id||'Manual'} &nbsp;·&nbsp;
+          <b>Date:</b> ${date}<br>
+          <b>Reason:</b> ${e.reason||'-'}<br>
+          <b>Added by:</b> ${e.added_by||'-'}
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button type="button" onclick="blDismiss()" style="padding:6px 14px;background:var(--surface2);color:var(--text);border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">✕ Clear Fields</button>
+          <button type="button" onclick="blProceed()" style="padding:6px 14px;background:var(--red);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:800;cursor:pointer">⚠️ Proceed Anyway</button>
+        </div>
+      </div>
+    </div>`;
+  } else {
+    if(warn) warn.style.display = 'none';
+  }
 }
 
-function showBlacklistPopup(e){
-  const date = e.added_at ? new Date(e.added_at).toLocaleDateString('en-IN') : '-';
-  document.getElementById('blp-name').textContent   = e.customer_name||'-';
-  document.getElementById('blp-task').textContent   = e.task_id||'Manual entry';
-  document.getElementById('blp-date').textContent   = date;
-  document.getElementById('blp-reason').textContent = e.reason||'-';
-  document.getElementById('blp-by').textContent     = e.added_by||'-';
-  document.getElementById('blp-overlay').style.display = 'flex';
-}
-
-function blpCancel(){
+function blDismiss(){
   const ph = document.getElementById('fm-contact');
   const em = document.getElementById('fm-email');
-  if(ph) ph.value = '';
-  if(em) em.value = '';
+  if(ph) ph.value='';
+  if(em) em.value='';
   _blAcknowledged = false;
-  document.getElementById('blp-overlay').style.display = 'none';
+  const warn = document.getElementById('bl-inline-warn');
+  if(warn) warn.style.display='none';
 }
 
-function blpProceed(){
+function blProceed(){
   _blAcknowledged = true;
-  document.getElementById('blp-overlay').style.display = 'none';
+  const warn = document.getElementById('bl-inline-warn');
+  if(warn){
+    warn.style.background='var(--amber-bg)';
+    warn.style.borderColor='var(--amber)';
+    const title = warn.querySelector('div > div');
+    if(title) title.style.color='var(--amber)';
+    // Remove buttons, show acknowledged message
+    const btns = warn.querySelectorAll('button');
+    btns.forEach(b=>b.remove());
+    warn.innerHTML += '<div style="font-size:12px;font-weight:700;color:var(--amber);margin-top:8px">⚠️ Proceeding with management approval — blacklist acknowledged</div>';
+  }
 }
 
 </script>
@@ -5460,32 +5486,6 @@ function blpProceed(){
     </div>
   </div>
 </div>
-<!-- BLACKLIST POPUP -->
-<div id="blp-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:3000;align-items:center;justify-content:center;padding:16px">
-  <div style="background:#fff;border-radius:16px;width:100%;max-width:400px;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.4)">
-    <div style="background:var(--red);padding:20px;color:#fff;text-align:center">
-      <div style="font-size:36px;margin-bottom:8px">🚫</div>
-      <div style="font-size:16px;font-weight:900">Blacklisted Customer</div>
-      <div style="font-size:12px;opacity:.8;margin-top:4px">This customer has a blacklist record</div>
-    </div>
-    <div style="padding:18px 20px">
-      <div style="background:var(--surface2);border-radius:10px;padding:14px;margin-bottom:12px;font-size:13px;display:grid;grid-template-columns:auto 1fr;gap:6px 14px">
-        <span style="color:var(--text3);font-weight:600">Customer</span><span style="font-weight:800" id="blp-name">–</span>
-        <span style="color:var(--text3);font-weight:600">Last Task</span><span style="font-weight:700;color:var(--accent)" id="blp-task">–</span>
-        <span style="color:var(--text3);font-weight:600">Date</span><span id="blp-date">–</span>
-        <span style="color:var(--text3);font-weight:600">Added By</span><span id="blp-by">–</span>
-      </div>
-      <div style="background:var(--amber-bg);border:1.5px solid var(--amber);border-radius:8px;padding:12px;margin-bottom:16px">
-        <div style="font-size:10px;font-weight:700;color:var(--amber);margin-bottom:4px;text-transform:uppercase">Reason</div>
-        <div style="font-size:13px;color:var(--text2);line-height:1.6" id="blp-reason">–</div>
-      </div>
-      <div style="font-size:12px;color:var(--red);font-weight:700;text-align:center;margin-bottom:16px">⚠️ Management approval required to proceed</div>
-      <div style="display:flex;gap:10px">
-        <button onclick="blpCancel()" style="flex:1;padding:12px;background:var(--surface2);color:var(--text);border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">✕ Cancel</button>
-        <button onclick="blpProceed()" style="flex:1;padding:12px;background:var(--red);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">⚠️ Proceed Anyway</button>
-      </div>
-    </div>
-  </div>
-</div>
+<!-- blacklist inline warning shown inside form -->
 </body>
 </html>
