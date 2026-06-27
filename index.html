@@ -4988,7 +4988,12 @@ async function loadDailyReport(){
   document.getElementById('dr-activity-tbody').innerHTML = '<tr><td colspan="5" style="padding:30px;text-align:center;color:var(--text3)">Loading...</td></tr>';
 
   const res = await api('get_daily_report',{date}).catch(()=>({}));
-  if(!res.summary){ document.getElementById('dr-stats').innerHTML='<div style="color:var(--red);padding:20px">Failed to load. Try again.</div>'; return; }
+  if(!res.summary){
+    const errMsg = res.error || 'Unknown error';
+    document.getElementById('dr-stats').innerHTML='<div style="color:var(--red);padding:20px;font-size:12px">❌ Error: '+errMsg+'</div>';
+    console.error('Daily report error:', res);
+    return;
+  }
   _drData = res;
 
   // ── 1. Summary cards ─────────────────────────────────

@@ -723,7 +723,7 @@ case 'get_daily_report':
             'date'                 => $date,
         ]);
     } catch(Exception $e){
-        echo json_encode(['error'=> $e->getMessage()]);
+        echo json_encode(['error'=> $e->getMessage(), 'trace'=> $e->getTraceAsString()]);
     }
     break;
 
