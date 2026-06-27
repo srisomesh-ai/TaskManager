@@ -21,7 +21,25 @@ $s->execute([$taskId]);
 $task = $s->fetch();
 if(!$task) exit;
 
-$subject = '✅ Consent Received — '.$task['task_id'].' | '.$cName;
+// Detect consent type
+$jobRaw = strtolower($task['device_details']??'');
+if(strpos($jobRaw,'troubleshoot')!==false||strpos($jobRaw,'offline')!==false)         $cType='troubleshoot';
+elseif(strpos($jobRaw,'vehicle to vehicle')!==false||strpos($jobRaw,'v2v')!==false)   $cType='v2v';
+elseif(strpos($jobRaw,'re-adding')!==false||strpos($jobRaw,'re adding')!==false)      $cType='readding';
+elseif(strpos($jobRaw,'only remove')!==false||strpos($jobRaw,'remove only')!==false)  $cType='remove';
+elseif(strpos($jobRaw,'demonstration')!==false||strpos($jobRaw,'demo')!==false)       $cType='demo';
+else                                                                                    $cType='installation';
+
+$typeLabels = [
+    'troubleshoot' => 'Free Service Visit Confirmed',
+    'v2v'          => 'V2V Change Consent Confirmed',
+    'readding'     => 'Re-Adding Service Confirmed',
+    'remove'       => 'GPS Removal Confirmed',
+    'demo'         => 'Demonstration Visit Confirmed',
+    'installation' => 'Installation Consent Received',
+];
+$typeLabel = $typeLabels[$cType] ?? 'Consent Received';
+$subject = '✅ '.$typeLabel.' — '.$task['task_id'].' | '.$cName;
 $html = '<!DOCTYPE html><html><body style="font-family:sans-serif;background:#f0f2f5;padding:20px">
 <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.1)">
 <div style="background:linear-gradient(135deg,#0E5C5C,#137272);padding:18px 24px;text-align:center">
@@ -32,8 +50,8 @@ $html = '<!DOCTYPE html><html><body style="font-family:sans-serif;background:#f0
 </div>
 <div style="padding:24px">
 <div style="background:#e8f5ec;border:2px solid #1a7a3a;border-radius:8px;padding:16px;margin-bottom:16px">
-<div style="font-size:15px;font-weight:800;color:#1a7a3a;margin-bottom:6px">✅ Customer Consent Received</div>
-<div style="font-size:13px;color:#1a1f2e">Customer has agreed to T&amp;C and payment. Technician can proceed with installation.</div>
+<div style="font-size:15px;font-weight:800;color:#1a7a3a;margin-bottom:6px">✅ '.$typeLabel.'</div>
+<div style="font-size:13px;color:#1a1f2e">Customer has confirmed their consent. Technician can now proceed.</div>
 </div>
 <table style="width:100%;font-size:13px;border-collapse:collapse">
 <tr><td style="padding:6px 0;color:#4a5568;width:140px">Task</td><td style="font-weight:700">'.htmlspecialchars($task['task_id']).'</td></tr>
@@ -43,7 +61,7 @@ $html = '<!DOCTYPE html><html><body style="font-family:sans-serif;background:#f0
 <tr><td style="padding:6px 0;color:#4a5568">Amount</td><td style="font-weight:800;color:#1a7a3a;font-size:15px">₹'.number_format(floatval($task['price_to_collect']??0),0).'</td></tr>
 <tr><td style="padding:6px 0;color:#4a5568">Time</td><td style="font-weight:700">'.date('d M Y, h:i A', strtotime($now)).'</td></tr>
 </table>
-<p style="font-size:13px;color:#1a7a3a;font-weight:700;margin-top:16px">✅ Technician can now proceed with installation.</p>
+<p style="font-size:13px;color:#1a7a3a;font-weight:700;margin-top:16px">✅ Technician can now proceed.</p>
 </div>
 <div style="background:#f7f8fa;padding:12px 24px;text-align:center;font-size:11px;color:#8a9ab0">
 BharatGPS Tracker · 9849849824 · sales@bharatgps.com
@@ -71,6 +89,41 @@ function notifyMail($to,$toName,$subject,$html){
     fclose($sock);
 }
 
+// Send to admins/assigners
 $admins = $pdo->query("SELECT name,email FROM users WHERE role IN ('admin','assigner') AND email IS NOT NULL AND email!='' AND is_active=1")->fetchAll();
 foreach($admins as $a) { if($a['email']) @notifyMail($a['email'],$a['name'],$subject,$html); }
-if($task['tech_email']) @notifyMail($task['tech_email'],$task['tech_name']??'Tech',$subject,$html);
+// Send to technician
+if(!empty($task['tech_email'])) @notifyMail($task['tech_email'],$task['tech_name']??'Tech',$subject,$html);
+// Send confirmation to customer
+$custEmail = trim($task['customer_email']??'');
+if($custEmail && filter_var($custEmail,FILTER_VALIDATE_EMAIL)){
+    $custSubject = '✅ Your '.$typeLabel.' — BharatGPS Task '.$task['task_id'];
+    $custHtml = '<!DOCTYPE html><html><body style="font-family:sans-serif;background:#f0f2f5;padding:20px">
+<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.1)">
+<div style="background:linear-gradient(135deg,#0E5C5C,#137272);padding:18px 24px;text-align:center">
+<div style="background:#fff;border-radius:10px;padding:8px 18px;display:inline-block;margin-bottom:8px">
+<img src="https://salmon-goldfish-110661.hostingersite.com/logo.png" style="height:42px;width:auto;display:block" alt="BharatGPS">
+</div>
+<div style="color:rgba(255,255,255,.7);font-size:11px;font-weight:600">BHARATGPS TRACKER</div>
+</div>
+<div style="padding:24px">
+<div style="background:#e8f5ec;border:2px solid #1a7a3a;border-radius:8px;padding:16px;margin-bottom:16px">
+<div style="font-size:16px;font-weight:800;color:#1a7a3a;margin-bottom:6px">✅ Consent Confirmed</div>
+<div style="font-size:13px;color:#1a1f2e">Dear '.htmlspecialchars($cName).', your consent has been successfully recorded.</div>
+</div>
+<table style="width:100%;font-size:13px;border-collapse:collapse">
+<tr><td style="padding:6px 0;color:#4a5568;width:140px">Task ID</td><td style="font-weight:700">'.htmlspecialchars($task['task_id']).'</td></tr>
+<tr><td style="padding:6px 0;color:#4a5568">Service</td><td style="font-weight:700">'.htmlspecialchars($task['device_details']??'GPS Service').'</td></tr>
+<tr><td style="padding:6px 0;color:#4a5568">Technician</td><td style="font-weight:700">'.htmlspecialchars($task['tech_name']??'BharatGPS Technician').'</td></tr>
+<tr><td style="padding:6px 0;color:#4a5568">Confirmed At</td><td style="font-weight:700">'.date('d M Y, h:i A',strtotime($now)).'</td></tr>
+</table>
+<p style="font-size:13px;color:#4a5568;margin-top:16px;line-height:1.7">
+Our technician will arrive shortly. Please ensure your <strong>vehicle is available and accessible</strong>.<br><br>
+For any help call <strong>9849849824</strong> or email <strong>sales@bharatgps.com</strong>
+</p>
+</div>
+<div style="background:#f7f8fa;padding:12px 24px;text-align:center;font-size:11px;color:#8a9ab0">
+BharatGPS Tracker · bharatgpstracker.com · Task '.$task['task_id'].'
+</div></div></body></html>';
+    @notifyMail($custEmail, $cName, $custSubject, $custHtml);
+}
