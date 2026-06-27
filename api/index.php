@@ -28,7 +28,7 @@ try { $pdo->exec("ALTER TABLE tasks ADD COLUMN admin_viewed_at DATETIME DEFAULT 
 
 
 // Auth
-$skipAuth = ['login','ping','verify_pin','check_blacklist'];
+$skipAuth = ['login','ping','verify_pin'];
 $cu = null; $userId = null; $userRole = null;
 if (!in_array($action, $skipAuth)) {
     if ($token) {
@@ -1203,21 +1203,34 @@ case 'update_user':
 // BLACKLIST
 // ============================================================
 case 'check_blacklist':
-    // Fast lookup by phone or email — no auth required (read-only)
+    // Fast lookup by phone or email — called onblur in create task form
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS blacklist_entries (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            customer_name VARCHAR(200),
+            phone VARCHAR(20),
+            email VARCHAR(200),
+            task_id VARCHAR(20),
+            task_db_id INT,
+            reason TEXT,
+            added_by VARCHAR(100),
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            status VARCHAR(20) DEFAULT 'active',
+            cleared_by VARCHAR(100),
+            cleared_reason TEXT,
+            cleared_at TIMESTAMP NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch(Exception $e){}
     $phone = trim($_GET['phone'] ?? '');
     $email = trim($_GET['email'] ?? '');
     if(!$phone && !$email){ echo json_encode(['found'=>false]); break; }
-    try {
-        $where=[]; $vals=[];
-        if($phone){ $where[]="phone=?"; $vals[]=$phone; }
-        if($email){ $where[]="email=?"; $vals[]=$email; }
-        $s=$pdo->prepare("SELECT * FROM blacklist_entries WHERE status='active' AND (".implode(' OR ',$where).") ORDER BY added_at DESC LIMIT 1");
-        $s->execute($vals);
-        $row=$s->fetch();
-        echo json_encode($row ? ['found'=>true,'entry'=>$row] : ['found'=>false]);
-    } catch(Exception $e){
-        echo json_encode(['found'=>false]);
-    }
+    $where=[]; $vals=[];
+    if($phone){ $where[]="phone=?"; $vals[]=$phone; }
+    if($email){ $where[]="email=?"; $vals[]=$email; }
+    $s=$pdo->prepare("SELECT * FROM blacklist_entries WHERE status='active' AND (".implode(' OR ',$where).") ORDER BY added_at DESC LIMIT 1");
+    $s->execute($vals);
+    $row=$s->fetch();
+    echo json_encode($row ? ['found'=>true,'entry'=>$row] : ['found'=>false]);
     break;
 
 case 'get_blacklist':
