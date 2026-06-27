@@ -199,9 +199,13 @@ async function adminWipeData(type){
 async function adminLoadUsers(){
   const el = document.getElementById('admin-users-list');
   el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Loading…</div>';
+  // Debug: show token status
+  const tokenPreview = AUTH_TOKEN ? AUTH_TOKEN.slice(0,8)+'...' : 'EMPTY';
+  console.log('Admin panel token:', tokenPreview, '| URL:', window.location.search);
   const res = await admApi('get_users', {role:'all'}).catch(e=>{return {error: e.message};});
+  console.log('get_users response:', res);
   if(res.error){
-    el.innerHTML='<div style="padding:20px;text-align:center;color:var(--red);font-size:13px">❌ '+res.error+'</div>';
+    el.innerHTML='<div style="padding:20px;text-align:center;color:var(--red);font-size:13px">❌ '+res.error+'<br><small style=\"color:var(--text3)\">Token: '+tokenPreview+'</small></div>';
     return;
   }
   const users = res.users || [];
