@@ -752,7 +752,7 @@ case 'get_daily_report':
         $newTasks = $q($pdo,"SELECT t.task_id,t.customer_name,t.device_details,u.name as tech_name,t.price_to_collect FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE DATE(t.created_at)=? ORDER BY t.created_at DESC",[$date])->fetchAll();
 
         // ── Activity log ───────────────────────────────────────
-        $activities = $q($pdo,"SELECT a.created_at,a.remark,u.name as user_name,t.task_id,t.customer_name FROM task_activities a JOIN tasks t ON a.task_id=t.id LEFT JOIN users u ON a.user_id=u.id WHERE DATE(a.created_at)=? ORDER BY a.created_at ASC",[$date])->fetchAll();
+        $activities = $q($pdo,"SELECT a.created_at,a.remark,u.name as user_name,t.task_id,t.customer_name FROM task_activities a JOIN tasks t ON a.task_id=t.id LEFT JOIN users u ON a.user_id=u.id WHERE DATE(a.created_at)=? ORDER BY a.created_at DESC",[$date])->fetchAll();
 
         echo json_encode([
             'summary'              => $summary,

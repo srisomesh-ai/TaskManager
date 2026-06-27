@@ -1019,9 +1019,17 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
 
         <!-- Activity Log -->
         <div class="card">
-          <div class="card-hd">
+          <div class="card-hd" style="flex-wrap:wrap;gap:8px">
             <div class="card-title"><span class="card-dot" style="background:var(--purple)"></span> Activity Log</div>
-            <div style="font-size:11px;color:var(--text3)" id="dr-activity-count">0 activities</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap">
+              <input type="text" id="dr-act-search" placeholder="🔍 Search activity…"
+                style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;outline:none;width:200px"
+                oninput="filterDrActivity()">
+              <select id="dr-act-user" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;outline:none" onchange="filterDrActivity()">
+                <option value="">All Users</option>
+              </select>
+              <span style="font-size:11px;color:var(--text3)" id="dr-activity-count">0 activities</span>
+            </div>
           </div>
           <div style="overflow-x:auto">
             <table style="width:100%;border-collapse:collapse">
@@ -5022,29 +5030,57 @@ async function loadDailyReport(){
       <div class="stat-lbl">${c.label}</div>
     </div>`).join('');
 
-  // ── 2. Technician performance ─────────────────────────
+  // ── 2. Technician performance — beautiful cards ──────────
   const techs = res.tech_perf || [];
   if(!techs.length){
     document.getElementById('dr-tech-tbody').innerHTML = '<tr><td colspan="6" style="padding:30px;text-align:center;color:var(--text3)">No technicians found</td></tr>';
   } else {
-    document.getElementById('dr-tech-tbody').innerHTML = techs.map(t=>{
-      const status = t.installed > 0 ? ['🟢','Done'] : t.activities > 0 ? ['🟡','Active'] : ['🔴','No Activity'];
-      return `<tr style="border-bottom:1px solid var(--border)">
-        <td style="padding:11px 14px;font-weight:700">${t.name}</td>
-        <td style="padding:11px 14px;text-align:center">${t.assigned}</td>
-        <td style="padding:11px 14px;text-align:center">${t.visited}</td>
-        <td style="padding:11px 14px;text-align:center">
-          ${t.installed > 0 ? `<span style="background:var(--green-bg);color:var(--green);padding:2px 9px;border-radius:10px;font-weight:800">${t.installed}</span>` : '<span style="color:var(--text3)">0</span>'}
-        </td>
-        <td style="padding:11px 14px;text-align:right;font-weight:800;color:${t.collected>0?'var(--green)':'var(--text3)'}">
-          ${t.collected>0?'₹'+parseFloat(t.collected).toLocaleString('en-IN'):'–'}
-        </td>
-        <td style="padding:11px 14px;text-align:center">
-          <span style="font-size:13px">${status[0]}</span>
-          <span style="font-size:11px;color:var(--text3);margin-left:4px">${status[1]}</span>
-        </td>
-      </tr>`;
-    }).join('');
+    // Replace table with card grid
+    const techTable = document.getElementById('dr-tech-table');
+    if(techTable) techTable.style.display='none';
+    let cardContainer = document.getElementById('dr-tech-cards');
+    if(!cardContainer){
+      cardContainer = document.createElement('div');
+      cardContainer.id = 'dr-tech-cards';
+      techTable?.parentNode?.insertBefore(cardContainer, techTable);
+    }
+    cardContainer.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;padding:14px">
+      ${techs.map(t=>{
+        const isActive   = t.activities > 0;
+        const isDone     = t.installed  > 0;
+        const statusColor = isDone ? 'var(--green)' : isActive ? 'var(--amber)' : 'var(--text3)';
+        const statusBg    = isDone ? 'var(--green-bg)' : isActive ? 'var(--amber-bg)' : 'var(--surface2)';
+        const statusLabel = isDone ? '✅ Installed' : isActive ? '🟡 Active' : '⚪ No Activity';
+        const initials    = t.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+        return `<div style="background:#fff;border-radius:12px;padding:16px;box-shadow:0 2px 10px rgba(0,0,0,.07);border:1.5px solid ${isDone?'var(--green)':isActive?'var(--amber)':'var(--border)'}">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+            <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${initials}</div>
+            <div>
+              <div style="font-size:13px;font-weight:800;color:var(--text)">${t.name}</div>
+              <div style="display:inline-flex;align-items:center;padding:2px 8px;background:${statusBg};color:${statusColor};border-radius:8px;font-size:10px;font-weight:700;margin-top:2px">${statusLabel}</div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+            <div style="background:var(--surface2);border-radius:7px;padding:8px;text-align:center">
+              <div style="font-size:16px;font-weight:900;color:var(--accent)">${t.assigned}</div>
+              <div style="font-size:10px;color:var(--text3);font-weight:600">Assigned</div>
+            </div>
+            <div style="background:var(--surface2);border-radius:7px;padding:8px;text-align:center">
+              <div style="font-size:16px;font-weight:900;color:var(--blue)">${t.visited}</div>
+              <div style="font-size:10px;color:var(--text3);font-weight:600">Visited</div>
+            </div>
+            <div style="background:${isDone?'var(--green-bg)':'var(--surface2)'};border-radius:7px;padding:8px;text-align:center">
+              <div style="font-size:16px;font-weight:900;color:${isDone?'var(--green)':'var(--text3)'}">${t.installed}</div>
+              <div style="font-size:10px;color:var(--text3);font-weight:600">Installed</div>
+            </div>
+            <div style="background:${t.collected>0?'var(--green-bg)':'var(--surface2)'};border-radius:7px;padding:8px;text-align:center">
+              <div style="font-size:12px;font-weight:900;color:${t.collected>0?'var(--green)':'var(--text3)'}">${t.collected>0?'₹'+parseFloat(t.collected).toLocaleString('en-IN'):'₹0'}</div>
+              <div style="font-size:10px;color:var(--text3);font-weight:600">Collected</div>
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
   }
 
   // ── 3. Payment summary ────────────────────────────────
@@ -5080,17 +5116,32 @@ async function loadDailyReport(){
       </div>`).join('')
     : '<div style="padding:18px;text-align:center;color:var(--text3);font-size:13px">No tasks created today</div>';
 
-  // ── 5. Activity log ───────────────────────────────────
-  const acts = res.activities || [];
-  document.getElementById('dr-activity-count').textContent = acts.length + ' activities';
+  // ── 5. Activity log — descending (latest first) ──────
+  const acts = (res.activities || []).slice().reverse(); // reverse to DESC
+  _drData.activitiesDesc = acts; // store for filter
+
+  // Populate user filter dropdown
+  const userSel = document.getElementById('dr-act-user');
+  if(userSel){
+    const users = [...new Set(acts.map(a=>a.user_name||'System'))].sort();
+    userSel.innerHTML = '<option value="">All Users</option>' +
+      users.map(u=>`<option value="${u}">${u}</option>`).join('');
+  }
+
+  renderDrActivity(acts);
+}
+
+function renderDrActivity(acts){
+  const count = document.getElementById('dr-activity-count');
+  if(count) count.textContent = acts.length + ' activities';
+  const tbody = document.getElementById('dr-activity-tbody');
   if(!acts.length){
-    document.getElementById('dr-activity-tbody').innerHTML = '<tr><td colspan="5" style="padding:30px;text-align:center;color:var(--text3)">No activities recorded</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="padding:30px;text-align:center;color:var(--text3)">No activities found</td></tr>';
     return;
   }
-  document.getElementById('dr-activity-tbody').innerHTML = acts.map(a=>{
-    const t   = new Date(a.created_at);
-    const tm  = t.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
-    const rem = (a.remark||'').length > 80 ? a.remark.slice(0,80)+'…' : a.remark;
+  tbody.innerHTML = acts.map(a=>{
+    const tm  = new Date(a.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
+    const rem = (a.remark||'').length > 90 ? a.remark.slice(0,90)+'…' : a.remark;
     return `<tr style="border-bottom:1px solid var(--border)">
       <td style="padding:9px 14px;font-size:12px;color:var(--text3);white-space:nowrap">${tm}</td>
       <td style="padding:9px 14px"><span class="task-id" style="font-size:11px">${a.task_id||'–'}</span></td>
@@ -5099,6 +5150,21 @@ async function loadDailyReport(){
       <td style="padding:9px 14px;font-size:12px;color:var(--text3);white-space:nowrap">${a.user_name||'System'}</td>
     </tr>`;
   }).join('');
+}
+
+function filterDrActivity(){
+  if(!_drData?.activitiesDesc) return;
+  const search = (document.getElementById('dr-act-search')?.value||'').toLowerCase();
+  const user   = document.getElementById('dr-act-user')?.value||'';
+  const filtered = _drData.activitiesDesc.filter(a=>{
+    if(user && (a.user_name||'System') !== user) return false;
+    if(search){
+      const hay = [a.task_id, a.customer_name, a.remark, a.user_name].join(' ').toLowerCase();
+      if(!hay.includes(search)) return false;
+    }
+    return true;
+  });
+  renderDrActivity(filtered);
 }
 
 function exportDailyCSV(){
