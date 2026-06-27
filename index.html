@@ -304,6 +304,20 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
 .priority-card-sub{font-size:11px;color:var(--text3);margin-top:2px}
 .priority-card-age{font-size:12px;font-weight:800;color:var(--red);flex-shrink:0;text-align:right}
 
+/* ── Balance Sheet ──────────────────────────────────────────────────── */
+.bs-tab{padding:10px 18px;border:none;border-bottom:3px solid transparent;background:none;font-size:13px;font-weight:700;color:var(--text3);cursor:pointer;transition:all .15s}
+.bs-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.bs-tab:hover{color:var(--accent2)}
+.bs-panel{display:none}.bs-panel.active{display:block}
+.bs-entry-row{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);font-size:13px;cursor:pointer;transition:background .15s}
+.bs-entry-row:hover{background:var(--surface2)}
+.bs-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700}
+.bs-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.bs-summary-strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;padding:14px;background:var(--surface2)}
+.bs-summary-box{background:var(--card);border-radius:8px;padding:12px;text-align:center;box-shadow:var(--shadow)}
+.bs-summary-val{font-size:20px;font-weight:900;line-height:1}
+.bs-summary-lbl{font-size:11px;color:var(--text3);margin-top:4px}
+
 </style>
 </head>
 <body>
@@ -1038,9 +1052,49 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
         </div>
       </div>
       <div class="page" id="page-balance-sheet">
-        <div class="pg-header"><div class="breadcrumb">Home / <b>Balance Sheet</b></div><div class="pg-title">💰 Balance Sheet</div></div>
-        <div class="card"><div style="padding:40px;text-align:center;color:var(--text3)">Coming soon</div></div>
+        <div class="breadcrumb">Home / Reports / <span>Balance Sheet</span></div>
+        <div class="page-header">
+          <div class="page-header-left">
+            <h2>💰 GPS Balance Sheet</h2>
+            <p>Sales, License & Payment Records</p>
+          </div>
+          <div class="header-actions">
+            <select id="bs-profile" class="toolbar-select" onchange="loadBS()">
+              <option value="BGPT">Bharat GPS Tracker</option>
+              <option value="SBGT">SRIBHARAT GPS TRACKER PVT LTD</option>
+            </select>
+          </div>
+        </div>
+        <!-- BS Tabs -->
+        <div style="background:var(--surface);border-bottom:2px solid var(--border);display:flex;gap:0;margin-bottom:0" id="bs-tab-bar">
+          <button class="bs-tab active" onclick="bsShowTab('records')" id="bstab-records">📊 Records</button>
+          <button class="bs-tab" onclick="bsShowTab('sales')" id="bstab-sales">➕ Sales Entry</button>
+          <button class="bs-tab" onclick="bsShowTab('license')" id="bstab-license">🔄 License / Service</button>
+        </div>
+        <div id="bs-records" class="bs-panel active">
+          <!-- Stats -->
+          <div id="bs-stats" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;padding:14px;background:var(--surface2)"></div>
+          <!-- Filters -->
+          <div style="display:flex;gap:8px;flex-wrap:wrap;padding:12px 14px;background:var(--surface);border-bottom:1px solid var(--border)">
+            <select id="bs-month" class="toolbar-select" onchange="loadBS()">
+              <option value="current">This Month</option>
+              <option value="all">All Time</option>
+              <option value="pending">Pending Only</option>
+            </select>
+            <select id="bs-type-filter" class="toolbar-select" onchange="loadBS()">
+              <option value="">All Types</option>
+              <option value="sales">Sales</option>
+              <option value="license">License/Service</option>
+            </select>
+            <input type="text" id="bs-search" class="toolbar-select" placeholder="Search task, name, IMEI..." style="min-width:200px" oninput="filterBSLocal()">
+            <button class="btn btn-secondary btn-sm" onclick="exportBSCSV()">⬇ CSV</button>
+          </div>
+          <div id="bs-table-wrap" style="padding:14px"></div>
+        </div>
+        <div id="bs-sales" class="bs-panel" style="display:none;padding:14px"></div>
+        <div id="bs-license" class="bs-panel" style="display:none;padding:14px"></div>
       </div>
+      
       <div class="page" id="page-accounts">
         <div class="pg-header"><div class="breadcrumb">Home / <b>P&L Overview</b></div><div class="pg-title">📈 P&L Overview</div></div>
         <div class="card"><div style="padding:40px;text-align:center;color:var(--text3)">Coming soon</div></div>
@@ -1665,12 +1719,13 @@ function showPage(name, opts={}){
   if(sidebar) sidebar.classList.remove('open');
   // Load page data
   const loaders = {
-    dashboard:     loadDashboard,
-    tasks:         loadTasksPage,
-    'my-tasks':    loadMyTasks,
-    urgent:        loadUrgentPage,
-    approvals:     loadApprovalsPage,
-    'daily-report':loadDailyReport,
+    dashboard:       loadDashboard,
+    tasks:           loadTasksPage,
+    'my-tasks':      loadMyTasks,
+    urgent:          loadUrgentPage,
+    approvals:       loadApprovalsPage,
+    'daily-report':  loadDailyReport,
+    'balance-sheet': loadBS,
   };
   if(loaders[name]) loaders[name]();
 }
@@ -4971,208 +5026,557 @@ async function loadApprovalsPage(){
 }
 
 async function loadApprovals(){ return loadApprovalsPage(); }
+
+
 // ════════════════════════════════════════════════════════
-// DAILY REPORT
+// BALANCE SHEET — functions from balance-sheet.html
 // ════════════════════════════════════════════════════════
-let _drData = null; // cache for CSV export
+let bsData = [], bsFiltered = [];
+const BS_GPS_PRICES     = {"Basic GPS":3499,"Engine Cut GPS":4499,"Micro GPS":3499,"Magnet GPS":5999,"VLTD":9499,"MIC/SOS GPS":4499};
+const BS_SERVICE_PRICES = {"V2V Change":500,"Upgrade":2500,"Re-Adding":1700,"Troubleshoot":500,"Service Charge":500};
+const BS_LICENSE_PRICES = {"3 Months":350,"6 Months":700,"1 Year":1200,"2 Years":2400,"3 Years":3000};
 
-async function loadDailyReport(){
-  // Set today's date if not set
-  const dateEl = document.getElementById('dr-date');
-  if(dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0,10);
-  const date = dateEl?.value || new Date().toISOString().slice(0,10);
-
-  // Show loading
-  document.getElementById('dr-stats').innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--text3)">⏳ Loading...</div>';
-  document.getElementById('dr-tech-tbody').innerHTML = '<tr><td colspan="6" style="padding:30px;text-align:center;color:var(--text3)">Loading...</td></tr>';
-  document.getElementById('dr-activity-tbody').innerHTML = '<tr><td colspan="5" style="padding:30px;text-align:center;color:var(--text3)">Loading...</td></tr>';
-
-  const res = await api('get_daily_report',{date}).catch(()=>({}));
-  if(!res.summary){
-    const errMsg = res.error || 'Unknown error';
-    document.getElementById('dr-stats').innerHTML='<div style="color:var(--red);padding:20px;font-size:12px">❌ Error: '+errMsg+'</div>';
-    console.error('Daily report error:', res);
-    return;
-  }
-  _drData = res;
-
-  // ── 1. Summary cards ─────────────────────────────────
-  const s = res.summary;
-  const statCards = [
-    {icon:'📋', label:'Created Today',   val:s.tasks_created||0,  color:'var(--blue)'},
-    {icon:'🛰', label:'Installed Today', val:s.installed||0,      color:'var(--accent)'},
-    {icon:'💰', label:'Collected',       val:'₹'+parseFloat(s.cash_collected||0).toLocaleString('en-IN'), color:'var(--green)'},
-    {icon:'⏳', label:'Open Tasks',      val:s.pending_tasks||0,  color:'var(--amber)'},
-    {icon:'🚨', label:'Urgent',          val:s.urgent_tasks||0,   color:'var(--red)'},
-  ];
-  document.getElementById('dr-stats').innerHTML = statCards.map(c=>`
-    <div class="stat-card" style="border-bottom:3px solid ${c.color}">
-      <div class="stat-ghost">${c.icon}</div>
-      <div class="stat-val" style="color:${c.color}">${c.val}</div>
-      <div class="stat-lbl">${c.label}</div>
-    </div>`).join('');
-
-  // ── 2. Technician performance ─────────────────────────
-  const techs = res.tech_perf || [];
-  if(!techs.length){
-    document.getElementById('dr-tech-tbody').innerHTML = '<tr><td colspan="6" style="padding:30px;text-align:center;color:var(--text3)">No technicians found</td></tr>';
-  } else {
-    document.getElementById('dr-tech-tbody').innerHTML = techs.map(t=>{
-      const status = t.installed > 0 ? ['🟢','Done'] : t.activities > 0 ? ['🟡','Active'] : ['🔴','No Activity'];
-      return `<tr style="border-bottom:1px solid var(--border)">
-        <td style="padding:11px 14px;font-weight:700">${t.name}</td>
-        <td style="padding:11px 14px;text-align:center">${t.assigned}</td>
-        <td style="padding:11px 14px;text-align:center">${t.visited}</td>
-        <td style="padding:11px 14px;text-align:center">
-          ${t.installed > 0 ? `<span style="background:var(--green-bg);color:var(--green);padding:2px 9px;border-radius:10px;font-weight:800">${t.installed}</span>` : '<span style="color:var(--text3)">0</span>'}
-        </td>
-        <td style="padding:11px 14px;text-align:right;font-weight:800;color:${t.collected>0?'var(--green)':'var(--text3)'}">
-          ${t.collected>0?'₹'+parseFloat(t.collected).toLocaleString('en-IN'):'–'}
-        </td>
-        <td style="padding:11px 14px;text-align:center">
-          <span style="font-size:13px">${status[0]}</span>
-          <span style="font-size:11px;color:var(--text3);margin-left:4px">${status[1]}</span>
-        </td>
-      </tr>`;
-    }).join('');
-  }
-
-  // ── 3. Payment summary ────────────────────────────────
-  const payRows = res.pay_rows || [];
-  const modeMap = {Cash:'💵',UPI:'📱','Bank Transfer':'🏦',Cheque:'📝','ATM Deposit':'🏧'};
-  let payHtml = payRows.length
-    ? payRows.map(r=>`
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-        <span style="font-size:13px;color:var(--text2)">${modeMap[r.payment_mode]||'💳'} ${r.payment_mode||'Other'} <span style="font-size:11px;color:var(--text3)">(${r.cnt} task${r.cnt>1?'s':''})</span></span>
-        <span style="font-weight:800;color:var(--green)">₹${parseFloat(r.total).toLocaleString('en-IN')}</span>
-      </div>`).join('') : '<div style="color:var(--text3);font-size:13px;padding:8px 0">No payments recorded today</div>';
-
-  if(res.cash_pending_deposit > 0) payHtml += `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-      <span style="font-size:13px;color:var(--saffron)">🏦 Cash Pending Deposit</span>
-      <span style="font-weight:800;color:var(--saffron)">₹${parseFloat(res.cash_pending_deposit).toLocaleString('en-IN')}</span>
-    </div>`;
-  if(res.balance_pending > 0) payHtml += `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0">
-      <span style="font-size:13px;color:var(--red)">⚠️ Balance Pending (all tasks)</span>
-      <span style="font-weight:800;color:var(--red)">₹${parseFloat(res.balance_pending).toLocaleString('en-IN')}</span>
-    </div>`;
-
-  document.getElementById('dr-payment-summary').innerHTML = `<div style="padding:4px 0">${payHtml}</div>`;
-
-  // ── 4. New tasks today ────────────────────────────────
-  const newTasks = res.new_tasks || [];
-  document.getElementById('dr-new-tasks').innerHTML = newTasks.length
-    ? newTasks.map(t=>`
-      <div style="padding:9px 18px;border-bottom:1px solid var(--border);cursor:pointer" onclick="viewTask(0)" >
-        <div style="font-size:12px;font-weight:700">${t.customer_name||'–'} <span style="color:var(--text3);font-weight:400">· ${t.task_id}</span></div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">${t.device_details||'–'} · ${t.tech_name||'Unassigned'}</div>
-      </div>`).join('')
-    : '<div style="padding:18px;text-align:center;color:var(--text3);font-size:13px">No tasks created today</div>';
-
-  // ── 5. Activity log ───────────────────────────────────
-  const acts = res.activities || [];
-  document.getElementById('dr-activity-count').textContent = acts.length + ' activities';
-  if(!acts.length){
-    document.getElementById('dr-activity-tbody').innerHTML = '<tr><td colspan="5" style="padding:30px;text-align:center;color:var(--text3)">No activities recorded</td></tr>';
-    return;
-  }
-  document.getElementById('dr-activity-tbody').innerHTML = acts.map(a=>{
-    const t   = new Date(a.created_at);
-    const tm  = t.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
-    const rem = (a.remark||'').length > 80 ? a.remark.slice(0,80)+'…' : a.remark;
-    return `<tr style="border-bottom:1px solid var(--border)">
-      <td style="padding:9px 14px;font-size:12px;color:var(--text3);white-space:nowrap">${tm}</td>
-      <td style="padding:9px 14px"><span class="task-id" style="font-size:11px">${a.task_id||'–'}</span></td>
-      <td style="padding:9px 14px;font-size:12px;font-weight:600;white-space:nowrap">${a.customer_name||'–'}</td>
-      <td style="padding:9px 14px;font-size:12px;color:var(--text2);max-width:320px">${rem}</td>
-      <td style="padding:9px 14px;font-size:12px;color:var(--text3);white-space:nowrap">${a.user_name||'System'}</td>
-    </tr>`;
-  }).join('');
+function bsShowTab(tab){
+  document.querySelectorAll('.bs-panel').forEach(p=>{p.classList.remove('active');p.style.display='none';});
+  document.querySelectorAll('.bs-tab').forEach(b=>b.classList.remove('active'));
+  const panel=document.getElementById('bs-'+tab);
+  const btn=document.getElementById('bstab-'+tab);
+  if(panel){panel.classList.add('active');panel.style.display='block';}
+  if(btn) btn.classList.add('active');
+  if(tab==='records') loadBS();
+  if(tab==='sales')   renderBSSalesForm();
+  if(tab==='license') renderBSLicenseForm();
 }
 
-function exportDailyCSV(){
-  if(!_drData){ alert('Load the report first.'); return; }
-  const date = document.getElementById('dr-date')?.value || 'report';
-  const acts = _drData.activities || [];
-  const rows = [['Time','Task ID','Customer','Update','By']];
-  acts.forEach(a=>{
-    const t = new Date(a.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
-    rows.push([t, a.task_id||'', a.customer_name||'', '"'+(a.remark||'').replace(/"/g,"'")+'"', a.user_name||'System']);
-  });
-  const csv = rows.map(r=>r.join(',')).join('\n');
-  const blob = new Blob([csv], {type:'text/csv'});
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href=url; a.download='daily-report-'+date+'.csv'; a.click();
-  URL.revokeObjectURL(url);
+function bsDownloadCSV(filename, headers, rows){
+  const csv=[headers,...rows.map(r=>r.map(v=>'"'+(v||'').toString().replace(/"/g,"'")+'"'))].map(r=>r.join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url);
   showToast('✅ CSV downloaded');
 }
 
-
-// ════════════════════════════════════════════════════════
-// QUICK TASK — Send enquiry link via WhatsApp
-// ════════════════════════════════════════════════════════
-const QT_ENQUIRY_URL = 'https://salmon-goldfish-110661.hostingersite.com/enquiry.php';
-
-function openQuickTask(){
-  document.getElementById('qt-name').value     = '';
-  document.getElementById('qt-phone').value    = '';
-  document.getElementById('qt-discount').value = '0';
-  document.getElementById('qt-link-box').style.display = 'none';
-  document.getElementById('quick-task-overlay').style.display = 'flex';
-  setTimeout(()=>document.getElementById('qt-name').focus(), 100);
+async function loadBS(){
+  const profile  = document.getElementById('bs-profile')?.value || 'BGPT';
+  const month    = document.getElementById('bs-month')?.value || 'current';
+  const typeF    = document.getElementById('bs-type-filter')?.value || '';
+  const params   = {profile};
+  if(typeF) params.type = typeF;
+  if(month==='current'){ const d=new Date(); params.from=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01'; params.to=new Date().toISOString().split('T')[0]; }
+  if(month==='pending') params.pending='1';
+  const res = await api('bs_get_entries',params);
+  bsAllEntries = res.entries||[];
+  bsData = bsAllEntries;
+  renderBSStats(res.stats||{});
+  renderBSTable(bsData);
 }
 
-function closeQuickTask(){
-  document.getElementById('quick-task-overlay').style.display = 'none';
-}
-
-function getQtLink(){
-  const name     = document.getElementById('qt-name').value.trim();
-  const phone    = document.getElementById('qt-phone').value.trim().replace(/\D/g,'');
-  const discount = parseInt(document.getElementById('qt-discount')?.value||0);
-  let url = QT_ENQUIRY_URL + '?name=' + encodeURIComponent(name) + '&phone=' + encodeURIComponent(phone);
-  if(discount > 0) url += '&disc=' + discount;
-  return { name, phone, discount, url };
-}
-
-function sendQuickTask(){
-  const { name, phone, discount, url } = getQtLink();
-  if(!name){ alert('Please enter the customer name.'); document.getElementById('qt-name').focus(); return; }
-  if(!phone || phone.length < 10){ alert('Please enter a valid 10-digit mobile number.'); document.getElementById('qt-phone').focus(); return; }
-
-  document.getElementById('qt-link-box').style.display = '';
-  document.getElementById('qt-link-text').textContent  = url;
-
-  const discountLine = discount > 0 ? '🎁 Special offer: ₹' + discount + ' OFF per device — applied automatically!\n\n' : '';
-  const msg = encodeURIComponent(
-    'Hello ' + name + '! 👋\n\n' +
-    'Thank you for your interest in BharatGPS Tracker.\n\n' +
-    discountLine +
-    '📋 Please fill your details to book your GPS installation:\n\n' +
-    url + '\n\n' +
-    'The form takes 2 minutes. Our team will contact you to schedule.\n\n' +
-    'For help call: 9849849824\n🌐 bharatgpstracker.com'
+function filterBSLocal(){
+  const q = (document.getElementById('bs-search')?.value||'').toLowerCase();
+  if(!q){ renderBSTable(bsAllEntries); return; }
+  const filtered = bsAllEntries.filter(e=>
+    (e.task_id||'').toLowerCase().includes(q) ||
+    (e.name_on_server||'').toLowerCase().includes(q) ||
+    (e.gps_serial_no||'').toLowerCase().includes(q) ||
+    (e.invoice_no||'').toLowerCase().includes(q) ||
+    (e.technician_name||'').toLowerCase().includes(q) ||
+    (e.location||'').toLowerCase().includes(q)
   );
-
-  window.open('https://wa.me/91' + phone + '?text=' + msg, '_blank');
-  closeQuickTask();
-  showToast('📱 WhatsApp opened — send the message to ' + name);
+  renderBSTable(filtered);
 }
 
-function copyQtLink(e){
-  e.preventDefault();
-  const { name, phone, url } = getQtLink();
-  if(!name && !phone){ alert('Enter customer name and phone first.'); return; }
-  navigator.clipboard?.writeText(url).then(()=>showToast('✅ Link copied!')).catch(()=>{
-    const ta = document.createElement('textarea');
-    ta.value = url; document.body.appendChild(ta);
-    ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
-    showToast('✅ Link copied!');
-  });
+function renderBSStats(s){
+  const fmt=v=>'₹'+parseFloat(v||0).toLocaleString('en-IN');
+  const num=v=>parseInt(v||0).toLocaleString('en-IN');
+  const items=[
+    {l:'Devices Sold',   v:num(s.devices_sold),   c:'var(--blue)',    i:'📡'},
+    {l:'Licenses',       v:num(s.license_count),  c:'var(--purple)',  i:'🔄'},
+    {l:'Sales Total',    v:fmt(s.total_sales),     c:'var(--green)',   i:'💰'},
+    {l:'License Total',  v:fmt(s.total_license),   c:'var(--blue)',    i:'📄'},
+    {l:'Received',       v:fmt(s.payment_received),c:'var(--green)',   i:'✅'},
+    {l:'Pending',        v:fmt(s.pending_payment), c:'var(--red)',     i:'⚠️'},
+  ];
+  document.getElementById('bs-stats').innerHTML=items.map(x=>`
+    <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:12px;text-align:center">
+      <div style="font-size:20px">${x.i}</div>
+      <div style="font-size:18px;font-weight:800;color:${x.c};margin-top:4px">${x.v}</div>
+      <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-top:2px">${x.l}</div>
+    </div>`).join('');
 }
 
+function renderBSTable(entries){
+  const wrap = document.getElementById('bs-table-wrap');
+  if(!entries.length){ wrap.innerHTML='<div class="empty-state"><div class="empty-icon">💰</div><h3>No entries found</h3><p>Add a Sales or License entry, or create entries from closed tasks.</p></div>'; return; }
+  const cols=['#','Date','Type','Task ID','Invoice','GPS Serial/IMEI','Name on Server','Server','Device/Service','Qty','Total','Received','Pending','Pay Mode','Technician','Status',''];
+  wrap.innerHTML=`<div class="table-wrapper"><div class="table-scroll"><table>
+    <thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+    <tbody>${entries.map((e,i)=>{
+      const isPending=parseFloat(e.pending_payment||0)>0;
+      return `<tr style="${isPending?'background:#fff8f0':''}" onclick="viewBSEntry(${e.id})">
+        <td style="color:var(--text3);font-size:11px">${i+1}</td>
+        <td style="white-space:nowrap">${e.date||'–'}</td>
+        <td><span class="badge" style="background:${e.type==='sales'?'var(--blue-bg)':'var(--purple-bg)'};color:${e.type==='sales'?'var(--blue)':'var(--purple)'}">${e.type==='sales'?'📡 Sales':'🔄 License'}</span></td>
+        <td><span class="task-id-cell">${e.task_id||'–'}</span></td>
+        <td style="font-size:11px">${e.invoice_no||'–'}</td>
+        <td style="font-family:'Consolas','Courier New',monospace;font-size:11px">${e.gps_serial_no||'–'}</td>
+        <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.name_on_server||'–'}</td>
+        <td>${e.server_name||'–'}</td>
+        <td style="font-size:12px">${e.device_model||e.service_type||'–'}</td>
+        <td style="text-align:center">${e.qty||1}</td>
+        <td style="font-weight:700;color:var(--blue)">₹${parseFloat(e.total_price||0).toLocaleString('en-IN')}</td>
+        <td style="font-weight:700;color:var(--green)">₹${parseFloat(e.payment_received||0).toLocaleString('en-IN')}</td>
+        <td style="font-weight:700;color:${isPending?'var(--red)':'var(--green)'}">₹${parseFloat(e.pending_payment||0).toLocaleString('en-IN')}</td>
+        <td style="font-size:12px">${e.payment_mode||'–'}</td>
+        <td style="font-size:12px">${e.technician_name||'–'}</td>
+        <td>${isPending?'<span class="badge badge-pay-pending">Pending</span>':'<span class="badge badge-pay-collected">Paid</span>'}</td>
+        <td onclick="event.stopPropagation()">
+          <div style="display:flex;gap:4px">
+            <button class="action-btn edit" onclick="editBSEntry(${e.id})" title="Edit">✏️</button>
+            <button class="action-btn delete" onclick="deleteBSEntry(${e.id})" title="Delete">🗑️</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div></div>`;
+}
+
+// ---- VIEW ----
+function viewBSEntry(id){
+  const e = bsAllEntries.find(x=>x.id===id); if(!e) return;
+  const fmt=v=>v?'₹'+parseFloat(v).toLocaleString('en-IN'):'–';
+  const row=(l,v)=>v?`<div class="detail-item"><label>${l}</label><span>${v}</span></div>`:'';
+  document.getElementById('detail-modal').style.display='flex';
+  document.getElementById('detail-body').innerHTML=`
+    <div class="modal-header">
+      <div><h3>📄 ${e.type==='sales'?'Sales':'License'} Entry — ${e.task_id||'Manual'}</h3><p>${e.date}</p></div>
+      <button class="modal-close" onclick="closeById('detail-modal')">✕</button>
+    </div>
+    <div class="detail-inner">
+      <div class="detail-section"><div class="detail-section-title">📋 General Info</div><div class="detail-grid">
+        ${row('Type',e.type)} ${row('Profile',e.profile)} ${row('Task ID',`<span class="task-id-cell">${e.task_id}</span>`)}
+        ${row('Date',e.date)} ${row('Invoice No.',e.invoice_no)} ${row('GPS Serial / IMEI',e.gps_serial_no)}
+        ${row('Customer Type',e.customer_type)} ${row('Name on Server',e.name_on_server)}
+        ${row('Server',e.server_name)} ${row('Device Model',e.device_model)}
+        ${row('Service Type',e.service_type)} ${row('License Plan',e.license_plan)}
+        ${row('Qty',e.qty)} ${row('Unit Price',fmt(e.unit_price))} ${row('GST',fmt(e.gst))}
+        ${row('Total Price',`<strong>${fmt(e.total_price)}</strong>`)}
+        ${row('Technician',e.technician_name)} ${row('Location',e.location)} ${row('Remarks',e.remarks)}
+      </div></div>
+      <div class="detail-section"><div class="detail-section-title">💳 Payment</div><div class="detail-grid">
+        ${row('Payment Received',`<strong style="color:var(--green)">${fmt(e.payment_received)}</strong>`)}
+        ${row('Pending',`<strong style="color:var(--red)">${fmt(e.pending_payment)}</strong>`)}
+        ${row('Payment Mode',e.payment_mode)} ${row('Received On',e.payment_received_on)}
+        ${row('Transaction Ref',e.payment_transaction_details)}
+        ${row('Pending Reason',e.pending_reason)} ${row('Discount Given',fmt(e.discount_given))}
+        ${row('Discount Reason',e.discount_reason)} ${row('Approved By',e.discount_incharge)}
+        ${row('Payment Reminder',e.payment_reminder_date)}
+      </div></div>
+    </div>`;
+}
+
+// ---- DELETE ----
+async function deleteBSEntry(id){
+  if(!confirm('Delete this entry? Cannot be undone.')) return;
+  const res=await api('bs_delete_entry',{},'POST',{id});
+  if(res.success){showToast('Entry deleted','success');loadBS();}
+  else showToast(res.error||'Error','error');
+}
+
+// ---- EDIT ----
+function editBSEntry(id){
+  const e = bsAllEntries.find(x=>x.id===id); if(!e) return;
+  const isSales=e.type==='sales';
+  document.getElementById('detail-modal').style.display='flex';
+  document.getElementById('detail-body').innerHTML=`
+    <div class="modal-header">
+      <div><h3>✏️ Edit ${isSales?'Sales':'License'} Entry</h3><p>${e.task_id||e.date}</p></div>
+      <button class="modal-close" onclick="closeById('detail-modal')">✕</button>
+    </div>
+    <div class="detail-inner">
+      <div class="form-grid">
+        <div class="field"><label>Date</label><input type="date" id="be-date" value="${e.date||''}"></div>
+        <div class="field"><label>Invoice No.</label><input type="text" id="be-invoice" value="${e.invoice_no||''}"></div>
+        ${isSales?`
+        <div class="field"><label>GPS Serial / IMEI</label><input type="text" id="be-imei" value="${e.gps_serial_no||''}"></div>
+        <div class="field"><label>Name on Server</label><input type="text" id="be-server-name" value="${e.name_on_server||''}"></div>
+        <div class="field"><label>Server</label><select id="be-server"><option value="">Select</option>${['Server 1','Server 2','Server 3','Server 4'].map(s=>`<option ${e.server_name===s?'selected':''}>${s}</option>`).join('')}</select></div>`:''}
+        <div class="field"><label>Total Price (₹)</label><input type="number" id="be-total" value="${e.total_price||''}"></div>
+        <div class="field"><label>Payment Received (₹)</label><input type="number" id="be-recv" value="${e.payment_received||''}"></div>
+        <div class="field"><label>Payment Mode</label><select id="be-paymode"><option value="">Select</option>${['Cash','UPI','Bank Transfer','Cheque'].map(m=>`<option ${e.payment_mode===m?'selected':''}>${m}</option>`).join('')}</select></div>
+        <div class="field"><label>Received On</label><input type="date" id="be-recv-date" value="${e.payment_received_on||''}"></div>
+        <div class="field"><label>Transaction Ref / UTR</label><input type="text" id="be-txn" value="${e.payment_transaction_details||''}"></div>
+        <div class="field"><label>Technician</label><input type="text" id="be-tech" value="${e.technician_name||''}"></div>
+        <div class="field"><label>Location</label><input type="text" id="be-loc" value="${e.location||''}"></div>
+        <div class="field span-2"><label>Pending Reason</label><select id="be-pending-reason">
+          <option value="">None</option>
+          <option value="later_will_do" ${e.pending_reason==='later_will_do'?'selected':''}>Customer will pay later</option>
+          <option value="discount_given" ${e.pending_reason==='discount_given'?'selected':''}>Discount given</option>
+          <option value="other" ${e.pending_reason==='other'?'selected':''}>Other</option>
+        </select></div>
+        <div class="field"><label>Discount Given (₹)</label><input type="number" id="be-disc" value="${e.discount_given||''}"></div>
+        <div class="field"><label>Discount Reason</label><input type="text" id="be-disc-reason" value="${e.discount_reason||''}"></div>
+        <div class="field"><label>Approved By</label><input type="text" id="be-disc-who" value="${e.discount_incharge||''}"></div>
+        <div class="field"><label>Payment Reminder Date</label><input type="date" id="be-pay-remind" value="${e.payment_reminder_date||''}"></div>
+        <div class="field span-2"><label>Remarks</label><textarea id="be-remarks">${e.remarks||''}</textarea></div>
+      </div>
+      <div style="padding-top:12px">
+        <button class="btn btn-primary" onclick="saveBSEntry(${id})">💾 Save Changes</button>
+      </div>
+    </div>`;
+}
+
+async function saveBSEntry(id){
+  const isSales = bsAllEntries.find(x=>x.id===id)?.type==='sales';
+  const total = parseFloat(document.getElementById('be-total').value||0);
+  const recv  = parseFloat(document.getElementById('be-recv').value||0);
+  const body  = {
+    id,
+    date:               document.getElementById('be-date').value,
+    invoice_no:         document.getElementById('be-invoice').value,
+    total_price:        total,
+    payment_received:   recv,
+    pending_payment:    Math.max(0,total-recv),
+    payment_mode:       document.getElementById('be-paymode').value,
+    payment_received_on:document.getElementById('be-recv-date').value,
+    payment_transaction_details:document.getElementById('be-txn').value,
+    technician_name:    document.getElementById('be-tech').value,
+    location:           document.getElementById('be-loc').value,
+    pending_reason:     document.getElementById('be-pending-reason').value,
+    discount_given:     document.getElementById('be-disc').value,
+    discount_reason:    document.getElementById('be-disc-reason').value,
+    discount_incharge:  document.getElementById('be-disc-who').value,
+    payment_reminder_date:document.getElementById('be-pay-remind').value,
+    remarks:            document.getElementById('be-remarks').value,
+  };
+  if(isSales){
+    body.gps_serial_no  = document.getElementById('be-imei')?.value;
+    body.name_on_server = document.getElementById('be-server-name')?.value;
+    body.server_name    = document.getElementById('be-server')?.value;
+  }
+  const res = await api('bs_update_entry',{},'POST',body);
+  if(res.success){closeById('detail-modal');showToast('Entry updated!','success');loadBS();}
+  else showToast(res.error||'Error','error');
+}
+
+// ---- SALES ENTRY FORM ----
+const BS_DEVICE_PRICES = {
+  'Engine Status':3500,'Engine Cut':4500,'Micro GPS':3500,
+  'Engine Cut+MIC':5000,'VLTD':9500,'Magnet GPS':6000,
+  'Basic/Normal':3500
+};
+const BS_GST_RATE = 0.18;
+
+function renderBSSalesForm(){
+  const profile = document.getElementById('bs-profile')?.value||'BGPT';
+  const isSBGT = profile==='SBGT';
+  document.getElementById('bs-sales').innerHTML=`
+    <div class="card" style="max-width:900px">
+      <div class="ch"><div class="ci" style="background:var(--blue-bg)">📡</div><div><h3>Sales Entry</h3><p>GPS device installation / sale</p></div></div>
+      <div class="cb">
+        <div class="form-grid">
+          <div class="field"><label>Date *</label><input type="date" id="bsf-date" value="${new Date().toISOString().split('T')[0]}"></div>
+          <div class="field"><label>Task No. (link to task)</label><input type="text" id="bsf-taskid" placeholder="e.g. ID-2026-0001" oninput="bsFetchTask(this.value)"></div>
+          <div class="field"><label>Invoice No.</label><input type="text" id="bsf-invoice" placeholder="INV-2026-001"></div>
+          <div class="field"><label>GPS Serial No. / IMEI *</label><input type="text" id="bsf-imei" placeholder="356938035643809"></div>
+          <div class="field"><label>Customer Type</label><select id="bsf-custtype">
+            <option value="">Select</option>
+            <option value="new_customer">New Customer</option>
+            <option value="existing_customer">Existing Customer</option>
+            <option value="reference_lead">Reference Lead</option>
+            <option value="3rd_party_lead">3rd Party Lead</option>
+          </select></div>
+          <div class="field"><label>Name on Server *</label><input type="text" id="bsf-nameserver" placeholder="Vehicle owner name as registered"></div>
+          <div class="field"><label>Server *</label><select id="bsf-server">
+            <option value="">Select Server</option>
+            <option>Server 1</option><option>Server 2</option><option>Server 3</option><option>Server 4</option>
+          </select></div>
+          <div class="field"><label>Device Model *</label><select id="bsf-model" onchange="bsCalcSales()">
+            <option value="">Select Device</option>
+            ${Object.keys(BS_DEVICE_PRICES).map(m=>`<option value="${m}">${m}</option>`).join('')}
+          </select></div>
+          <div class="field"><label>Qty *</label><input type="number" id="bsf-qty" value="1" min="1" oninput="bsCalcSales()"></div>
+          <div class="field"><label>Unit Price (₹)</label><input type="number" id="bsf-unit" placeholder="Auto-filled" oninput="bsCalcSales()"></div>
+          ${isSBGT?`<div class="field"><label>GST (18%) ₹</label><input type="number" id="bsf-gst" readonly style="background:var(--surface2)"></div>`:'<input type="hidden" id="bsf-gst" value="0">'}
+          <div class="field"><label>Total Price (₹) *</label><input type="number" id="bsf-total" readonly style="background:var(--surface2);font-weight:700;color:var(--blue)"></div>
+          <div class="field"><label>Payment Status *</label><select id="bsf-paystatus" onchange="bsTogglePending()">
+            <option value="">Select</option>
+            <option value="full">Full Payment</option>
+            <option value="partial">Partial Payment</option>
+            <option value="pending">Pending</option>
+          </select></div>
+          <div class="field"><label>Payment Received (₹) *</label><input type="number" id="bsf-recv" value="0" oninput="bsCalcSales()"></div>
+          <div class="field"><label>Payment Mode *</label><select id="bsf-paymode">
+            <option value="">Select</option><option>Cash</option><option>UPI</option><option>Bank Transfer</option><option>Cheque</option>
+          </select></div>
+          <div class="field"><label>Received On</label><input type="date" id="bsf-recvdate"></div>
+          <div class="field"><label>Transaction Ref / UTR</label><input type="text" id="bsf-txn" placeholder="UPI ref, cheque no..."></div>
+          <div class="field"><label>Technician *</label><select id="bsf-tech"><option value="">Select</option>${technicians.map(t=>`<option value="${t.name}">${t.name}</option>`).join('')}</select></div>
+          <div class="field"><label>Location</label><input type="text" id="bsf-loc" placeholder="City / Area"></div>
+          <div class="field span-2"><label>Remarks</label><textarea id="bsf-remarks" rows="2" placeholder="Any notes..."></textarea></div>
+        </div>
+        <!-- Pending fields -->
+        <div id="bsf-pending-section" style="display:none;background:var(--saffron-bg);border:1.5px solid rgba(212,104,10,.3);border-radius:var(--radius);padding:14px;margin-top:12px">
+          <div style="font-size:13px;font-weight:800;color:var(--orange);margin-bottom:10px">⚠️ Pending Payment Details</div>
+          <div class="form-grid">
+            <div class="field"><label>Pending Amount (₹)</label><input type="number" id="bsf-pend" readonly style="background:var(--surface2);font-weight:700;color:var(--red)"></div>
+            <div class="field"><label>Reason *</label><select id="bsf-pend-reason" onchange="bsTogglePendingReason()">
+              <option value="">Select reason</option>
+              <option value="later_will_do">Customer will pay later</option>
+              <option value="discount_given">Discount given</option>
+              <option value="other">Other reason</option>
+            </select></div>
+            <div class="field"><label>Payment Reminder Date</label><input type="date" id="bsf-pend-remind"></div>
+            <div id="bsf-disc-fields" style="display:none;grid-column:1/-1">
+              <div class="form-grid">
+                <div class="field"><label>Discount Amount (₹)</label><input type="number" id="bsf-disc"></div>
+                <div class="field"><label>Discount Reason</label><input type="text" id="bsf-disc-reason" placeholder="Why discount was given"></div>
+                <div class="field"><label>Approved By</label><input type="text" id="bsf-disc-who" placeholder="Who approved the discount"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:14px">
+          <button class="btn btn-primary" onclick="submitBSSales()">💾 Save Sales Entry</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function bsCalcSales(){
+  const profile = document.getElementById('bs-profile')?.value||'BGPT';
+  const model = document.getElementById('bsf-model')?.value;
+  const qty   = parseFloat(document.getElementById('bsf-qty')?.value||1);
+  let unit    = BS_DEVICE_PRICES[model] || parseFloat(document.getElementById('bsf-unit')?.value||0);
+  if(BS_DEVICE_PRICES[model] && document.getElementById('bsf-unit')) document.getElementById('bsf-unit').value=unit;
+  const base  = unit * qty;
+  const gst   = profile==='SBGT' ? +(base*BS_GST_RATE).toFixed(2) : 0;
+  const total = +(base+gst).toFixed(2);
+  if(document.getElementById('bsf-gst')) document.getElementById('bsf-gst').value=gst;
+  if(document.getElementById('bsf-total')) document.getElementById('bsf-total').value=total;
+  const recv  = parseFloat(document.getElementById('bsf-recv')?.value||0);
+  const pend  = Math.max(0,total-recv);
+  if(document.getElementById('bsf-pend')) document.getElementById('bsf-pend').value=pend.toFixed(2);
+  bsTogglePending();
+}
+
+function bsTogglePending(){
+  const total = parseFloat(document.getElementById('bsf-total')?.value||0);
+  const recv  = parseFloat(document.getElementById('bsf-recv')?.value||0);
+  const pend  = document.getElementById('bsf-pending-section');
+  if(pend) pend.style.display = (recv<total && total>0) ? 'block' : 'none';
+}
+
+function bsTogglePendingReason(){
+  const reason = document.getElementById('bsf-pend-reason')?.value;
+  const df = document.getElementById('bsf-disc-fields');
+  if(df) df.style.display = reason==='discount_given' ? 'block' : 'none';
+}
+
+async function bsFetchTask(taskId){
+  if(!taskId||taskId.length<8) return;
+  const res = await api('get_tasks',{search:taskId.trim()});
+  const t = (res.tasks||[]).find(x=>x.task_id===taskId.trim());
+  if(!t) return;
+  // Auto-fill from task
+  if(document.getElementById('bsf-unit')) document.getElementById('bsf-unit').value = t.price_to_collect/Math.max(1,t.device_qty);
+  if(document.getElementById('bsf-qty'))  document.getElementById('bsf-qty').value  = t.device_qty||1;
+  if(document.getElementById('bsf-recv')) document.getElementById('bsf-recv').value = t.amount_collected||0;
+  if(document.getElementById('bsf-paymode')) document.getElementById('bsf-paymode').value = t.payment_mode||'';
+  if(document.getElementById('bsf-loc'))  document.getElementById('bsf-loc').value  = t.location||'';
+  if(document.getElementById('bsf-tech')) document.getElementById('bsf-tech').value = t.technician_name||'';
+  if(document.getElementById('bsf-imei') && t.gps_serial_no) document.getElementById('bsf-imei').value = t.gps_serial_no;
+  if(document.getElementById('bsf-nameserver') && t.name_on_server) document.getElementById('bsf-nameserver').value = t.name_on_server;
+  if(document.getElementById('bsf-server') && t.server_name) document.getElementById('bsf-server').value = t.server_name;
+  // Match device model
+  if(t.device_details && document.getElementById('bsf-model')){
+    const match = Object.keys(BS_DEVICE_PRICES).find(k=>t.device_details.includes(k));
+    if(match) document.getElementById('bsf-model').value=match;
+  }
+  bsCalcSales();
+  showToast('Task '+taskId+' auto-filled!','success');
+}
+
+async function submitBSSales(){
+  const profile = document.getElementById('bs-profile')?.value||'BGPT';
+  const taskIdVal = document.getElementById('bsf-taskid')?.value.trim()||'';
+  // Find task db id if linked
+  let taskDbId = null;
+  if(taskIdVal){
+    const res = await api('get_tasks',{search:taskIdVal});
+    const t=(res.tasks||[]).find(x=>x.task_id===taskIdVal);
+    if(t) taskDbId=t.id;
+  }
+  const total  = parseFloat(document.getElementById('bsf-total')?.value||0);
+  const recv   = parseFloat(document.getElementById('bsf-recv')?.value||0);
+  const body = {
+    type:'sales', profile,
+    task_id:    taskIdVal||null,
+    task_db_id: taskDbId,
+    date:       document.getElementById('bsf-date')?.value,
+    invoice_no: document.getElementById('bsf-invoice')?.value,
+    gps_serial_no: document.getElementById('bsf-imei')?.value,
+    customer_type: document.getElementById('bsf-custtype')?.value,
+    name_on_server:document.getElementById('bsf-nameserver')?.value,
+    server_name:document.getElementById('bsf-server')?.value,
+    device_model:document.getElementById('bsf-model')?.value,
+    qty:        document.getElementById('bsf-qty')?.value,
+    unit_price: document.getElementById('bsf-unit')?.value,
+    gst:        document.getElementById('bsf-gst')?.value||0,
+    total_price:total,
+    payment_status:document.getElementById('bsf-paystatus')?.value,
+    payment_received:recv,
+    pending_payment:Math.max(0,total-recv),
+    payment_mode:document.getElementById('bsf-paymode')?.value,
+    payment_received_on:document.getElementById('bsf-recvdate')?.value||null,
+    payment_transaction_details:document.getElementById('bsf-txn')?.value,
+    pending_reason:document.getElementById('bsf-pend-reason')?.value,
+    discount_given:document.getElementById('bsf-disc')?.value||0,
+    discount_reason:document.getElementById('bsf-disc-reason')?.value,
+    discount_incharge:document.getElementById('bsf-disc-who')?.value,
+    payment_reminder_date:document.getElementById('bsf-pend-remind')?.value||null,
+    technician_name:document.getElementById('bsf-tech')?.value,
+    location:   document.getElementById('bsf-loc')?.value,
+    remarks:    document.getElementById('bsf-remarks')?.value,
+  };
+  if(!body.gps_serial_no||!body.name_on_server||!body.server_name||!body.device_model||!total){
+    showToast('Please fill GPS Serial, Name on Server, Server, Device Model and Price','error'); return;
+  }
+  const res = await api('bs_add_entry',{},'POST',body);
+  if(res.success){showToast('Sales entry saved! ✅','success');bsShowTab('records');loadBS();}
+  else showToast(res.error||'Error saving','error');
+}
+
+// ---- LICENSE / SERVICE ENTRY FORM ----
+
+function renderBSLicenseForm(){
+  const profile = document.getElementById('bs-profile')?.value||'BGPT';
+  const isSBGT  = profile==='SBGT';
+  document.getElementById('bs-license').innerHTML=`
+    <div class="card" style="max-width:900px">
+      <div class="ch"><div class="ci" style="background:var(--purple-bg)">🔄</div><div><h3>License / Service Entry</h3><p>Renewals, V2V, troubleshoot, service charges</p></div></div>
+      <div class="cb">
+        <div class="form-grid">
+          <div class="field"><label>Date *</label><input type="date" id="bsl-date" value="${new Date().toISOString().split('T')[0]}"></div>
+          <div class="field"><label>Task No.</label><input type="text" id="bsl-taskid" placeholder="e.g. ID-2026-0001"></div>
+          <div class="field"><label>Invoice No.</label><input type="text" id="bsl-invoice"></div>
+          <div class="field"><label>Name on Server *</label><input type="text" id="bsl-nameserver" placeholder="Vehicle name on GPS server"></div>
+          <div class="field"><label>Server *</label><select id="bsl-server">
+            <option value="">Select Server</option>
+            <option>Server 1</option><option>Server 2</option><option>Server 3</option><option>Server 4</option>
+          </select></div>
+          <div class="field"><label>Service Type</label><select id="bsl-service" onchange="bsCalcLicense()">
+            <option value="">Select</option>
+            ${Object.keys(BS_SERVICE_PRICES).map(s=>`<option value="${s}">${s} — ₹${BS_SERVICE_PRICES[s]}</option>`).join('')}
+          </select></div>
+          <div class="field"><label>License Plan</label><select id="bsl-license" onchange="bsCalcLicense()">
+            <option value="">Select (if renewal)</option>
+            ${Object.keys(BS_LICENSE_PRICES).map(l=>`<option value="${l}">${l} — ₹${BS_LICENSE_PRICES[l]}</option>`).join('')}
+          </select></div>
+          <div class="field"><label>Qty</label><input type="number" id="bsl-qty" value="1" min="1" oninput="bsCalcLicense()"></div>
+          <div class="field"><label>Unit Price (₹)</label><input type="number" id="bsl-unit" oninput="bsCalcLicense()"></div>
+          ${isSBGT?`<div class="field"><label>GST (18%) ₹</label><input type="number" id="bsl-gst" readonly style="background:var(--surface2)"></div>`:'<input type="hidden" id="bsl-gst" value="0">'}
+          <div class="field"><label>Total Price (₹)</label><input type="number" id="bsl-total" readonly style="background:var(--surface2);font-weight:700;color:var(--blue)"></div>
+          <div class="field"><label>Payment Received (₹)</label><input type="number" id="bsl-recv" value="0" oninput="bsCalcLicense()"></div>
+          <div class="field"><label>Payment Mode *</label><select id="bsl-paymode">
+            <option value="">Select</option><option>Cash</option><option>UPI</option><option>Bank Transfer</option>
+          </select></div>
+          <div class="field"><label>Received On</label><input type="date" id="bsl-recvdate"></div>
+          <div class="field"><label>Transaction Ref</label><input type="text" id="bsl-txn"></div>
+          <div class="field"><label>Technician</label><select id="bsl-tech"><option value="">Select</option>${technicians.map(t=>`<option value="${t.name}">${t.name}</option>`).join('')}</select></div>
+          <div class="field"><label>Location</label><input type="text" id="bsl-loc"></div>
+          <div class="field span-2"><label>Remarks</label><textarea id="bsl-remarks" rows="2"></textarea></div>
+        </div>
+        <div id="bsl-pending-section" style="display:none;background:var(--saffron-bg);border:1.5px solid rgba(212,104,10,.3);border-radius:var(--radius);padding:14px;margin-top:12px">
+          <div class="form-grid">
+            <div class="field"><label>Pending (₹)</label><input type="number" id="bsl-pend" readonly style="background:var(--surface2);color:var(--red);font-weight:700"></div>
+            <div class="field"><label>Reason</label><select id="bsl-pend-reason">
+              <option value="">Select</option>
+              <option value="later_will_do">Will pay later</option>
+              <option value="discount_given">Discount given</option>
+            </select></div>
+            <div class="field"><label>Reminder Date</label><input type="date" id="bsl-pend-remind"></div>
+          </div>
+        </div>
+        <div style="margin-top:14px">
+          <button class="btn btn-primary" onclick="submitBSLicense()">💾 Save License/Service Entry</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function bsCalcLicense(){
+  const profile = document.getElementById('bs-profile')?.value||'BGPT';
+  const service = document.getElementById('bsl-service')?.value;
+  const license = document.getElementById('bsl-license')?.value;
+  const qty     = parseFloat(document.getElementById('bsl-qty')?.value||1);
+  let unit      = BS_SERVICE_PRICES[service] || BS_LICENSE_PRICES[license] || parseFloat(document.getElementById('bsl-unit')?.value||0);
+  if((BS_SERVICE_PRICES[service]||BS_LICENSE_PRICES[license]) && document.getElementById('bsl-unit')) document.getElementById('bsl-unit').value=unit;
+  const base  = unit*qty;
+  const gst   = profile==='SBGT'?+(base*BS_GST_RATE).toFixed(2):0;
+  const total = +(base+gst).toFixed(2);
+  if(document.getElementById('bsl-gst'))   document.getElementById('bsl-gst').value=gst;
+  if(document.getElementById('bsl-total')) document.getElementById('bsl-total').value=total;
+  const recv  = parseFloat(document.getElementById('bsl-recv')?.value||0);
+  const pend  = Math.max(0,total-recv);
+  if(document.getElementById('bsl-pend'))  document.getElementById('bsl-pend').value=pend.toFixed(2);
+  const ps = document.getElementById('bsl-pending-section');
+  if(ps) ps.style.display = (recv<total&&total>0)?'block':'none';
+}
+
+async function submitBSLicense(){
+  const profile  = document.getElementById('bs-profile')?.value||'BGPT';
+  const taskIdVal= document.getElementById('bsl-taskid')?.value.trim()||'';
+  const total    = parseFloat(document.getElementById('bsl-total')?.value||0);
+  const recv     = parseFloat(document.getElementById('bsl-recv')?.value||0);
+  const body = {
+    type:'license', profile,
+    task_id:    taskIdVal||null,
+    date:       document.getElementById('bsl-date')?.value,
+    invoice_no: document.getElementById('bsl-invoice')?.value,
+    name_on_server: document.getElementById('bsl-nameserver')?.value,
+    server_name:    document.getElementById('bsl-server')?.value,
+    service_type:   document.getElementById('bsl-service')?.value,
+    license_plan:   document.getElementById('bsl-license')?.value,
+    qty:        document.getElementById('bsl-qty')?.value,
+    unit_price: document.getElementById('bsl-unit')?.value,
+    gst:        document.getElementById('bsl-gst')?.value||0,
+    total_price:total,
+    payment_received:recv,
+    pending_payment:Math.max(0,total-recv),
+    payment_mode:   document.getElementById('bsl-paymode')?.value,
+    payment_received_on:document.getElementById('bsl-recvdate')?.value||null,
+    payment_transaction_details:document.getElementById('bsl-txn')?.value,
+    pending_reason: document.getElementById('bsl-pend-reason')?.value,
+    payment_reminder_date:document.getElementById('bsl-pend-remind')?.value||null,
+    technician_name:document.getElementById('bsl-tech')?.value,
+    location:   document.getElementById('bsl-loc')?.value,
+    remarks:    document.getElementById('bsl-remarks')?.value,
+  };
+  if(!body.name_on_server||!body.server_name||!total){showToast('Please fill Name on Server, Server and Price','error');return;}
+  const res = await api('bs_add_entry',{},'POST',body);
+  if(res.success){showToast('License/Service entry saved! ✅','success');bsShowTab('records');loadBS();}
+  else showToast(res.error||'Error','error');
+}
+
+// ---- EXPORT CSV ----
+function exportBSCSV(){
+  if(!bsData.length){showToast('No data to export','error');return;}
+  bsDownloadCSV('balance_sheet.csv',
+    ['Date','Type','Task ID','Invoice','GPS Serial/IMEI','Name on Server','Server','Device/Service','Qty','Unit Price','GST','Total','Received','Pending','Pay Mode','Txn Ref','Technician','Location','Remarks'],
+    bsData.map(e=>[e.date,e.type,e.task_id||'',e.invoice_no||'',e.gps_serial_no||'',e.name_on_server||'',e.server_name||'',e.device_model||e.service_type||'',e.qty,e.unit_price,e.gst||0,e.total_price,e.payment_received,e.pending_payment,e.payment_mode||'',e.payment_transaction_details||'',e.technician_name||'',e.location||'',e.remarks||''])
+  );
+}
+
+// ---- AUTO-CREATE BS FROM CLOSED TASK ----
+async function createBSFromTask(taskDbId, profile){
+  const p = profile || document.getElementById('bs-profile')?.value || 'BGPT';
+  const res = await api('bs_from_task',{},'POST',{task_db_id:taskDbId,profile:p});
+  if(res.success){
+    if(res.existing) showToast('Balance sheet entry already exists','info');
+    else showToast('Balance sheet entry created from task!','success');
+  } else showToast(res.error||'Error','error');
+}
 </script>
 
 <!-- ═══════════════════════════════════════════
