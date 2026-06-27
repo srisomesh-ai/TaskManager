@@ -441,28 +441,37 @@ case 'update_task':
     if ($sets) { $vals[]=$id; $pdo->prepare("UPDATE tasks SET ".implode(',',$sets)." WHERE id=?")->execute($vals); }
 
     // ── SYNC PAYMENT TO BS ENTRY ─────────────────────────────────────
-    // If this task has a linked BS entry, sync payment fields
+    // Uses values from $body (what was just saved) — avoids stale DB read
     try {
-        $bsCheck = $pdo->prepare("SELECT bs_entry_id FROM tasks WHERE id=?");
+        $bsCheck = $pdo->prepare("SELECT bs_entry_id, price_to_collect, amount_collected, payment_mode FROM tasks WHERE id=?");
         $bsCheck->execute([$id]); $bsRow = $bsCheck->fetch();
         if (!empty($bsRow['bs_entry_id'])) {
-            $tLatest = $pdo->prepare("SELECT * FROM tasks WHERE id=?");
-            $tLatest->execute([$id]); $tL = $tLatest->fetch();
-            if ($tL) {
-                $recv3  = floatval($tL['amount_collected']??0);
-                $total3 = floatval($tL['price_to_collect']??0);
-                $pend3  = max(0, $total3-$recv3);
-                $ps3    = 'pending';
-                if ($recv3 >= $total3-15) $ps3 = 'paid';
-                elseif ($recv3 > 0)       $ps3 = 'partially_paid';
-                $pdo->prepare("UPDATE balance_sheet_entries SET
-                    payment_received=?,pending_payment=?,payment_status=?,
-                    payment_mode=?,total_price=?,updated_at=NOW()
-                    WHERE id=?")
-                    ->execute([$recv3,$pend3,$ps3,
-                               $tL['payment_mode']??null,$total3,
-                               $bsRow['bs_entry_id']]);
+            // Use new value from body if present, else use existing DB value
+            $recv3  = array_key_exists('amount_collected', $body)
+                        ? floatval($body['amount_collected'])
+                        : floatval($bsRow['amount_collected']??0);
+            $total3 = array_key_exists('price_to_collect', $body)
+                        ? floatval($body['price_to_collect'])
+                        : floatval($bsRow['price_to_collect']??0);
+            $pmode3 = array_key_exists('payment_mode', $body)
+                        ? $body['payment_mode']
+                        : ($bsRow['payment_mode']??null);
+            $pend3  = max(0, $total3 - $recv3);
+            // Payment status logic
+            if ($total3 <= 0) {
+                $ps3 = 'pending'; // no price set yet
+            } elseif ($recv3 <= 0) {
+                $ps3 = 'pending';
+            } elseif ($recv3 >= $total3 - 15) {
+                $ps3 = 'paid';
+            } else {
+                $ps3 = 'partially_paid';
             }
+            $pdo->prepare("UPDATE balance_sheet_entries SET
+                payment_received=?, pending_payment=?, payment_status=?,
+                payment_mode=?, total_price=?, updated_at=NOW()
+                WHERE id=?")
+                ->execute([$recv3, $pend3, $ps3, $pmode3, $total3, $bsRow['bs_entry_id']]);
         }
     } catch(Exception $bsSync) {
         error_log('BS sync error: '.$bsSync->getMessage());
@@ -862,8 +871,10 @@ case 'save_device_install':
 
                 // Determine payment status
                 $pStatus = 'pending';
-                if ($recv2 >= $total2-15) $pStatus = 'paid';
-                elseif ($recv2 > 0)       $pStatus = 'partially_paid';
+                if ($total2 <= 0)                $pStatus = 'pending';
+                elseif ($recv2 <= 0)             $pStatus = 'pending';
+                elseif ($recv2 >= $total2 - 15)  $pStatus = 'paid';
+                else                             $pStatus = 'partially_paid';
 
                 $pdo->prepare("INSERT INTO balance_sheet_entries
                     (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,

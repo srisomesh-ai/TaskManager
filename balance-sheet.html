@@ -431,12 +431,12 @@ async function loadEntries(){
 function renderStats(s){
   const fmt=v=>'₹'+parseFloat(v||0).toLocaleString('en-IN',{minimumFractionDigits:0});
   const cards=[
-    {l:'Devices Sold',  v:(+s.devices_sold||0).toLocaleString('en-IN'),  c:'#0E5C5C'},
-    {l:'Licenses',      v:(+s.license_count||0).toLocaleString('en-IN'), c:'#5b2d8e'},
-    {l:'Sales Total',   v:fmt(s.total_sales),   c:'#1a7a3a'},
-    {l:'License Total', v:fmt(s.total_license), c:'#1a56a0'},
-    {l:'Received',      v:fmt(s.payment_received), c:'#137272'},
-    {l:'Pending',       v:fmt(s.pending_payment),  c:'#c0392b'},
+    {l:'Devices Installed', v:(+s.devices_sold||0).toLocaleString('en-IN'),  c:'#0E5C5C'},
+    {l:'Licenses/Services', v:(+s.license_count||0).toLocaleString('en-IN'), c:'#5b2d8e'},
+    {l:'Sales Value',       v:fmt(s.total_sales),        c:'#1a56a0'},
+    {l:'License Value',     v:fmt(s.total_license),      c:'#5b2d8e'},
+    {l:'Cash Received',     v:fmt(s.payment_received),   c:'#1a7a3a'},
+    {l:'Outstanding',       v:fmt(s.pending_payment),    c:'#c0392b'},
   ];
   document.getElementById('bs-stats').innerHTML=cards.map(c=>`
     <div class="bs-stat" style="border-top-color:${c.c}">
