@@ -2676,7 +2676,7 @@ async function _fillTechDropdown(selId,selectedId=null){
   while(sel.options.length>1)sel.remove(1);
   const r=await api('get_users',{role:'technician'}).catch(()=>({}));
   (r.users||[]).forEach(t=>{const o=document.createElement('option');o.value=t.id;o.textContent=t.name;sel.appendChild(o);});
-  if(selectedId)sel.value=selectedId;
+  if(selectedId) sel.value=String(selectedId);
 }
 
 
