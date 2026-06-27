@@ -89,19 +89,17 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:var(--text);padd
     </div>
 
     <div class="section-box" style="background:var(--amber-bg);border:1.5px solid var(--amber)">
-      <div class="section-box-title" style="color:var(--amber)">🔄 Set Task ID Start Number</div>
-      <div class="section-box-sub">Set the number your next task ID should start from. Example: enter <strong>85</strong> and next task will be <strong>ID-2026-0085</strong>.</div>
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <div style="display:flex;align-items:center;gap:6px;background:#fff;border:1.5px solid var(--amber);border-radius:7px;padding:6px 10px">
-          <span style="font-size:13px;color:var(--text3);font-weight:700">ID-2026-</span>
-          <input type="number" id="task-start-num" min="1" max="9999" value="1"
-            style="width:80px;border:none;outline:none;font-size:16px;font-weight:800;color:var(--amber);background:transparent;text-align:center">
-        </div>
-        <button class="btn btn-amber" onclick="setTaskCounter()">🔄 Set Task Counter</button>
-      </div>
-      <div id="task-counter-result" style="margin-top:8px;font-size:12px;font-weight:700;display:none"></div>
+      <div class="section-box-title" style="color:var(--amber)">🔄 Reset Task IDs</div>
+      <div class="section-box-sub">After wiping, reset the task counter so next task starts from ID-2026-0001.</div>
+      <button class="btn btn-amber" onclick="adminWipeData('reset_ids')">🔄 Reset Task Counter</button>
     </div>
 
+    <div class="section-box" style="background:var(--surface2);border:1.5px solid var(--border)">
+      <div class="section-box-title">📊 Database Stats</div>
+      <div id="admin-db-stats" style="font-size:12px;color:var(--text2);margin-bottom:10px">Click to load stats</div>
+      <div class="stat-grid" id="admin-stats-grid" style="padding:0;display:none"></div>
+      <button class="btn btn-accent btn-sm" style="margin-top:10px" onclick="adminLoadStats()">Load Stats</button>
+    </div>
 
   </div>
 </div>
@@ -185,15 +183,40 @@ function toast(msg){
 
 // ── DATA MANAGEMENT ──────────────────────────────────────────────
 async function adminWipeData(type){
-  if(!confirm('⚠️ This will permanently delete ALL tasks, activities and device installs.\n\nThis CANNOT be undone. Are you absolutely sure?')) return;
-  const confirm2 = prompt('Type DELETE to confirm:');
-  if(confirm2 !== 'DELETE'){ toast('Cancelled — type DELETE exactly'); return; }
-  const res = await admApi('admin_wipe',{},'POST',{type, confirm:'DELETE'}).catch(()=>({}));
+  const labels = {
+    tasks:     'ALL tasks, activities, device installs, and consent records',
+    reset_ids: 'the task ID counter (next task = ID-2026-0001)',
+  };
+  if(!confirm(`⚠️ This will permanently delete ${labels[type]}.\n\nThis CANNOT be undone. Are you absolutely sure?`)) return;
+  const code = prompt('Enter admin passcode to confirm:');
+  if(!code){ toast('Cancelled'); return; }
+  const res = await admApi('admin_wipe',{},'POST',{type, passcode:code}).catch(()=>({}));
   if(res.success) toast('✅ Done: '+res.message);
   else toast('❌ '+(res.error||'Failed'));
 }
 
-
+async function adminLoadStats(){
+  document.getElementById('admin-db-stats').textContent = 'Loading…';
+  document.getElementById('admin-stats-grid').style.display = 'none';
+  const res = await admApi('admin_db_stats').catch(()=>({}));
+  if(res.error){ document.getElementById('admin-db-stats').textContent = '❌ '+res.error; return; }
+  document.getElementById('admin-db-stats').textContent = '';
+  const grid = document.getElementById('admin-stats-grid');
+  grid.style.display = 'grid';
+  const stats = [
+    {l:'Total Tasks',       v:res.total_tasks||0},
+    {l:'Open Tasks',        v:res.open_tasks||0},
+    {l:'Closed Tasks',      v:res.closed_tasks||0},
+    {l:'Installed Today',   v:res.installed_today||0},
+    {l:'Total Users',       v:res.total_users||0},
+    {l:'BS Entries',        v:res.bs_entries||0},
+  ];
+  grid.innerHTML = stats.map(s=>`
+    <div class="stat-box">
+      <div class="stat-val">${s.v}</div>
+      <div class="stat-lbl">${s.l}</div>
+    </div>`).join('');
+}
 
 // ── USER MANAGEMENT ───────────────────────────────────────────────
 async function adminLoadUsers(){
@@ -215,7 +238,6 @@ async function adminLoadUsers(){
       <div style="display:flex;gap:6px;flex-shrink:0">
         <button class="btn btn-accent btn-sm" onclick="openEditUser(${JSON.stringify(u).replace(/"/g,'&quot;')})">✏️</button>
         <button class="btn btn-sm" style="background:var(--red-bg);color:var(--red);border:1.5px solid var(--red)" onclick="toggleUserActive(${u.id},${u.is_active})">${inactive?'✅ Enable':'⛔ Disable'}</button>
-        <button class="btn btn-sm" style="background:var(--red);color:#fff" onclick="deleteUser(${u.id},'${u.name.replace(/'/g,"\\'")}')" title="Delete permanently">🗑️</button>
       </div>
     </div>`;
   }).join('');
@@ -275,35 +297,6 @@ async function saveUser(){
   }
 }
 
-async function setTaskCounter(){
-  const num = parseInt(document.getElementById('task-start-num').value)||1;
-  if(num < 1){ toast('⚠️ Enter a valid number'); return; }
-  const confirm2 = prompt('Type DELETE to confirm:');
-  if(confirm2 !== 'DELETE'){ toast('Cancelled — type DELETE exactly'); return; }
-  const res = await admApi('admin_wipe',{},'POST',{type:'reset_ids', start_num:num, confirm:'DELETE'}).catch(()=>({}));
-  const el = document.getElementById('task-counter-result');
-  if(res.success){
-    el.style.display='';
-    el.style.color='var(--green)';
-    el.textContent='✅ '+res.message+' (Next: '+res.next+')';
-    toast('✅ '+res.message);
-  } else {
-    el.style.display='';
-    el.style.color='var(--red)';
-    el.textContent='❌ '+(res.error||'Failed');
-    toast('❌ '+(res.error||'Failed'));
-  }
-}
-
-async function deleteUser(id, name){
-  if(!confirm('⚠️ Permanently delete user "'+name+'"?
-
-This cannot be undone. If they have tasks assigned, deletion will fail — disable them instead.')) return;
-  const res = await admApi('delete_user',{},'POST',{id}).catch(()=>({}));
-  if(res.success){ toast('🗑️ User deleted'); adminLoadUsers(); }
-  else toast('❌ '+(res.error||'Delete failed'));
-}
-
 async function toggleUserActive(id, currentActive){
   const newActive = currentActive==1 ? 0 : 1;
   const action    = newActive ? 'Enable' : 'Disable';
@@ -315,6 +308,7 @@ async function toggleUserActive(id, currentActive){
 
 // Auto-load on open
 adminLoadUsers();
+adminLoadStats();
 </script>
 </body>
 </html>
