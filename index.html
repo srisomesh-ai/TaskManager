@@ -589,7 +589,8 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
               </div>
               <div class="form-row">
                 <div class="form-group"><label>Email ID</label><input type="email" id="fm-email" placeholder="Optional" onblur="checkBlacklist('email')"></div>
-                <div class="form-group"><label>Location / Area</label><input type="text" id="fm-location" placeholder="City, area, landmark"></div>
+                <div id="bl-warning" style="display:none;background:var(--red-bg);border:1.5px solid var(--red);border-radius:8px;padding:12px 14px;margin-bottom:4px"></div>
+              <div class="form-group"><label>Location / Area</label><input type="text" id="fm-location" placeholder="City, area, landmark"></div>
               </div>
               <div class="form-row">
                 <div class="form-group">
@@ -5189,11 +5190,14 @@ function filterDrActivity(){
 }
 
 // ════════════════════════════════════════════════════════
-// BLACKLIST CHECK — onblur in create task form → popup
+// BLACKLIST CHECK — onblur in create task form
 // ════════════════════════════════════════════════════════
 async function checkBlacklist(field){
   const phone = document.getElementById('fm-contact')?.value?.trim() || '';
   const email = document.getElementById('fm-email')?.value?.trim() || '';
+  const warn  = document.getElementById('bl-warning');
+  if(!warn) return;
+  if(!phone && !email){ warn.style.display='none'; return; }
   const params = {};
   if(field==='phone' && phone) params.phone = phone;
   if(field==='email' && email) params.email = email;
@@ -5202,18 +5206,27 @@ async function checkBlacklist(field){
   if(res.found && res.entry){
     const e = res.entry;
     const date = e.added_at ? new Date(e.added_at).toLocaleDateString('en-IN') : '–';
-    // Show popup
-    document.getElementById('bl-popup-name').textContent    = e.customer_name||'–';
-    document.getElementById('bl-popup-task').textContent    = e.task_id||'Manual entry';
-    document.getElementById('bl-popup-date').textContent    = date;
-    document.getElementById('bl-popup-reason').textContent  = e.reason||'–';
-    document.getElementById('bl-popup-by').textContent      = e.added_by||'–';
-    document.getElementById('bl-popup-overlay').style.display = 'flex';
+    warn.style.display = 'block';
+    warn.innerHTML = `
+      <div style="display:flex;align-items:flex-start;gap:10px">
+        <span style="font-size:22px;flex-shrink:0">🚫</span>
+        <div>
+          <div style="font-size:13px;font-weight:800;color:var(--red);margin-bottom:4px">Blacklisted Customer</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.7">
+            <b>Name:</b> ${e.customer_name||'–'} &nbsp;|&nbsp;
+            <b>Task:</b> ${e.task_id||'Manual entry'} &nbsp;|&nbsp;
+            <b>Date:</b> ${date}<br>
+            <b>Reason:</b> ${e.reason||'–'}<br>
+            <b>Added by:</b> ${e.added_by||'–'}
+          </div>
+          <div style="margin-top:8px;font-size:12px;font-weight:700;color:var(--red)">
+            ⚠️ Management approval required before proceeding with this customer.
+          </div>
+        </div>
+      </div>`;
+  } else {
+    warn.style.display = 'none';
   }
-}
-
-function closeBlacklistPopup(){
-  document.getElementById('bl-popup-overlay').style.display = 'none';
 }
 
 function exportDailyCSV(){
@@ -5445,48 +5458,5 @@ function copyQtLink(e){
     </div>
   </div>
 </div>
-<!-- BLACKLIST WARNING POPUP -->
-<div id="bl-popup-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:3000;align-items:center;justify-content:center;padding:16px">
-  <div style="background:#fff;border-radius:16px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.35);overflow:hidden">
-    <!-- Red header -->
-    <div style="background:var(--red);padding:18px 20px;color:#fff">
-      <div style="font-size:24px;margin-bottom:6px">🚫</div>
-      <div style="font-size:16px;font-weight:800">Blacklisted Customer</div>
-      <div style="font-size:12px;opacity:.85;margin-top:2px">This customer has a blacklist record</div>
-    </div>
-    <!-- Details -->
-    <div style="padding:18px 20px">
-      <div style="background:var(--red-bg);border-radius:10px;padding:14px;margin-bottom:14px">
-        <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13px">
-          <span style="color:var(--text3);font-weight:600">Customer</span>
-          <span style="font-weight:800" id="bl-popup-name">–</span>
-          <span style="color:var(--text3);font-weight:600">Last Task</span>
-          <span style="font-weight:700;color:var(--accent)" id="bl-popup-task">–</span>
-          <span style="color:var(--text3);font-weight:600">Date</span>
-          <span id="bl-popup-date">–</span>
-          <span style="color:var(--text3);font-weight:600">Added By</span>
-          <span id="bl-popup-by">–</span>
-        </div>
-      </div>
-      <div style="background:var(--amber-bg);border:1.5px solid var(--amber);border-radius:8px;padding:12px;margin-bottom:16px">
-        <div style="font-size:11px;font-weight:700;color:var(--amber);margin-bottom:4px">REASON</div>
-        <div style="font-size:13px;color:var(--text2);line-height:1.6" id="bl-popup-reason">–</div>
-      </div>
-      <div style="font-size:12px;color:var(--red);font-weight:700;margin-bottom:16px;text-align:center">
-        ⚠️ Management approval required before proceeding with this customer
-      </div>
-      <!-- Buttons -->
-      <div style="display:flex;gap:10px">
-        <button onclick="closeBlacklistPopup()" style="flex:1;padding:11px;background:var(--surface2);color:var(--text);border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">
-          ✕ Cancel Task
-        </button>
-        <button onclick="closeBlacklistPopup()" style="flex:1;padding:11px;background:var(--red);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">
-          ⚠️ Proceed Anyway
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
 </body>
 </html>
