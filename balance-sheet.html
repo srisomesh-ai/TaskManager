@@ -16,12 +16,7 @@
   --shadow:0 2px 10px rgba(0,0,0,.08);
 }
 body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:var(--text)}
-/* topbar */
-.bs-topbar{background:linear-gradient(135deg,var(--accent),var(--accent2));padding:11px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0}
-.bs-topbar-logo{height:32px;width:auto;background:#fff;padding:3px 9px;border-radius:6px}
-.bs-topbar-title{flex:1;color:#fff;font-size:14px;font-weight:800}
-.bs-profile-sel{padding:5px 10px;border:1.5px solid rgba(255,255,255,.4);border-radius:6px;background:rgba(255,255,255,.15);color:#fff;font-size:12px;font-weight:700;cursor:pointer;outline:none}
-.bs-profile-sel option{color:var(--text);background:#fff}
+/* topbar removed */
 /* tabs */
 .bs-tabbar{background:#fff;border-bottom:2px solid var(--border);display:flex;flex-shrink:0}
 .bs-tab{padding:11px 18px;border:none;border-bottom:3px solid transparent;background:none;font-size:13px;font-weight:700;color:var(--text3);cursor:pointer;white-space:nowrap;transition:all .15s}
@@ -106,19 +101,19 @@ tr:hover td{background:#f7f9fc}
 </head>
 <body style="display:flex;flex-direction:column;height:100vh;overflow:hidden">
 
-<div class="bs-topbar">
-  <img src="logo.png" class="bs-topbar-logo" onerror="this.style.display='none'" alt="BharatGPS">
-  <div class="bs-topbar-title">💰 GPS Balance Sheet</div>
-  <select class="bs-profile-sel" id="bs-profile" onchange="loadEntries()">
-    <option value="BGPT">Bharat GPS Tracker</option>
-    <option value="SBGT">SRIBHARAT GPS TRACKER PVT LTD</option>
-  </select>
-</div>
+<!-- Profile selector moved into tab bar -->
 
 <div class="bs-tabbar">
   <button class="bs-tab active" id="bstab-records"  onclick="bsTab('records')">📊 Records</button>
   <button class="bs-tab"        id="bstab-sales"    onclick="bsTab('sales')">➕ Sales Entry</button>
   <button class="bs-tab"        id="bstab-license"  onclick="bsTab('license')">🔄 License / Service</button>
+  <div style="margin-left:auto;display:flex;align-items:center;padding:0 12px">
+    <select class="bs-profile-sel" id="bs-profile" onchange="loadEntries()"
+      style="padding:5px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-weight:700;color:var(--text);background:#fff;outline:none;cursor:pointer">
+      <option value="BGPT">Bharat GPS Tracker</option>
+      <option value="SBGT">SRIBHARAT GPS TRACKER PVT LTD</option>
+    </select>
+  </div>
 </div>
 
 <!-- RECORDS -->
