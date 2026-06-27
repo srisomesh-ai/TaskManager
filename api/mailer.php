@@ -393,27 +393,26 @@ function sendConsentRequest(array $task, string $techName): void {
         $amountRow   = '<div class="row"><div class="label">Amount Agreed</div><div class="value highlight">&#8377;' . $price . '</div></div>';
     }
 
-    $emailContent = '
-    <div class="greeting">Dear ' . htmlspecialchars($task['customer_name']) . ',</div>
-    <p style="font-size:14px;color:#4a5568;margin-bottom:16px">' . $actionLine . '</p>
-    <div style="background:#e8f5ec;border:2px solid #1a7a3a;border-radius:10px;padding:18px;margin-bottom:16px;text-align:center">
-        <div style="font-size:13px;font-weight:700;color:#1a7a3a;margin-bottom:8px">' . $actionTitle . '</div>
-        <p style="font-size:13px;color:#1a1f2e;margin-bottom:14px;line-height:1.6">' . $actionDesc . '</p>
-        <a href="' . $consentUrl . '"
-           style="display:inline-block;background:#0E5C5C;color:#fff;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:800;text-decoration:none">
-           ' . $btnText . '
-        </a>
-        <p style="font-size:11px;color:#8a9ab0;margin-top:10px;word-break:break-all">
-            Can't click? Copy this link: ' . $consentUrl . '
-        </p>
-    </div>
-    <div class="details">
-        <div class="row"><div class="label">Task ID</div><div class="value blue">' . $task['task_id'] . '</div></div>
-        <div class="row"><div class="label">Service</div><div class="value">' . htmlspecialchars($jobLabel) . '</div></div>
-        ' . $amountRow . '
-        <div class="row"><div class="label">Technician</div><div class="value">' . htmlspecialchars($techName) . '</div></div>
-    </div>
-    <p style="font-size:12px;color:#8a9ab0;margin-top:16px">For help call <strong>9849849824</strong></p>';
+    $custName = htmlspecialchars($task['customer_name']);
+    $jobLabelEsc = htmlspecialchars($jobLabel);
+    $techNameEsc = htmlspecialchars($techName);
+    $taskIdEsc   = htmlspecialchars($task['task_id']);
+    $emailContent = "<div class=\"greeting\">Dear {$custName},</div>"
+        . "<p style=\"font-size:14px;color:#4a5568;margin-bottom:16px\">{$actionLine}</p>"
+        . "<div style=\"background:#e8f5ec;border:2px solid #1a7a3a;border-radius:10px;padding:18px;margin-bottom:16px;text-align:center\">"
+        . "<div style=\"font-size:13px;font-weight:700;color:#1a7a3a;margin-bottom:8px\">{$actionTitle}</div>"
+        . "<p style=\"font-size:13px;color:#1a1f2e;margin-bottom:14px;line-height:1.6\">{$actionDesc}</p>"
+        . "<a href=\"{$consentUrl}\" style=\"display:inline-block;background:#0E5C5C;color:#fff;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:800;text-decoration:none\">"
+        . "{$btnText}</a>"
+        . "<p style=\"font-size:11px;color:#8a9ab0;margin-top:10px;word-break:break-all\">Cannot click? Copy this link: {$consentUrl}</p>"
+        . "</div>"
+        . "<div class=\"details\">"
+        . "<div class=\"row\"><div class=\"label\">Task ID</div><div class=\"value blue\">{$taskIdEsc}</div></div>"
+        . "<div class=\"row\"><div class=\"label\">Service</div><div class=\"value\">{$jobLabelEsc}</div></div>"
+        . $amountRow
+        . "<div class=\"row\"><div class=\"label\">Technician</div><div class=\"value\">{$techNameEsc}</div></div>"
+        . "</div>"
+        . "<p style=\"font-size:12px;color:#8a9ab0;margin-top:16px\">For help call <strong>9849849824</strong></p>";
 
     sendMail(
         $task['email'],
