@@ -3543,6 +3543,21 @@ async function submitTechUpdate(){
   const body = { id: taskId, remark: parts.join(' | ') };
   if(remindDate) body.reminder_date = remindDate;
 
+  // Free service + Vehicle Not Ready → offer to convert to ₹300 charge
+  const isFreeServiceTask = (_detailTask?.payment_mode === 'Free Service') ||
+                            ((_detailTask?.device_details||'').includes('Troubleshoot') && parseFloat(_detailTask?.price_to_collect||0) === 0);
+  const vehicleNotReady   = (discussed||'').toLowerCase().includes('vehicle not ready') ||
+                            custResp.toLowerCase().includes('vehicle not ready') ||
+                            parts.join('|').toLowerCase().includes('vehicle not ready');
+  if(isFreeServiceTask && vehicleNotReady){
+    const convert = confirm('🚗 Vehicle was not available for this free service visit.\n\nConvert to chargeable visit?\n\n• Click OK to charge ₹300 (visit charge)\n• Click Cancel to keep as free service');
+    if(convert){
+      body.price_to_collect = 300;
+      body.payment_mode     = 'Cash';
+      body.remark           = (body.remark||'') + ' | 💰 Converted to chargeable visit — ₹300 (vehicle not available)';
+    }
+  }
+
   // If consent was active and tech selected a vehicle card — reset consent
   // so technician needs to Attend again and get fresh consent from customer
   if(consentWasActive){

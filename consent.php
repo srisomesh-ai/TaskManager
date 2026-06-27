@@ -74,7 +74,19 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
         $pdo->prepare("UPDATE tasks SET customer_consent_at=?,customer_consent_name=?,customer_consent_mobile=? WHERE id=?")
             ->execute([$now,$cName,$cMobile,$task['id']]);
         $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,0,?,'system')")
-            ->execute([$task['id'], "✅ Customer consent received — {$cName} ({$cMobile}) agreed to T&C and payment of ₹".number_format(floatval($task['price_to_collect']??0),0)]);
+            ->execute([$task['id'], (isset([
+    'troubleshoot' => "✅ Free service consent — {$cName} ({$cMobile}) confirmed vehicle availability. ₹300 if unavailable.",
+    'v2v'          => "✅ V2V consent — {$cName} ({$cMobile}) confirmed both vehicles available. Pay ₹".number_format(floatval($task['price_to_collect']??0),0),
+    'readding'     => "✅ Re-adding consent — {$cName} ({$cMobile}) confirmed vehicle available. Pay ₹".number_format(floatval($task['price_to_collect']??0),0),
+    'remove'       => "✅ GPS removal consent — {$cName} ({$cMobile}) confirmed permanent removal.",
+    'demo'         => "✅ Demo consent — {$cName} ({$cMobile}) confirmed availability.",
+][$consentType]) ? [
+    'troubleshoot' => "✅ Free service consent — {$cName} ({$cMobile}) confirmed vehicle availability. ₹300 if unavailable.",
+    'v2v'          => "✅ V2V consent — {$cName} ({$cMobile}) confirmed both vehicles available. Pay ₹".number_format(floatval($task['price_to_collect']??0),0),
+    'readding'     => "✅ Re-adding consent — {$cName} ({$cMobile}) confirmed vehicle available. Pay ₹".number_format(floatval($task['price_to_collect']??0),0),
+    'remove'       => "✅ GPS removal consent — {$cName} ({$cMobile}) confirmed permanent removal.",
+    'demo'         => "✅ Demo consent — {$cName} ({$cMobile}) confirmed availability.",
+][$consentType] : "✅ Customer consent received — {$cName} ({$cMobile}) agreed to T&C and payment of ₹".number_format(floatval($task['price_to_collect']??0),0)]);
 
         // ── Step 2: Trigger background email via non-blocking HTTP ───────
         // We call a separate endpoint that handles SMTP — fire and forget
@@ -125,6 +137,23 @@ $taskId  = htmlspecialchars($task['task_id']??'');
 $tech    = htmlspecialchars($task['tech_name']??'BharatGPS Technician');
 $payMode = htmlspecialchars($task['payment_mode']??'');
 $mobile  = htmlspecialchars($task['contact_number']??'');
+
+// ── Detect consent type from job ────────────────────────────────────────
+$jobRaw = strtolower($task['device_details']??'');
+if(strpos($jobRaw,'troubleshoot')!==false || strpos($jobRaw,'offline')!==false){
+    $consentType = 'troubleshoot';
+} elseif(strpos($jobRaw,'vehicle to vehicle')!==false || strpos($jobRaw,'v2v')!==false){
+    $consentType = 'v2v';
+} elseif(strpos($jobRaw,'re-adding')!==false || strpos($jobRaw,'re adding')!==false || strpos($jobRaw,'readd')!==false){
+    $consentType = 'readding';
+} elseif(strpos($jobRaw,'only remove')!==false || strpos($jobRaw,'remove only')!==false){
+    $consentType = 'remove';
+} elseif(strpos($jobRaw,'demonstration')!==false || strpos($jobRaw,'demo')!==false){
+    $consentType = 'demo';
+} else {
+    $consentType = 'installation'; // default GPS installation
+}
+$isFreeService = in_array($consentType, ['troubleshoot','remove','demo']);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -181,7 +210,17 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:#1a1f2e;min-heig
        onerror="this.style.display='none'" alt="BharatGPS">
   <div class="header-text">
     <div class="header-title">BharatGPS Tracker</div>
-    <div class="header-sub">Service Consent & Payment Confirmation</div>
+    <div class="header-sub"><?php
+$subtitles = [
+  'troubleshoot' => 'Free Service Visit — Vehicle Availability Confirmation',
+  'v2v'          => 'Vehicle to Vehicle Change — Consent & Payment',
+  'readding'     => 'Re-Adding Service — Consent & Payment',
+  'remove'       => 'GPS Removal — Confirmation Required',
+  'demo'         => 'Demonstration Visit — Availability Confirmation',
+  'installation' => 'Service Consent & Payment Confirmation',
+];
+echo $subtitles[$consentType] ?? 'Service Consent & Payment Confirmation';
+?></div>
   </div>
 </div>
 
@@ -201,6 +240,76 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:#1a1f2e;min-heig
   </div>
 </div>
 
+<?php if($consentType==='troubleshoot'): ?>
+<div class="card">
+  <div class="card-hd" style="background:#e8f5ec;color:#1a7a3a">🔧 Troubleshoot / Offline Fix</div>
+  <div class="card-body">
+    <div class="price-box" style="background:#e8f5ec;border-color:#1a7a3a">
+      <div class="price-label" style="color:#1a7a3a">Service Charge</div>
+      <div class="price-amount" style="color:#1a7a3a">FREE</div>
+      <div class="price-mode" style="color:#2d6a4f">Technician will bring your GPS back online</div>
+    </div>
+    <div style="background:#fff3e0;border:1.5px solid #e07b00;border-radius:8px;padding:12px 14px;margin-top:10px;font-size:12px;color:#8a5a00;line-height:1.8">
+      ⚠️ <strong>Important:</strong> This is a free service visit. If our technician arrives and your <strong>vehicle is not available</strong>, a <strong>₹300 visit charge</strong> will be applicable.
+    </div>
+  </div>
+</div>
+<?php elseif($consentType==='v2v'): ?>
+<div class="card">
+  <div class="card-hd">🚗➡️🚗 Vehicle to Vehicle Change</div>
+  <div class="card-body">
+    <div style="background:#e8f0fb;border:1.5px solid #1a56a0;border-radius:8px;padding:12px 14px;margin-bottom:10px;font-size:12px;color:#1a3a6b;line-height:1.8">
+      📌 Technician will <strong>remove GPS from old vehicle</strong> and <strong>reinstall on new vehicle</strong>. Please ensure <strong>both vehicles are available</strong>.
+    </div>
+    <div class="price-box">
+      <div class="price-label">V2V Change Charge</div>
+      <div class="price-amount">₹<?=$price?></div>
+      <?php if($payMode): ?><div class="price-mode">Payment Mode: <?=$payMode?></div><?php endif; ?>
+    </div>
+  </div>
+</div>
+<?php elseif($consentType==='readding'): ?>
+<div class="card">
+  <div class="card-hd">🔄 Re-Adding Service</div>
+  <div class="card-body">
+    <div style="background:#e8f0fb;border:1.5px solid #1a56a0;border-radius:8px;padding:12px 14px;margin-bottom:10px;font-size:12px;color:#1a3a6b;line-height:1.8">
+      📌 Technician will <strong>re-add your vehicle to the GPS server</strong>. Please ensure your vehicle is <strong>available, running and accessible</strong>.
+    </div>
+    <div class="price-box">
+      <div class="price-label">Re-Adding Service Charge</div>
+      <div class="price-amount">₹<?=$price?></div>
+      <?php if($payMode): ?><div class="price-mode">Payment Mode: <?=$payMode?></div><?php endif; ?>
+    </div>
+  </div>
+</div>
+<?php elseif($consentType==='remove'): ?>
+<div class="card">
+  <div class="card-hd" style="background:#fdecea;color:#c0392b">🔴 GPS Device Removal</div>
+  <div class="card-body">
+    <div class="price-box" style="background:#e8f5ec;border-color:#1a7a3a">
+      <div class="price-label" style="color:#1a7a3a">Removal Charge</div>
+      <div class="price-amount" style="color:#1a7a3a">FREE</div>
+    </div>
+    <div style="background:#fdecea;border:1.5px solid #c0392b;border-radius:8px;padding:12px 14px;margin-top:10px;font-size:12px;color:#c0392b;line-height:1.8">
+      ⚠️ <strong>Warning:</strong> Once removed, the GPS device <strong>cannot be reinstalled</strong> without a new order. The device will be taken back. This action is <strong>permanent</strong>.
+    </div>
+  </div>
+</div>
+<?php elseif($consentType==='demo'): ?>
+<div class="card">
+  <div class="card-hd" style="background:#f0eaf8;color:#5b2d8e">📱 Demonstration Visit</div>
+  <div class="card-body">
+    <div class="price-box" style="background:#e8f5ec;border-color:#1a7a3a">
+      <div class="price-label" style="color:#1a7a3a">Demonstration Charge</div>
+      <div class="price-amount" style="color:#1a7a3a">FREE</div>
+      <div class="price-mode" style="color:#2d6a4f">No installation — demonstration only</div>
+    </div>
+    <div style="background:#f0eaf8;border:1.5px solid #5b2d8e;border-radius:8px;padding:12px 14px;margin-top:10px;font-size:12px;color:#5b2d8e;line-height:1.8">
+      📌 This is a <strong>demonstration only</strong>. No GPS will be installed. There is <strong>no obligation to purchase</strong>.
+    </div>
+  </div>
+</div>
+<?php else: ?>
 <div class="card">
   <div class="card-hd">💰 Payment Confirmation</div>
   <div class="card-body">
@@ -211,11 +320,11 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:#1a1f2e;min-heig
     </div>
     <p style="font-size:12px;color:#4a5568;line-height:1.7;margin-top:8px">
       This amount has been agreed upon before the installation. As per our
-      <strong>Payment Terms &amp; Recovery Rights</strong>, failure to pay after
-      installation gives BharatGPS the right to recover the GPS device.
+      <strong>Payment Terms &amp; Recovery Rights</strong>, failure to pay after installation gives BharatGPS the right to recover the GPS device.
     </p>
   </div>
 </div>
+<?php endif; ?>
 
 <div class="card">
   <div class="card-hd">📄 Terms & Conditions — Please Read</div>
@@ -280,12 +389,48 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:#1a1f2e;min-heig
         <input type="checkbox" name="chk_terms" id="chk_terms">
         <label for="chk_terms">I have <strong>read and understood</strong> all the Terms &amp; Conditions above, including Warranty Policy, Installation terms, Refund Policy, and Payment Recovery Rights.</label>
       </div>
+      <?php if($consentType==='troubleshoot'): ?>
+      <div class="chk-item" onclick="this.querySelector('input').click()">
+        <input type="checkbox" name="chk_pay" id="chk_pay">
+        <label for="chk_pay">I confirm my <strong>vehicle will be available and accessible</strong> when the technician arrives. I understand that if the vehicle is unavailable, a <strong>₹300 visit charge</strong> will apply.</label>
+      </div>
+      <?php elseif($consentType==='v2v'): ?>
+      <div class="chk-item" onclick="this.querySelector('input').click()">
+        <input type="checkbox" name="chk_pay" id="chk_pay">
+        <label for="chk_pay">I confirm <strong>both vehicles will be available</strong> and I will pay <strong>₹<?=$price?></strong><?php if($payMode): ?> via <strong><?=$payMode?></strong><?php endif; ?> to the technician.</label>
+      </div>
+      <?php elseif($consentType==='readding'): ?>
+      <div class="chk-item" onclick="this.querySelector('input').click()">
+        <input type="checkbox" name="chk_pay" id="chk_pay">
+        <label for="chk_pay">I confirm my <strong>vehicle will be available and running</strong> and I will pay <strong>₹<?=$price?></strong><?php if($payMode): ?> via <strong><?=$payMode?></strong><?php endif; ?> to the technician.</label>
+      </div>
+      <?php elseif($consentType==='remove'): ?>
+      <div class="chk-item" onclick="this.querySelector('input').click()">
+        <input type="checkbox" name="chk_pay" id="chk_pay">
+        <label for="chk_pay">I confirm my <strong>vehicle will be available</strong> for GPS removal and I understand this is <strong>permanent</strong> — the device will be taken back.</label>
+      </div>
+      <?php elseif($consentType==='demo'): ?>
+      <div class="chk-item" onclick="this.querySelector('input').click()">
+        <input type="checkbox" name="chk_pay" id="chk_pay">
+        <label for="chk_pay">I confirm I will be <strong>available at the location</strong> for the demonstration. I understand <strong>no GPS will be installed</strong> during this visit.</label>
+      </div>
+      <?php else: ?>
       <div class="chk-item" onclick="this.querySelector('input').click()">
         <input type="checkbox" name="chk_pay" id="chk_pay">
         <label for="chk_pay">I confirm that I will pay <strong>₹<?=$price?></strong><?php if($payMode): ?> via <strong><?=$payMode?></strong><?php endif; ?> <strong>immediately after installation</strong>.</label>
       </div>
+      <?php endif; ?>
       <button type="button" id="consent-btn" class="btn-submit" onclick="submitConsent()">
-        ✅ I Agree — Confirm &amp; Proceed for Installation
+        <?php
+        $btnLabels = [
+          'troubleshoot' => '✅ I Agree — Vehicle Will Be Available',
+          'v2v'          => '✅ I Agree — Both Vehicles Will Be Available',
+          'readding'     => '✅ I Agree — Confirm Re-Adding Service',
+          'remove'       => '✅ I Agree — Confirm GPS Removal',
+          'demo'         => '✅ I Agree — I Will Be Available for Demo',
+        ];
+        echo $btnLabels[$consentType] ?? '✅ I Agree — Confirm &amp; Proceed for Installation';
+        ?>
       </button>
       <p style="font-size:11px;color:#8a9ab0;text-align:center;margin-top:12px;line-height:1.6">
         By submitting this form, you provide your digital consent.<br>
