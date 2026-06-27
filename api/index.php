@@ -719,7 +719,8 @@ case 'get_daily_report':
         $summary = [
             'tasks_created'  => $q($pdo,"SELECT COUNT(*) FROM tasks WHERE DATE(created_at)=?",[$date])->fetchColumn(),
             'installed'      => $q($pdo,"SELECT COUNT(*) FROM task_device_installs WHERE DATE(saved_at)=? AND gps_serial_no IS NOT NULL",[$date])->fetchColumn(),
-            'cash_collected' => $q($pdo,"SELECT COALESCE(SUM(amount_collected),0) FROM tasks WHERE DATE(updated_at)=? AND amount_collected>0",[$date])->fetchColumn(),
+            // Cash collected today = tasks CLOSED today with payment (management confirmed)
+            'cash_collected' => $q($pdo,"SELECT COALESCE(SUM(amount_collected),0) FROM tasks WHERE DATE(closed_at)=? AND amount_collected>0",[$date])->fetchColumn(),
             'pending_tasks'  => $q($pdo,"SELECT COUNT(*) FROM tasks WHERE task_status IN ('Open','In Progress','Task Pending')")->fetchColumn(),
             'urgent_tasks'   => $q($pdo,"SELECT COUNT(*) FROM tasks WHERE task_status IN ('Open','In Progress','Task Pending') AND (is_urgent=1 OR created_at <= DATE_SUB(NOW(), INTERVAL 24 HOUR))")->fetchColumn(),
         ];
@@ -736,12 +737,14 @@ case 'get_daily_report':
                 'activities'=> intval($q($pdo,"SELECT COUNT(*) FROM task_activities a JOIN tasks t ON a.task_id=t.id WHERE t.assigned_to=? AND DATE(a.created_at)=?",[$tid,$date])->fetchColumn()),
                 'visited'   => intval($q($pdo,"SELECT COUNT(DISTINCT a.task_id) FROM task_activities a JOIN tasks t ON a.task_id=t.id WHERE t.assigned_to=? AND DATE(a.created_at)=? AND (a.remark LIKE ? OR a.remark LIKE ?)",[$tid,$date,'%Visited%','%Called%'])->fetchColumn()),
                 'installed' => intval($q($pdo,"SELECT COUNT(*) FROM task_device_installs di JOIN tasks t ON di.task_id=t.id WHERE t.assigned_to=? AND DATE(di.saved_at)=? AND di.gps_serial_no IS NOT NULL",[$tid,$date])->fetchColumn()),
-                'collected' => floatval($q($pdo,"SELECT COALESCE(SUM(t.amount_collected),0) FROM tasks t WHERE t.assigned_to=? AND DATE(t.updated_at)=? AND t.amount_collected>0",[$tid,$date])->fetchColumn()),
+                // Collected = tasks closed today by this technician (management confirmed)
+                'collected' => floatval($q($pdo,"SELECT COALESCE(SUM(t.amount_collected),0) FROM tasks t WHERE t.assigned_to=? AND DATE(t.closed_at)=? AND t.amount_collected>0",[$tid,$date])->fetchColumn()),
             ];
         }
 
         // ── Payment summary ────────────────────────────────────
-        $payRows            = $q($pdo,"SELECT payment_mode, SUM(amount_collected) as total, COUNT(*) as cnt FROM tasks WHERE DATE(updated_at)=? AND amount_collected>0 GROUP BY payment_mode",[$date])->fetchAll();
+        // Only tasks CLOSED today = management confirmed payment received
+        $payRows            = $q($pdo,"SELECT payment_mode, SUM(amount_collected) as total, COUNT(*) as cnt FROM tasks WHERE DATE(closed_at)=? AND amount_collected>0 GROUP BY payment_mode",[$date])->fetchAll();
         $cashPendingDeposit = $q($pdo,"SELECT COALESCE(SUM(amount_collected),0) FROM tasks WHERE cash_deposit_status='pending' AND payment_mode='Cash'")->fetchColumn();
         $balancePending     = $q($pdo,"SELECT COALESCE(SUM(price_to_collect - amount_collected),0) FROM tasks WHERE task_status NOT IN ('Closed','Cancelled') AND price_to_collect > amount_collected + 15")->fetchColumn();
 
