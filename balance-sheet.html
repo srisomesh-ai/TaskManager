@@ -145,7 +145,6 @@ tr:hover td{background:#f7f9fc}
     </div>
     <button class="bs-btn" onclick="clearFilters()">✕ Clear</button>
     <button class="bs-btn bs-btn-p" onclick="exportXLS()">⬇️ Excel</button>
-    <button class="bs-btn" onclick="resyncAll()" style="background:#5b2d8e;color:#fff;border-color:#5b2d8e" title="Sync all payment data from task manager">🔄 Sync Payments</button>
     <button class="bs-btn bs-btn-g" id="bs-wa-btn" onclick="sendWA()" style="display:none">📱 WA Report</button>
   </div>
   <div class="bs-table-wrap">
@@ -797,15 +796,17 @@ function toast(msg){
 // ── INIT ─────────────────────────────────────────────
 setToday();
 loadEntries();
-// Auto-sync existing entries silently on load
-setTimeout(async()=>{
+
+// Auto-sync payment data every 5 minutes — silently in background
+async function silentSync(){
   try {
     const res = await bsApi('bs_resync_all',{},'POST',{}).catch(()=>({}));
-    if(res.success && res.updated > 0){
-      loadEntries(); // reload after sync
-    }
+    if(res.success && res.updated > 0) loadEntries();
   } catch(e){}
-}, 1500);
+}
+// Run once on load after 2s, then every 5 minutes
+setTimeout(silentSync, 2000);
+setInterval(silentSync, 5 * 60 * 1000);
 </script>
 </body>
 </html>
