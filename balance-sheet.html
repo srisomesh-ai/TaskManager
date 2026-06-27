@@ -155,7 +155,7 @@ tr:hover td{background:#f7f9fc}
           <th><input type="checkbox" id="chk-all" onchange="toggleAll(this)"></th>
           <th>#</th><th>Date</th><th>Type</th><th>Task No</th><th>Invoice</th>
           <th>Name on Server</th><th>Server</th><th>Model/Service</th><th>Qty</th>
-          <th>Total</th><th>Received</th><th>Pending</th><th>Mode</th><th>Status</th>
+          <th>Task Value</th><th>Pending</th><th>Received</th><th>Mode</th><th>Status</th>
           <th>Tech</th><th>Location</th><th>Actions</th>
         </tr></thead>
         <tbody id="bs-tbody"><tr><td colspan="18" style="text-align:center;padding:32px;color:var(--text3)">Loading…</td></tr></tbody>
@@ -492,8 +492,8 @@ function renderTable(){
       <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis">${e.name_on_server||'–'}</td>
       <td>${e.server_name||'–'}</td><td>${e.device_model||e.service_type||'–'}</td><td>${e.qty||'–'}</td>
       <td style="font-weight:700">₹${parseFloat(e.total_price||0).toLocaleString('en-IN')}</td>
+      <td style="color:${(+e.pending_payment||0)>0?'var(--red)':'var(--green)'};font-weight:700">₹${parseFloat(e.pending_payment||0).toLocaleString('en-IN')}</td>
       <td style="color:var(--green);font-weight:700">₹${parseFloat(e.payment_received||0).toLocaleString('en-IN')}</td>
-      <td style="color:${(+e.pending_payment||0)>0?'var(--red)':'var(--text3)'}">₹${parseFloat(e.pending_payment||0).toLocaleString('en-IN')}</td>
       <td>${e.payment_mode||'–'}</td><td>${ps}</td>
       <td>${e.technician_name||'–'}</td><td>${e.location||'–'}</td>
       <td>
