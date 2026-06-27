@@ -441,32 +441,33 @@ case 'update_task':
     if ($sets) { $vals[]=$id; $pdo->prepare("UPDATE tasks SET ".implode(',',$sets)." WHERE id=?")->execute($vals); }
 
     // ── SYNC PAYMENT TO BS ENTRY ─────────────────────────────────────
-    // Uses values from $body (what was just saved) — avoids stale DB read
+    // Received is ONLY confirmed when task is Closed (management approved)
     try {
-        $bsCheck = $pdo->prepare("SELECT bs_entry_id, price_to_collect, amount_collected, payment_mode FROM tasks WHERE id=?");
+        $bsCheck = $pdo->prepare("SELECT bs_entry_id, price_to_collect, amount_collected, payment_mode, task_status FROM tasks WHERE id=?");
         $bsCheck->execute([$id]); $bsRow = $bsCheck->fetch();
         if (!empty($bsRow['bs_entry_id'])) {
-            // Use new value from body if present, else use existing DB value
-            $recv3  = array_key_exists('amount_collected', $body)
-                        ? floatval($body['amount_collected'])
-                        : floatval($bsRow['amount_collected']??0);
-            $total3 = array_key_exists('price_to_collect', $body)
+            $total3  = array_key_exists('price_to_collect', $body)
                         ? floatval($body['price_to_collect'])
                         : floatval($bsRow['price_to_collect']??0);
-            $pmode3 = array_key_exists('payment_mode', $body)
+            $pmode3  = array_key_exists('payment_mode', $body)
                         ? $body['payment_mode']
                         : ($bsRow['payment_mode']??null);
-            $pend3  = max(0, $total3 - $recv3);
-            // Payment status logic
-            if ($total3 <= 0) {
-                $ps3 = 'pending'; // no price set yet
-            } elseif ($recv3 <= 0) {
-                $ps3 = 'pending';
-            } elseif ($recv3 >= $total3 - 15) {
-                $ps3 = 'paid';
+            $newStatus = $body['task_status'] ?? $bsRow['task_status'] ?? '';
+
+            // Only mark as received when management closes the task
+            if ($newStatus === 'Closed') {
+                $recv3 = array_key_exists('amount_collected', $body)
+                            ? floatval($body['amount_collected'])
+                            : floatval($bsRow['amount_collected']??0);
             } else {
-                $ps3 = 'partially_paid';
+                // Task not closed yet — keep received as 0, full amount pending
+                $recv3 = 0;
             }
+            $pend3 = max(0, $total3 - $recv3);
+            if ($total3 <= 0 || $recv3 <= 0)    $ps3 = 'pending';
+            elseif ($recv3 >= $total3 - 15)      $ps3 = 'paid';
+            else                                 $ps3 = 'partially_paid';
+
             $pdo->prepare("UPDATE balance_sheet_entries SET
                 payment_received=?, pending_payment=?, payment_status=?,
                 payment_mode=?, total_price=?, updated_at=NOW()
@@ -865,16 +866,12 @@ case 'save_device_install':
                 $qty2  = floatval($t2['device_qty']??1);
                 $total2= floatval($t2['price_to_collect']??0);
                 $unit2 = $qty2>0 ? $total2/$qty2 : $total2;
-                $recv2 = floatval($t2['amount_collected']??0);
-                $pend2 = max(0, $total2-$recv2);
                 $profile2 = $t2['profile']??'BGPT';
 
-                // Determine payment status
+                // Received = 0 at install time — only management closing confirms receipt
+                $recv2 = 0;
+                $pend2 = $total2;
                 $pStatus = 'pending';
-                if ($total2 <= 0)                $pStatus = 'pending';
-                elseif ($recv2 <= 0)             $pStatus = 'pending';
-                elseif ($recv2 >= $total2 - 15)  $pStatus = 'paid';
-                else                             $pStatus = 'partially_paid';
 
                 $pdo->prepare("INSERT INTO balance_sheet_entries
                     (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,
@@ -1087,14 +1084,15 @@ case 'bs_resync_all':
     if ($userRole !== 'admin') { http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
     try {
         // Get all BS entries that are linked to a task
-        $rows = $pdo->query("SELECT b.id, b.task_db_id, t.price_to_collect, t.amount_collected, t.payment_mode
+        $rows = $pdo->query("SELECT b.id, b.task_db_id, t.price_to_collect, t.amount_collected, t.payment_mode, t.task_status
             FROM balance_sheet_entries b
             JOIN tasks t ON b.task_db_id = t.id
             WHERE b.task_db_id IS NOT NULL")->fetchAll();
         $count = 0;
         foreach ($rows as $r) {
-            $recv  = floatval($r['amount_collected']??0);
             $total = floatval($r['price_to_collect']??0);
+            // Received only confirmed when task is Closed
+            $recv  = ($r['task_status']==='Closed') ? floatval($r['amount_collected']??0) : 0;
             $pend  = max(0, $total - $recv);
             if ($total <= 0 || $recv <= 0)  $ps = 'pending';
             elseif ($recv >= $total - 15)   $ps = 'paid';
