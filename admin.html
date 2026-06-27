@@ -88,6 +88,12 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:var(--text);padd
       <button class="btn btn-red" onclick="adminWipeData('tasks')">🗑️ Wipe All Task Data</button>
     </div>
 
+    <div class="section-box" style="background:var(--red-bg);border:1.5px solid var(--red)">
+      <div class="section-box-title" style="color:var(--red)">🗑️ Wipe All Balance Sheet Entries</div>
+      <div class="section-box-sub">Permanently deletes ALL balance sheet entries (Sales, License, all records). Cannot be undone.</div>
+      <button class="btn btn-red" onclick="wipeBs()">🗑️ Wipe Balance Sheet</button>
+    </div>
+
     <div class="section-box" style="background:var(--amber-bg);border:1.5px solid var(--amber)">
       <div class="section-box-title" style="color:var(--amber)">🔄 Set Task ID Start Number</div>
       <div class="section-box-sub">Set the number your next task ID should start from. Example: enter <strong>85</strong> and next task will be <strong>ID-2026-0085</strong>.</div>
@@ -281,6 +287,15 @@ async function saveUser(){
   } else {
     toast('❌ '+(res.error||'Failed to save user'));
   }
+}
+
+async function wipeBs(){
+  if(!confirm('⚠️ This will permanently delete ALL balance sheet entries.\n\nThis CANNOT be undone. Are you absolutely sure?')) return;
+  const confirm2 = prompt('Type DELETE to confirm:');
+  if(confirm2 !== 'DELETE'){ toast('Cancelled — type DELETE exactly'); return; }
+  const res = await admApi('admin_wipe',{},'POST',{type:'balance_sheet', confirm:'DELETE'}).catch(()=>({}));
+  if(res.success) toast('✅ '+res.message);
+  else toast('❌ '+(res.error||'Failed'));
 }
 
 async function setTaskCounter(){

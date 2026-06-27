@@ -626,6 +626,11 @@ case 'update_task':
 case 'delete_task':
     if ($userRole!=='admin') { http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
     $id=intval($body['id']??$_GET['id']??0);
+    // Delete all linked data
+    $pdo->prepare("DELETE FROM task_activities WHERE task_id=?")->execute([$id]);
+    $pdo->prepare("DELETE FROM task_device_installs WHERE task_id=?")->execute([$id]);
+    try { $pdo->prepare("DELETE FROM balance_sheet_entries WHERE task_db_id=?")->execute([$id]); } catch(Exception $e){}
+    try { $pdo->prepare("DELETE FROM blacklist_entries WHERE task_db_id=?")->execute([$id]); } catch(Exception $e){}
     $pdo->prepare("DELETE FROM tasks WHERE id=?")->execute([$id]);
     echo json_encode(['success'=>true]);
     break;
@@ -1640,10 +1645,13 @@ case 'admin_wipe':
             // Wipe in order (FK constraints)
             $pdo->exec("DELETE FROM task_device_installs");
             $pdo->exec("DELETE FROM task_activities");
-            // consent_token etc stored on tasks table
             try { $pdo->exec("DELETE FROM consent_logs"); } catch(Exception $e){}
+            try { $pdo->exec("DELETE FROM balance_sheet_entries WHERE task_db_id IS NOT NULL"); } catch(Exception $e){}
+            try { $pdo->exec("DELETE FROM blacklist_entries WHERE task_db_id IS NOT NULL"); } catch(Exception $e){}
             $pdo->exec("DELETE FROM tasks");
-            echo json_encode(['success'=>true,'message'=>'All tasks, activities and device installs deleted.']);
+            // Reset task ID offset
+            try { $pdo->exec("DELETE FROM app_settings WHERE key_name='task_id_offset'"); } catch(Exception $e){}
+            echo json_encode(['success'=>true,'message'=>'All tasks, activities, device installs and linked BS entries deleted.']);
         } elseif($type === 'reset_ids'){
             // Set task counter to a specific start number
             $startNum = intval($body['start_num'] ?? 1);
@@ -1658,6 +1666,14 @@ case 'admin_wipe':
             $pdo->prepare("INSERT INTO app_settings (key_name,key_value) VALUES ('task_id_offset',?) ON DUPLICATE KEY UPDATE key_value=VALUES(key_value)")->execute([$offset]);
             $nextId = 'ID-'.$year.'-'.str_pad($startNum, 4, '0', STR_PAD_LEFT);
             echo json_encode(['success'=>true,'message'=>"Task counter set. Next task will be $nextId.", 'next'=>$nextId]);
+        } elseif($type === 'balance_sheet'){
+            // Wipe ALL balance sheet entries
+            try {
+                $pdo->exec("DELETE FROM balance_sheet_entries");
+                echo json_encode(['success'=>true,'message'=>'All balance sheet entries deleted.']);
+            } catch(Exception $e){
+                echo json_encode(['error'=>'Could not delete: '.$e->getMessage()]);
+            }
         } else {
             echo json_encode(['error'=>'Unknown wipe type']);
         }
