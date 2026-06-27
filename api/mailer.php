@@ -338,42 +338,87 @@ function sendConsentRequest(array $task, string $techName): void {
     $BASE_URL   = 'https://salmon-goldfish-110661.hostingersite.com';
     $consentUrl = $BASE_URL . '/consent.php?token=' . urlencode($task['consent_token'] ?? '');
     $price      = number_format(floatval($task['price_to_collect'] ?? 0), 0);
+    $isFree     = floatval($task['price_to_collect'] ?? 0) == 0 || ($task['payment_mode']??'') === 'Free Service';
+
+    // Detect job type for correct wording
+    $jobRaw = strtolower($task['device_details'] ?? '');
+    if(strpos($jobRaw,'troubleshoot')!==false || strpos($jobRaw,'offline')!==false) {
+        $jobLabel    = 'Troubleshoot / Offline Fix';
+        $actionLine  = 'Our technician <strong>' . htmlspecialchars($techName) . '</strong> is coming to fix your GPS device and bring it back online.';
+        $actionTitle = '⚠️ Action Required — Please Confirm Your Availability';
+        $actionDesc  = 'This is a <strong>free service visit</strong>. Please confirm your vehicle will be available. If the vehicle is not available when the technician arrives, a <strong>₹300 visit charge</strong> will apply.';
+        $btnText     = '✅ Confirm Vehicle Availability';
+        $emailSubject= 'Action Required: Confirm GPS Troubleshoot Visit — ' . $task['task_id'];
+        $amountRow   = '<div class="row"><div class="label">Charge</div><div class="value" style="color:#1a7a3a">FREE (₹300 if vehicle unavailable)</div></div>';
+    } elseif(strpos($jobRaw,'vehicle to vehicle')!==false || strpos($jobRaw,'v2v')!==false) {
+        $jobLabel    = 'Vehicle to Vehicle Change';
+        $actionLine  = 'Our technician <strong>' . htmlspecialchars($techName) . '</strong> is coming to transfer your GPS device from your old vehicle to your new vehicle.';
+        $actionTitle = '⚠️ Action Required — Please Confirm & Pay';
+        $actionDesc  = 'Please ensure <strong>both vehicles are available</strong> at the time of visit and confirm your payment of <strong>&#8377;' . $price . '</strong>.';
+        $btnText     = '✅ Confirm & Accept V2V Change';
+        $emailSubject= 'Action Required: Confirm V2V Change — ' . $task['task_id'];
+        $amountRow   = '<div class="row"><div class="label">V2V Charge</div><div class="value highlight">&#8377;' . $price . '</div></div>';
+    } elseif(strpos($jobRaw,'re-adding')!==false || strpos($jobRaw,'re adding')!==false) {
+        $jobLabel    = 'Re-Adding Service';
+        $actionLine  = 'Our technician <strong>' . htmlspecialchars($techName) . '</strong> is coming to re-add your vehicle to the GPS server.';
+        $actionTitle = '⚠️ Action Required — Please Confirm & Pay';
+        $actionDesc  = 'Please ensure your <strong>vehicle is available and running</strong> and confirm your payment of <strong>&#8377;' . $price . '</strong>.';
+        $btnText     = '✅ Confirm Re-Adding Service';
+        $emailSubject= 'Action Required: Confirm Re-Adding Service — ' . $task['task_id'];
+        $amountRow   = '<div class="row"><div class="label">Service Charge</div><div class="value highlight">&#8377;' . $price . '</div></div>';
+    } elseif(strpos($jobRaw,'only remove')!==false || strpos($jobRaw,'remove only')!==false) {
+        $jobLabel    = 'GPS Device Removal';
+        $actionLine  = 'Our technician <strong>' . htmlspecialchars($techName) . '</strong> is coming to permanently remove your GPS device.';
+        $actionTitle = '⚠️ Action Required — Please Confirm Removal';
+        $actionDesc  = 'Please ensure your <strong>vehicle is available</strong>. Note: This action is <strong>permanent</strong> — the device will be taken back and cannot be reinstalled without a new order. <strong>No charge</strong> for removal.';
+        $btnText     = '✅ Confirm GPS Removal';
+        $emailSubject= 'Action Required: Confirm GPS Removal — ' . $task['task_id'];
+        $amountRow   = '<div class="row"><div class="label">Removal Charge</div><div class="value" style="color:#1a7a3a">FREE</div></div>';
+    } elseif(strpos($jobRaw,'demonstration')!==false || strpos($jobRaw,'demo')!==false) {
+        $jobLabel    = 'GPS Demonstration';
+        $actionLine  = 'Our technician <strong>' . htmlspecialchars($techName) . '</strong> is coming to demonstrate the BharatGPS system to you.';
+        $actionTitle = '✅ Confirm Your Availability';
+        $actionDesc  = 'This is a <strong>free demonstration</strong> — no GPS will be installed and there is <strong>no obligation to purchase</strong>. Please confirm you will be available at the location.';
+        $btnText     = '✅ Confirm I Will Be Available';
+        $emailSubject= 'Action Required: Confirm Demo Visit — ' . $task['task_id'];
+        $amountRow   = '<div class="row"><div class="label">Demo Charge</div><div class="value" style="color:#1a7a3a">FREE</div></div>';
+    } else {
+        // Default: GPS Installation
+        $jobLabel    = $task['device_details'] ?? 'GPS Installation';
+        $actionLine  = 'Your BharatGPS technician <strong>' . htmlspecialchars($techName) . '</strong> is ready to begin your <strong>' . htmlspecialchars($task['device_details'] ?? 'GPS') . '</strong> installation.';
+        $actionTitle = '⚠️ Action Required Before Installation Begins';
+        $actionDesc  = 'Please read and accept our Terms &amp; Conditions and confirm your payment of <strong style="font-size:18px;color:#1a7a3a">&#8377;' . $price . '</strong>. The technician will wait for your confirmation.';
+        $btnText     = '✅ Read T&C & Confirm Payment';
+        $emailSubject= 'Action Required: Confirm Your GPS Installation — ' . $task['task_id'];
+        $amountRow   = '<div class="row"><div class="label">Amount Agreed</div><div class="value highlight">&#8377;' . $price . '</div></div>';
+    }
 
     $emailContent = '
     <div class="greeting">Dear ' . htmlspecialchars($task['customer_name']) . ',</div>
-    <p style="font-size:14px;color:#4a5568;margin-bottom:16px">
-        Your BharatGPS technician <strong>' . htmlspecialchars($techName) . '</strong>
-        is ready to begin your <strong>' . htmlspecialchars($task['device_details'] ?? 'GPS') . '</strong> installation.
-    </p>
+    <p style="font-size:14px;color:#4a5568;margin-bottom:16px">' . $actionLine . '</p>
     <div style="background:#e8f5ec;border:2px solid #1a7a3a;border-radius:10px;padding:18px;margin-bottom:16px;text-align:center">
-        <div style="font-size:13px;font-weight:700;color:#1a7a3a;margin-bottom:8px">⚠️ Action Required Before Installation Begins</div>
-        <p style="font-size:13px;color:#1a1f2e;margin-bottom:14px;line-height:1.6">
-            Please read and accept our Terms &amp; Conditions and confirm your payment of
-            <strong style="font-size:18px;color:#1a7a3a">&#8377;' . $price . '</strong>.
-            The technician will wait for your confirmation.
-        </p>
+        <div style="font-size:13px;font-weight:700;color:#1a7a3a;margin-bottom:8px">' . $actionTitle . '</div>
+        <p style="font-size:13px;color:#1a1f2e;margin-bottom:14px;line-height:1.6">' . $actionDesc . '</p>
         <a href="' . $consentUrl . '"
-           style="display:inline-block;background:#1a7a3a;color:#fff;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:800;text-decoration:none">
-           &#10003; Read T&amp;C &amp; Confirm Payment
+           style="display:inline-block;background:#0E5C5C;color:#fff;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:800;text-decoration:none">
+           ' . $btnText . '
         </a>
         <p style="font-size:11px;color:#8a9ab0;margin-top:10px;word-break:break-all">
-            Can&#39;t click the button? Copy this link: ' . $consentUrl . '
+            Can't click? Copy this link: ' . $consentUrl . '
         </p>
     </div>
     <div class="details">
         <div class="row"><div class="label">Task ID</div><div class="value blue">' . $task['task_id'] . '</div></div>
-        <div class="row"><div class="label">Service</div><div class="value">' . htmlspecialchars($task['device_details'] ?? 'GPS') . '</div></div>
-        <div class="row"><div class="label">Amount Agreed</div><div class="value highlight">&#8377;' . $price . '</div></div>
+        <div class="row"><div class="label">Service</div><div class="value">' . htmlspecialchars($jobLabel) . '</div></div>
+        ' . $amountRow . '
         <div class="row"><div class="label">Technician</div><div class="value">' . htmlspecialchars($techName) . '</div></div>
     </div>
-    <p style="font-size:12px;color:#8a9ab0;margin-top:16px">
-        For help call <strong>9849849824</strong>
-    </p>';
+    <p style="font-size:12px;color:#8a9ab0;margin-top:16px">For help call <strong>9849849824</strong></p>';
 
     sendMail(
         $task['email'],
         $task['customer_name'],
-        'Action Required: Confirm Your GPS Installation — ' . $task['task_id'],
+        $emailSubject,
         emailTemplate($emailContent)
     );
 }
