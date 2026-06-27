@@ -2442,9 +2442,25 @@ let _pendingPayMode = null;
 
 function selectPayMode(mode){
   if(mode==='Free Service'){
-    // Zero out price for free service
-    const priceEl = document.getElementById('fm-unit-price');
-    if(priceEl){ priceEl.value='0'; if(typeof setModalJobPrice==='function') updateDrawerTotals(); }
+    // Free service — no charges, skip modal entirely
+    // Zero out all price fields
+    ['fm-price','fm-unit-price','fm-collect-price'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el) el.value='0';
+    });
+    // Set hidden paymode value
+    document.getElementById('fm-paymode').value='Free Service';
+    document.getElementById('fm-pay-reminder').value='';
+    // Mark button as selected
+    document.querySelectorAll('.pay-mode-opt').forEach(b=>b.classList.remove('selected'));
+    document.getElementById('free-service-btn')?.classList.add('selected');
+    // Show green confirmed banner
+    const cEl=document.getElementById('fm-pay-confirmed');
+    const cTxt=document.getElementById('fm-pay-confirmed-txt');
+    if(cEl){ cEl.style.display='flex'; }
+    if(cTxt){ cTxt.textContent='🎁 Free Service — No charges applicable'; }
+    window._payDeferredMeta = null;
+    return; // skip modal
   }
   _pendingPayMode = mode;
   const {price, qty, gst, total, gstTotal} = getDrawerTotal();
