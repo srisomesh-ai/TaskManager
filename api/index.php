@@ -1278,6 +1278,43 @@ case 'clear_blacklist':
     break;
 
 // ============================================================
+// SAVE JOB OUTCOME — Troubleshoot / Demo / Remove / V2V
+// ============================================================
+case 'save_job_outcome':
+    if(!in_array($userRole,['admin','assigner','technician'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    $jid   = intval($body['task_id']??0);
+    $jtype = $body['job_type']??'';
+    if(!$jid){ echo json_encode(['error'=>'Task ID required']); break; }
+
+    // Build remark from submitted fields
+    $parts = [];
+    $fields = $body['fields'] ?? [];
+    foreach($fields as $label => $val){
+        if($val!=='' && $val!==null) $parts[] = "**{$label}:** {$val}";
+    }
+    $remark = ($body['summary']??'') . "
+" . implode("
+", $parts);
+
+    // Log activity
+    $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'tech')")
+        ->execute([$jid, $userId, trim($remark)]);
+
+    // Close the task
+    $newStatus = $body['close_task']??false ? 'Awaiting Approval' : 'In Progress';
+    $pdo->prepare("UPDATE tasks SET task_status=?, updated_at=NOW() WHERE id=?")
+        ->execute([$newStatus, $jid]);
+
+    // For removal — save serial number
+    if(!empty($body['removed_serial'])){
+        $pdo->prepare("UPDATE tasks SET gps_serial_no=?, updated_at=NOW() WHERE id=?")
+            ->execute([$body['removed_serial'], $jid]);
+    }
+
+    echo json_encode(['success'=>true, 'status'=>$newStatus]);
+    break;
+
+// ============================================================
 // FINANCE PORTAL ACTIONS
 // ============================================================
 case 'verify_pin':
