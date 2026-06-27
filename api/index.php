@@ -679,7 +679,7 @@ case 'get_daily_report':
         // ── Summary ──────────────────────────────────────────
         $summary = [
             'tasks_created'  => $q($pdo,"SELECT COUNT(*) FROM tasks WHERE DATE(created_at)=?",[$date])->fetchColumn(),
-            'installed'      => $q($pdo,"SELECT COUNT(*) FROM task_device_installs WHERE DATE(created_at)=? AND gps_serial_no IS NOT NULL",[$date])->fetchColumn(),
+            'installed'      => $q($pdo,"SELECT COUNT(*) FROM task_device_installs WHERE DATE(saved_at)=? AND gps_serial_no IS NOT NULL",[$date])->fetchColumn(),
             'cash_collected' => $q($pdo,"SELECT COALESCE(SUM(amount_collected),0) FROM tasks WHERE DATE(updated_at)=? AND amount_collected>0",[$date])->fetchColumn(),
             'pending_tasks'  => $q($pdo,"SELECT COUNT(*) FROM tasks WHERE task_status IN ('Open','In Progress','Task Pending')")->fetchColumn(),
             'urgent_tasks'   => $q($pdo,"SELECT COUNT(*) FROM tasks WHERE task_status IN ('Open','In Progress','Task Pending') AND (is_urgent=1 OR created_at <= DATE_SUB(NOW(), INTERVAL 24 HOUR))")->fetchColumn(),
@@ -696,7 +696,7 @@ case 'get_daily_report':
                 'assigned'  => intval($q($pdo,"SELECT COUNT(*) FROM tasks WHERE assigned_to=? AND task_status NOT IN ('Closed','Cancelled')",[$tid])->fetchColumn()),
                 'activities'=> intval($q($pdo,"SELECT COUNT(*) FROM task_activities a JOIN tasks t ON a.task_id=t.id WHERE t.assigned_to=? AND DATE(a.created_at)=?",[$tid,$date])->fetchColumn()),
                 'visited'   => intval($q($pdo,"SELECT COUNT(DISTINCT a.task_id) FROM task_activities a JOIN tasks t ON a.task_id=t.id WHERE t.assigned_to=? AND DATE(a.created_at)=? AND (a.remark LIKE ? OR a.remark LIKE ?)",[$tid,$date,'%Visited%','%Called%'])->fetchColumn()),
-                'installed' => intval($q($pdo,"SELECT COUNT(*) FROM task_device_installs di JOIN tasks t ON di.task_id=t.id WHERE t.assigned_to=? AND DATE(di.created_at)=? AND di.gps_serial_no IS NOT NULL",[$tid,$date])->fetchColumn()),
+                'installed' => intval($q($pdo,"SELECT COUNT(*) FROM task_device_installs di JOIN tasks t ON di.task_id=t.id WHERE t.assigned_to=? AND DATE(di.saved_at)=? AND di.gps_serial_no IS NOT NULL",[$tid,$date])->fetchColumn()),
                 'collected' => floatval($q($pdo,"SELECT COALESCE(SUM(t.amount_collected),0) FROM tasks t WHERE t.assigned_to=? AND DATE(t.updated_at)=? AND t.amount_collected>0",[$tid,$date])->fetchColumn()),
             ];
         }
