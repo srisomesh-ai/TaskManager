@@ -73,20 +73,17 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
 
         $pdo->prepare("UPDATE tasks SET customer_consent_at=?,customer_consent_name=?,customer_consent_mobile=? WHERE id=?")
             ->execute([$now,$cName,$cMobile,$task['id']]);
+        // Build activity remark based on consent type
+        $actMsgs = [
+            'troubleshoot' => "✅ Free service consent — {$cName} ({$cMobile}) confirmed vehicle availability. ₹300 if unavailable.",
+            'v2v'          => "✅ V2V consent — {$cName} ({$cMobile}) confirmed both vehicles available. Pay ₹".number_format(floatval($task['price_to_collect']??0),0),
+            'readding'     => "✅ Re-adding consent — {$cName} ({$cMobile}) confirmed vehicle available. Pay ₹".number_format(floatval($task['price_to_collect']??0),0),
+            'remove'       => "✅ GPS removal consent — {$cName} ({$cMobile}) confirmed permanent removal.",
+            'demo'         => "✅ Demo consent — {$cName} ({$cMobile}) confirmed availability.",
+        ];
+        $actRemark = $actMsgs[$consentType] ?? "✅ Customer consent received — {$cName} ({$cMobile}) agreed to T&C and payment of ₹".number_format(floatval($task['price_to_collect']??0),0);
         $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,0,?,'system')")
-            ->execute([$task['id'], (isset([
-    'troubleshoot' => "✅ Free service consent — {$cName} ({$cMobile}) confirmed vehicle availability. ₹300 if unavailable.",
-    'v2v'          => "✅ V2V consent — {$cName} ({$cMobile}) confirmed both vehicles available. Pay ₹".number_format(floatval($task['price_to_collect']??0),0),
-    'readding'     => "✅ Re-adding consent — {$cName} ({$cMobile}) confirmed vehicle available. Pay ₹".number_format(floatval($task['price_to_collect']??0),0),
-    'remove'       => "✅ GPS removal consent — {$cName} ({$cMobile}) confirmed permanent removal.",
-    'demo'         => "✅ Demo consent — {$cName} ({$cMobile}) confirmed availability.",
-][$consentType]) ? [
-    'troubleshoot' => "✅ Free service consent — {$cName} ({$cMobile}) confirmed vehicle availability. ₹300 if unavailable.",
-    'v2v'          => "✅ V2V consent — {$cName} ({$cMobile}) confirmed both vehicles available. Pay ₹".number_format(floatval($task['price_to_collect']??0),0),
-    'readding'     => "✅ Re-adding consent — {$cName} ({$cMobile}) confirmed vehicle available. Pay ₹".number_format(floatval($task['price_to_collect']??0),0),
-    'remove'       => "✅ GPS removal consent — {$cName} ({$cMobile}) confirmed permanent removal.",
-    'demo'         => "✅ Demo consent — {$cName} ({$cMobile}) confirmed availability.",
-][$consentType] : "✅ Customer consent received — {$cName} ({$cMobile}) agreed to T&C and payment of ₹".number_format(floatval($task['price_to_collect']??0),0)]);
+            ->execute([$task['id'], $actRemark]);
 
         // ── Step 2: Trigger background email via non-blocking HTTP ───────
         // We call a separate endpoint that handles SMTP — fire and forget
