@@ -5,22 +5,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>Balance Sheet — BharatGPS</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script>
-// Supabase config
-const SB_URL  = 'https://coyijtshptojuithfswt.supabase.co';
-const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNveWlqdHNocHRvanVpdGhmc3d0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI3MTY0NDAsImV4cCI6MjA2ODI5MjQ0MH0.LJMSGy0LlFhHNmi2R6-hv8eSLOrs6kHticgAk3dPFMs';
-
-async function sbReq(path, opts={}){
-  const r = await fetch(SB_URL+'/rest/v1/'+path, {
-    ...opts,
-    headers:{ 'apikey':SB_KEY, 'Authorization':'Bearer '+SB_KEY,
-              'Content-Type':'application/json', 'Prefer':'return=representation', ...(opts.headers||{}) }
-  });
-  const json = await r.json();
-  if(!r.ok) throw new Error(json.message||JSON.stringify(json));
-  return json;
-}
-</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -31,1147 +15,776 @@ async function sbReq(path, opts={}){
   --border:#e2e8f0;--surface:#fff;--surface2:#f7f8fa;
   --shadow:0 2px 10px rgba(0,0,0,.08);
 }
-body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:var(--text);min-height:100vh}
-/* ── Auth ─────────────────────────────────────────────── */
-#auth-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:16px;background:linear-gradient(135deg,#0E5C5C 0%,#137272 50%,#0B4A4A 100%)}
-.auth-card{background:#fff;border-radius:16px;padding:36px 32px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.25);text-align:center}
-.auth-logo{height:56px;width:auto;margin-bottom:16px;background:#fff;padding:6px 14px;border-radius:10px;box-shadow:var(--shadow)}
-.auth-title{font-size:20px;font-weight:800;color:var(--text);margin-bottom:4px}
-.auth-sub{font-size:13px;color:var(--text3);margin-bottom:24px}
-.auth-input{width:100%;padding:13px 16px;border:2px solid var(--border);border-radius:9px;font-size:20px;font-family:monospace;text-align:center;letter-spacing:6px;outline:none;transition:border .2s}
-.auth-input:focus{border-color:var(--accent)}
-.auth-btn{width:100%;margin-top:14px;padding:13px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:9px;font-size:15px;font-weight:800;cursor:pointer}
-.auth-error{color:var(--red);font-size:13px;margin-top:10px;display:none}
-/* ── Profile selector ─────────────────────────────────── */
-#profile-screen{display:none;align-items:center;justify-content:center;min-height:100vh;padding:16px;background:linear-gradient(135deg,#0E5C5C,#137272)}
-.profile-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:520px;width:100%}
-.profile-card{background:#fff;border-radius:14px;padding:28px 20px;text-align:center;cursor:pointer;box-shadow:0 8px 32px rgba(0,0,0,.15);transition:transform .2s,box-shadow .2s;border:2px solid transparent}
-.profile-card:hover{transform:translateY(-4px);box-shadow:0 16px 48px rgba(0,0,0,.2);border-color:var(--accent)}
-.profile-icon{font-size:36px;margin-bottom:12px}
-.profile-name{font-size:13px;font-weight:800;color:var(--text)}
-.profile-sub{font-size:11px;color:var(--text3);margin-top:4px}
-.profile-hd{text-align:center;color:#fff;margin-bottom:24px}
-.profile-hd h2{font-size:22px;font-weight:800}
-.profile-hd p{font-size:13px;opacity:.7;margin-top:4px}
-/* ── Main app ─────────────────────────────────────────── */
-#app-screen{display:none}
-.topbar{background:linear-gradient(135deg,var(--accent),var(--accent2));padding:12px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100}
-.topbar-logo{height:36px;width:auto;background:#fff;padding:4px 10px;border-radius:7px}
-.topbar-title{flex:1;color:#fff;font-size:15px;font-weight:800}
-.topbar-profile{background:rgba(255,255,255,.2);color:#fff;font-size:12px;font-weight:700;padding:5px 12px;border-radius:20px;border:none;cursor:pointer}
-.topbar-btn{background:rgba(255,255,255,.15);color:#fff;border:1.5px solid rgba(255,255,255,.3);padding:5px 12px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer}
-/* ── Tabs ─────────────────────────────────────────────── */
-.tab-bar{background:#fff;border-bottom:2px solid var(--border);display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch}
-.tab-btn{padding:13px 20px;border:none;border-bottom:3px solid transparent;background:none;font-size:13px;font-weight:700;color:var(--text3);cursor:pointer;white-space:nowrap;transition:all .15s}
-.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
-.tab-btn:hover{color:var(--accent2)}
-.tab-pane{display:none;padding:20px;max-width:1200px;margin:0 auto}
-.tab-pane.active{display:block}
-/* ── Stat cards ───────────────────────────────────────── */
-.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px}
-.stat-card-bs{background:#fff;border-radius:10px;padding:16px;box-shadow:var(--shadow);text-align:center}
-.stat-card-bs .val{font-size:18px;font-weight:900;margin-bottom:4px}
-.stat-card-bs .lbl{font-size:11px;color:var(--text3);font-weight:600}
-/* ── Toolbar ──────────────────────────────────────────── */
-.toolbar{background:#fff;border-radius:10px;padding:14px 16px;margin-bottom:16px;box-shadow:var(--shadow);display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
-.tb-group{display:flex;flex-direction:column;gap:4px}
-.tb-label{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px}
-.tb-input,.tb-select{padding:8px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;outline:none;background:var(--surface)}
-.tb-input:focus,.tb-select:focus{border-color:var(--accent)}
-.tb-btn{padding:8px 14px;border-radius:7px;border:1.5px solid var(--border);font-size:12px;font-weight:700;cursor:pointer;background:var(--surface2);color:var(--text);transition:all .15s}
-.tb-btn:hover{border-color:var(--accent);color:var(--accent)}
-.tb-btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
-.tb-btn-primary:hover{background:var(--accent2)}
-.tb-btn-green{background:var(--green);color:#fff;border-color:var(--green)}
-/* ── Table ────────────────────────────────────────────── */
-.table-wrap{background:#fff;border-radius:10px;box-shadow:var(--shadow);overflow:hidden}
-.table-scroll{overflow-x:auto;max-height:60vh}
+body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:var(--text)}
+/* topbar */
+.bs-topbar{background:linear-gradient(135deg,var(--accent),var(--accent2));padding:11px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.bs-topbar-logo{height:32px;width:auto;background:#fff;padding:3px 9px;border-radius:6px}
+.bs-topbar-title{flex:1;color:#fff;font-size:14px;font-weight:800}
+.bs-profile-sel{padding:5px 10px;border:1.5px solid rgba(255,255,255,.4);border-radius:6px;background:rgba(255,255,255,.15);color:#fff;font-size:12px;font-weight:700;cursor:pointer;outline:none}
+.bs-profile-sel option{color:var(--text);background:#fff}
+/* tabs */
+.bs-tabbar{background:#fff;border-bottom:2px solid var(--border);display:flex;flex-shrink:0}
+.bs-tab{padding:11px 18px;border:none;border-bottom:3px solid transparent;background:none;font-size:13px;font-weight:700;color:var(--text3);cursor:pointer;white-space:nowrap;transition:all .15s}
+.bs-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+/* pane */
+.bs-pane{display:none;padding:16px;overflow-y:auto;flex:1}
+.bs-pane.active{display:block}
+/* stats */
+.bs-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:14px}
+.bs-stat{background:#fff;border-radius:8px;padding:12px;box-shadow:var(--shadow);text-align:center;border-top:3px solid var(--accent)}
+.bs-stat .v{font-size:17px;font-weight:900;line-height:1;margin-bottom:3px}
+.bs-stat .l{font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase}
+/* toolbar */
+.bs-toolbar{background:#fff;border-radius:8px;padding:12px 14px;margin-bottom:12px;box-shadow:var(--shadow);display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+.bs-tb-grp{display:flex;flex-direction:column;gap:3px}
+.bs-tb-lbl{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px}
+.bs-tb-in,.bs-tb-sel{padding:7px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;outline:none;background:#fff}
+.bs-tb-in:focus,.bs-tb-sel:focus{border-color:var(--accent)}
+.bs-btn{padding:7px 12px;border-radius:6px;border:1.5px solid var(--border);font-size:12px;font-weight:700;cursor:pointer;background:var(--surface2);color:var(--text);white-space:nowrap}
+.bs-btn:hover{border-color:var(--accent);color:var(--accent)}
+.bs-btn-p{background:var(--accent);color:#fff;border-color:var(--accent)}
+.bs-btn-p:hover{background:var(--accent2)}
+.bs-btn-g{background:var(--green);color:#fff;border-color:var(--green)}
+/* table */
+.bs-table-wrap{background:#fff;border-radius:8px;box-shadow:var(--shadow);overflow:hidden}
+.bs-table-scroll{overflow-x:auto;max-height:55vh}
 table{width:100%;border-collapse:collapse;font-size:12px}
 thead tr{background:var(--surface2);position:sticky;top:0;z-index:5}
-th{padding:10px 12px;text-align:left;font-weight:700;font-size:11px;text-transform:uppercase;color:var(--text3);white-space:nowrap;border-bottom:2px solid var(--border)}
-td{padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+th{padding:9px 10px;text-align:left;font-weight:700;font-size:10px;text-transform:uppercase;color:var(--text3);white-space:nowrap;border-bottom:2px solid var(--border)}
+td{padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
 tr:hover td{background:#f7f9fc}
-.badge-paid{background:#e8f5ec;color:#1a7a3a;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700}
-.badge-pend{background:#fff3e0;color:#e07b00;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700}
-.badge-full{background:#fdecea;color:#c0392b;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700}
-.badge-sales{background:#e8f0fb;color:#1a56a0;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700}
-.badge-lic{background:#f0eaf8;color:#5b2d8e;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700}
-.action-btn{background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:5px;font-size:14px;transition:background .15s}
-.action-btn:hover{background:var(--surface2)}
-.pagination{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid var(--border);font-size:13px;color:var(--text3)}
-.pg-btn{padding:6px 12px;border:1.5px solid var(--border);border-radius:6px;background:var(--surface);cursor:pointer;font-size:12px;font-weight:700}
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700}
+.badge-paid{background:var(--green-bg);color:var(--green)}
+.badge-part{background:var(--amber-bg);color:var(--amber)}
+.badge-pend{background:var(--red-bg);color:var(--red)}
+.badge-sales{background:var(--blue-bg);color:var(--blue)}
+.badge-lic{background:var(--purple-bg);color:var(--purple)}
+.pg-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--border);font-size:12px;color:var(--text3)}
+.pg-btn{padding:5px 10px;border:1.5px solid var(--border);border-radius:5px;background:#fff;cursor:pointer;font-size:11px;font-weight:700}
 .pg-btn:disabled{opacity:.4;cursor:not-allowed}
-/* ── Forms ────────────────────────────────────────────── */
-.form-card{background:#fff;border-radius:10px;padding:20px;box-shadow:var(--shadow);margin-bottom:16px}
-.form-card-title{font-size:14px;font-weight:800;color:var(--text);margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border)}
-.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
-.form-group{display:flex;flex-direction:column;gap:5px}
-.form-group label{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px}
-.form-group input,.form-group select,.form-group textarea{padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;transition:border .2s}
-.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--accent)}
-.form-group input[readonly]{background:var(--surface2);color:var(--text2)}
-.form-group.span2{grid-column:span 2}
-.form-group.span4{grid-column:1/-1}
-.pending-section{background:#fff3e0;border:1.5px solid #e07b00;border-radius:8px;padding:14px;margin-top:4px}
-.pending-section-title{font-size:12px;font-weight:800;color:#e07b00;margin-bottom:12px}
-.submit-row{display:flex;gap:10px;margin-top:16px}
-.submit-btn{padding:12px 28px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:800;cursor:pointer}
-.reset-btn{padding:12px 20px;background:var(--surface2);color:var(--text);border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-weight:700;cursor:pointer}
-/* ── Modal ────────────────────────────────────────────── */
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;padding:16px}
-.modal-overlay.open{display:flex}
-.modal-box{background:#fff;border-radius:14px;width:100%;max-width:600px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
-.modal-hd{background:var(--accent);color:#fff;padding:16px 20px;border-radius:14px 14px 0 0;display:flex;align-items:center;justify-content:space-between}
-.modal-hd-title{font-size:15px;font-weight:800}
-.modal-close{background:rgba(255,255,255,.2);border:none;color:#fff;width:30px;height:30px;border-radius:6px;font-size:16px;cursor:pointer}
-.modal-body{padding:20px}
-.modal-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
-.modal-row:last-child{border-bottom:none}
-.modal-lbl{color:var(--text3);font-weight:500}
-.modal-val{font-weight:700;color:var(--text);text-align:right;max-width:60%}
-/* ── Toast ────────────────────────────────────────────── */
-#bs-toast{position:fixed;bottom:24px;right:24px;background:#1a1f2e;color:#fff;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:700;z-index:9999;opacity:0;transform:translateY(16px);transition:all .3s;pointer-events:none}
-#bs-toast.show{opacity:1;transform:translateY(0)}
-/* ── Names list ───────────────────────────────────────── */
-.names-list{display:flex;flex-direction:column;gap:6px}
-.name-row{display:flex;gap:6px;align-items:center}
-.name-row input{flex:1;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;outline:none}
+.act-btn{background:none;border:none;cursor:pointer;padding:3px 5px;border-radius:4px;font-size:13px}
+.act-btn:hover{background:var(--surface2)}
+/* forms */
+.bs-form-card{background:#fff;border-radius:8px;padding:16px;box-shadow:var(--shadow);margin-bottom:12px}
+.bs-form-title{font-size:13px;font-weight:800;color:var(--text);margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.bs-fg{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+.fg{display:flex;flex-direction:column;gap:4px}
+.fg label{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px}
+.fg input,.fg select,.fg textarea{padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;outline:none;transition:border .2s}
+.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--accent)}
+.fg input[readonly]{background:var(--surface2);color:var(--text2)}
+.fg.span2{grid-column:span 2}
+.names-list{display:flex;flex-direction:column;gap:5px}
+.name-row{display:flex;gap:5px;align-items:center}
+.name-row input{flex:1;padding:8px 11px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;outline:none}
 .name-row input:focus{border-color:var(--accent)}
-.name-remove{background:var(--red-bg);color:var(--red);border:none;border-radius:6px;width:30px;height:30px;font-size:16px;cursor:pointer;flex-shrink:0}
-.name-add{padding:7px 14px;background:var(--surface2);border:1.5px dashed var(--border);border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text3);margin-top:4px;transition:all .15s}
+.name-rm{background:var(--red-bg);color:var(--red);border:none;border-radius:5px;width:28px;height:28px;font-size:14px;cursor:pointer;flex-shrink:0}
+.name-add{padding:6px 12px;background:var(--surface2);border:1.5px dashed var(--border);border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;color:var(--text3);margin-top:3px}
 .name-add:hover{border-color:var(--accent);color:var(--accent)}
-@media(max-width:600px){
-  .form-grid{grid-template-columns:1fr}
-  .form-group.span2,.form-group.span4{grid-column:1}
-  .stats-grid{grid-template-columns:1fr 1fr}
-  .profile-grid{grid-template-columns:1fr}
-}
+.pend-box{background:var(--amber-bg);border:1.5px solid var(--amber);border-radius:8px;padding:12px;margin-top:6px}
+.pend-box-title{font-size:11px;font-weight:800;color:var(--amber);margin-bottom:10px}
+.sub-row{display:flex;gap:8px;margin-top:14px}
+.sub-btn{padding:11px 24px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:800;cursor:pointer}
+.rst-btn{padding:11px 18px;background:var(--surface2);color:var(--text);border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-weight:700;cursor:pointer}
+/* modal */
+.bs-modal-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center;padding:16px}
+.bs-modal-ov.open{display:flex}
+.bs-modal-box{background:#fff;border-radius:12px;width:100%;max-width:560px;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.bs-modal-hd{background:var(--accent);color:#fff;padding:14px 18px;border-radius:12px 12px 0 0;display:flex;align-items:center;justify-content:space-between}
+.bs-modal-title{font-size:14px;font-weight:800}
+.bs-modal-close{background:rgba(255,255,255,.2);border:none;color:#fff;width:28px;height:28px;border-radius:5px;font-size:15px;cursor:pointer}
+.bs-modal-body{padding:16px}
+.bs-modal-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px}
+.bs-modal-row:last-child{border-bottom:none}
+.bs-modal-lbl{color:var(--text3)}
+.bs-modal-val{font-weight:700;text-align:right;max-width:60%}
+/* toast */
+#bs-toast{position:fixed;bottom:20px;right:20px;background:#1a1f2e;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:700;z-index:99999;opacity:0;transform:translateY(12px);transition:all .3s;pointer-events:none}
+#bs-toast.show{opacity:1;transform:translateY(0)}
+@media(max-width:600px){.bs-fg,.fg.span2{grid-template-columns:1fr}.fg.span2{grid-column:1}.bs-stats{grid-template-columns:1fr 1fr}}
 </style>
 </head>
-<body>
+<body style="display:flex;flex-direction:column;height:100vh;overflow:hidden">
 
-<!-- ── AUTH ───────────────────────────────────────────── -->
-<div id="auth-screen">
-  <div class="auth-card">
-    <img src="https://salmon-goldfish-110661.hostingersite.com/logo.png"
-         class="auth-logo" onerror="this.style.display='none'" alt="BharatGPS">
-    <div class="auth-title">Balance Sheet</div>
-    <div class="auth-sub">Enter your 9-digit access code</div>
-    <input type="password" id="auth-code" class="auth-input" maxlength="9"
-           placeholder="•••••••••" oninput="this.value=this.value.replace(/\D/g,'').slice(0,9)"
-           onkeydown="if(event.key==='Enter')doAuth()">
-    <button class="auth-btn" onclick="doAuth()">🔓 Unlock</button>
-    <div class="auth-error" id="auth-error"></div>
+<div class="bs-topbar">
+  <img src="logo.png" class="bs-topbar-logo" onerror="this.style.display='none'" alt="BharatGPS">
+  <div class="bs-topbar-title">💰 GPS Balance Sheet</div>
+  <select class="bs-profile-sel" id="bs-profile" onchange="loadEntries()">
+    <option value="BGPT">Bharat GPS Tracker</option>
+    <option value="SBGT">SRIBHARAT GPS TRACKER PVT LTD</option>
+  </select>
+</div>
+
+<div class="bs-tabbar">
+  <button class="bs-tab active" id="bstab-records"  onclick="bsTab('records')">📊 Records</button>
+  <button class="bs-tab"        id="bstab-sales"    onclick="bsTab('sales')">➕ Sales Entry</button>
+  <button class="bs-tab"        id="bstab-license"  onclick="bsTab('license')">🔄 License / Service</button>
+</div>
+
+<!-- RECORDS -->
+<div class="bs-pane active" id="bspane-records">
+  <div class="bs-stats" id="bs-stats"></div>
+  <div class="bs-toolbar">
+    <div class="bs-tb-grp"><span class="bs-tb-lbl">Search</span>
+      <input class="bs-tb-in" id="bs-search" placeholder="Name, task, serial…" oninput="renderTable()" style="min-width:160px">
+    </div>
+    <div class="bs-tb-grp"><span class="bs-tb-lbl">Month</span>
+      <select class="bs-tb-sel" id="bs-month" onchange="renderTable()">
+        <option value="current">This Month</option>
+        <option value="all">All Time</option>
+        <option value="pending">Pending Only</option>
+      </select>
+    </div>
+    <div class="bs-tb-grp"><span class="bs-tb-lbl">From</span>
+      <input type="date" class="bs-tb-in" id="bs-from" onchange="renderTable()">
+    </div>
+    <div class="bs-tb-grp"><span class="bs-tb-lbl">To</span>
+      <input type="date" class="bs-tb-in" id="bs-to" onchange="renderTable()">
+    </div>
+    <div class="bs-tb-grp"><span class="bs-tb-lbl">Type</span>
+      <select class="bs-tb-sel" id="bs-type" onchange="renderTable()">
+        <option value="">All</option>
+        <option value="sales">Sales</option>
+        <option value="license">License</option>
+      </select>
+    </div>
+    <button class="bs-btn" onclick="clearFilters()">✕ Clear</button>
+    <button class="bs-btn bs-btn-p" onclick="exportXLS()">⬇️ Excel</button>
+    <button class="bs-btn bs-btn-g" id="bs-wa-btn" onclick="sendWA()" style="display:none">📱 WA Report</button>
+  </div>
+  <div class="bs-table-wrap">
+    <div class="bs-table-scroll">
+      <table>
+        <thead><tr>
+          <th><input type="checkbox" id="chk-all" onchange="toggleAll(this)"></th>
+          <th>#</th><th>Date</th><th>Type</th><th>Task No</th><th>Invoice</th>
+          <th>Name on Server</th><th>Server</th><th>Model/Service</th><th>Qty</th>
+          <th>Total</th><th>Received</th><th>Pending</th><th>Mode</th><th>Status</th>
+          <th>Tech</th><th>Location</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="bs-tbody"><tr><td colspan="18" style="text-align:center;padding:32px;color:var(--text3)">Loading…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="pg-bar">
+      <span id="bs-pg-info">–</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="pg-btn" id="bs-pg-prev" onclick="bsPg(-1)">← Prev</button>
+        <span id="bs-pg-num" style="font-weight:700;font-size:12px">1</span>
+        <button class="pg-btn" id="bs-pg-next" onclick="bsPg(1)">Next →</button>
+      </div>
+    </div>
   </div>
 </div>
 
-<!-- ── PROFILE ─────────────────────────────────────────── -->
-<div id="profile-screen">
-  <div style="width:100%;max-width:560px;margin:0 auto;padding:16px">
-    <div class="profile-hd">
-      <img src="https://salmon-goldfish-110661.hostingersite.com/logo.png"
-           style="height:48px;width:auto;background:#fff;padding:6px 14px;border-radius:10px;margin-bottom:16px"
-           onerror="this.style.display='none'" alt="BharatGPS">
-      <h2>Select Profile</h2>
-      <p>Choose a business profile to continue</p>
-    </div>
-    <div class="profile-grid">
-      <div class="profile-card" onclick="selectProfile('SBGT')">
-        <div class="profile-icon">🏢</div>
-        <div class="profile-name">SBGT</div>
-        <div class="profile-sub">SRIBHARAT GPS TRACKER PVT LTD</div>
+<!-- SALES -->
+<div class="bs-pane" id="bspane-sales" style="overflow-y:auto">
+  <form onsubmit="submitSales(event)">
+    <div class="bs-form-card">
+      <div class="bs-form-title">➕ New Sales Entry</div>
+      <div class="bs-fg">
+        <div class="fg"><label>GPS Serial No (VIN)</label><input type="text" id="s-vin" placeholder="VIN / IMEI"></div>
+        <div class="fg"><label>Task No *</label><input type="text" id="s-task" required placeholder="Task number"></div>
+        <div class="fg"><label>Invoice No</label><input type="text" id="s-invoice" placeholder="Invoice number"></div>
+        <div class="fg"><label>Date *</label><input type="date" id="s-date" required></div>
+        <div class="fg"><label>Customer Type</label>
+          <select id="s-ctype"><option value="">Select…</option>
+            <option value="new_customer">New Customer</option>
+            <option value="existing_customer">Existing Customer</option>
+            <option value="reference_lead">Reference Lead</option>
+            <option value="3rd_party_lead">3rd Party Lead</option>
+          </select>
+        </div>
+        <div class="fg"><label>Server *</label>
+          <select id="s-server" required><option value="">Select…</option>
+            <option>Server 1</option><option>Server 2</option>
+            <option>Server 3</option><option>Server 4</option>
+          </select>
+        </div>
+        <div class="fg"><label>Device Model *</label>
+          <select id="s-model" onchange="calcSales()" required><option value="">Select…</option>
+            <option value="basic">Basic (₹3500)</option>
+            <option value="engine_status">Engine Status (₹3500)</option>
+            <option value="engine_cut">Engine Cut (₹4500)</option>
+            <option value="magnet">Magnet (₹6000)</option>
+            <option value="micro">Micro (₹3500)</option>
+            <option value="mic_sos">MIC/SOS (₹4499)</option>
+            <option value="engine_cut_with_mic">Engine Cut+MIC (₹5000)</option>
+            <option value="vltd">VLTD (₹9500)</option>
+            <option value="engine_status_self">Engine Status-Self (₹2500)</option>
+            <option value="engine_cut_self">Engine Cut-Self (₹3000)</option>
+            <option value="micro_nosim">Micro-NOSIM (₹2500)</option>
+          </select>
+        </div>
+        <div class="fg"><label>Qty *</label><input type="number" id="s-qty" value="1" min="1" onchange="calcSales()" required></div>
+        <div class="fg"><label>Unit Price *</label><input type="number" id="s-uprice" step="0.01" onchange="calcSales()" required></div>
+        <div class="fg" id="s-gst-grp" style="display:none"><label>GST (18%)</label><input type="number" id="s-gst" readonly></div>
+        <div class="fg"><label>Total Price</label><input type="number" id="s-total" readonly></div>
+        <div class="fg"><label>Technician</label><input type="text" id="s-tech" placeholder="Name"></div>
+        <div class="fg"><label>Location</label><input type="text" id="s-loc" placeholder="Location"></div>
+        <div class="fg span2"><label>Name on Server *</label>
+          <div class="names-list" id="s-names">
+            <div class="name-row"><input type="text" placeholder="Name on server" required><button type="button" class="name-rm" style="display:none" onclick="rmName(this,'s')">✕</button></div>
+          </div>
+          <button type="button" class="name-add" onclick="addName('s')">+ Add Name</button>
+        </div>
+        <div class="fg span2"><label>Remarks</label><textarea id="s-remarks" rows="2" placeholder="Any remarks…"></textarea></div>
       </div>
-      <div class="profile-card" onclick="selectProfile('BGT')">
-        <div class="profile-icon">📡</div>
-        <div class="profile-name">BGT</div>
-        <div class="profile-sub">Bharat GPS Tracker</div>
+    </div>
+    <div class="bs-form-card">
+      <div class="bs-form-title">💰 Payment Details</div>
+      <div class="bs-fg">
+        <div class="fg"><label>Payment Status *</label>
+          <select id="s-pstatus" onchange="calcSales()" required><option value="">Select…</option>
+            <option value="paid">Fully Paid</option>
+            <option value="partially_paid">Partially Paid</option>
+            <option value="pending">Pending</option>
+          </select>
+        </div>
+        <div class="fg"><label>Amount Received *</label><input type="number" id="s-recv" step="0.01" value="0" onchange="calcSales()" required></div>
+        <div class="fg"><label>Pending Amount</label><input type="number" id="s-pend" readonly></div>
+        <div class="fg"><label>Payment Mode *</label>
+          <select id="s-pmode" required><option value="">Select…</option>
+            <option>Cash</option><option>UPI</option>
+            <option>Bank Transfer</option><option>Cheque</option>
+          </select>
+        </div>
+        <div class="fg"><label>Payment Received On</label><input type="date" id="s-precon"></div>
+        <div class="fg"><label>Transaction / UTR</label><input type="text" id="s-ptxn" placeholder="Ref number"></div>
+      </div>
+      <div class="pend-box" id="s-pend-box" style="display:none">
+        <div class="pend-box-title">⚠️ Pending Payment Details</div>
+        <div class="bs-fg">
+          <div class="fg"><label>Reason *</label>
+            <select id="s-preason" onchange="calcSales()"><option value="">Select…</option>
+              <option value="later_will_do">Will pay later</option>
+              <option value="discount_given">Discount given</option>
+              <option value="customer_issue">Customer issue</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="fg" id="s-reminder-grp" style="display:none"><label>Reminder Date</label><input type="date" id="s-preminder"></div>
+          <div class="fg" id="s-disc-grp" style="display:none"><label>Discount Amount (₹)</label><input type="number" id="s-disc" step="0.01"></div>
+          <div class="fg" id="s-dreason-grp" style="display:none"><label>Discount Reason</label><input type="text" id="s-dreason"></div>
+          <div class="fg" id="s-dincharge-grp" style="display:none"><label>Discount Incharge</label><input type="text" id="s-dincharge"></div>
+        </div>
       </div>
     </div>
-    <div style="text-align:center;margin-top:20px">
-      <button class="topbar-btn" onclick="doLogout()">↩ Logout</button>
+    <div class="sub-row">
+      <button type="submit" class="sub-btn">✅ Save Sales Entry</button>
+      <button type="button" class="rst-btn" onclick="resetSales()">↺ Reset</button>
     </div>
-  </div>
+  </form>
 </div>
 
-<!-- ── MAIN APP ─────────────────────────────────────────── -->
-<div id="app-screen">
-  <div class="topbar">
-    <img src="https://salmon-goldfish-110661.hostingersite.com/logo.png"
-         class="topbar-logo" onerror="this.style.display='none'" alt="BharatGPS">
-    <div class="topbar-title">💰 GPS Balance Sheet — <span id="profile-label"></span></div>
-    <button class="topbar-btn" onclick="switchProfile()" style="margin-right:6px">⇄ Switch Profile</button>
-    <button class="topbar-btn" onclick="doLogout()">↩ Logout</button>
-  </div>
-
-  <div class="tab-bar">
-    <button class="tab-btn active" id="tab-btn-records"  onclick="showTab('records')">📊 View Records</button>
-    <button class="tab-btn"        id="tab-btn-sales"    onclick="showTab('sales')">➕ Sales Entry</button>
-    <button class="tab-btn"        id="tab-btn-license"  onclick="showTab('license')">🔄 License / Service</button>
-  </div>
-
-  <!-- RECORDS TAB -->
-  <div class="tab-pane active" id="tab-records">
-    <div class="stats-grid" id="bs-stats"></div>
-    <div class="toolbar">
-      <div class="tb-group">
-        <span class="tb-label">Search</span>
-        <input class="tb-input" id="bs-search" placeholder="Name, task, serial…" oninput="renderTable()" style="min-width:200px">
-      </div>
-      <div class="tb-group">
-        <span class="tb-label">Month</span>
-        <select class="tb-select" id="bs-month" onchange="renderTable()">
-          <option value="current">This Month</option>
-          <option value="all">All Time</option>
-          <option value="pending">All Pending</option>
-        </select>
-      </div>
-      <div class="tb-group">
-        <span class="tb-label">From</span>
-        <input type="date" class="tb-input" id="bs-from" onchange="renderTable()">
-      </div>
-      <div class="tb-group">
-        <span class="tb-label">To</span>
-        <input type="date" class="tb-input" id="bs-to" onchange="renderTable()">
-      </div>
-      <div class="tb-group">
-        <span class="tb-label">Type</span>
-        <select class="tb-select" id="bs-type" onchange="renderTable()">
-          <option value="">All Types</option>
-          <option value="sales">Sales</option>
-          <option value="license">License</option>
-        </select>
-      </div>
-      <button class="tb-btn" onclick="clearFilters()">✕ Clear</button>
-      <button class="tb-btn tb-btn-primary" onclick="exportExcel()">⬇️ Export Excel</button>
-      <button class="tb-btn tb-btn-green" id="wa-report-btn" onclick="sendWaReport()" style="display:none">📱 WA Report</button>
-    </div>
-    <div class="table-wrap">
-      <div class="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th><input type="checkbox" id="chk-all" onchange="toggleAll(this)"></th>
-              <th>#</th><th>Date</th><th>Type</th><th>Task No</th><th>Invoice</th>
-              <th>Name on Server</th><th>Server</th><th>Model</th><th>Qty</th>
-              <th>Unit Price</th><th>GST</th><th>Total</th><th>Received</th>
-              <th>Pending</th><th>Mode</th><th>Status</th><th>Tech</th>
-              <th>Location</th><th>Created By</th><th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="bs-tbody"><tr><td colspan="21" style="text-align:center;padding:40px;color:var(--text3)">Loading…</td></tr></tbody>
-        </table>
-      </div>
-      <div class="pagination">
-        <span id="pg-info">–</span>
-        <div style="display:flex;gap:6px;align-items:center">
-          <button class="pg-btn" id="pg-prev" onclick="changePage(-1)">← Prev</button>
-          <span id="pg-num" style="font-weight:700;color:var(--text)">1</span>
-          <button class="pg-btn" id="pg-next" onclick="changePage(1)">Next →</button>
+<!-- LICENSE -->
+<div class="bs-pane" id="bspane-license" style="overflow-y:auto">
+  <form onsubmit="submitLicense(event)">
+    <div class="bs-form-card">
+      <div class="bs-form-title">🔄 New License / Service Entry</div>
+      <div class="bs-fg">
+        <div class="fg"><label>Task No *</label><input type="text" id="l-task" required placeholder="Task number"></div>
+        <div class="fg"><label>Invoice No</label><input type="text" id="l-invoice" placeholder="Invoice number"></div>
+        <div class="fg"><label>Date *</label><input type="date" id="l-date" required></div>
+        <div class="fg"><label>Server *</label>
+          <select id="l-server" required><option value="">Select…</option>
+            <option>Server 1</option><option>Server 2</option>
+            <option>Server 3</option><option>Server 4</option>
+          </select>
         </div>
+        <div class="fg"><label>Service Type *</label>
+          <select id="l-stype" onchange="calcLic()" required><option value="">Select…</option>
+            <option value="license">License Renewal</option>
+            <option value="v2v">V2V Change (₹500)</option>
+            <option value="upgrade">Upgrade (₹2500)</option>
+            <option value="re_adding">Re-Adding (₹1700)</option>
+            <option value="troubleshoot">Troubleshoot (₹500)</option>
+            <option value="service_charge">Service Charge</option>
+          </select>
+        </div>
+        <div class="fg" id="l-plan-grp" style="display:none"><label>License Plan *</label>
+          <select id="l-plan" onchange="calcLic()"><option value="">Select…</option>
+            <option value="license_3_months">3 Months (₹350)</option>
+            <option value="license_6_months">6 Months (₹700)</option>
+            <option value="license_1_year">1 Year (₹1200)</option>
+          </select>
+        </div>
+        <div class="fg"><label>Qty *</label><input type="number" id="l-qty" value="1" min="1" onchange="calcLic()" required></div>
+        <div class="fg"><label>Unit Price</label><input type="number" id="l-uprice" step="0.01" onchange="calcLic()" placeholder="Auto-filled"></div>
+        <div class="fg" id="l-gst-grp" style="display:none"><label>GST (18%)</label><input type="number" id="l-gst" readonly></div>
+        <div class="fg"><label>Total Price</label><input type="number" id="l-total" readonly></div>
+        <div class="fg"><label>Technician</label><input type="text" id="l-tech" placeholder="Name"></div>
+        <div class="fg"><label>Location</label><input type="text" id="l-loc" placeholder="Location"></div>
+        <div class="fg span2"><label>Name on Server *</label>
+          <div class="names-list" id="l-names">
+            <div class="name-row"><input type="text" placeholder="Name on server" required><button type="button" class="name-rm" style="display:none" onclick="rmName(this,'l')">✕</button></div>
+          </div>
+          <button type="button" class="name-add" onclick="addName('l')">+ Add Name</button>
+        </div>
+        <div class="fg span2"><label>Remarks</label><textarea id="l-remarks" rows="2" placeholder="Any remarks…"></textarea></div>
       </div>
     </div>
-  </div>
-
-  <!-- SALES ENTRY TAB -->
-  <div class="tab-pane" id="tab-sales">
-    <form onsubmit="submitSales(event)">
-      <div class="form-card">
-        <div class="form-card-title">➕ New Sales Entry</div>
-        <div class="form-grid">
-          <div class="form-group">
-            <label>GPS Serial No (VIN) *</label>
-            <input type="text" id="s-vin" placeholder="Enter VIN" required>
-          </div>
-          <div class="form-group">
-            <label>Task No *</label>
-            <input type="text" id="s-task" placeholder="Task number" required>
-          </div>
-          <div class="form-group">
-            <label>Invoice No</label>
-            <input type="text" id="s-invoice" placeholder="Invoice number">
-          </div>
-          <div class="form-group">
-            <label>Date *</label>
-            <input type="date" id="s-date" required>
-          </div>
-          <div class="form-group">
-            <label>Customer Type</label>
-            <select id="s-ctype">
-              <option value="">Select…</option>
-              <option value="new_customer">New Customer</option>
-              <option value="existing_customer">Existing Customer</option>
-              <option value="reference_lead">Reference Lead</option>
-              <option value="3rd_party_lead">3rd Party Lead</option>
+    <div class="bs-form-card">
+      <div class="bs-form-title">💰 Payment Details</div>
+      <div class="bs-fg">
+        <div class="fg"><label>Payment Status *</label>
+          <select id="l-pstatus" onchange="calcLic()" required><option value="">Select…</option>
+            <option value="paid">Fully Paid</option>
+            <option value="partially_paid">Partially Paid</option>
+            <option value="pending">Pending</option>
+          </select>
+        </div>
+        <div class="fg"><label>Amount Received *</label><input type="number" id="l-recv" step="0.01" value="0" onchange="calcLic()" required></div>
+        <div class="fg"><label>Pending Amount</label><input type="number" id="l-pend" readonly></div>
+        <div class="fg"><label>Payment Mode *</label>
+          <select id="l-pmode" required><option value="">Select…</option>
+            <option>Cash</option><option>UPI</option>
+            <option>Bank Transfer</option><option>Cheque</option>
+          </select>
+        </div>
+        <div class="fg"><label>Payment Received On</label><input type="date" id="l-precon"></div>
+        <div class="fg"><label>Transaction / UTR</label><input type="text" id="l-ptxn" placeholder="Ref number"></div>
+      </div>
+      <div class="pend-box" id="l-pend-box" style="display:none">
+        <div class="pend-box-title">⚠️ Pending Payment Details</div>
+        <div class="bs-fg">
+          <div class="fg"><label>Reason *</label>
+            <select id="l-preason" onchange="calcLic()"><option value="">Select…</option>
+              <option value="later_will_do">Will pay later</option>
+              <option value="discount_given">Discount given</option>
+              <option value="customer_issue">Customer issue</option>
+              <option value="other">Other</option>
             </select>
           </div>
-          <div class="form-group">
-            <label>Server *</label>
-            <select id="s-server" required>
-              <option value="">Select server…</option>
-              <option>Server 1</option><option>Server 2</option>
-              <option>Server 3</option><option>Server 4</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Device Model *</label>
-            <select id="s-model" onchange="calcSales()" required>
-              <option value="">Select model…</option>
-              <option value="basic">Basic</option>
-              <option value="engine_status">Engine Status</option>
-              <option value="engine_cut">Engine Cut</option>
-              <option value="magnet">Magnet</option>
-              <option value="micro">Micro</option>
-              <option value="mic_sos">MIC/SOS</option>
-              <option value="engine_cut_with_mic">Engine Cut with MIC</option>
-              <option value="vltd">VLTD</option>
-              <option value="engine_status_self">Engine Status-Self</option>
-              <option value="engine_cut_self">Engine Cut-Self</option>
-              <option value="micro_nosim">Micro-NOSIM</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Qty *</label>
-            <input type="number" id="s-qty" value="1" min="1" onchange="calcSales()" required>
-          </div>
-          <div class="form-group">
-            <label>Unit Price *</label>
-            <input type="number" id="s-uprice" step="0.01" onchange="calcSales()" placeholder="Auto-filled" required>
-          </div>
-          <div class="form-group" id="s-gst-group" style="display:none">
-            <label>GST (18%)</label>
-            <input type="number" id="s-gst" readonly placeholder="Auto-calculated">
-          </div>
-          <div class="form-group">
-            <label>Total Price</label>
-            <input type="number" id="s-total" readonly placeholder="Auto-calculated">
-          </div>
-          <div class="form-group">
-            <label>Technician</label>
-            <input type="text" id="s-tech" placeholder="Technician name">
-          </div>
-          <div class="form-group">
-            <label>Location</label>
-            <input type="text" id="s-loc" placeholder="Location">
-          </div>
-          <div class="form-group span2">
-            <label>Name on Server *</label>
-            <div class="names-list" id="s-names-list">
-              <div class="name-row"><input type="text" placeholder="Name on server" required><button type="button" class="name-remove" style="display:none" onclick="removeName(this,'s')">✕</button></div>
-            </div>
-            <button type="button" class="name-add" onclick="addName('s')">+ Add Name</button>
-          </div>
-          <div class="form-group span4">
-            <label>Remarks</label>
-            <textarea id="s-remarks" rows="2" placeholder="Any remarks…"></textarea>
-          </div>
+          <div class="fg" id="l-reminder-grp" style="display:none"><label>Reminder Date</label><input type="date" id="l-preminder"></div>
+          <div class="fg" id="l-disc-grp" style="display:none"><label>Discount Amount (₹)</label><input type="number" id="l-disc" step="0.01"></div>
         </div>
       </div>
-      <div class="form-card">
-        <div class="form-card-title">💰 Payment Details</div>
-        <div class="form-grid">
-          <div class="form-group">
-            <label>Payment Status *</label>
-            <select id="s-pstatus" onchange="calcSales()" required>
-              <option value="">Select…</option>
-              <option value="paid">Fully Paid</option>
-              <option value="partially_paid">Partially Paid</option>
-              <option value="pending">Pending</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Payment Received *</label>
-            <input type="number" id="s-preceived" step="0.01" value="0" onchange="calcSales()" required>
-          </div>
-          <div class="form-group">
-            <label>Pending Payment</label>
-            <input type="number" id="s-ppending" readonly>
-          </div>
-          <div class="form-group">
-            <label>Payment Mode *</label>
-            <select id="s-pmode" required>
-              <option value="">Select…</option>
-              <option value="Cash">Cash</option>
-              <option value="UPI">UPI</option>
-              <option value="Bank Transfer">Bank Transfer</option>
-              <option value="Cheque">Cheque</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Payment Received On</label>
-            <input type="date" id="s-precon">
-          </div>
-          <div class="form-group">
-            <label>Transaction Details</label>
-            <input type="text" id="s-ptxn" placeholder="UTR/Ref number">
-          </div>
-        </div>
-        <div class="pending-section" id="s-pending-section" style="display:none">
-          <div class="pending-section-title">⚠️ Pending Payment Details</div>
-          <div class="form-grid">
-            <div class="form-group">
-              <label>Pending Reason *</label>
-              <select id="s-preason" onchange="calcSales()">
-                <option value="">Select reason…</option>
-                <option value="later_will_do">Will pay later</option>
-                <option value="discount_given">Discount given</option>
-                <option value="customer_issue">Customer issue</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-            <div class="form-group" id="s-reminder-group" style="display:none">
-              <label>Payment Reminder Date</label>
-              <input type="date" id="s-preminder">
-            </div>
-            <div class="form-group" id="s-discount-group" style="display:none">
-              <label>Discount Given (₹)</label>
-              <input type="number" id="s-discount" step="0.01" placeholder="Amount">
-            </div>
-            <div class="form-group" id="s-dreason-group" style="display:none">
-              <label>Discount Reason</label>
-              <input type="text" id="s-dreason" placeholder="Reason for discount">
-            </div>
-            <div class="form-group" id="s-dincharge-group" style="display:none">
-              <label>Discount Incharge</label>
-              <input type="text" id="s-dincharge" placeholder="Who approved">
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="submit-row">
-        <button type="submit" class="submit-btn">✅ Save Sales Entry</button>
-        <button type="button" class="reset-btn" onclick="resetSales()">↺ Reset</button>
-      </div>
-    </form>
-  </div>
-
-  <!-- LICENSE ENTRY TAB -->
-  <div class="tab-pane" id="tab-license">
-    <form onsubmit="submitLicense(event)">
-      <div class="form-card">
-        <div class="form-card-title">🔄 New License / Service Entry</div>
-        <div class="form-grid">
-          <div class="form-group">
-            <label>Task No *</label>
-            <input type="text" id="l-task" placeholder="Task number" required>
-          </div>
-          <div class="form-group">
-            <label>Invoice No</label>
-            <input type="text" id="l-invoice" placeholder="Invoice number">
-          </div>
-          <div class="form-group">
-            <label>Date *</label>
-            <input type="date" id="l-date" required>
-          </div>
-          <div class="form-group">
-            <label>Server *</label>
-            <select id="l-server" required>
-              <option value="">Select server…</option>
-              <option>Server 1</option><option>Server 2</option>
-              <option>Server 3</option><option>Server 4</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Service Type *</label>
-            <select id="l-stype" onchange="calcLicense()" required>
-              <option value="">Select type…</option>
-              <option value="license">License Renewal</option>
-              <option value="v2v">V2V Change (₹500)</option>
-              <option value="upgrade">Upgrade (₹2500)</option>
-              <option value="re_adding">Re-Adding (₹1700)</option>
-              <option value="troubleshoot">Troubleshoot (₹500)</option>
-              <option value="service_charge">Service Charge</option>
-            </select>
-          </div>
-          <div class="form-group" id="l-plan-group" style="display:none">
-            <label>License Plan *</label>
-            <select id="l-plan" onchange="calcLicense()">
-              <option value="">Select plan…</option>
-              <option value="license_3_months">3 Months (₹350)</option>
-              <option value="license_6_months">6 Months (₹700)</option>
-              <option value="license_1_year">1 Year (₹1200)</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Qty *</label>
-            <input type="number" id="l-qty" value="1" min="1" onchange="calcLicense()" required>
-          </div>
-          <div class="form-group">
-            <label>Unit Price</label>
-            <input type="number" id="l-uprice" step="0.01" onchange="calcLicense()" placeholder="Auto-filled">
-          </div>
-          <div class="form-group" id="l-gst-group" style="display:none">
-            <label>GST (18%)</label>
-            <input type="number" id="l-gst" readonly placeholder="Auto-calculated">
-          </div>
-          <div class="form-group">
-            <label>Total Price</label>
-            <input type="number" id="l-total" readonly placeholder="Auto-calculated">
-          </div>
-          <div class="form-group">
-            <label>Technician</label>
-            <input type="text" id="l-tech" placeholder="Technician name">
-          </div>
-          <div class="form-group">
-            <label>Location</label>
-            <input type="text" id="l-loc" placeholder="Location">
-          </div>
-          <div class="form-group span2">
-            <label>Name on Server *</label>
-            <div class="names-list" id="l-names-list">
-              <div class="name-row"><input type="text" placeholder="Name on server" required><button type="button" class="name-remove" style="display:none" onclick="removeName(this,'l')">✕</button></div>
-            </div>
-            <button type="button" class="name-add" onclick="addName('l')">+ Add Name</button>
-          </div>
-          <div class="form-group span4">
-            <label>Remarks</label>
-            <textarea id="l-remarks" rows="2" placeholder="Any remarks…"></textarea>
-          </div>
-        </div>
-      </div>
-      <div class="form-card">
-        <div class="form-card-title">💰 Payment Details</div>
-        <div class="form-grid">
-          <div class="form-group">
-            <label>Payment Status *</label>
-            <select id="l-pstatus" onchange="calcLicense()" required>
-              <option value="">Select…</option>
-              <option value="paid">Fully Paid</option>
-              <option value="partially_paid">Partially Paid</option>
-              <option value="pending">Pending</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Payment Received *</label>
-            <input type="number" id="l-preceived" step="0.01" value="0" onchange="calcLicense()" required>
-          </div>
-          <div class="form-group">
-            <label>Pending Payment</label>
-            <input type="number" id="l-ppending" readonly>
-          </div>
-          <div class="form-group">
-            <label>Payment Mode *</label>
-            <select id="l-pmode" required>
-              <option value="">Select…</option>
-              <option value="Cash">Cash</option>
-              <option value="UPI">UPI</option>
-              <option value="Bank Transfer">Bank Transfer</option>
-              <option value="Cheque">Cheque</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Payment Received On</label>
-            <input type="date" id="l-precon">
-          </div>
-          <div class="form-group">
-            <label>Transaction Details</label>
-            <input type="text" id="l-ptxn" placeholder="UTR/Ref number">
-          </div>
-        </div>
-        <div class="pending-section" id="l-pending-section" style="display:none">
-          <div class="pending-section-title">⚠️ Pending Payment Details</div>
-          <div class="form-grid">
-            <div class="form-group">
-              <label>Pending Reason *</label>
-              <select id="l-preason" onchange="calcLicense()">
-                <option value="">Select reason…</option>
-                <option value="later_will_do">Will pay later</option>
-                <option value="discount_given">Discount given</option>
-                <option value="customer_issue">Customer issue</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-            <div class="form-group" id="l-reminder-group" style="display:none">
-              <label>Payment Reminder Date</label>
-              <input type="date" id="l-preminder">
-            </div>
-            <div class="form-group" id="l-discount-group" style="display:none">
-              <label>Discount Given (₹)</label>
-              <input type="number" id="l-discount" step="0.01" placeholder="Amount">
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="submit-row">
-        <button type="submit" class="submit-btn">✅ Save License Entry</button>
-        <button type="button" class="reset-btn" onclick="resetLicense()">↺ Reset</button>
-      </div>
-    </form>
-  </div>
+    </div>
+    <div class="sub-row">
+      <button type="submit" class="sub-btn">✅ Save License Entry</button>
+      <button type="button" class="rst-btn" onclick="resetLic()">↺ Reset</button>
+    </div>
+  </form>
 </div>
 
 <!-- VIEW MODAL -->
-<div class="modal-overlay" id="view-modal" onclick="if(event.target===this)closeView()">
-  <div class="modal-box">
-    <div class="modal-hd">
-      <div class="modal-hd-title">📋 Entry Details</div>
-      <button class="modal-close" onclick="closeView()">✕</button>
-    </div>
-    <div class="modal-body" id="view-body"></div>
+<div class="bs-modal-ov" id="bs-view-ov" onclick="if(event.target===this)closeView()">
+  <div class="bs-modal-box">
+    <div class="bs-modal-hd"><span class="bs-modal-title">📋 Entry Details</span><button class="bs-modal-close" onclick="closeView()">✕</button></div>
+    <div class="bs-modal-body" id="bs-view-body"></div>
   </div>
 </div>
-
 <!-- EDIT MODAL -->
-<div class="modal-overlay" id="edit-modal" onclick="if(event.target===this)closeEdit()">
-  <div class="modal-box">
-    <div class="modal-hd">
-      <div class="modal-hd-title">✏️ Edit Entry</div>
-      <button class="modal-close" onclick="closeEdit()">✕</button>
-    </div>
-    <div class="modal-body" id="edit-body"></div>
+<div class="bs-modal-ov" id="bs-edit-ov" onclick="if(event.target===this)closeEditModal()">
+  <div class="bs-modal-box">
+    <div class="bs-modal-hd"><span class="bs-modal-title">✏️ Edit Payment Details</span><button class="bs-modal-close" onclick="closeEditModal()">✕</button></div>
+    <div class="bs-modal-body" id="bs-edit-body"></div>
   </div>
 </div>
 
 <div id="bs-toast"></div>
 
 <script>
-// ═══════════════════════════════════════════════════════
-// STATE
-// ═══════════════════════════════════════════════════════
-const ADMIN_CODE  = '532842001';
-const DEVICE_PRICES = {
-  basic:3500, engine_status:3500, micro:3500,
-  engine_cut:4500, engine_cut_with_mic:5000, vltd:9500,
-  magnet:6000, engine_status_self:2500, engine_cut_self:3000, micro_nosim:2500
-};
-const LICENSE_PRICES = {
-  license_3_months:350, license_6_months:700, license_1_year:1200
-};
-const SERVICE_PRICES = { v2v:500, upgrade:2500, re_adding:1700, troubleshoot:500 };
-const GST_RATE = 0.18;
+const API = 'api/index.php';
+// Get auth token from parent window (task manager) or localStorage
+const AUTH_TOKEN = (()=>{
+  try{ return window.parent?.authToken || localStorage.getItem('bgps_token') || ''; }catch(e){ return localStorage.getItem('bgps_token')||''; }
+})();
 
-let userCode='', currentProfile='', allEntries=[], selectedIds=new Set();
-let currentPage=1; const PAGE_SIZE=50;
-
-// ═══════════════════════════════════════════════════════
-// AUTH
-// ═══════════════════════════════════════════════════════
-async function doAuth(){
-  const code = document.getElementById('auth-code').value.trim();
-  const errEl = document.getElementById('auth-error');
-  errEl.style.display='none';
-  if(code.length!==9){ errEl.textContent='Enter a 9-digit code.'; errEl.style.display='block'; return; }
-  try {
-    const rows = await sbReq(`access_codes?code=eq.${code}&is_enabled=eq.true&select=code,role`);
-    if(!rows.length) throw new Error('Invalid or disabled code.');
-    userCode = code;
-    localStorage.setItem('bs_code', code);
-    showScreen('profile');
-  } catch(e){ errEl.textContent=e.message; errEl.style.display='block'; }
+async function bsApi(action, params={}, method='GET', body=null){
+  let url = API+'?action='+action;
+  if(method==='GET') url += '&'+new URLSearchParams(params);
+  const opts = {method, headers:{'X-Auth-Token': AUTH_TOKEN}};
+  if(body){ opts.headers['Content-Type']='application/json'; opts.body=JSON.stringify(body); }
+  const r = await fetch(url, opts);
+  return r.json();
 }
 
-function doLogout(){
-  userCode=''; currentProfile=''; allEntries=[];
-  localStorage.removeItem('bs_code');
-  document.getElementById('auth-code').value='';
-  showScreen('auth');
+const DEVICE_PRICES = {basic:3500,engine_status:3500,micro:3500,engine_cut:4500,engine_cut_with_mic:5000,vltd:9500,magnet:6000,engine_status_self:2500,engine_cut_self:3000,micro_nosim:2500,mic_sos:4499};
+const LICENSE_PRICES = {license_3_months:350,license_6_months:700,license_1_year:1200};
+const SERVICE_PRICES = {v2v:500,upgrade:2500,re_adding:1700,troubleshoot:500};
+const GST = 0.18;
+
+let allEntries=[], selectedIds=new Set(), curPage=1;
+const PAGE=50;
+
+// ── TABS ────────────────────────────────────────────
+function bsTab(t){
+  document.querySelectorAll('.bs-tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.bs-pane').forEach(p=>p.classList.remove('active'));
+  document.getElementById('bstab-'+t).classList.add('active');
+  document.getElementById('bspane-'+t).classList.add('active');
+  if(t==='records') loadEntries();
 }
 
-function switchProfile(){ showScreen('profile'); }
-
-function selectProfile(p){
-  currentProfile = p;
-  document.getElementById('profile-label').textContent = p==='SBGT'?'SRIBHARAT GPS TRACKER PVT LTD':'Bharat GPS Tracker';
-  showScreen('app');
-  // Show/hide GST column based on profile
-  document.getElementById('s-gst-group').style.display = p==='SBGT'?'':'none';
-  document.getElementById('l-gst-group').style.display = p==='SBGT'?'':'none';
-  setTodayDates();
-  loadEntries();
-}
-
-function showScreen(s){
-  ['auth-screen','profile-screen','app-screen'].forEach(id=>{
-    document.getElementById(id).style.display = id===s+'-screen'?(s==='auth'||s==='profile'?'flex':'block'):'none';
-  });
-}
-
-// ═══════════════════════════════════════════════════════
-// DATA
-// ═══════════════════════════════════════════════════════
+// ── DATA ────────────────────────────────────────────
 async function loadEntries(){
-  try {
-    const rows = await sbReq(`balance_sheet_entries?profile=eq.${currentProfile}&order=created_at.desc&select=*`);
-    allEntries = rows;
-    renderStats();
-    renderTable();
-  } catch(e){ toast('❌ Failed to load: '+e.message); }
+  document.getElementById('bs-tbody').innerHTML='<tr><td colspan="18" style="text-align:center;padding:32px;color:var(--text3)">Loading…</td></tr>';
+  const profile = document.getElementById('bs-profile').value;
+  const res = await bsApi('bs_get_entries',{profile}).catch(()=>({}));
+  if(res.error){ toast('❌ '+res.error); return; }
+  allEntries = res.entries||[];
+  renderStats(res.stats||{});
+  renderTable();
 }
 
-function renderStats(){
-  const sales   = allEntries.filter(e=>e.type==='sales');
-  const lic     = allEntries.filter(e=>e.type==='license');
-  const totalRec= allEntries.reduce((a,e)=>a+(+e.payment_received||0),0);
-  const totalPen= allEntries.reduce((a,e)=>a+(+e.pending_payment||0),0);
-  const fmt = v=>'₹'+parseFloat(v||0).toLocaleString('en-IN',{minimumFractionDigits:0,maximumFractionDigits:0});
-  document.getElementById('bs-stats').innerHTML = [
-    {lbl:'Devices Sold',  val:sales.reduce((a,e)=>a+(+e.qty||0),0),  color:'#0E5C5C', currency:false},
-    {lbl:'Licenses',      val:lic.reduce((a,e)=>a+(+e.qty||0),0),    color:'#5b2d8e', currency:false},
-    {lbl:'Sales Total',   val:sales.reduce((a,e)=>a+(+e.total_price||0),0), color:'#1a7a3a'},
-    {lbl:'License Total', val:lic.reduce((a,e)=>a+(+e.total_price||0),0),   color:'#1a56a0'},
-    {lbl:'Received',      val:totalRec, color:'#137272'},
-    {lbl:'Pending',       val:totalPen, color:'#c0392b'},
-  ].map(s=>`<div class="stat-card-bs" style="border-top:3px solid ${s.color}">
-    <div class="val" style="color:${s.color}">${s.currency===false?s.val.toLocaleString('en-IN'):fmt(s.val)}</div>
-    <div class="lbl">${s.lbl}</div>
-  </div>`).join('');
+function renderStats(s){
+  const fmt=v=>'₹'+parseFloat(v||0).toLocaleString('en-IN',{minimumFractionDigits:0});
+  const cards=[
+    {l:'Devices Sold',  v:(+s.devices_sold||0).toLocaleString('en-IN'),  c:'#0E5C5C'},
+    {l:'Licenses',      v:(+s.license_count||0).toLocaleString('en-IN'), c:'#5b2d8e'},
+    {l:'Sales Total',   v:fmt(s.total_sales),   c:'#1a7a3a'},
+    {l:'License Total', v:fmt(s.total_license), c:'#1a56a0'},
+    {l:'Received',      v:fmt(s.payment_received), c:'#137272'},
+    {l:'Pending',       v:fmt(s.pending_payment),  c:'#c0392b'},
+  ];
+  document.getElementById('bs-stats').innerHTML=cards.map(c=>`
+    <div class="bs-stat" style="border-top-color:${c.c}">
+      <div class="v" style="color:${c.c}">${c.v}</div>
+      <div class="l">${c.l}</div>
+    </div>`).join('');
 }
 
 function getFiltered(){
-  const search = (document.getElementById('bs-search')?.value||'').toLowerCase();
-  const month  = document.getElementById('bs-month')?.value||'current';
-  const type   = document.getElementById('bs-type')?.value||'';
-  const from   = document.getElementById('bs-from')?.value||'';
-  const to     = document.getElementById('bs-to')?.value||'';
-
-  const now  = new Date();
-  const cm   = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-
+  const search=(document.getElementById('bs-search')?.value||'').toLowerCase();
+  const month=document.getElementById('bs-month')?.value||'current';
+  const type=document.getElementById('bs-type')?.value||'';
+  const from=document.getElementById('bs-from')?.value||'';
+  const to=document.getElementById('bs-to')?.value||'';
+  const now=new Date(), cm=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
   return allEntries.filter(e=>{
     if(type && e.type!==type) return false;
+    if(month==='pending' && (+e.pending_payment||0)<=0) return false;
+    if(month==='current' && !from && !to && !(e.date||'').startsWith(cm)) return false;
+    if(from && to && (e.date<from||e.date>to)) return false;
+    else if(from && !to && e.date<from) return false;
+    else if(!from && to && e.date>to) return false;
     if(search){
-      const hay = [e.name_on_server,e.task_no,e.gps_serial_no,e.invoice_no,e.technician_name,e.location].join(' ').toLowerCase();
+      const hay=[e.name_on_server,e.task_id,e.task_no,e.gps_serial_no,e.invoice_no,e.technician_name,e.location].join(' ').toLowerCase();
       if(!hay.includes(search)) return false;
-    }
-    if(month==='current' && !from && !to){
-      if(!e.date || !e.date.startsWith(cm)) return false;
-    } else if(month==='pending'){
-      if((+e.pending_payment||0) <= 0) return false;
-    } else if(from && to){
-      if(e.date < from || e.date > to) return false;
-    } else if(from){
-      if(e.date < from) return false;
-    } else if(to){
-      if(e.date > to) return false;
     }
     return true;
   });
 }
 
 function renderTable(){
-  const filtered = getFiltered();
-  const total    = filtered.length;
-  const pages    = Math.max(1, Math.ceil(total/PAGE_SIZE));
-  if(currentPage > pages) currentPage = pages;
-
-  const slice = filtered.slice((currentPage-1)*PAGE_SIZE, currentPage*PAGE_SIZE);
-  document.getElementById('pg-info').textContent = `${total} entries (page ${currentPage}/${pages})`;
-  document.getElementById('pg-prev').disabled = currentPage<=1;
-  document.getElementById('pg-next').disabled = currentPage>=pages;
-  document.getElementById('pg-num').textContent = currentPage;
-
-  const isAdmin = userCode===ADMIN_CODE;
-  const tbody = document.getElementById('bs-tbody');
-  if(!slice.length){
-    tbody.innerHTML='<tr><td colspan="21" style="text-align:center;padding:40px;color:var(--text3)">No records found</td></tr>';
-    return;
-  }
-  tbody.innerHTML = slice.map((e,i)=>{
-    const n   = (currentPage-1)*PAGE_SIZE+i+1;
-    const chk = selectedIds.has(e.id) ? 'checked' : '';
-    const ps  = e.payment_status==='paid'?'<span class="badge-paid">Paid</span>'
-               :e.payment_status==='partially_paid'?'<span class="badge-pend">Partial</span>'
-               :'<span class="badge-full">Pending</span>';
-    const tp  = e.type==='sales'?'<span class="badge-sales">Sales</span>':'<span class="badge-lic">License</span>';
-    const canEdit = e.created_by_code===userCode||isAdmin;
+  const filtered=getFiltered();
+  const total=filtered.length, pages=Math.max(1,Math.ceil(total/PAGE));
+  if(curPage>pages) curPage=pages;
+  const slice=filtered.slice((curPage-1)*PAGE, curPage*PAGE);
+  document.getElementById('bs-pg-info').textContent=`${total} entries · page ${curPage}/${pages}`;
+  document.getElementById('bs-pg-prev').disabled=curPage<=1;
+  document.getElementById('bs-pg-next').disabled=curPage>=pages;
+  document.getElementById('bs-pg-num').textContent=curPage;
+  const tbody=document.getElementById('bs-tbody');
+  if(!slice.length){ tbody.innerHTML='<tr><td colspan="18" style="text-align:center;padding:32px;color:var(--text3)">No records found</td></tr>'; return; }
+  const isAdmin=true; // all task manager users can edit their own
+  tbody.innerHTML=slice.map((e,i)=>{
+    const n=(curPage-1)*PAGE+i+1;
+    const chk=selectedIds.has(e.id)?'checked':'';
+    const ps=e.payment_status==='paid'?'<span class="badge badge-paid">Paid</span>':e.payment_status==='partially_paid'?'<span class="badge badge-part">Partial</span>':'<span class="badge badge-pend">Pending</span>';
+    const tp=e.type==='sales'?'<span class="badge badge-sales">Sales</span>':'<span class="badge badge-lic">License</span>';
     return `<tr>
-      <td><input type="checkbox" ${chk} onchange="toggleSel('${e.id}',this)"></td>
-      <td>${n}</td>
-      <td>${e.date||'–'}</td>
-      <td>${tp}</td>
-      <td>${e.task_no||'–'}</td>
-      <td>${e.invoice_no||'–'}</td>
-      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">${e.name_on_server||'–'}</td>
-      <td>${e.server_name||'–'}</td>
-      <td>${e.device_model||e.service_type||'–'}</td>
-      <td>${e.qty||'–'}</td>
-      <td>${e.unit_price?'₹'+parseFloat(e.unit_price).toLocaleString('en-IN'):'–'}</td>
-      <td>${e.gst?'₹'+parseFloat(e.gst).toLocaleString('en-IN'):'–'}</td>
+      <td><input type="checkbox" ${chk} onchange="toggleSel(${e.id},this)"></td>
+      <td>${n}</td><td>${e.date||'–'}</td><td>${tp}</td>
+      <td>${e.task_id||e.task_no||'–'}</td><td>${e.invoice_no||'–'}</td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis">${e.name_on_server||'–'}</td>
+      <td>${e.server_name||'–'}</td><td>${e.device_model||e.service_type||'–'}</td><td>${e.qty||'–'}</td>
       <td style="font-weight:700">₹${parseFloat(e.total_price||0).toLocaleString('en-IN')}</td>
       <td style="color:var(--green);font-weight:700">₹${parseFloat(e.payment_received||0).toLocaleString('en-IN')}</td>
       <td style="color:${(+e.pending_payment||0)>0?'var(--red)':'var(--text3)'}">₹${parseFloat(e.pending_payment||0).toLocaleString('en-IN')}</td>
-      <td>${e.payment_mode||'–'}</td>
-      <td>${ps}</td>
-      <td>${e.technician_name||'–'}</td>
-      <td>${e.location||'–'}</td>
-      <td style="font-size:11px;color:var(--text3)">${e.created_by_code?'…'+e.created_by_code.slice(-4):'–'}</td>
+      <td>${e.payment_mode||'–'}</td><td>${ps}</td>
+      <td>${e.technician_name||'–'}</td><td>${e.location||'–'}</td>
       <td>
-        <button class="action-btn" onclick="viewEntry('${e.id}')" title="View">👁</button>
-        ${canEdit?`<button class="action-btn" onclick="editEntry('${e.id}')" title="Edit">✏️</button>
-        <button class="action-btn" onclick="deleteEntry('${e.id}')" title="Delete">🗑️</button>`:''}
-        <button class="action-btn" onclick="waEntry('${e.id}')" title="WhatsApp">📱</button>
+        <button class="act-btn" onclick="viewEntry(${e.id})" title="View">👁</button>
+        <button class="act-btn" onclick="editEntry(${e.id})" title="Edit">✏️</button>
+        <button class="act-btn" onclick="delEntry(${e.id})" title="Delete">🗑️</button>
+        <button class="act-btn" onclick="waEntry(${e.id})" title="WhatsApp">📱</button>
       </td>
     </tr>`;
   }).join('');
-
-  // WA report button
-  document.getElementById('wa-report-btn').style.display = selectedIds.size>0?'':'none';
+  document.getElementById('bs-wa-btn').style.display=selectedIds.size>0?'':'none';
 }
 
-function changePage(d){ currentPage+=d; renderTable(); }
+function bsPg(d){ curPage+=d; renderTable(); }
 function clearFilters(){
   ['bs-search','bs-from','bs-to'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('bs-month').value='current';
   document.getElementById('bs-type').value='';
-  currentPage=1; renderTable();
+  curPage=1; renderTable();
 }
-function toggleAll(cb){ 
-  getFiltered().slice((currentPage-1)*PAGE_SIZE,currentPage*PAGE_SIZE).forEach(e=>{
-    cb.checked ? selectedIds.add(e.id) : selectedIds.delete(e.id);
-  });
+function toggleAll(cb){
+  getFiltered().slice((curPage-1)*PAGE,curPage*PAGE).forEach(e=>cb.checked?selectedIds.add(e.id):selectedIds.delete(e.id));
   renderTable();
 }
-function toggleSel(id,cb){ cb.checked?selectedIds.add(id):selectedIds.delete(id); 
-  document.getElementById('wa-report-btn').style.display=selectedIds.size>0?'':'none';
+function toggleSel(id,cb){ cb.checked?selectedIds.add(id):selectedIds.delete(id);
+  document.getElementById('bs-wa-btn').style.display=selectedIds.size>0?'':'none';
 }
 
-// ═══════════════════════════════════════════════════════
-// VIEW / EDIT / DELETE
-// ═══════════════════════════════════════════════════════
+// ── VIEW ────────────────────────────────────────────
 function viewEntry(id){
-  const e = allEntries.find(x=>String(x.id)===String(id));
-  if(!e) return;
-  const rows = [
-    ['Type', e.type],['Date', e.date],['Task No', e.task_no],['Invoice', e.invoice_no],
-    ['Name on Server', e.name_on_server],['Server', e.server_name],
-    ['Device/Service', e.device_model||e.service_type],['Qty', e.qty],
-    ['Unit Price', e.unit_price?'₹'+parseFloat(e.unit_price).toLocaleString('en-IN'):'–'],
-    ['GST', e.gst?'₹'+parseFloat(e.gst).toLocaleString('en-IN'):'–'],
-    ['Total', '₹'+parseFloat(e.total_price||0).toLocaleString('en-IN')],
-    ['Payment Received', '₹'+parseFloat(e.payment_received||0).toLocaleString('en-IN')],
-    ['Pending', '₹'+parseFloat(e.pending_payment||0).toLocaleString('en-IN')],
-    ['Payment Mode', e.payment_mode],['Payment Status', e.payment_status],
-    ['Payment Received On', e.payment_received_on||'–'],
-    ['Transaction Details', e.payment_transaction_details||'–'],
-    ['Pending Reason', e.pending_reason||'–'],
-    ['Discount Given', e.discount_given?'₹'+e.discount_given:'–'],
-    ['Discount Reason', e.discount_reason||'–'],
-    ['Discount Incharge', e.discount_incharge||'–'],
-    ['Technician', e.technician_name||'–'],['Location', e.location||'–'],
-    ['GPS Serial No', e.gps_serial_no||'–'],['Customer Type', e.customer_type||'–'],
-    ['Remarks', e.remarks||'–'],
-    ['Created By', e.created_by_code?'…'+e.created_by_code.slice(-4):'–'],
-    ['Created At', e.created_at?new Date(e.created_at).toLocaleString('en-IN'):'–'],
-  ];
-  document.getElementById('view-body').innerHTML = rows.map(([l,v])=>`
-    <div class="modal-row">
-      <span class="modal-lbl">${l}</span>
-      <span class="modal-val">${v||'–'}</span>
-    </div>`).join('');
-  document.getElementById('view-modal').classList.add('open');
+  const e=allEntries.find(x=>+x.id===+id); if(!e) return;
+  const rows=[['Type',e.type],['Date',e.date],['Task No',e.task_id||e.task_no],['Invoice',e.invoice_no],
+    ['Name on Server',e.name_on_server],['Server',e.server_name],['Model/Service',e.device_model||e.service_type],
+    ['Qty',e.qty],['Unit Price',e.unit_price?'₹'+parseFloat(e.unit_price).toLocaleString('en-IN'):'–'],
+    ['GST',e.gst?'₹'+parseFloat(e.gst).toLocaleString('en-IN'):'–'],
+    ['Total','₹'+parseFloat(e.total_price||0).toLocaleString('en-IN')],
+    ['Received','₹'+parseFloat(e.payment_received||0).toLocaleString('en-IN')],
+    ['Pending','₹'+parseFloat(e.pending_payment||0).toLocaleString('en-IN')],
+    ['Mode',e.payment_mode],['Status',e.payment_status],
+    ['Received On',e.payment_received_on||'–'],['Transaction',e.payment_transaction_details||'–'],
+    ['Pending Reason',e.pending_reason||'–'],['Discount',e.discount_given?'₹'+e.discount_given:'–'],
+    ['Discount Reason',e.discount_reason||'–'],['Discount Incharge',e.discount_incharge||'–'],
+    ['Technician',e.technician_name||'–'],['Location',e.location||'–'],
+    ['GPS Serial',e.gps_serial_no||'–'],['Customer Type',e.customer_type||'–'],
+    ['Remarks',e.remarks||'–'],['Created By',e.created_by_code||'–'],
+    ['Created At',e.created_at?new Date(e.created_at).toLocaleString('en-IN'):'–']];
+  document.getElementById('bs-view-body').innerHTML=rows.map(([l,v])=>`
+    <div class="bs-modal-row"><span class="bs-modal-lbl">${l}</span><span class="bs-modal-val">${v||'–'}</span></div>`).join('');
+  document.getElementById('bs-view-ov').classList.add('open');
 }
-function closeView(){ document.getElementById('view-modal').classList.remove('open'); }
+function closeView(){ document.getElementById('bs-view-ov').classList.remove('open'); }
 
+// ── EDIT ────────────────────────────────────────────
 function editEntry(id){
-  const e = allEntries.find(x=>String(x.id)===String(id));
-  if(!e) return;
-  const fields = ['payment_status','payment_received','payment_mode','payment_received_on',
-                  'payment_transaction_details','pending_reason','payment_reminder_date',
-                  'discount_given','discount_reason','discount_incharge','remarks'];
-  document.getElementById('edit-body').innerHTML = `
-    <div class="form-grid">
-      ${fields.map(f=>`<div class="form-group">
-        <label>${f.replace(/_/g,' ').toUpperCase()}</label>
-        <input type="text" id="edit-${f}" value="${e[f]||''}">
+  const e=allEntries.find(x=>+x.id===+id); if(!e) return;
+  const fields=[
+    {id:'payment_status',label:'Payment Status',type:'select',opts:['paid','partially_paid','pending']},
+    {id:'payment_received',label:'Amount Received',type:'number'},
+    {id:'pending_payment',label:'Pending Amount',type:'number'},
+    {id:'payment_mode',label:'Payment Mode',type:'select',opts:['Cash','UPI','Bank Transfer','Cheque']},
+    {id:'payment_received_on',label:'Received On',type:'date'},
+    {id:'payment_transaction_details',label:'Transaction/UTR',type:'text'},
+    {id:'pending_reason',label:'Pending Reason',type:'text'},
+    {id:'discount_given',label:'Discount Given',type:'number'},
+    {id:'discount_reason',label:'Discount Reason',type:'text'},
+    {id:'discount_incharge',label:'Discount Incharge',type:'text'},
+    {id:'remarks',label:'Remarks',type:'text'},
+  ];
+  document.getElementById('bs-edit-body').innerHTML=`
+    <div class="bs-fg" style="margin-bottom:14px">
+      ${fields.map(f=>`<div class="fg"><label>${f.label}</label>
+        ${f.type==='select'
+          ?`<select id="ef-${f.id}"><option value="">–</option>${f.opts.map(o=>`<option value="${o}" ${e[f.id]===o?'selected':''}>${o}</option>`).join('')}</select>`
+          :`<input type="${f.type}" id="ef-${f.id}" value="${e[f.id]||''}">`}
       </div>`).join('')}
     </div>
-    <div class="submit-row" style="margin-top:16px">
-      <button class="submit-btn" onclick="saveEdit('${id}')">💾 Save Changes</button>
-      <button class="reset-btn" onclick="closeEdit()">Cancel</button>
+    <div class="sub-row">
+      <button class="sub-btn" onclick="saveEdit(${id})">💾 Save</button>
+      <button class="rst-btn" onclick="closeEditModal()">Cancel</button>
     </div>`;
-  document.getElementById('edit-modal').classList.add('open');
+  document.getElementById('bs-edit-ov').classList.add('open');
 }
-
 async function saveEdit(id){
-  const fields = ['payment_status','payment_received','payment_mode','payment_received_on',
-                  'payment_transaction_details','pending_reason','payment_reminder_date',
-                  'discount_given','discount_reason','discount_incharge','remarks'];
-  const body = {};
-  fields.forEach(f=>{ const v=document.getElementById('edit-'+f)?.value; if(v!==undefined) body[f]=v||null; });
-  try {
-    await sbReq(`balance_sheet_entries?id=eq.${id}`, {method:'PATCH', body:JSON.stringify(body)});
-    closeEdit(); toast('✅ Entry updated'); loadEntries();
-  } catch(e){ toast('❌ '+e.message); }
+  const fields=['payment_status','payment_received','pending_payment','payment_mode',
+                'payment_received_on','payment_transaction_details','pending_reason',
+                'discount_given','discount_reason','discount_incharge','remarks'];
+  const updates={};
+  fields.forEach(f=>{ const v=document.getElementById('ef-'+f)?.value; updates[f]=v||null; });
+  const res=await bsApi('bs_update_entry',{},'POST',{id,...updates}).catch(()=>({}));
+  if(res.success){ closeEditModal(); toast('✅ Entry updated'); loadEntries(); }
+  else toast('❌ '+(res.error||'Update failed'));
 }
-function closeEdit(){ document.getElementById('edit-modal').classList.remove('open'); }
+function closeEditModal(){ document.getElementById('bs-edit-ov').classList.remove('open'); }
 
-async function deleteEntry(id){
-  const e = allEntries.find(x=>String(x.id)===String(id));
+// ── DELETE ──────────────────────────────────────────
+async function delEntry(id){
+  const e=allEntries.find(x=>+x.id===+id);
   if(!confirm(`Delete entry for "${e?.name_on_server||id}"?`)) return;
-  try {
-    await sbReq(`balance_sheet_entries?id=eq.${id}`, {method:'DELETE'});
-    toast('🗑️ Entry deleted'); loadEntries();
-  } catch(e){ toast('❌ '+e.message); }
+  const res=await bsApi('bs_delete_entry',{},'POST',{id}).catch(()=>({}));
+  if(res.success){ toast('🗑️ Deleted'); loadEntries(); }
+  else toast('❌ '+(res.error||'Delete failed'));
 }
 
+// ── WHATSAPP ─────────────────────────────────────────
 function waEntry(id){
-  const e = allEntries.find(x=>String(x.id)===String(id));
-  if(!e) return;
-  const msg = `*Please Renew*\n\n*Name on Server:*\n${e.name_on_server||'N/A'}\n\n*Server:* ${e.server_name||'N/A'}\n*Payment Received:* ₹${e.payment_received||0}\n*Payment Mode:* ${e.payment_mode||'N/A'}`;
+  const e=allEntries.find(x=>+x.id===+id); if(!e) return;
+  const msg=`*Please Renew*\n\n*Name on Server:*\n${e.name_on_server||'N/A'}\n\n*Server:* ${e.server_name||'N/A'}\n*Payment Received:* ₹${e.payment_received||0}\n*Payment Mode:* ${e.payment_mode||'N/A'}`;
+  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+}
+function sendWA(){
+  const sel=allEntries.filter(e=>selectedIds.has(e.id));
+  const today=new Date().toLocaleDateString('en-IN');
+  let msg=`*Today Report (${today})*\n\n`;
+  sel.filter(e=>e.type==='sales').forEach(e=>{ msg+=`- ${e.name_on_server||'N/A'}, ${e.device_model||'N/A'}, ${e.server_name||'N/A'}\n`; });
   window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
 }
 
-function sendWaReport(){
-  const selected = allEntries.filter(e=>selectedIds.has(e.id));
-  const today = new Date().toLocaleDateString('en-IN');
-  let msg = `*Today Report (${today})*\n\n`;
-  const sales = selected.filter(e=>e.type==='sales');
-  const lic   = selected.filter(e=>e.type==='license');
-  if(sales.length){
-    msg += '*Sales*\n';
-    sales.forEach(e=>{ msg += `- ${e.name_on_server||'N/A'}, ${e.device_model||'N/A'}, ${e.server_name||'N/A'}\n`; });
-    msg += '\n';
-  }
-  if(lic.length){
-    msg += '*License/Service*\n';
-    lic.forEach(e=>{ msg += `- ${e.service_type||'N/A'}: ${e.name_on_server||'N/A'}\n`; });
-  }
-  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+// ── EXPORT ───────────────────────────────────────────
+function exportXLS(){
+  const data=getFiltered();
+  const rows=data.map((e,i)=>({'#':i+1,'Date':e.date,'Type':e.type,'Task':e.task_id||e.task_no,'Invoice':e.invoice_no,
+    'Name on Server':e.name_on_server,'Server':e.server_name,'Model/Service':e.device_model||e.service_type,
+    'Qty':e.qty,'Unit Price':e.unit_price,'GST':e.gst,'Total':e.total_price,
+    'Received':e.payment_received,'Pending':e.pending_payment,'Mode':e.payment_mode,
+    'Status':e.payment_status,'Tech':e.technician_name,'Location':e.location,
+    'GPS Serial':e.gps_serial_no,'Remarks':e.remarks,'Created By':e.created_by_code,
+    'Created At':e.created_at?new Date(e.created_at).toLocaleString('en-IN'):''}));
+  const ws=XLSX.utils.json_to_sheet(rows);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Balance Sheet');
+  const profile=document.getElementById('bs-profile').value;
+  XLSX.writeFile(wb,`BS_${profile}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast('✅ Excel downloaded');
 }
 
-// ═══════════════════════════════════════════════════════
-// SALES FORM
-// ═══════════════════════════════════════════════════════
+// ── SALES FORM ───────────────────────────────────────
 function calcSales(){
-  const model   = document.getElementById('s-model').value;
-  const qty     = parseFloat(document.getElementById('s-qty').value)||0;
-  const preceived = parseFloat(document.getElementById('s-preceived').value)||0;
-  const preason = document.getElementById('s-preason').value;
-
-  let unitPrice = DEVICE_PRICES[model] || parseFloat(document.getElementById('s-uprice').value)||0;
-  if(!DEVICE_PRICES[model]) document.getElementById('s-uprice').readOnly = false;
-  else { document.getElementById('s-uprice').value = unitPrice; document.getElementById('s-uprice').readOnly = true; }
-
-  let gst=0, total=0;
-  if(currentProfile==='SBGT'){ gst=unitPrice*qty*GST_RATE; total=unitPrice*qty+gst; }
-  else total=unitPrice*qty;
-
-  if(currentProfile==='SBGT') document.getElementById('s-gst').value = gst.toFixed(2);
-  document.getElementById('s-total').value = total.toFixed(2);
-
-  const pending = preason==='discount_given' ? 0 : Math.max(0, total-preceived);
-  document.getElementById('s-ppending').value = pending.toFixed(2);
-
-  const showPend = total>preceived && preceived<total;
-  document.getElementById('s-pending-section').style.display = showPend?'block':'none';
-  if(preason==='later_will_do') document.getElementById('s-reminder-group').style.display='';
-  else document.getElementById('s-reminder-group').style.display='none';
-  if(preason==='discount_given'){
-    ['s-discount-group','s-dreason-group','s-dincharge-group'].forEach(id=>document.getElementById(id).style.display='');
-  } else {
-    ['s-discount-group','s-dreason-group','s-dincharge-group'].forEach(id=>document.getElementById(id).style.display='none');
-  }
+  const profile=document.getElementById('bs-profile').value;
+  const model=document.getElementById('s-model').value;
+  const qty=parseFloat(document.getElementById('s-qty').value)||0;
+  const recv=parseFloat(document.getElementById('s-recv').value)||0;
+  const preason=document.getElementById('s-preason').value;
+  let unit=DEVICE_PRICES[model]||parseFloat(document.getElementById('s-uprice').value)||0;
+  document.getElementById('s-uprice').readOnly=!!DEVICE_PRICES[model];
+  if(DEVICE_PRICES[model]) document.getElementById('s-uprice').value=unit;
+  document.getElementById('s-gst-grp').style.display=profile==='SBGT'?'':'none';
+  let gst=0,total=0;
+  if(profile==='SBGT'){ gst=unit*qty*GST; total=unit*qty+gst; }
+  else total=unit*qty;
+  if(profile==='SBGT') document.getElementById('s-gst').value=gst.toFixed(2);
+  document.getElementById('s-total').value=total.toFixed(2);
+  const pend=preason==='discount_given'?0:Math.max(0,total-recv);
+  document.getElementById('s-pend').value=pend.toFixed(2);
+  const showPend=total>recv&&recv<total;
+  document.getElementById('s-pend-box').style.display=showPend?'block':'none';
+  document.getElementById('s-reminder-grp').style.display=preason==='later_will_do'?'':'none';
+  const isDisc=preason==='discount_given';
+  ['s-disc-grp','s-dreason-grp','s-dincharge-grp'].forEach(id=>document.getElementById(id).style.display=isDisc?'':'none');
 }
 
 async function submitSales(e){
   e.preventDefault();
-  const names = [...document.querySelectorAll('#s-names-list .name-row input')].map(i=>i.value.trim()).filter(Boolean);
-  if(!names.length){ toast('⚠️ Add at least one name on server'); return; }
-  const body = {
-    type:'sales', profile:currentProfile, created_by_code:userCode,
-    gps_serial_no: document.getElementById('s-vin').value.trim(),
-    task_no:       document.getElementById('s-task').value.trim(),
-    invoice_no:    document.getElementById('s-invoice').value.trim()||null,
-    date:          document.getElementById('s-date').value,
-    customer_type: document.getElementById('s-ctype').value||null,
-    name_on_server:names.join(', '),
-    server_name:   document.getElementById('s-server').value,
-    device_model:  document.getElementById('s-model').value,
-    qty:           parseFloat(document.getElementById('s-qty').value)||1,
-    unit_price:    parseFloat(document.getElementById('s-uprice').value)||null,
-    gst:           currentProfile==='SBGT'?(parseFloat(document.getElementById('s-gst').value)||null):null,
-    total_price:   parseFloat(document.getElementById('s-total').value)||0,
-    payment_status:document.getElementById('s-pstatus').value,
-    payment_received:parseFloat(document.getElementById('s-preceived').value)||0,
-    pending_payment:parseFloat(document.getElementById('s-ppending').value)||0,
-    payment_mode:  document.getElementById('s-pmode').value,
-    payment_received_on:  document.getElementById('s-precon').value||null,
-    payment_transaction_details: document.getElementById('s-ptxn').value||null,
-    pending_reason:document.getElementById('s-preason').value||null,
-    payment_reminder_date:document.getElementById('s-preminder').value||null,
-    discount_given:parseFloat(document.getElementById('s-discount')?.value)||null,
-    discount_reason:document.getElementById('s-dreason')?.value||null,
-    discount_incharge:document.getElementById('s-dincharge')?.value||null,
-    technician_name:document.getElementById('s-tech').value||null,
-    location:      document.getElementById('s-loc').value||null,
-    remarks:       document.getElementById('s-remarks').value||null,
+  const names=[...document.querySelectorAll('#s-names .name-row input')].map(i=>i.value.trim()).filter(Boolean);
+  if(!names.length){toast('⚠️ Add at least one name on server');return;}
+  const profile=document.getElementById('bs-profile').value;
+  const body={
+    type:'sales', profile,
+    gps_serial_no:v('s-vin'), task_no:v('s-task'), invoice_no:v('s-invoice'),
+    date:v('s-date'), customer_type:v('s-ctype'), name_on_server:names.join(', '),
+    server_name:v('s-server'), device_model:v('s-model'),
+    qty:parseFloat(v('s-qty'))||1, unit_price:parseFloat(v('s-uprice'))||0,
+    gst:profile==='SBGT'?(parseFloat(v('s-gst'))||0):0,
+    total_price:parseFloat(v('s-total'))||0,
+    payment_status:v('s-pstatus'), payment_received:parseFloat(v('s-recv'))||0,
+    pending_payment:parseFloat(v('s-pend'))||0, payment_mode:v('s-pmode'),
+    payment_received_on:v('s-precon')||null, payment_transaction_details:v('s-ptxn'),
+    pending_reason:v('s-preason'), payment_reminder_date:v('s-preminder')||null,
+    discount_given:parseFloat(v('s-disc'))||0, discount_reason:v('s-dreason'),
+    discount_incharge:v('s-dincharge'), technician_name:v('s-tech'),
+    location:v('s-loc'), remarks:v('s-remarks'),
   };
-  try {
-    await sbReq('balance_sheet_entries', {method:'POST', body:JSON.stringify(body)});
-    toast('✅ Sales entry saved!'); resetSales(); showTab('records'); loadEntries();
-  } catch(err){ toast('❌ '+err.message); }
+  const res=await bsApi('bs_add_entry',{},'POST',body).catch(()=>({}));
+  if(res.success){ toast('✅ Sales entry saved!'); resetSales(); bsTab('records'); }
+  else toast('❌ '+(res.error||'Save failed'));
 }
 
 function resetSales(){
-  document.querySelectorAll('#tab-sales input,#tab-sales select,#tab-sales textarea').forEach(el=>{
-    if(el.type==='checkbox') el.checked=false;
-    else el.value='';
+  document.querySelectorAll('#bspane-sales input,#bspane-sales select,#bspane-sales textarea').forEach(el=>{
+    if(el.type!=='submit') el.value='';
   });
   document.getElementById('s-qty').value='1';
-  document.getElementById('s-preceived').value='0';
-  document.getElementById('s-pending-section').style.display='none';
-  document.getElementById('s-names-list').innerHTML='<div class="name-row"><input type="text" placeholder="Name on server" required><button type="button" class="name-remove" style="display:none" onclick="removeName(this,\'s\')">✕</button></div>';
-  setTodayDates();
+  document.getElementById('s-recv').value='0';
+  document.getElementById('s-pend-box').style.display='none';
+  document.getElementById('s-names').innerHTML='<div class="name-row"><input type="text" placeholder="Name on server" required><button type="button" class="name-rm" style="display:none" onclick="rmName(this,\'s\')">✕</button></div>';
+  setToday();
 }
 
-// ═══════════════════════════════════════════════════════
-// LICENSE FORM
-// ═══════════════════════════════════════════════════════
-function calcLicense(){
-  const stype = document.getElementById('l-stype').value;
-  const plan  = document.getElementById('l-plan').value;
-  const qty   = parseFloat(document.getElementById('l-qty').value)||0;
-  const preceived = parseFloat(document.getElementById('l-preceived').value)||0;
-  const preason = document.getElementById('l-preason').value;
-
-  document.getElementById('l-plan-group').style.display = stype==='license'?'':'none';
-
-  let unitPrice = 0;
-  if(stype==='license') unitPrice = LICENSE_PRICES[plan]||0;
-  else if(SERVICE_PRICES[stype]) unitPrice = SERVICE_PRICES[stype];
-  else unitPrice = parseFloat(document.getElementById('l-uprice').value)||0;
-
-  const isPriceEditable = !LICENSE_PRICES[plan] && !SERVICE_PRICES[stype] && stype!=='license';
-  document.getElementById('l-uprice').readOnly = !isPriceEditable;
-  if(!isPriceEditable && unitPrice>0) document.getElementById('l-uprice').value = unitPrice;
-
-  let gst=0, total=0;
-  if(currentProfile==='SBGT'){ gst=unitPrice*qty*GST_RATE; total=unitPrice*qty+gst; }
-  else total=unitPrice*qty;
-
-  if(currentProfile==='SBGT') document.getElementById('l-gst').value = gst.toFixed(2);
-  document.getElementById('l-total').value = total.toFixed(2);
-
-  const pending = preason==='discount_given'?0:Math.max(0,total-preceived);
-  document.getElementById('l-ppending').value = pending.toFixed(2);
-
-  const showPend = total>preceived && preceived<total;
-  document.getElementById('l-pending-section').style.display = showPend?'block':'none';
-  document.getElementById('l-reminder-group').style.display = preason==='later_will_do'?'':'none';
-  document.getElementById('l-discount-group').style.display = preason==='discount_given'?'':'none';
+// ── LICENSE FORM ─────────────────────────────────────
+function calcLic(){
+  const profile=document.getElementById('bs-profile').value;
+  const stype=document.getElementById('l-stype').value;
+  const plan=document.getElementById('l-plan').value;
+  const qty=parseFloat(document.getElementById('l-qty').value)||0;
+  const recv=parseFloat(document.getElementById('l-recv').value)||0;
+  const preason=document.getElementById('l-preason').value;
+  document.getElementById('l-plan-grp').style.display=stype==='license'?'':'none';
+  let unit=0;
+  if(stype==='license') unit=LICENSE_PRICES[plan]||0;
+  else if(SERVICE_PRICES[stype]) unit=SERVICE_PRICES[stype];
+  else unit=parseFloat(document.getElementById('l-uprice').value)||0;
+  const editable=!LICENSE_PRICES[plan]&&!SERVICE_PRICES[stype]&&stype!=='license';
+  document.getElementById('l-uprice').readOnly=!editable;
+  if(!editable&&unit>0) document.getElementById('l-uprice').value=unit;
+  document.getElementById('l-gst-grp').style.display=profile==='SBGT'?'':'none';
+  let gst=0,total=0;
+  if(profile==='SBGT'){ gst=unit*qty*GST; total=unit*qty+gst; }
+  else total=unit*qty;
+  if(profile==='SBGT') document.getElementById('l-gst').value=gst.toFixed(2);
+  document.getElementById('l-total').value=total.toFixed(2);
+  const pend=preason==='discount_given'?0:Math.max(0,total-recv);
+  document.getElementById('l-pend').value=pend.toFixed(2);
+  const showPend=total>recv&&recv<total;
+  document.getElementById('l-pend-box').style.display=showPend?'block':'none';
+  document.getElementById('l-reminder-grp').style.display=preason==='later_will_do'?'':'none';
+  document.getElementById('l-disc-grp').style.display=preason==='discount_given'?'':'none';
 }
 
 async function submitLicense(e){
   e.preventDefault();
-  const names = [...document.querySelectorAll('#l-names-list .name-row input')].map(i=>i.value.trim()).filter(Boolean);
-  if(!names.length){ toast('⚠️ Add at least one name on server'); return; }
-  const body = {
-    type:'license', profile:currentProfile, created_by_code:userCode,
-    task_no:       document.getElementById('l-task').value.trim(),
-    invoice_no:    document.getElementById('l-invoice').value.trim()||null,
-    date:          document.getElementById('l-date').value,
-    name_on_server:names.join(', '),
-    server_name:   document.getElementById('l-server').value,
-    service_type:  document.getElementById('l-stype').value,
-    license_plan:  document.getElementById('l-plan').value||null,
-    qty:           parseFloat(document.getElementById('l-qty').value)||1,
-    unit_price:    parseFloat(document.getElementById('l-uprice').value)||null,
-    gst:           currentProfile==='SBGT'?(parseFloat(document.getElementById('l-gst').value)||null):null,
-    total_price:   parseFloat(document.getElementById('l-total').value)||0,
-    payment_status:document.getElementById('l-pstatus').value,
-    payment_received:parseFloat(document.getElementById('l-preceived').value)||0,
-    pending_payment:parseFloat(document.getElementById('l-ppending').value)||0,
-    payment_mode:  document.getElementById('l-pmode').value,
-    payment_received_on:  document.getElementById('l-precon').value||null,
-    payment_transaction_details: document.getElementById('l-ptxn').value||null,
-    pending_reason:document.getElementById('l-preason').value||null,
-    payment_reminder_date:document.getElementById('l-preminder').value||null,
-    discount_given:parseFloat(document.getElementById('l-discount')?.value)||null,
-    technician_name:document.getElementById('l-tech').value||null,
-    location:      document.getElementById('l-loc').value||null,
-    remarks:       document.getElementById('l-remarks').value||null,
+  const names=[...document.querySelectorAll('#l-names .name-row input')].map(i=>i.value.trim()).filter(Boolean);
+  if(!names.length){toast('⚠️ Add at least one name on server');return;}
+  const profile=document.getElementById('bs-profile').value;
+  const body={
+    type:'license', profile,
+    task_no:v('l-task'), invoice_no:v('l-invoice'), date:v('l-date'),
+    name_on_server:names.join(', '), server_name:v('l-server'),
+    service_type:v('l-stype'), license_plan:v('l-plan')||null,
+    qty:parseFloat(v('l-qty'))||1, unit_price:parseFloat(v('l-uprice'))||0,
+    gst:profile==='SBGT'?(parseFloat(v('l-gst'))||0):0,
+    total_price:parseFloat(v('l-total'))||0,
+    payment_status:v('l-pstatus'), payment_received:parseFloat(v('l-recv'))||0,
+    pending_payment:parseFloat(v('l-pend'))||0, payment_mode:v('l-pmode'),
+    payment_received_on:v('l-precon')||null, payment_transaction_details:v('l-ptxn'),
+    pending_reason:v('l-preason'), payment_reminder_date:v('l-preminder')||null,
+    discount_given:parseFloat(v('l-disc'))||0, technician_name:v('l-tech'),
+    location:v('l-loc'), remarks:v('l-remarks'),
   };
-  try {
-    await sbReq('balance_sheet_entries', {method:'POST', body:JSON.stringify(body)});
-    toast('✅ License entry saved!'); resetLicense(); showTab('records'); loadEntries();
-  } catch(err){ toast('❌ '+err.message); }
+  const res=await bsApi('bs_add_entry',{},'POST',body).catch(()=>({}));
+  if(res.success){ toast('✅ License entry saved!'); resetLic(); bsTab('records'); }
+  else toast('❌ '+(res.error||'Save failed'));
 }
 
-function resetLicense(){
-  document.querySelectorAll('#tab-license input,#tab-license select,#tab-license textarea').forEach(el=>{
-    if(el.type==='checkbox') el.checked=false;
-    else el.value='';
+function resetLic(){
+  document.querySelectorAll('#bspane-license input,#bspane-license select,#bspane-license textarea').forEach(el=>{
+    if(el.type!=='submit') el.value='';
   });
   document.getElementById('l-qty').value='1';
-  document.getElementById('l-preceived').value='0';
-  document.getElementById('l-pending-section').style.display='none';
-  document.getElementById('l-plan-group').style.display='none';
-  document.getElementById('l-names-list').innerHTML='<div class="name-row"><input type="text" placeholder="Name on server" required><button type="button" class="name-remove" style="display:none" onclick="removeName(this,\'l\')">✕</button></div>';
-  setTodayDates();
+  document.getElementById('l-recv').value='0';
+  document.getElementById('l-pend-box').style.display='none';
+  document.getElementById('l-plan-grp').style.display='none';
+  document.getElementById('l-names').innerHTML='<div class="name-row"><input type="text" placeholder="Name on server" required><button type="button" class="name-rm" style="display:none" onclick="rmName(this,\'l\')">✕</button></div>';
+  setToday();
 }
 
-// ═══════════════════════════════════════════════════════
-// HELPERS
-// ═══════════════════════════════════════════════════════
-function showTab(t){
-  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
-  document.getElementById('tab-btn-'+t).classList.add('active');
-  document.getElementById('tab-'+t).classList.add('active');
-  if(t==='records') loadEntries();
+// ── HELPERS ──────────────────────────────────────────
+function v(id){ return (document.getElementById(id)?.value||'').trim(); }
+function setToday(){
+  const t=new Date().toISOString().slice(0,10);
+  ['s-date','l-date'].forEach(id=>{ const el=document.getElementById(id); if(el&&!el.value) el.value=t; });
 }
-
-function setTodayDates(){
-  const today = new Date().toISOString().split('T')[0];
-  ['s-date','l-date'].forEach(id=>{ const el=document.getElementById(id); if(el&&!el.value) el.value=today; });
-}
-
-function addName(prefix){
-  const list = document.getElementById(prefix+'-names-list');
-  const div  = document.createElement('div');
+function addName(p){
+  const list=document.getElementById(p+'-names');
+  const div=document.createElement('div');
   div.className='name-row';
-  div.innerHTML=`<input type="text" placeholder="Name on server" required><button type="button" class="name-remove" onclick="removeName(this,'${prefix}')">✕</button>`;
+  div.innerHTML=`<input type="text" placeholder="Name on server" required><button type="button" class="name-rm" onclick="rmName(this,'${p}')">✕</button>`;
   list.appendChild(div);
-  updateRemoveButtons(prefix);
+  syncRmBtns(p);
 }
-function removeName(btn, prefix){
-  btn.closest('.name-row').remove();
-  updateRemoveButtons(prefix);
+function rmName(btn,p){ btn.closest('.name-row').remove(); syncRmBtns(p); }
+function syncRmBtns(p){
+  const rows=document.querySelectorAll(`#${p}-names .name-row`);
+  rows.forEach(r=>{ const b=r.querySelector('.name-rm'); if(b) b.style.display=rows.length>1?'':'none'; });
 }
-function updateRemoveButtons(prefix){
-  const rows = document.querySelectorAll(`#${prefix}-names-list .name-row`);
-  rows.forEach((r,i)=>{ const btn=r.querySelector('.name-remove'); if(btn) btn.style.display=rows.length>1?'':'none'; });
-}
-
-function exportExcel(){
-  const data = getFiltered();
-  const rows = data.map((e,i)=>({
-    '#': i+1, 'Date':e.date, 'Type':e.type, 'Task No':e.task_no,
-    'Invoice':e.invoice_no, 'Name on Server':e.name_on_server,
-    'Server':e.server_name, 'Model/Service':e.device_model||e.service_type,
-    'Qty':e.qty, 'Unit Price':e.unit_price, 'GST':e.gst,
-    'Total':e.total_price, 'Received':e.payment_received,
-    'Pending':e.pending_payment, 'Mode':e.payment_mode,
-    'Status':e.payment_status, 'Tech':e.technician_name, 'Location':e.location,
-    'GPS Serial':e.gps_serial_no, 'Remarks':e.remarks,
-    'Created By':e.created_by_code?'…'+e.created_by_code.slice(-4):'',
-    'Created At':e.created_at?new Date(e.created_at).toLocaleString('en-IN'):'',
-  }));
-  const ws = XLSX.utils.json_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Balance Sheet');
-  XLSX.writeFile(wb, `BalanceSheet_${currentProfile}_${new Date().toISOString().slice(0,10)}.xlsx`);
-  toast('✅ Excel downloaded');
-}
-
 function toast(msg){
   const el=document.getElementById('bs-toast');
   el.textContent=msg; el.classList.add('show');
   setTimeout(()=>el.classList.remove('show'),3000);
 }
 
-// ═══════════════════════════════════════════════════════
-// INIT
-// ═══════════════════════════════════════════════════════
-(async function init(){
-  const saved = localStorage.getItem('bs_code');
-  if(saved){
-    try {
-      const rows = await sbReq(`access_codes?code=eq.${saved}&is_enabled=eq.true&select=code`);
-      if(rows.length){ userCode=saved; showScreen('profile'); return; }
-    } catch(e){}
-  }
-  showScreen('auth');
-})();
+// ── INIT ─────────────────────────────────────────────
+setToday();
+loadEntries();
 </script>
 </body>
 </html>

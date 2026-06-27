@@ -1037,27 +1037,13 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
           </div>
         </div>
       </div>
-      <div class="page" id="page-balance-sheet">
-        <div class="pg-header">
-          <div class="breadcrumb">Home / <b>Balance Sheet</b></div>
-          <div class="pg-title">💰 Balance Sheet</div>
-          <div class="pg-sub">GPS Sales, License &amp; Payment Records</div>
-        </div>
-        <div class="card" style="margin-bottom:14px">
-          <div style="padding:40px;text-align:center">
-            <div style="font-size:52px;margin-bottom:16px">💰</div>
-            <div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:8px">GPS Balance Sheet</div>
-            <div style="font-size:13px;color:var(--text3);margin-bottom:24px;line-height:1.7">
-              Sales entries, license renewals, payment records<br>for BGPT and SBGT profiles.
-            </div>
-            <a href="balance-sheet.html" target="_blank"
-               style="display:inline-block;background:var(--accent);color:#fff;padding:14px 32px;border-radius:10px;font-size:15px;font-weight:800;text-decoration:none;box-shadow:0 4px 12px rgba(14,92,92,.3)">
-              📊 Open Balance Sheet →
-            </a>
-            <div style="margin-top:14px;font-size:11px;color:var(--text3)">Opens in a new tab — your login session carries over automatically</div>
-          </div>
-        </div>
+      <div class="page" id="page-balance-sheet" style="padding:0;display:flex;flex-direction:column">
+        <iframe id="bs-iframe" src="balance-sheet.html"
+          style="flex:1;width:100%;border:none;min-height:calc(100vh - 120px)"
+          onload="syncBsAuth(this)">
+        </iframe>
       </div>
+
       <div class="page" id="page-accounts">
         <div class="pg-header"><div class="breadcrumb">Home / <b>P&L Overview</b></div><div class="pg-title">📈 P&L Overview</div></div>
         <div class="card"><div style="padding:40px;text-align:center;color:var(--text3)">Coming soon</div></div>
@@ -1682,12 +1668,13 @@ function showPage(name, opts={}){
   if(sidebar) sidebar.classList.remove('open');
   // Load page data
   const loaders = {
-    dashboard:     loadDashboard,
-    tasks:         loadTasksPage,
-    'my-tasks':    loadMyTasks,
-    urgent:        loadUrgentPage,
-    approvals:     loadApprovalsPage,
-    'daily-report':loadDailyReport,
+    dashboard:       loadDashboard,
+    tasks:           loadTasksPage,
+    'my-tasks':      loadMyTasks,
+    urgent:          loadUrgentPage,
+    approvals:       loadApprovalsPage,
+    'daily-report':  loadDailyReport,
+    'balance-sheet': ()=>{ syncBsAuth(document.getElementById('bs-iframe')); },
   };
   if(loaders[name]) loaders[name]();
 }
@@ -4988,6 +4975,15 @@ async function loadApprovalsPage(){
 }
 
 async function loadApprovals(){ return loadApprovalsPage(); }
+
+function syncBsAuth(iframe){
+  // Pass current auth token into the balance sheet iframe
+  try {
+    if(iframe.contentWindow && authToken){
+      iframe.contentWindow.authToken = authToken;
+    }
+  } catch(e){}
+}
 // ════════════════════════════════════════════════════════
 // DAILY REPORT
 // ════════════════════════════════════════════════════════
