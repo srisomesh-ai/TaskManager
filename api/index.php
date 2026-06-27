@@ -1002,18 +1002,7 @@ case 'bs_update_entry':
     if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     $id = intval($body['id']??0);
     if (!$id) { echo json_encode(['error'=>'Missing id']); break; }
-    // AUDIT PROTECTION: task-linked entries can only update payment fields
-    $bsUpd = $pdo->prepare("SELECT task_db_id FROM balance_sheet_entries WHERE id=?");
-    $bsUpd->execute([$id]); $bsUpdRow = $bsUpd->fetch();
-    $isTaskLinked = !empty($bsUpdRow['task_db_id']);
-    if ($isTaskLinked) {
-        // Only payment-related fields allowed for task-linked audit entries
-        $allowed = ['payment_status','payment_received','pending_payment','payment_mode',
-                    'payment_received_on','payment_transaction_details','pending_reason',
-                    'discount_given','discount_reason','discount_incharge',
-                    'payment_reminder_date','invoice_no','remarks'];
-    } else {
-        $allowed = ['date','invoice_no','gps_serial_no','customer_type','name_on_server','server_name',
+    $allowed = ['date','invoice_no','gps_serial_no','customer_type','name_on_server','server_name',
                 'device_model','service_type','license_plan','qty','unit_price','gst','total_price',
                 'payment_status','payment_received','pending_payment','payment_mode','payment_received_on',
                 'payment_transaction_details','pending_reason','discount_given','discount_reason',
