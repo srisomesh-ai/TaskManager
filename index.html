@@ -614,7 +614,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
               <div class="form-row">
                 <div class="form-group">
                   <label>Job Type</label>
-                  <select id="fm-job" onchange="setModalJobPrice(this.value);checkTaskFormReady()">
+                  <select id="fm-job" onchange="setModalJobPrice(this.value);checkTaskFormReady();toggleFreeService(this.value)">
                     <option value="">Select Job Type</option>
                     <option value="Basic/Normal">Basic/Normal GPS</option>
                     <option value="Engine Status">Engine Status GPS</option>
@@ -683,6 +683,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
                   <button type="button" class="pay-mode-opt" onclick="selectPayMode('In 7 Days')">📅 In 7 Days</button>
                   <button type="button" class="pay-mode-opt" onclick="selectPayMode('In 15 Days')">📅 In 15 Days</button>
                   <button type="button" class="pay-mode-opt" onclick="selectPayMode('Within 30 Days')">📅 30 Days</button>
+                  <button type="button" id="free-service-btn" class="pay-mode-opt" onclick="selectPayMode('Free Service')" style="display:none;background:var(--green-bg);color:var(--green);border-color:var(--green)">🎁 Free Service</button>
                 </div>
                 <input type="hidden" id="fm-paymode">
                 <input type="hidden" id="fm-pay-reminder">
@@ -2440,6 +2441,11 @@ const JOB_PRICES = {
 let _pendingPayMode = null;
 
 function selectPayMode(mode){
+  if(mode==='Free Service'){
+    // Zero out price for free service
+    const priceEl = document.getElementById('fm-unit-price');
+    if(priceEl){ priceEl.value='0'; if(typeof setModalJobPrice==='function') updateDrawerTotals(); }
+  }
   _pendingPayMode = mode;
   const {price, qty, gst, total, gstTotal} = getDrawerTotal();
   const profile = document.getElementById('fm-profile')?.value||'BGPT';
@@ -5271,6 +5277,20 @@ function copyQtLink(e){
     ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
     showToast('✅ Link copied!');
   });
+}
+
+// ══════════════════════════════════════════════════════════
+// FREE SERVICE — show only for Troubleshoot / Demonstration
+// ══════════════════════════════════════════════════════════
+function toggleFreeService(jobType){
+  const freeJobs = ['Troubleshoot/Offline', 'Demonstration'];
+  const btn = document.getElementById('free-service-btn');
+  if(!btn) return;
+  btn.style.display = freeJobs.includes(jobType) ? '' : 'none';
+  // If job changed away from free-service jobs, clear free service selection
+  if(!freeJobs.includes(jobType) && document.getElementById('fm-paymode')?.value === 'Free Service'){
+    clearPayMode();
+  }
 }
 
 // ══════════════════════════════════════════════════════════
