@@ -77,7 +77,7 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
 /* CONTENT */
 .content{flex:1;height:100%;overflow:auto;background:var(--bg)}
 .page{display:none;padding:22px 24px}
-.page.active{display:block}#page-balance-sheet.active{display:flex}#page-admin.active{display:flex}
+.page.active{display:block}#page-balance-sheet.active{display:flex}
 
 /* PAGE HEADER */
 .pg-header{margin-bottom:20px}
@@ -1068,10 +1068,51 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
         <div class="pg-header"><div class="breadcrumb">Home / <b>Invoicing</b></div><div class="pg-title">🧾 Invoicing</div></div>
         <div class="card"><div style="padding:40px;text-align:center;color:var(--text3)">Coming soon</div></div>
       </div>
-      <div class="page" id="page-admin" style="padding:0;flex-direction:column">
-        <iframe id="admin-iframe" src="about:blank"
-          style="flex:1;width:100%;border:none;min-height:calc(100vh - 120px)">
-        </iframe>
+      <div class="page" id="page-admin">
+        <div class="pg-header">
+          <div class="breadcrumb">Home / <b>Admin Panel</b></div>
+          <div class="pg-title">⚙️ Admin Panel</div>
+          <div class="pg-sub">Manage users, data and system settings</div>
+        </div>
+
+        <!-- DATA MANAGEMENT -->
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-hd">
+            <div class="card-title"><span class="card-dot" style="background:var(--red)"></span> Data Management</div>
+          </div>
+          <div style="padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+
+            <div style="background:var(--red-bg);border:1.5px solid var(--red);border-radius:8px;padding:14px 16px">
+              <div style="font-size:13px;font-weight:800;color:var(--red);margin-bottom:4px">🗑️ Delete All Tasks</div>
+              <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Permanently deletes all tasks, activities, device installs, and consent records. Cannot be undone.</div>
+              <button onclick="adminWipeData('tasks')" style="background:var(--red);color:#fff;border:none;padding:9px 18px;border-radius:7px;font-size:13px;font-weight:800;cursor:pointer">🗑️ Wipe All Task Data</button>
+            </div>
+
+            <div style="background:var(--amber-bg);border:1.5px solid var(--amber);border-radius:8px;padding:14px 16px">
+              <div style="font-size:13px;font-weight:800;color:var(--saffron);margin-bottom:4px">🔄 Reset Task IDs</div>
+              <div style="font-size:12px;color:var(--text2);margin-bottom:12px">After wiping, reset the task counter so next task starts from ID-2026-0001.</div>
+              <button onclick="adminWipeData('reset_ids')" style="background:var(--saffron);color:#fff;border:none;padding:9px 18px;border-radius:7px;font-size:13px;font-weight:800;cursor:pointer">🔄 Reset Task Counter</button>
+            </div>
+
+            <div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:14px 16px">
+              <div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:4px">📊 Database Stats</div>
+              <div id="admin-db-stats" style="font-size:12px;color:var(--text2)">Click to load stats</div>
+              <button onclick="adminLoadStats()" style="margin-top:10px;background:var(--accent);color:#fff;border:none;padding:7px 14px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">Load Stats</button>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- USER MANAGEMENT -->
+        <div class="card">
+          <div class="card-hd">
+            <div class="card-title"><span class="card-dot" style="background:var(--accent)"></span> Users</div>
+            <button class="card-btn" onclick="adminLoadUsers()">Refresh</button>
+          </div>
+          <div id="admin-users-list" style="padding:8px 0">
+            <div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Click Refresh to load users</div>
+          </div>
+        </div>
       </div>
 
     </div><!-- /content -->
@@ -1650,7 +1691,6 @@ function showPage(name, opts={}){
     approvals:       loadApprovalsPage,
     'daily-report':  loadDailyReport,
     'balance-sheet': syncBsAuth,
-    'admin':         syncAdminAuth,
   };
   if(loaders[name]) loaders[name]();
 }
@@ -4955,13 +4995,8 @@ async function loadApprovals(){ return loadApprovalsPage(); }
 function syncBsAuth(){
   const iframe = document.getElementById('bs-iframe');
   if(!iframe) return;
+  // Pass token as URL param — works same-origin
   iframe.src = 'balance-sheet.html?token=' + encodeURIComponent(authToken||'');
-}
-
-function syncAdminAuth(){
-  const iframe = document.getElementById('admin-iframe');
-  if(!iframe) return;
-  iframe.src = 'admin.html?token=' + encodeURIComponent(authToken||'');
 }
 // ════════════════════════════════════════════════════════
 // DAILY REPORT

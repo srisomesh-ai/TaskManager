@@ -1115,40 +1115,6 @@ case 'bs_resync_all':
     }
     break;
 
-// ── USER MANAGEMENT ──────────────────────────────────────────
-case 'create_user':
-    if ($userRole!=='admin') { http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
-    $name  = trim($body['name']??'');
-    $email = trim($body['email']??'');
-    $pass  = $body['password']??'';
-    $role  = $body['role']??'technician';
-    $active= intval($body['is_active']??1);
-    if(!$name||!$email||!$pass) { echo json_encode(['error'=>'Name, email and password required']); break; }
-    if(strlen($pass)<6) { echo json_encode(['error'=>'Password must be at least 6 characters']); break; }
-    $check = $pdo->prepare("SELECT id FROM users WHERE email=?");
-    $check->execute([$email]);
-    if($check->fetch()) { echo json_encode(['error'=>'Email already exists']); break; }
-    $pdo->prepare("INSERT INTO users (name,email,password,role,is_active) VALUES (?,?,?,?,?)")
-        ->execute([$name,$email,password_hash($pass,PASSWORD_DEFAULT),$role,$active]);
-    echo json_encode(['success'=>true,'id'=>$pdo->lastInsertId()]);
-    break;
-
-case 'update_user':
-    if ($userRole!=='admin') { http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
-    $uid   = intval($body['id']??0);
-    if(!$uid) { echo json_encode(['error'=>'Missing user id']); break; }
-    $sets=[]; $vals=[];
-    if(!empty($body['name']))      { $sets[]='name=?';      $vals[]=$body['name']; }
-    if(!empty($body['email']))     { $sets[]='email=?';     $vals[]=$body['email']; }
-    if(!empty($body['role']))      { $sets[]='role=?';      $vals[]=$body['role']; }
-    if(isset($body['is_active']))  { $sets[]='is_active=?'; $vals[]=intval($body['is_active']); }
-    if(!empty($body['password']))  { $sets[]='password=?';  $vals[]=password_hash($body['password'],PASSWORD_DEFAULT); }
-    if(!$sets) { echo json_encode(['error'=>'Nothing to update']); break; }
-    $vals[]=$uid;
-    $pdo->prepare("UPDATE users SET ".implode(',',$sets)." WHERE id=?")->execute($vals);
-    echo json_encode(['success'=>true]);
-    break;
-
 // ============================================================
 // FINANCE PORTAL ACTIONS
 // ============================================================
