@@ -2798,7 +2798,7 @@ async function viewTask(id){
         <div id="td-consent-status-${t.id}" style="margin-top:10px"></div>
       `;
       // Check consent status immediately when panel loads
-      checkAndUpdateAttendBtn(t.id);
+      checkAndUpdateAttendBtn(t.id, t);
     }
   } else {
     techPanel.style.display = 'none';
@@ -3229,9 +3229,9 @@ async function submitTechUpdate(){
 }
 
 // ── TECH ATTEND MODAL ─────────────────────────────────────────────────────
-function openTechAttend(taskId){
-  // Route to job-specific form for non-installation jobs
-  const job = (_detailTask?.device_details||'').toLowerCase();
+function openTechAttend(taskId, jobTypeParam){
+  // Route to job-specific form — use jobTypeParam if passed (avoids _detailTask dependency)
+  const job = (jobTypeParam || _detailTask?.device_details||'').toLowerCase();
   const isSpecialJob = job.includes('troubleshoot') || job.includes('offline') ||
                        (job.includes('vehicle to vehicle') || job.includes('v2v')) ||
                        job.includes('demonstration') || job.includes('demo') ||
@@ -3569,7 +3569,11 @@ async function handleAttendClick(taskId){
   // Check if consent already received
   const check = await api('check_consent', {id: taskId}).catch(()=>({}));
   if(check.consented){
-    // Consent already done — go straight to attend form
+    // Ensure _detailTask is loaded so openTechAttend can read device_details
+    if(!_detailTask || String(_detailTask.id) !== String(taskId)){
+      const tr = await api('get_task', {id: taskId}).catch(()=>({}));
+      if(tr && tr.task) _detailTask = tr.task;
+    }
     openTechAttend(taskId);
     return;
   }
@@ -3634,8 +3638,10 @@ async function handleAttendClick(taskId){
           techPanel.appendChild(done);
         }
 
-        // Change onclick to open attend directly
-        btn.setAttribute('onclick', 'openTechAttend(' + taskId + ')');
+        // Change onclick to open attend directly with device_details embedded
+        const dd3 = encodeURIComponent(_detailTask?.device_details||'');
+        btn.setAttribute('onclick', 'openTechAttend(' + taskId + ',decodeURIComponent(\'' + dd3 + '\'))');
+
       }
     }, 8000);
   } else {
@@ -3649,7 +3655,7 @@ async function handleAttendClick(taskId){
 // Poll timer cleared in closeTaskDetail above
 
 // ── Check consent and update Attend button state on task open ─────────────
-async function checkAndUpdateAttendBtn(taskId){
+async function checkAndUpdateAttendBtn(taskId, taskObj){
   const btn    = document.getElementById('td-attend-btn-'  + taskId);
   const icon   = document.getElementById('td-attend-icon-' + taskId);
   const label  = document.getElementById('td-attend-label-'+ taskId);
@@ -3709,15 +3715,29 @@ async function checkAndUpdateAttendBtn(taskId){
   // Check consent status from server
   const res = await api('check_consent', {id: taskId}).catch(()=>({}));
 
-  // STATE 2: Consent received — Proceed to Adding
+  // STATE 2: Consent received — label depends on job type
   if(res.consented){
+    const jobLower = (taskObj?.device_details || _detailTask?.device_details||'').toLowerCase();
+    const isDemo2  = jobLower.includes('demonstration') || jobLower.includes('demo');
+    const isTrbl2  = jobLower.includes('troubleshoot')  || jobLower.includes('offline');
     btn.style.background = 'var(--green)';
     btn.style.border     = 'none';
     btn.style.display    = '';
-    btn.setAttribute('onclick', 'openTechAttend(' + taskId + ')');
-    if(icon)  icon.textContent  = '➕';
-    if(label) label.textContent = 'Proceed to Adding';
-    if(sub)   sub.textContent   = 'Customer confirmed';
+    const dd2 = encodeURIComponent(taskObj?.device_details || _detailTask?.device_details||'');
+    btn.setAttribute('onclick', 'openTechAttend(' + taskId + ',decodeURIComponent(\'' + dd2 + '\'))');
+    if(isDemo2){
+      if(icon)  icon.textContent  = '📱';
+      if(label) label.textContent = 'Demo Done';
+      if(sub)   sub.textContent   = 'Tap to record demo report';
+    } else if(isTrbl2){
+      if(icon)  icon.textContent  = '🔧';
+      if(label) label.textContent = 'Fix Done';
+      if(sub)   sub.textContent   = 'Tap to record outcome';
+    } else {
+      if(icon)  icon.textContent  = '➕';
+      if(label) label.textContent = 'Proceed to Adding';
+      if(sub)   sub.textContent   = 'Customer confirmed';
+    }
     if(status) status.innerHTML = `
       <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--green);line-height:1.6">
         ✅ <strong>${res.name||'Customer'}</strong> confirmed T&amp;C and payment.<br>
@@ -5046,9 +5066,16 @@ let _joTaskId = null;
 let _joJobType = null;
 
 function openJobOutcome(taskId){
-  _joTaskId  = taskId;
+  _joTaskId = taskId;
+  // If _detailTask not loaded, fetch first then retry
+  if(!_detailTask || String(_detailTask.id) !== String(taskId)){
+    api('get_task', {id: taskId}).then(function(r){
+      if(r && r.task){ _detailTask = r.task; openJobOutcome(taskId); }
+      else showToast('❌ Could not load task');
+    }).catch(function(){ showToast('❌ Network error'); });
+    return;
+  }
   const task = _detailTask;
-  if(!task) return;
 
   const job = (task.device_details||'').toLowerCase();
   let type = 'default';
