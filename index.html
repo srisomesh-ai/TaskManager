@@ -3659,7 +3659,7 @@ function openTechAttend(taskId, jobType){
                        job.includes('demonstration') || job.includes('demo') ||
                        job.includes('only remove') || job.includes('remove only');
   if(isSpecialJob){
-    openJobOutcome(taskId);
+    openJobOutcome(taskId, jobType);
     return;
   }
 
@@ -5535,13 +5535,25 @@ function blProceed(){
 let _joTaskId = null;
 let _joJobType = null;
 
-function openJobOutcome(taskId){
+function openJobOutcome(taskId, jobTypeHint){
+  // If _detailTask not loaded, fetch it then retry
+  if(!_detailTask || String(_detailTask.id) !== String(taskId)){
+    showToast('⏳ Loading…');
+    api('get_task', {id: taskId}).then(function(res){
+      if(res && res.task){
+        _detailTask = res.task;
+        openJobOutcome(taskId, jobTypeHint);
+      } else {
+        showToast('❌ Could not load task');
+      }
+    }).catch(function(){ showToast('❌ Network error'); });
+    return;
+  }
   const task = _detailTask;
-  if(!task){ showToast('⚠️ Open the task first'); return; }
   _joTaskId  = taskId;
 
-  // Determine job type
-  const job = (task.device_details||'').toLowerCase();
+  // Determine job type — use hint from button if available
+  const job = (jobTypeHint || task.device_details || '').toLowerCase();
   if(job.includes('troubleshoot') || job.includes('offline')){
     _joJobType = 'troubleshoot';
   } else if(job.includes('vehicle to vehicle') || job.includes('v2v')){
