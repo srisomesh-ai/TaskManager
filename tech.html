@@ -3231,13 +3231,11 @@ async function submitTechUpdate(){
 // ── TECH ATTEND MODAL ─────────────────────────────────────────────────────
 function openTechAttend(taskId, jobTypeParam){
   const job = (jobTypeParam || _detailTask?.device_details||'').toLowerCase();
-  showToast('DEBUG: job=' + job + ' param=' + (jobTypeParam||'none'));
   const isSpecialJob = job.includes('troubleshoot') || job.includes('offline') ||
                        (job.includes('vehicle to vehicle') || job.includes('v2v')) ||
                        job.includes('demonstration') || job.includes('demo') ||
                        job.includes('only remove') || job.includes('remove only');
   if(isSpecialJob){
-    showToast('DEBUG: routing to openJobOutcome');
     openJobOutcome(taskId);
     return;
   }
@@ -3639,9 +3637,7 @@ async function handleAttendClick(taskId){
           techPanel.appendChild(done);
         }
 
-        // Change onclick to open attend directly with device_details embedded
-        const dd3 = encodeURIComponent(_detailTask?.device_details||'');
-        btn.setAttribute('onclick', 'openTechAttend(' + taskId + ',decodeURIComponent(\'' + dd3 + '\'))');
+        btn.setAttribute('onclick', 'openJobOutcome(' + taskId + ')');
 
       }
     }, 8000);
@@ -3727,8 +3723,7 @@ async function checkAndUpdateAttendBtn(taskId, taskObj){
     btn.style.background = 'var(--green)';
     btn.style.border     = 'none';
     btn.style.display    = '';
-    const dd2 = encodeURIComponent(taskObj?.device_details || _detailTask?.device_details||'');
-    btn.setAttribute('onclick', 'openTechAttend(' + taskId + ',decodeURIComponent(\'' + dd2 + '\'))');
+    btn.setAttribute('onclick', 'openJobOutcome(' + taskId + ')');
     if(isDemo2){
       if(icon)  icon.textContent  = '📱';
       if(label) label.textContent = 'Demo Done';
