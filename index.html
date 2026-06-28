@@ -3988,7 +3988,11 @@ async function handleAttendClick(taskId){
   // Check if consent already received
   const check = await api('check_consent', {id: taskId}).catch(()=>({}));
   if(check.consented){
-    // Consent already done — go straight to attend form
+    // Consent already done — ensure task is loaded then proceed
+    if(!_detailTask || String(_detailTask.id) !== String(taskId)){
+      const r = await api('get_task',{id:taskId}).catch(()=>({}));
+      if(r&&r.task) _detailTask = r.task;
+    }
     openTechAttend(taskId);
     return;
   }
@@ -5523,9 +5527,14 @@ let _joTaskId = null;
 let _joJobType = null;
 
 function openJobOutcome(taskId){
-  _joTaskId  = taskId;
+  _joTaskId = taskId;
+  if(!_detailTask || String(_detailTask.id) !== String(taskId)){
+    api('get_task',{id:taskId}).then(function(r){
+      if(r&&r.task){_detailTask=r.task; openJobOutcome(taskId);}
+    });
+    return;
+  }
   const task = _detailTask;
-  if(!task) return;
 
   const job = (task.device_details||'').toLowerCase();
   let type = 'default';
