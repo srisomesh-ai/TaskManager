@@ -3637,7 +3637,7 @@ async function handleAttendClick(taskId){
           techPanel.appendChild(done);
         }
 
-        btn.setAttribute('onclick', 'testDemoBtn(' + taskId + ')');
+        btn.setAttribute('onclick', 'openJobOutcome(' + taskId + ')');
 
       }
     }, 8000);
@@ -3723,7 +3723,7 @@ async function checkAndUpdateAttendBtn(taskId, taskObj){
     btn.style.background = 'var(--green)';
     btn.style.border     = 'none';
     btn.style.display    = '';
-    btn.setAttribute('onclick', 'testDemoBtn(' + taskId + ')');
+    btn.setAttribute('onclick', 'openJobOutcome(' + taskId + ')');
     if(isDemo2){
       if(icon)  icon.textContent  = '📱';
       if(label) label.textContent = 'Demo Done';
@@ -5068,20 +5068,9 @@ function blProceed(){
 let _joTaskId = null;
 let _joJobType = null;
 
-function testDemoBtn(taskId){
-  alert('BUTTON CLICKED! taskId=' + taskId + ' _detailTask=' + (_detailTask ? _detailTask.device_details : 'NULL'));
-  openJobOutcome(taskId);
-}
-
 function openJobOutcome(taskId){
   _joTaskId = taskId;
-  if(!_detailTask || String(_detailTask.id) !== String(taskId)){
-    api('get_task',{id:taskId}).then(function(r){
-      if(r&&r.task){_detailTask=r.task; openJobOutcome(taskId);}
-      else showToast('❌ Could not load task');
-    }).catch(function(){showToast('❌ Network error');});
-    return;
-  }
+  // _detailTask confirmed set - proceed directly
   var task = _detailTask;
   var cust = (task.customer_name||'').replace(/"/g,'&quot;');
   var ser  = (task.gps_serial_no||'').replace(/"/g,'&quot;');
