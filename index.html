@@ -3653,7 +3653,7 @@ async function submitTechUpdate(){
 // ── TECH ATTEND MODAL ─────────────────────────────────────────────────────
 function openTechAttend(taskId){
   // Ensure _detailTask is loaded — may be null if button clicked from card without opening detail
-  if(!_detailTask || _detailTask.id != taskId){
+  if(!_detailTask || String(_detailTask.id) != String(taskId)){
     api('get_task', {id: taskId}).then(res => {
       if(res && res.task){ _detailTask = res.task; openTechAttend(taskId); }
     }).catch(()=>{});
@@ -4044,9 +4044,20 @@ async function handleAttendClick(taskId){
         _consentPollTimer = null;
         // Customer confirmed — change button to green proceed
         if(btn){ btn.style.background = 'var(--green)'; btn.disabled = false; }
-        if(icon)  icon.textContent  = '✅';
-        if(label) label.textContent = 'Proceed!';
-        if(sub)   sub.textContent   = poll.name + ' confirmed';
+        const pollJob = (_detailTask?.device_details||'').toLowerCase();
+        if(pollJob.includes('demonstration') || pollJob.includes('demo')){
+          if(icon)  icon.textContent  = '📱';
+          if(label) label.textContent = 'Demo Done';
+          if(sub)   sub.textContent   = 'Tap to record demo report';
+        } else if(pollJob.includes('troubleshoot') || pollJob.includes('offline')){
+          if(icon)  icon.textContent  = '🔧';
+          if(label) label.textContent = 'Fix Done';
+          if(sub)   sub.textContent   = 'Tap to record outcome';
+        } else {
+          if(icon)  icon.textContent  = '✅';
+          if(label) label.textContent = 'Proceed!';
+          if(sub)   sub.textContent   = poll.name + ' confirmed';
+        }
 
         // Update info toast
         const techPanel = document.getElementById('td-tech-actions');
@@ -5532,7 +5543,13 @@ let _joJobType = null;
 function openJobOutcome(taskId){
   _joTaskId  = taskId;
   const task = _detailTask;
-  if(!task) return;
+  if(!task || String(task.id) !== String(taskId)){
+    // _detailTask not loaded yet — fetch then retry
+    api('get_task', {id: taskId}).then(res => {
+      if(res && res.task){ _detailTask = res.task; openJobOutcome(taskId); }
+    }).catch(()=>{});
+    return;
+  }
 
   const job = (task.device_details||'').toLowerCase();
   let type = 'default';
