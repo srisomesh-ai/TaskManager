@@ -3651,11 +3651,11 @@ async function submitTechUpdate(){
 }
 
 // ── TECH ATTEND MODAL ─────────────────────────────────────────────────────
-function openTechAttend(taskId){
-  // Route to job-specific form for non-installation jobs
-  const job = (_detailTask?.device_details||'').toLowerCase();
+function openTechAttend(taskId, jobType){
+  // jobType passed directly from button to avoid _detailTask race condition
+  const job = (jobType || _detailTask?.device_details || '').toLowerCase();
   const isSpecialJob = job.includes('troubleshoot') || job.includes('offline') ||
-                       (job.includes('vehicle to vehicle') || job.includes('v2v')) ||
+                       job.includes('vehicle to vehicle') || job.includes('v2v') ||
                        job.includes('demonstration') || job.includes('demo') ||
                        job.includes('only remove') || job.includes('remove only');
   if(isSpecialJob){
@@ -4064,8 +4064,10 @@ async function handleAttendClick(taskId){
           techPanel.appendChild(done);
         }
 
-        // Change onclick to open attend directly
-        btn.setAttribute('onclick', 'openTechAttend(' + taskId + ')');
+        // Change onclick to open attend directly — pass jobType to avoid _detailTask race
+        const _pjt = (_detailTask?.device_details||'').replace(/'/g,'');
+        btn.setAttribute('onclick', 'openTechAttend(' + taskId + ',\'' + _pjt + '\')');
+
       }
     }, 8000);
   } else {
@@ -4147,7 +4149,8 @@ async function checkAndUpdateAttendBtn(taskId){
     btn.style.background = 'var(--green)';
     btn.style.border     = 'none';
     btn.style.display    = '';
-    btn.setAttribute('onclick', 'openTechAttend(' + taskId + ')');
+    const jobType2str = (_detailTask?.device_details||'').replace(/'/g,'');
+    btn.setAttribute('onclick', 'openTechAttend(' + taskId + ',\'' + jobType2str + '\')');
     if(isDemo2){
       if(icon)  icon.textContent  = '📱';
       if(label) label.textContent = 'Demo Done';
