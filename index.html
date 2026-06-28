@@ -4128,18 +4128,31 @@ async function checkAndUpdateAttendBtn(taskId){
   // Check consent status from server
   const res = await api('check_consent', {id: taskId}).catch(()=>({}));
 
-  // STATE 2: Consent received — Proceed to Adding
+  // STATE 2: Consent received — label depends on job type
   if(res.consented){
+    const jobType2 = (_detailTask?.device_details||'').toLowerCase();
+    const isDemo2  = jobType2.includes('demonstration') || jobType2.includes('demo');
+    const isTrbl2  = jobType2.includes('troubleshoot') || jobType2.includes('offline');
     btn.style.background = 'var(--green)';
     btn.style.border     = 'none';
     btn.style.display    = '';
     btn.setAttribute('onclick', 'openTechAttend(' + taskId + ')');
-    if(icon)  icon.textContent  = '➕';
-    if(label) label.textContent = 'Proceed to Adding';
-    if(sub)   sub.textContent   = 'Customer confirmed';
+    if(isDemo2){
+      if(icon)  icon.textContent  = '📱';
+      if(label) label.textContent = 'Demo Done';
+      if(sub)   sub.textContent   = 'Tap to record demo report';
+    } else if(isTrbl2){
+      if(icon)  icon.textContent  = '🔧';
+      if(label) label.textContent = 'Fix Done';
+      if(sub)   sub.textContent   = 'Tap to record outcome';
+    } else {
+      if(icon)  icon.textContent  = '➕';
+      if(label) label.textContent = 'Proceed to Adding';
+      if(sub)   sub.textContent   = 'Customer confirmed';
+    }
     if(status) status.innerHTML = `
       <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--green);line-height:1.6">
-        ✅ <strong>${res.name||'Customer'}</strong> confirmed T&amp;C and payment.<br>
+        ✅ <strong>${res.name||'Customer'}</strong> confirmed.<br>
         <span style="font-size:10px;color:var(--text3)">Confirmed: ${(res.consented_at||'').replace('T',' ').slice(0,16)}</span>
       </div>`;
     return;
