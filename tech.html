@@ -5070,8 +5070,13 @@ let _joJobType = null;
 
 function openJobOutcome(taskId){
   _joTaskId = taskId;
-  // _detailTask confirmed set - proceed directly
   var task = _detailTask;
+  // Step by step trace
+  var t1 = document.getElementById('jo-title');
+  var t2 = document.getElementById('jo-body');
+  var t3 = document.getElementById('job-outcome-overlay');
+  alert('jo-title=' + (t1?'OK':'NULL') + ' jo-body=' + (t2?'OK':'NULL') + ' overlay=' + (t3?'OK':'NULL'));
+  if(!t1||!t2||!t3){ alert('MISSING ELEMENTS - cannot open'); return; }
   var cust = (task.customer_name||'').replace(/"/g,'&quot;');
   var ser  = (task.gps_serial_no||'').replace(/"/g,'&quot;');
   var job  = (task.device_details||'').toLowerCase();
