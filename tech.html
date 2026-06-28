@@ -308,6 +308,9 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
 
 #tech-app{display:none;flex-direction:column;height:100vh;width:100%;overflow:hidden}
 #tech-app.show{display:flex}
+.cd-method-btn{border:2px solid var(--border);border-radius:10px;padding:12px 10px;text-align:center;cursor:pointer;transition:all .2s;background:var(--surface)}
+.cd-method-btn:hover{border-color:var(--accent);background:var(--accent-light)}
+.cd-method-btn.selected{border-color:var(--green);background:var(--green-bg)}
 </style>
 </head>
 <body>
@@ -2355,7 +2358,7 @@ function closeTaskModal(){
 
 async function loadMyTasks(){
   const tbody = document.getElementById('my-tasks-tbody');
-  if(tbody) tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading your tasks...</td></tr>';
+  if(tbody) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading your tasks...</td></tr>';
 
   const isTech2 = currentUser?.role === 'technician';
 
@@ -2423,14 +2426,13 @@ function myTasksPage(dir){
 }
 
 function renderMyTasks(){
-  const search  = (document.getElementById('my-search')?.value||'').toLowerCase();
-  const status  = document.getElementById('my-status-filter')?.value||'';
-  const tbody   = document.getElementById('my-tasks-tbody');
-  const info    = document.getElementById('my-tasks-info');
-  const pinf    = document.getElementById('my-page-info');
-  const prev    = document.getElementById('my-prev');
-  const next    = document.getElementById('my-next');
-  const openSt  = ['Open','In Progress','Task Pending'];
+  const search = (document.getElementById('my-search')?.value||'').toLowerCase();
+  const status = document.getElementById('my-status-filter')?.value||'';
+  const tbody  = document.getElementById('my-tasks-tbody');
+  const info   = document.getElementById('my-tasks-info');
+  const pinf   = document.getElementById('my-page-info');
+  const prev   = document.getElementById('my-prev');
+  const next   = document.getElementById('my-next');
 
   // Filter
   myFiltered = myAllTasks.filter(t=>{
@@ -2448,46 +2450,43 @@ function renderMyTasks(){
   const slice = myFiltered.slice(start, start+MY_PER_PAGE);
 
   if(info) info.textContent = myFiltered.length
-    ? `Showing ${start+1}–${Math.min(start+MY_PER_PAGE,myFiltered.length)} of ${myFiltered.length} tasks`
+    ? `${start+1}–${Math.min(start+MY_PER_PAGE,myFiltered.length)} of ${myFiltered.length} tasks`
     : 'No tasks found';
   if(pinf) pinf.textContent = `Page ${myPage} of ${total}`;
-  if(prev) prev.disabled = myPage === 1;
+  if(prev) prev.disabled = myPage <= 1;
   if(next) next.disabled = myPage >= total;
 
-  // ── Priority section (urgent tasks at top) ───────────────────────────
+  // Priority section
   const prioritySec  = document.getElementById('my-priority-section');
   const priorityList = document.getElementById('my-priority-list');
-  const urgentAll = myAllTasks.filter(t => {
+  const urgentAll = myAllTasks.filter(t=>{
     const open = ['Open','In Progress','Task Pending'].includes(t.task_status);
     return open && (t.is_urgent=='1' || getAgeHours(t.created_at) >= 24);
   });
   if(prioritySec && priorityList){
     if(urgentAll.length && !status && !search){
-      prioritySec.style.display = '';
-      priorityList.innerHTML = urgentAll.slice(0,5).map(t => {
-        const age  = getAgeHours(t.created_at);
-        const crit = t.is_urgent=='1' || age>=48;
+      prioritySec.style.display='';
+      priorityList.innerHTML = urgentAll.slice(0,5).map(t=>{
+        const age=getAgeHours(t.created_at);
+        const crit=t.is_urgent=='1'||age>=48;
         return `<div class="priority-card" onclick="viewTask(${t.id})">
           <div class="priority-card-body">
-            <div style="font-size:24px;flex-shrink:0">${crit?'🚨':'⚠️'}</div>
+            <div style="font-size:22px;flex-shrink:0">${crit?'🚨':'⚠️'}</div>
             <div class="priority-card-info">
-              <div class="priority-card-name">${t.customer_name||'–'} <span style="font-size:10px;color:var(--text3);font-weight:400">· ${t.task_id||''}</span></div>
+              <div class="priority-card-name">${t.customer_name||'–'} · ${t.task_id||''}</div>
               <div class="priority-card-sub">${t.device_details||'–'} · ${t.location||'–'}</div>
             </div>
-            <div class="priority-card-age">
-              ${crit?'🚨 URGENT':'⚠️ '+age+'h'}<br>
-              <span style="font-size:10px;color:var(--text3);font-weight:400">${t.task_status}</span>
-            </div>
+            <div class="priority-card-age">${crit?'🚨 URGENT':age+'h old'}</div>
           </div>
         </div>`;
       }).join('');
     } else {
-      prioritySec.style.display = 'none';
+      prioritySec.style.display='none';
     }
   }
 
   if(!slice.length){
-    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:48px;color:var(--text3)">
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:48px;color:var(--text3)">
       <div style="font-size:36px;margin-bottom:10px">📋</div>
       <div style="font-size:14px;font-weight:700">No tasks found</div>
       <div style="font-size:12px;margin-top:4px">Try clearing the filters</div>
@@ -2496,34 +2495,36 @@ function renderMyTasks(){
   }
 
   tbody.innerHTML = slice.map((t,i)=>{
-    const age      = openSt.includes(t.task_status) ? getAgeHours(t.created_at) : 0;
-    const isUrgentTask = t.is_urgent=='1' || age >= 24;
-    const isCrit   = t.is_urgent=='1' || age >= 48;
-    const isWarn   = !isCrit && age >= 24;
-    const rowClass = isCrit ? 'urgent-row' : isWarn ? '' : '';
-    const rowStyle = isWarn ? 'background:#fffbf0' : '';
-    const ageTxt   = isCrit  ? `<span class="age-badge" style="background:#fdecea;color:#c0392b">🚨 ${age}h</span>`
-                   : isWarn  ? `<span class="age-badge" style="background:#fff3e0;color:#e07b00">⚠️ ${age}h</span>`
-                   : age > 0 ? `<span style="color:var(--text3);font-size:11px">${age}h</span>` : '–';
-    const urgentBadge = isUrgentTask ? `<span class="urgent-badge-row">🚨 Urgent</span>` : '';
-    const closedStyle = ['Closed','Cancelled'].includes(t.task_status) ? 'opacity:.55;' : '';
-    return `<tr class="${rowClass}" style="border-bottom:1px solid var(--border);cursor:pointer;${rowStyle}${closedStyle}" onclick="viewTask(${t.id})">
-      <td style="padding:9px 12px;color:var(--text3);font-size:11px">${start+i+1}</td>
-      <td style="padding:9px 12px"><span class="task-id">${t.task_id||'–'}</span>${urgentBadge}</td>
-      <td style="padding:9px 12px"><div class="cust-name" style="max-width:130px">${t.customer_name||'–'}</div></td>
-      <td style="padding:9px 12px;color:var(--text2);font-size:12px">${t.contact_number||'–'}</td>
-      <td style="padding:9px 12px;color:var(--text2);font-size:12px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.location||'–'}</td>
+    const openSt  = ['Open','In Progress','Task Pending'];
+    const age     = openSt.includes(t.task_status) ? getAgeHours(t.created_at) : 0;
+    const isCrit  = t.is_urgent=='1' || age>=48;
+    const isWarn  = !isCrit && age>=24;
+    const ageTxt  = isCrit  ? `<span style="background:#fdecea;color:#c0392b;padding:2px 6px;border-radius:10px;font-size:10px;font-weight:700">🚨 ${age}h</span>`
+                  : isWarn  ? `<span style="background:#fff3e0;color:#e07b00;padding:2px 6px;border-radius:10px;font-size:10px;font-weight:700">⚠️ ${age}h</span>`
+                  : age > 0 ? `<span style="color:var(--text3);font-size:11px">${age}h</span>` : '–';
+    const rowBg   = isCrit ? 'background:#fff5f5' : isWarn ? 'background:#fffbf0' : '';
+    const dimmed  = ['Closed','Cancelled'].includes(t.task_status) ? 'opacity:.5' : '';
+    const price   = parseFloat(t.price_to_collect||0);
+    return `<tr onclick="viewTask(${t.id})" style="border-bottom:1px solid var(--border);cursor:pointer;${rowBg};${dimmed};transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='${rowBg}'">
+      <td style="padding:9px 12px;color:var(--text3);font-size:11px;white-space:nowrap">${start+i+1}</td>
+      <td style="padding:9px 12px;white-space:nowrap">
+        <span style="font-size:11px;font-weight:800;color:var(--accent)">${t.task_id||'–'}</span>
+        ${t.is_urgent=='1'?'<span style="background:#c0392b;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;margin-left:4px">URGENT</span>':''}
+      </td>
+      <td style="padding:9px 12px"><div style="font-weight:700;font-size:13px;color:var(--text);white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis">${t.customer_name||'–'}</div></td>
+      <td style="padding:9px 12px;color:var(--text2);font-size:12px;white-space:nowrap">${t.contact_number||'–'}</td>
+      <td style="padding:9px 12px;color:var(--text2);font-size:12px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.location||'–'}</td>
       <td style="padding:9px 12px;color:var(--text2);font-size:12px;white-space:nowrap">${t.device_details||'–'}</td>
-      <td style="padding:9px 12px;font-weight:700;color:var(--green);white-space:nowrap">₹${parseFloat(t.price_to_collect||0).toLocaleString('en-IN')}</td>
-      <td style="padding:9px 12px">${statusPill(t.task_status)}</td>
-      <td style="padding:9px 12px">${ageTxt}</td>
-      <td style="padding:9px 12px;color:var(--text3);font-size:11px;white-space:nowrap">${(t.created_at||'').slice(0,10)||'–'}</td>
-      <td style="padding:9px 12px">
-        <button class="act-btn act-view" onclick="viewTask(${t.id})" title="View">👁</button>
+      <td style="padding:9px 12px;font-weight:700;color:var(--green);white-space:nowrap;font-size:13px">${price>0?'₹'+price.toLocaleString('en-IN'):'Free'}</td>
+      <td style="padding:9px 12px;white-space:nowrap">${statusPill(t.task_status)}</td>
+      <td style="padding:9px 12px;white-space:nowrap">${ageTxt}</td>
+      <td style="padding:9px 12px;white-space:nowrap">
+        <button onclick="event.stopPropagation();viewTask(${t.id})" style="background:var(--accent);color:#fff;border:none;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">Open</button>
       </td>
     </tr>`;
   }).join('');
 }
+
 
 
 // ════════════════════════════════════════════════════════
