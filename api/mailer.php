@@ -136,9 +136,9 @@ function sendTaskCreatedCustomer(array $task, string $techName, string $techPhon
     <hr class="divider">
     <div class="details">
         <div class="row"><div class="label">Task ID</div><div class="value blue">' . $task['task_id'] . '</div></div>
-        <div class="row"><div class="label">Service Type</div><div class="value">' . htmlspecialchars($task['device_details'] ?: $task['lead_type']) . '</div></div>
-        ' . ((strpos(strtolower($task['device_details'] ?? ''), 'demonstration') !== false || strpos(strtolower($task['device_details'] ?? ''), 'demo') !== false || strpos(strtolower($task['device_details'] ?? ''), 'troubleshoot') !== false || strpos(strtolower($task['device_details'] ?? ''), 'offline') !== false) ? '' :
-        '<div class="row"><div class="label">Device Qty</div><div class="value">' . intval($task['device_qty']) . '</div></div>') . '
+        <div class="row"><div class="label">Service Type</div><div class="value">' . htmlspecialchars($task['lead_type']) . '</div></div>
+        <div class="row"><div class="label">GPS Type</div><div class="value">' . htmlspecialchars($task['device_details'] ?: 'Engine Status') . '</div></div>
+        <div class="row"><div class="label">Device Qty</div><div class="value">' . intval($task['device_qty']) . '</div></div>
         <div class="row"><div class="label">Amount to Pay</div><div class="value highlight">' . $priceStr . '</div></div>
         <div class="row"><div class="label">Location</div><div class="value">' . htmlspecialchars($task['location'] ?: '–') . '</div></div>
     </div>
