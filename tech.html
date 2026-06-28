@@ -3637,7 +3637,7 @@ async function handleAttendClick(taskId){
           techPanel.appendChild(done);
         }
 
-        btn.setAttribute('onclick', 'openJobOutcome(' + taskId + ')');
+        btn.setAttribute('onclick', 'testDemoBtn(' + taskId + ')');
 
       }
     }, 8000);
@@ -3723,7 +3723,7 @@ async function checkAndUpdateAttendBtn(taskId, taskObj){
     btn.style.background = 'var(--green)';
     btn.style.border     = 'none';
     btn.style.display    = '';
-    btn.setAttribute('onclick', 'openJobOutcome(' + taskId + ')');
+    btn.setAttribute('onclick', 'testDemoBtn(' + taskId + ')');
     if(isDemo2){
       if(icon)  icon.textContent  = '📱';
       if(label) label.textContent = 'Demo Done';
@@ -5067,6 +5067,11 @@ function blProceed(){
 // ════════════════════════════════════════════════════════
 let _joTaskId = null;
 let _joJobType = null;
+
+function testDemoBtn(taskId){
+  alert('BUTTON CLICKED! taskId=' + taskId + ' _detailTask=' + (_detailTask ? _detailTask.device_details : 'NULL'));
+  openJobOutcome(taskId);
+}
 
 function openJobOutcome(taskId){
   _joTaskId = taskId;
