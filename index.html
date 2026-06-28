@@ -359,8 +359,8 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
       <div class="nav-item admin-only" id="nav-accounts" onclick="showPage('accounts')"><span class="nav-icon">📈</span> P&L Overview</div>
       <div class="nav-item admin-only" id="nav-invoicing" onclick="showPage('invoicing')"><span class="nav-icon">🧾</span> Invoicing</div>
       <div class="nav-sec admin-only">Admin</div>
-      <div class="nav-item admin-only" id="nav-blacklist" onclick="showPage('blacklist')"><span class="nav-icon">🚫</span> Blacklist</div>
-      <div class="nav-item admin-only" id="nav-admin" onclick="showPage('admin')"><span class="nav-icon">⚙️</span> Admin Panel</div>
+      <div class="nav-item super-admin-only" id="nav-blacklist" onclick="showPage('blacklist')"><span class="nav-icon">🚫</span> Blacklist</div>
+      <div class="nav-item super-admin-only" id="nav-admin" onclick="showPage('admin')"><span class="nav-icon">⚙️</span> Admin Panel</div>
       <div class="sb-footer">
         <div class="sb-av" id="sb-avatar">?</div>
         <div>
@@ -1636,6 +1636,11 @@ async function doLogin(){
 
 // ── Show/hide pages ────────────────────────────────────────────────────────
 function showPage(name, opts={}){
+  // Block blacklist and admin panel for non-admin roles
+  if(['blacklist','admin'].includes(name) && currentUser?.role !== 'admin'){
+    showToast('⛔ Access denied — Admin only');
+    return;
+  }
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   const page = document.getElementById('page-'+name);
@@ -1679,10 +1684,14 @@ function startApp(){
   document.getElementById('sb-role').textContent    = role;
   document.getElementById('sb-avatar').textContent  = initials;
 
-  // Show/hide admin-only elements
-  const isAdmin = ['admin','assigner'].includes(currentUser.role);
-  const isTech  = currentUser.role === 'technician';
+  // Show/hide role-based elements
+  const isAdmin      = ['admin','assigner'].includes(currentUser.role);
+  const isSuperAdmin = currentUser.role === 'admin';
+  const isTech       = currentUser.role === 'technician';
+  // admin-only = admin + assigner (approvals, daily report, balance sheet)
   document.querySelectorAll('.admin-only').forEach(el=>el.style.display = isAdmin ? '' : 'none');
+  // super-admin-only = admin ONLY (blacklist, admin panel)
+  document.querySelectorAll('.super-admin-only').forEach(el=>el.style.display = isSuperAdmin ? '' : 'none');
 
   // Hide Dashboard nav for technicians — they have My Tasks as home
   const dashNav = document.getElementById('nav-dashboard');
@@ -5019,11 +5028,13 @@ function syncBsAuth(){
 }
 
 function syncAdminAuth(){
+  if(currentUser?.role !== 'admin'){ return; }
   const iframe = document.getElementById('admin-iframe');
   if(!iframe) return;
   iframe.src = 'admin.html?token=' + encodeURIComponent(authToken||'');
 }
 function syncBlacklistAuth(){
+  if(currentUser?.role !== 'admin'){ return; }
   const iframe = document.getElementById('blacklist-iframe');
   if(!iframe) return;
   iframe.src = 'blacklist.html?token=' + encodeURIComponent(authToken||'');
