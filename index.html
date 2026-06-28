@@ -3652,13 +3652,6 @@ async function submitTechUpdate(){
 
 // ── TECH ATTEND MODAL ─────────────────────────────────────────────────────
 function openTechAttend(taskId){
-  // Ensure _detailTask is loaded — may be null if button clicked from card without opening detail
-  if(!_detailTask || String(_detailTask.id) != String(taskId)){
-    api('get_task', {id: taskId}).then(res => {
-      if(res && res.task){ _detailTask = res.task; openTechAttend(taskId); }
-    }).catch(()=>{});
-    return;
-  }
   // Route to job-specific form for non-installation jobs
   const job = (_detailTask?.device_details||'').toLowerCase();
   const isSpecialJob = job.includes('troubleshoot') || job.includes('offline') ||
@@ -5543,13 +5536,11 @@ let _joJobType = null;
 function openJobOutcome(taskId){
   _joTaskId  = taskId;
   const task = _detailTask;
-  if(!task || String(task.id) !== String(taskId)){
-    // _detailTask not loaded yet — fetch then retry
-    api('get_task', {id: taskId}).then(res => {
-      if(res && res.task){ _detailTask = res.task; openJobOutcome(taskId); }
-    }).catch(()=>{});
-    return;
-  }
+  if(!task){ showToast('⚠️ Please open the task first'); return; }
+
+  // Ensure overlay is visible (debug)
+  const overlay = document.getElementById('job-outcome-overlay');
+  if(!overlay){ showToast('❌ Modal HTML missing'); return; }
 
   const job = (task.device_details||'').toLowerCase();
   let type = 'default';
