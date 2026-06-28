@@ -2789,7 +2789,7 @@ async function viewTask(id){
             <div style="font-size:14px;font-weight:800;color:var(--accent)">Update</div>
             <div style="font-size:11px;color:var(--text3);margin-top:3px">Call log & next step</div>
           </button>` : ''}
-          <button onclick="handleAttendClick(${t.id})" id="td-attend-btn-${t.id}" style="background:var(--accent);border:none;border-radius:10px;padding:16px 12px;text-align:center;cursor:pointer;transition:all .2s;${showUpdateBtn?'':'grid-column:1/-1'}" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+          <button onclick="handleAttendClick(${t.id})" id="td-attend-btn-${t.id}" style="opacity:0;pointer-events:none;background:var(--accent);border:none;border-radius:10px;padding:16px 12px;text-align:center;cursor:pointer;transition:all .2s;${showUpdateBtn?'':'grid-column:1/-1'}" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
             <div style="font-size:28px;margin-bottom:6px" id="td-attend-icon-${t.id}">🔧</div>
             <div style="font-size:14px;font-weight:800;color:#fff" id="td-attend-label-${t.id}">Attend</div>
             <div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:3px" id="td-attend-sub-${t.id}">${t.device_details||'Start task'}</div>
@@ -3687,6 +3687,7 @@ async function checkAndUpdateAttendBtn(taskId, taskObj){
         You collected cash. Please deposit and confirm within 24 hours.<br>
         <span style="font-size:10px;color:var(--text3)">Once confirmed, task will be submitted for approval.</span>
       </div>`;
+    if(btn){btn.style.opacity='1';btn.style.pointerEvents='';}
     return;
   }
 
@@ -3702,6 +3703,7 @@ async function checkAndUpdateAttendBtn(taskId, taskObj){
         💳 Adding complete. <strong>Payment pending.</strong><br>
         <span style="font-size:10px;color:var(--text3)">Tap to collect payment</span>
       </div>`;
+    if(btn){btn.style.opacity='1';btn.style.pointerEvents='';}
     return;
   }
 
@@ -3709,6 +3711,7 @@ async function checkAndUpdateAttendBtn(taskId, taskObj){
   if(addingDone && paid){
     btn.style.display = 'none';
     if(status) status.innerHTML = '';
+    if(btn){btn.style.opacity='1';btn.style.pointerEvents='';}
     return;
   }
 
@@ -3738,6 +3741,7 @@ async function checkAndUpdateAttendBtn(taskId, taskObj){
       if(label) label.textContent = 'Proceed to Adding';
       if(sub)   sub.textContent   = 'Customer confirmed';
     }
+    if(btn){btn.style.opacity='1';btn.style.pointerEvents='';}
     if(status) status.innerHTML = `
       <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--green);line-height:1.6">
         ✅ <strong>${res.name||'Customer'}</strong> confirmed T&amp;C and payment.<br>
@@ -3755,12 +3759,15 @@ async function checkAndUpdateAttendBtn(taskId, taskObj){
         Consent email has been sent. Waiting for the customer to confirm.<br>
         <span style="font-size:10px;color:var(--text3)">The button will unlock automatically once customer confirms.</span>
       </div>`;
+    if(btn){btn.style.opacity='1';btn.style.pointerEvents='';}
     return;
   }
 
   // STATE 1: No consent sent yet — show Attend button
-  btn.style.background = 'var(--accent)';
-  btn.style.display    = '';
+  btn.style.background    = 'var(--accent)';
+  btn.style.display       = '';
+  btn.style.opacity       = '1';
+  btn.style.pointerEvents = '';
   btn.setAttribute('onclick', 'handleAttendClick(' + taskId + ')');
   if(icon)  icon.textContent  = '🔧';
   if(label) label.textContent = 'Attend';
