@@ -231,7 +231,7 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
 .tu-card.selected{background:var(--accent-light);border-width:2px}
 .tu-card-icon{font-size:20px;line-height:1;margin-bottom:4px}
 .tu-card-title{font-size:11px;font-weight:800;color:var(--text);line-height:1.2;margin-bottom:2px}
-.tu-card-sub{font-size:9px;color:var(--text3);line-height:1.3}
+.tu-card-sub{font-size:9px;color:var(--text3);line-height:1.3}1.3}
 .tu-card.selected .tu-card-title{color:var(--accent)}
 
 /* DEVICE INSTALL CARDS */
@@ -307,21 +307,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
 </style>
 </head>
 <body>
-<!-- DIALOG -->
-<div id="cdlg-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:center;justify-content:center;padding:20px">
-  <div id="cdlg-box" style="background:#fff;border-radius:14px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.35);overflow:hidden">
-    <div style="padding:20px 20px 14px;display:flex;align-items:flex-start;gap:12px">
-      <span id="cdlg-icon" style="font-size:26px;line-height:1;flex-shrink:0;margin-top:2px"></span>
-      <div style="flex:1;min-width:0">
-        <div id="cdlg-title" style="font-size:15px;font-weight:800;color:#1a1a2e;margin-bottom:6px"></div>
-        <div id="cdlg-msg" style="font-size:13px;color:#555;line-height:1.6"></div>
-      </div>
-    </div>
-    <div id="cdlg-footer" style="display:flex;gap:10px;padding:0 20px 20px"></div>
-  </div>
-</div>
 
-<!-- ═══
 <!-- LOGIN -->
 <div id="login-screen">
   <div class="lcard">
@@ -1611,37 +1597,6 @@ const API = 'https://salmon-goldfish-110661.hostingersite.com/api/index.php';
 let authToken = '', currentUser = null;
 
 // ── API helper ────────────────────────────────────────────────────────────
-// ── CUSTOM DIALOG (showAlert / showConfirm) ──────────────────────────────
-var _cdlgResolve = null;
-function _cdlgClose(v){
-  document.getElementById('cdlg-overlay').style.display='none';
-  if(_cdlgResolve){_cdlgResolve(v);_cdlgResolve=null;}
-}
-function showAlert(msg,title,icon){
-  title=title||'Notice'; icon=icon||'ℹ️';
-  return new Promise(function(resolve){
-    _cdlgResolve=resolve;
-    document.getElementById('cdlg-icon').textContent=icon;
-    document.getElementById('cdlg-title').textContent=title;
-    document.getElementById('cdlg-msg').innerHTML=msg;
-    document.getElementById('cdlg-footer').innerHTML='<button onclick="_cdlgClose(true)" style="flex:1;padding:11px 16px;background:#1a1a2e;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">OK</button>';
-    document.getElementById('cdlg-overlay').style.display='flex';
-  });
-}
-function showConfirm(msg,title,icon,yesLabel,noLabel,yesColor){
-  title=title||'Confirm'; icon=icon||'❓'; yesLabel=yesLabel||'Yes'; noLabel=noLabel||'Cancel'; yesColor=yesColor||'#1a1a2e';
-  return new Promise(function(resolve){
-    _cdlgResolve=resolve;
-    document.getElementById('cdlg-icon').textContent=icon;
-    document.getElementById('cdlg-title').textContent=title;
-    document.getElementById('cdlg-msg').innerHTML=msg;
-    document.getElementById('cdlg-footer').innerHTML=
-      '<button onclick="_cdlgClose(false)" style="flex:1;padding:11px 16px;background:#f5f5f5;color:#333;border:1.5px solid #ddd;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">'+noLabel+'</button>'+
-      '<button onclick="_cdlgClose(true)" style="flex:1;padding:11px 16px;background:'+yesColor+';color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">'+yesLabel+'</button>';
-    document.getElementById('cdlg-overlay').style.display='flex';
-  });
-}
-// ─────────────────────────────────────────────────────────────────────────────
 async function api(action, params={}, method='GET', body=null){
   const url = API + '?action=' + action + (method==='GET' ? '&'+new URLSearchParams(params) : '');
   const opts = {method, headers:{'X-Auth-Token': authToken}};
@@ -3979,9 +3934,12 @@ async function handleAttendClick(taskId){
   const jobType      = task?.device_details || 'GPS Installation';
   const location     = task?.location || '';
 
-  const confirmed = await showConfirm(
-    '<b>' + customerName + '</b><br>' + jobType + (location ? '<br>📍 ' + location : '') + '<br><br>This will send a <b>consent request</b> to the customer.',
-    'Ready to Proceed?', '🔧', 'Yes, Send Consent', 'Not Yet', '#0F766E'
+  const confirmed = confirm(
+    '🔧 Ready for Installation?\n\n' +
+    'Customer: ' + customerName + '\n' +
+    'Job: ' + jobType + (location ? '\nLocation: ' + location : '') + '\n\n' +
+    'This will send a consent & payment confirmation request to the customer.\n\n' +
+    'Are you sure you are at the location and ready to proceed?'
   );
   if(!confirmed) return;
 
