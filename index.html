@@ -307,6 +307,22 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
 </style>
 </head>
 <body>
+<!-- ═══════════════════════════════════════════════════
+     CUSTOM DIALOG SYSTEM (replaces browser alert/confirm)
+═══════════════════════════════════════════════════ -->
+<div id="cdlg-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:14px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden">
+    <div style="padding:18px 20px 12px;display:flex;align-items:flex-start;gap:12px">
+      <span id="cdlg-icon" style="font-size:28px;flex-shrink:0;line-height:1"></span>
+      <div style="flex:1">
+        <div id="cdlg-title" style="font-size:15px;font-weight:800;color:var(--text)"></div>
+        <div id="cdlg-msg" style="font-size:13px;color:var(--text2);margin-top:6px;line-height:1.7"></div>
+      </div>
+    </div>
+    </div>
+    <div id="cdlg-footer" style="display:flex;gap:10px;padding:12px 20px 18px"></div>
+  </div>
+
 
 <!-- LOGIN -->
 <div id="login-screen">
@@ -5736,6 +5752,44 @@ async function submitJobOutcome(){
   }
 }
 
+
+// ════════════════════════════════════════════════════════
+// CUSTOM DIALOG — replaces browser alert() and confirm()
+// ════════════════════════════════════════════════════════
+let _cdlgResolve = null;
+
+function _cdlgClose(val){
+  document.getElementById('cdlg-overlay').style.display = 'none';
+  if(_cdlgResolve){ _cdlgResolve(val); _cdlgResolve = null; }
+}
+
+// showAlert(message, title, icon) — replaces alert()
+function showAlert(msg, title='Notice', icon='ℹ️'){
+  return new Promise(resolve => {
+    _cdlgResolve = resolve;
+    document.getElementById('cdlg-icon').textContent  = icon;
+    document.getElementById('cdlg-title').textContent = title;
+    document.getElementById('cdlg-msg').innerHTML     = msg;
+    document.getElementById('cdlg-footer').innerHTML  = `
+      <button onclick="_cdlgClose(true)" style="flex:1;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">OK</button>`;
+    document.getElementById('cdlg-overlay').style.display = 'flex';
+  });
+}
+
+// showConfirm(message, title, icon, confirmLabel, cancelLabel, confirmColor)
+function showConfirm(msg, title='Confirm', icon='❓', confirmLabel='Yes', cancelLabel='Cancel', confirmColor='var(--accent)'){
+  return new Promise(resolve => {
+    _cdlgResolve = resolve;
+    document.getElementById('cdlg-icon').textContent  = icon;
+    document.getElementById('cdlg-title').textContent = title;
+    document.getElementById('cdlg-msg').innerHTML     = msg;
+    document.getElementById('cdlg-footer').innerHTML  = `
+      <button onclick="_cdlgClose(false)" style="flex:1;padding:11px;background:var(--surface2);color:var(--text);border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">${cancelLabel}</button>
+      <button onclick="_cdlgClose(true)" style="flex:1;padding:11px;background:${confirmColor};color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">${confirmLabel}</button>`;
+    document.getElementById('cdlg-overlay').style.display = 'flex';
+  });
+}
+
 </script>
 
 <!-- ═══════════════════════════════════════════
@@ -5904,59 +5958,6 @@ async function submitJobOutcome(){
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════
-     CUSTOM DIALOG SYSTEM (replaces browser alert/confirm)
-═══════════════════════════════════════════════════ -->
-<div id="cdlg-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;align-items:center;justify-content:center;padding:16px">
-  <div style="background:#fff;border-radius:14px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden">
-    <div id="cdlg-header" style="padding:18px 20px 12px;display:flex;align-items:flex-start;gap:12px">
-      <span id="cdlg-icon" style="font-size:28px;flex-shrink:0;line-height:1"></span>
-      <div>
-        <div id="cdlg-title" style="font-size:15px;font-weight:800;color:var(--text)"></div>
-        <div id="cdlg-msg" style="font-size:13px;color:var(--text2);margin-top:6px;line-height:1.7"></div>
-      </div>
-    </div>
-    <div id="cdlg-footer" style="display:flex;gap:10px;padding:12px 20px 18px"></div>
-  </div>
-</div>
-
-<script>
-// ════════════════════════════════════════════════════════
-// CUSTOM DIALOG — replaces browser alert() and confirm()
-// ════════════════════════════════════════════════════════
-let _cdlgResolve = null;
-
-function _cdlgClose(val){
-  document.getElementById('cdlg-overlay').style.display = 'none';
-  if(_cdlgResolve){ _cdlgResolve(val); _cdlgResolve = null; }
-}
-
-// showAlert(message, title, icon) — replaces alert()
-function showAlert(msg, title='Notice', icon='ℹ️'){
-  return new Promise(resolve => {
-    _cdlgResolve = resolve;
-    document.getElementById('cdlg-icon').textContent  = icon;
-    document.getElementById('cdlg-title').textContent = title;
-    document.getElementById('cdlg-msg').innerHTML     = msg;
-    document.getElementById('cdlg-footer').innerHTML  = `
-      <button onclick="_cdlgClose(true)" style="flex:1;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">OK</button>`;
-    document.getElementById('cdlg-overlay').style.display = 'flex';
-  });
-}
-
-// showConfirm(message, title, icon, confirmLabel, cancelLabel, confirmColor)
-function showConfirm(msg, title='Confirm', icon='❓', confirmLabel='Yes', cancelLabel='Cancel', confirmColor='var(--accent)'){
-  return new Promise(resolve => {
-    _cdlgResolve = resolve;
-    document.getElementById('cdlg-icon').textContent  = icon;
-    document.getElementById('cdlg-title').textContent = title;
-    document.getElementById('cdlg-msg').innerHTML     = msg;
-    document.getElementById('cdlg-footer').innerHTML  = `
-      <button onclick="_cdlgClose(false)" style="flex:1;padding:11px;background:var(--surface2);color:var(--text);border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">${cancelLabel}</button>
-      <button onclick="_cdlgClose(true)" style="flex:1;padding:11px;background:${confirmColor};color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">${confirmLabel}</button>`;
-    document.getElementById('cdlg-overlay').style.display = 'flex';
-  });
-}
 </script>
 
 </body>
