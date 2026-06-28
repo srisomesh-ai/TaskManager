@@ -3652,8 +3652,6 @@ async function submitTechUpdate(){
 
 // ── TECH ATTEND MODAL ─────────────────────────────────────────────────────
 function openTechAttend(taskId){
-  // DEBUG — remove after fix
-  console.log('openTechAttend called, taskId=', taskId, '_detailTask=', _detailTask?.device_details);
   // Route to job-specific form for non-installation jobs
   const job = (_detailTask?.device_details||'').toLowerCase();
   const isSpecialJob = job.includes('troubleshoot') || job.includes('offline') ||
@@ -5537,7 +5535,6 @@ let _joJobType = null;
 
 function openJobOutcome(taskId){
   _joTaskId  = taskId;
-  console.log('openJobOutcome called, taskId=', taskId, 'task=', _detailTask?.device_details);
   const task = _detailTask;
   if(!task){ showToast('⚠️ Please open the task first'); return; }
 
@@ -5710,7 +5707,7 @@ function openJobOutcome(taskId){
       <textarea id="jo-remarks" class="form-input" rows="3" placeholder="Job completion notes…"></textarea>
     </div>`;
 
-  console.log('Showing job-outcome-overlay'); document.getElementById('job-outcome-overlay').style.display = 'flex'; console.log('Overlay display:', document.getElementById('job-outcome-overlay').style.display);
+  const joEl = document.getElementById('job-outcome-overlay'); joEl.style.display = 'flex'; joEl.onclick = function(e){ if(e.target===joEl) closeJobOutcome(); };
 }
 
 function closeJobOutcome(){
@@ -5960,7 +5957,7 @@ async function submitJobOutcome(){
 <!-- ═══════════════════════════════════════════════════
      JOB OUTCOME MODAL (Troubleshoot/Demo/Remove/V2V)
 ═══════════════════════════════════════════════════ -->
-<div id="job-outcome-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;align-items:center;justify-content:center;padding:16px;overflow-y:auto">
+<div id="job-outcome-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;align-items:center;justify-content:center;padding:16px;overflow-y:auto">
   <div style="background:#fff;border-radius:14px;width:100%;max-width:520px;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden;margin:auto">
     <div id="jo-header" style="background:linear-gradient(135deg,var(--accent),var(--accent2));padding:16px 20px;color:#fff;display:flex;align-items:center;justify-content:space-between">
       <div>
