@@ -3184,7 +3184,7 @@ async function viewTask(id){
         <div id="td-consent-status-${t.id}" style="margin-top:10px"></div>
       `;
       // Check consent status immediately when panel loads
-      checkAndUpdateAttendBtn(t.id);
+      checkAndUpdateAttendBtn(t.id, t);
     }
   } else {
     techPanel.style.display = 'none';
@@ -3615,9 +3615,9 @@ async function submitTechUpdate(){
 }
 
 // ── TECH ATTEND MODAL ─────────────────────────────────────────────────────
-function openTechAttend(taskId){
-  // Route to job-specific form for non-installation jobs
-  const job = (_detailTask?.device_details||'').toLowerCase();
+function openTechAttend(taskId, jobTypeParam){
+  // Route to job-specific form — use jobTypeParam if passed (avoids _detailTask dependency)
+  const job = (jobTypeParam || _detailTask?.device_details||'').toLowerCase();
   const isSpecialJob = job.includes('troubleshoot') || job.includes('offline') ||
                        (job.includes('vehicle to vehicle') || job.includes('v2v')) ||
                        job.includes('demonstration') || job.includes('demo') ||
@@ -4024,8 +4024,10 @@ async function handleAttendClick(taskId){
           techPanel.appendChild(done);
         }
 
-        // Change onclick to open attend directly
-        btn.setAttribute('onclick', 'openTechAttend(' + taskId + ')');
+        // Change onclick to open attend directly with device_details embedded
+        const dd3 = encodeURIComponent(_detailTask?.device_details||'');
+        btn.setAttribute('onclick', 'openTechAttend(' + taskId + ',decodeURIComponent(\'' + dd3 + '\'))');
+
       }
     }, 8000);
   } else {
@@ -4039,7 +4041,7 @@ async function handleAttendClick(taskId){
 // Poll timer cleared in closeTaskDetail above
 
 // ── Check consent and update Attend button state on task open ─────────────
-async function checkAndUpdateAttendBtn(taskId){
+async function checkAndUpdateAttendBtn(taskId, taskObj){
   const btn    = document.getElementById('td-attend-btn-'  + taskId);
   const icon   = document.getElementById('td-attend-icon-' + taskId);
   const label  = document.getElementById('td-attend-label-'+ taskId);
@@ -4101,13 +4103,14 @@ async function checkAndUpdateAttendBtn(taskId){
 
   // STATE 2: Consent received — label depends on job type
   if(res.consented){
-    const jobLower = (_detailTask?.device_details||'').toLowerCase();
+    const jobLower = (taskObj?.device_details || _detailTask?.device_details||'').toLowerCase();
     const isDemo2  = jobLower.includes('demonstration') || jobLower.includes('demo');
     const isTrbl2  = jobLower.includes('troubleshoot')  || jobLower.includes('offline');
     btn.style.background = 'var(--green)';
     btn.style.border     = 'none';
     btn.style.display    = '';
-    btn.setAttribute('onclick', 'openTechAttend(' + taskId + ')');
+    const dd2 = encodeURIComponent(taskObj?.device_details || _detailTask?.device_details||'');
+    btn.setAttribute('onclick', 'openTechAttend(' + taskId + ',decodeURIComponent(\'' + dd2 + '\'))');
     if(isDemo2){
       if(icon)  icon.textContent  = '📱';
       if(label) label.textContent = 'Demo Done';
