@@ -3955,7 +3955,11 @@ async function handleAttendClick(taskId){
   // Check if consent already received
   const check = await api('check_consent', {id: taskId}).catch(()=>({}));
   if(check.consented){
-    // Consent already done — go straight to attend form
+    // Ensure _detailTask is loaded so openTechAttend can read device_details
+    if(!_detailTask || String(_detailTask.id) !== String(taskId)){
+      const tr = await api('get_task', {id: taskId}).catch(()=>({}));
+      if(tr && tr.task) _detailTask = tr.task;
+    }
     openTechAttend(taskId);
     return;
   }
@@ -4095,15 +4099,28 @@ async function checkAndUpdateAttendBtn(taskId){
   // Check consent status from server
   const res = await api('check_consent', {id: taskId}).catch(()=>({}));
 
-  // STATE 2: Consent received — Proceed to Adding
+  // STATE 2: Consent received — label depends on job type
   if(res.consented){
+    const jobLower = (_detailTask?.device_details||'').toLowerCase();
+    const isDemo2  = jobLower.includes('demonstration') || jobLower.includes('demo');
+    const isTrbl2  = jobLower.includes('troubleshoot')  || jobLower.includes('offline');
     btn.style.background = 'var(--green)';
     btn.style.border     = 'none';
     btn.style.display    = '';
     btn.setAttribute('onclick', 'openTechAttend(' + taskId + ')');
-    if(icon)  icon.textContent  = '➕';
-    if(label) label.textContent = 'Proceed to Adding';
-    if(sub)   sub.textContent   = 'Customer confirmed';
+    if(isDemo2){
+      if(icon)  icon.textContent  = '📱';
+      if(label) label.textContent = 'Demo Done';
+      if(sub)   sub.textContent   = 'Tap to record demo report';
+    } else if(isTrbl2){
+      if(icon)  icon.textContent  = '🔧';
+      if(label) label.textContent = 'Fix Done';
+      if(sub)   sub.textContent   = 'Tap to record outcome';
+    } else {
+      if(icon)  icon.textContent  = '➕';
+      if(label) label.textContent = 'Proceed to Adding';
+      if(sub)   sub.textContent   = 'Customer confirmed';
+    }
     if(status) status.innerHTML = `
       <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--green);line-height:1.6">
         ✅ <strong>${res.name||'Customer'}</strong> confirmed T&amp;C and payment.<br>
@@ -5489,9 +5506,16 @@ let _joTaskId = null;
 let _joJobType = null;
 
 function openJobOutcome(taskId){
-  _joTaskId  = taskId;
+  _joTaskId = taskId;
+  // If _detailTask not loaded, fetch first then retry
+  if(!_detailTask || String(_detailTask.id) !== String(taskId)){
+    api('get_task', {id: taskId}).then(function(r){
+      if(r && r.task){ _detailTask = r.task; openJobOutcome(taskId); }
+      else showToast('❌ Could not load task');
+    }).catch(function(){ showToast('❌ Network error'); });
+    return;
+  }
   const task = _detailTask;
-  if(!task) return;
 
   const job = (task.device_details||'').toLowerCase();
   let type = 'default';
