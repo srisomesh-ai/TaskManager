@@ -2337,7 +2337,7 @@ async function saveTask(){
   const btn = document.getElementById('task-save-btn');
   const customer = document.getElementById('fm-customer').value.trim();
   const contact  = document.getElementById('fm-contact').value.trim();
-  if(!customer||!contact){ alert('Customer name and contact are required.'); return; }
+  if(!customer||!contact){ await showAlert('Customer name and contact number are required to create a task.','Required Fields','⚠️'); return; }
   // Block if blacklisted and not acknowledged
   if(!_blAcknowledged && !editingTaskId && contact){
     const blRes = await api('check_blacklist',{phone:contact}).catch(()=>({found:false}));
@@ -2398,7 +2398,7 @@ async function saveTask(){
 
 // ── Delete Task ───────────────────────────────────────────────────────────
 async function deleteTask(id, taskId){
-  if(!confirm(`Delete task ${taskId}? This cannot be undone.`)) return;
+  if(!await showConfirm(`Delete task <b>${taskId}</b>? This will remove all linked activities, payments and balance sheet entries. <b>Cannot be undone.</b>`,'Delete Task','🗑️','Yes, Delete','Cancel','var(--red)')) return;
   const res = await api('delete_task',{},'POST',{id}).catch(()=>({}));
   if(res.success) loadTasks();
   else alert(res.error||'Delete failed.');
@@ -3540,7 +3540,7 @@ async function submitTechUpdate(){
   if(_tuSubmitting) return; // prevent double submit
   const taskId    = document.getElementById('tech-update-task-id').value;
   const discussed = document.getElementById('tch-discussed').value.trim();
-  if(!discussed){ alert('Please describe what happened.'); document.getElementById('tch-discussed').focus(); return; }
+  if(!discussed){ await showAlert('Please describe what happened before continuing.','Required Field','⚠️'); document.getElementById('tch-discussed').focus(); return; }
 
   const custResp  = document.getElementById('tch-cust-resp').value;
   const nextStep  = document.getElementById('tch-next-step').value;
@@ -3563,7 +3563,10 @@ async function submitTechUpdate(){
                             custResp.toLowerCase().includes('vehicle not ready') ||
                             parts.join('|').toLowerCase().includes('vehicle not ready');
   if(isFreeServiceTask && vehicleNotReady){
-    const convert = confirm('🚗 Vehicle was not available for this free service visit.\n\nConvert to chargeable visit?\n\n• Click OK to charge ₹300 (visit charge)\n• Click Cancel to keep as free service');
+    const convert = await showConfirm(
+      'Vehicle was not available when technician arrived.<br><br>Convert this to a <b>chargeable visit?</b><br><span style="color:var(--amber)">₹300 visit charge will be applied.</span>',
+      'Vehicle Not Available', '🚗', '💰 Charge ₹300', 'Keep Free', 'var(--amber)'
+    );
     if(convert){
       body.price_to_collect = 300;
       body.payment_mode     = 'Cash';
@@ -3758,7 +3761,7 @@ function updateAttendBalance(){
 async function submitTechAttend(){
   const taskId = document.getElementById('attend-task-id').value;
   const status = document.getElementById('attend-install-status').value;
-  if(!status){ alert('Please select installation status.'); return; }
+  if(!status){ await showAlert('Please select the installation status before submitting.','Required','⚠️'); return; }
 
   // Block submit if no payment collected (for completed tasks with price > 0)
   if(status === 'completed'){
@@ -3766,7 +3769,7 @@ async function submitTechAttend(){
     const collected = parseFloat(_detailTask?.amount_collected||0)
                     + parseFloat(document.getElementById('attend-amount')?.value||0);
     if(price > 0 && collected <= 0){
-      alert('⚠️ Payment must be collected before submitting for approval.\n\nPlease collect payment first using the payment button.');
+      await showAlert('Payment must be collected before submitting for approval.<br>Please collect payment first using the payment button.','Payment Required','💰');
       return;
     }
   }
@@ -3790,7 +3793,7 @@ async function submitTechAttend(){
     const amount   = parseFloat(document.getElementById('attend-amount').value||0);
     const payMode  = document.getElementById('attend-pay-mode').value;
 
-    if(!workDone){ alert('Please enter overall work remarks.'); btn.disabled=false; btn.textContent='✅ Submit — Request Approval'; return; }
+    if(!workDone){ await showAlert('Please enter overall work remarks before submitting.','Required','⚠️'); btn.disabled=false; btn.textContent='✅ Submit — Request Approval'; return; }
 
     // Build remark from all saved devices
     parts = ['🔧 Installation completed'];
@@ -3854,7 +3857,7 @@ async function submitTechAttend(){
 
 // ── ADMIN ACTIONS ─────────────────────────────────────────────────────────
 async function adminApproveTask(taskId){
-  if(!confirm('Approve and close this task?')) return;
+  if(!await showConfirm('Are you sure you want to approve and close this task?<br>Make sure payment is verified.','Approve & Close Task','✅','Yes, Approve','Cancel','var(--green)')) return;
   const res = await api('approve_task',{},'POST',{id:taskId}).catch(()=>({}));
   if(res.success){
     closeTaskDetail();
@@ -3914,7 +3917,7 @@ async function confirmSendBack(taskId){
 }
 
 async function adminCancelTask(taskId){
-  if(!confirm('Cancel this task? This cannot be undone.')) return;
+  if(!await showConfirm('Cancel this task? This action <b>cannot be undone</b>.','Cancel Task','⚠️','Yes, Cancel Task','Go Back','var(--red)')) return;
   const res = await api('update_task',{},'POST',{id:taskId,task_status:'Cancelled',remark:'🚫 Cancelled by admin'}).catch(()=>({}));
   if(res.success){
     closeTaskDetail();
@@ -3934,12 +3937,9 @@ async function handleAttendClick(taskId){
   const jobType      = task?.device_details || 'GPS Installation';
   const location     = task?.location || '';
 
-  const confirmed = confirm(
-    '🔧 Ready for Installation?\n\n' +
-    'Customer: ' + customerName + '\n' +
-    'Job: ' + jobType + (location ? '\nLocation: ' + location : '') + '\n\n' +
-    'This will send a consent & payment confirmation request to the customer.\n\n' +
-    'Are you sure you are at the location and ready to proceed?'
+  const confirmed = await showConfirm(
+    '<b>Customer:</b> ' + customerName + '<br><b>Job:</b> ' + jobType + (location ? '<br><b>Location:</b> ' + location : '') + '<br><br>This will send a <b>consent request</b> to the customer. Make sure you are at the location and ready to proceed.',
+    'Ready to Proceed?', '🔧', 'Yes, Send Consent', 'Not Yet', 'var(--accent)'
   );
   if(!confirmed) return;
 
@@ -4944,7 +4944,7 @@ function showUpdateToast(msg){
 const _origStartApp = typeof startApp === 'function' ? startApp : null;
 
 async function adminDeleteTask(id){
-  if(!confirm('⚠️ Delete this task permanently?\n\nThis will remove the task, all activity logs, device installs and consent records.\n\nType OK to confirm.')) return;
+  if(!await showConfirm('Delete this task permanently? All activity logs, device installs, balance sheet entries and consent records will also be removed. <b>Cannot be undone.</b>','Delete Task','🗑️','Yes, Delete','Cancel','var(--red)')) return;
   const res = await api('delete_task',{},'POST',{id}).catch(()=>({}));
   if(res.success){
     closeTaskDetail();
@@ -5903,6 +5903,61 @@ async function submitJobOutcome(){
     </div>
   </div>
 </div>
+
+<!-- ═══════════════════════════════════════════════════
+     CUSTOM DIALOG SYSTEM (replaces browser alert/confirm)
+═══════════════════════════════════════════════════ -->
+<div id="cdlg-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:14px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden">
+    <div id="cdlg-header" style="padding:18px 20px 12px;display:flex;align-items:flex-start;gap:12px">
+      <span id="cdlg-icon" style="font-size:28px;flex-shrink:0;line-height:1"></span>
+      <div>
+        <div id="cdlg-title" style="font-size:15px;font-weight:800;color:var(--text)"></div>
+        <div id="cdlg-msg" style="font-size:13px;color:var(--text2);margin-top:6px;line-height:1.7"></div>
+      </div>
+    </div>
+    <div id="cdlg-footer" style="display:flex;gap:10px;padding:12px 20px 18px"></div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════
+// CUSTOM DIALOG — replaces browser alert() and confirm()
+// ════════════════════════════════════════════════════════
+let _cdlgResolve = null;
+
+function _cdlgClose(val){
+  document.getElementById('cdlg-overlay').style.display = 'none';
+  if(_cdlgResolve){ _cdlgResolve(val); _cdlgResolve = null; }
+}
+
+// showAlert(message, title, icon) — replaces alert()
+function showAlert(msg, title='Notice', icon='ℹ️'){
+  return new Promise(resolve => {
+    _cdlgResolve = resolve;
+    document.getElementById('cdlg-icon').textContent  = icon;
+    document.getElementById('cdlg-title').textContent = title;
+    document.getElementById('cdlg-msg').innerHTML     = msg;
+    document.getElementById('cdlg-footer').innerHTML  = `
+      <button onclick="_cdlgClose(true)" style="flex:1;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">OK</button>`;
+    document.getElementById('cdlg-overlay').style.display = 'flex';
+  });
+}
+
+// showConfirm(message, title, icon, confirmLabel, cancelLabel, confirmColor)
+function showConfirm(msg, title='Confirm', icon='❓', confirmLabel='Yes', cancelLabel='Cancel', confirmColor='var(--accent)'){
+  return new Promise(resolve => {
+    _cdlgResolve = resolve;
+    document.getElementById('cdlg-icon').textContent  = icon;
+    document.getElementById('cdlg-title').textContent = title;
+    document.getElementById('cdlg-msg').innerHTML     = msg;
+    document.getElementById('cdlg-footer').innerHTML  = `
+      <button onclick="_cdlgClose(false)" style="flex:1;padding:11px;background:var(--surface2);color:var(--text);border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">${cancelLabel}</button>
+      <button onclick="_cdlgClose(true)" style="flex:1;padding:11px;background:${confirmColor};color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">${confirmLabel}</button>`;
+    document.getElementById('cdlg-overlay').style.display = 'flex';
+  });
+}
+</script>
 
 </body>
 </html>
