@@ -3988,11 +3988,7 @@ async function handleAttendClick(taskId){
   // Check if consent already received
   const check = await api('check_consent', {id: taskId}).catch(()=>({}));
   if(check.consented){
-    // Consent already done — ensure task is loaded then proceed
-    if(!_detailTask || String(_detailTask.id) !== String(taskId)){
-      const r = await api('get_task',{id:taskId}).catch(()=>({}));
-      if(r&&r.task) _detailTask = r.task;
-    }
+    // Consent already done — go straight to attend form
     openTechAttend(taskId);
     return;
   }
@@ -4132,31 +4128,18 @@ async function checkAndUpdateAttendBtn(taskId){
   // Check consent status from server
   const res = await api('check_consent', {id: taskId}).catch(()=>({}));
 
-  // STATE 2: Consent received — label depends on job type
+  // STATE 2: Consent received — Proceed to Adding
   if(res.consented){
-    const jobType2 = (_detailTask?.device_details||'').toLowerCase();
-    const isDemo2  = jobType2.includes('demonstration') || jobType2.includes('demo');
-    const isTrbl2  = jobType2.includes('troubleshoot') || jobType2.includes('offline');
     btn.style.background = 'var(--green)';
     btn.style.border     = 'none';
     btn.style.display    = '';
     btn.setAttribute('onclick', 'openTechAttend(' + taskId + ')');
-    if(isDemo2){
-      if(icon)  icon.textContent  = '📱';
-      if(label) label.textContent = 'Demo Done';
-      if(sub)   sub.textContent   = 'Tap to record demo report';
-    } else if(isTrbl2){
-      if(icon)  icon.textContent  = '🔧';
-      if(label) label.textContent = 'Fix Done';
-      if(sub)   sub.textContent   = 'Tap to record outcome';
-    } else {
-      if(icon)  icon.textContent  = '➕';
-      if(label) label.textContent = 'Proceed to Adding';
-      if(sub)   sub.textContent   = 'Customer confirmed';
-    }
+    if(icon)  icon.textContent  = '➕';
+    if(label) label.textContent = 'Proceed to Adding';
+    if(sub)   sub.textContent   = 'Customer confirmed';
     if(status) status.innerHTML = `
       <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--green);line-height:1.6">
-        ✅ <strong>${res.name||'Customer'}</strong> confirmed.<br>
+        ✅ <strong>${res.name||'Customer'}</strong> confirmed T&amp;C and payment.<br>
         <span style="font-size:10px;color:var(--text3)">Confirmed: ${(res.consented_at||'').replace('T',' ').slice(0,16)}</span>
       </div>`;
     return;
@@ -5407,6 +5390,7 @@ function onLeadTypeChange(leadType){
   if(isDemo && jobSel){
     jobSel.value = 'Demonstration';
     setModalJobPrice('Demonstration');
+    checkTaskFormReady();
     toggleFreeService('Demonstration');
   }
 
@@ -5429,7 +5413,6 @@ function onLeadTypeChange(leadType){
   // For Demo: auto-select Free Service payment mode
   if(isDemo){
     selectPayMode('Free Service');
-    checkTaskFormReady();
   } else {
     // Restore fields if switching away from Demo
     clearPayMode();
@@ -5527,14 +5510,9 @@ let _joTaskId = null;
 let _joJobType = null;
 
 function openJobOutcome(taskId){
-  _joTaskId = taskId;
-  if(!_detailTask || String(_detailTask.id) !== String(taskId)){
-    api('get_task',{id:taskId}).then(function(r){
-      if(r&&r.task){_detailTask=r.task; openJobOutcome(taskId);}
-    });
-    return;
-  }
+  _joTaskId  = taskId;
   const task = _detailTask;
+  if(!task) return;
 
   const job = (task.device_details||'').toLowerCase();
   let type = 'default';
