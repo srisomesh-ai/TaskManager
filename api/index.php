@@ -275,7 +275,14 @@ case 'get_tasks':
             // Postponed AFTER customer already consented — needs attention
             $task['workflow_state'] = 'postponed_after_consent';
         } elseif($consentAt !== '' && !$addingDone){
-            $task['workflow_state'] = 'ready_to_add';
+            $jobType = strtolower($task['device_details']??'');
+            if(strpos($jobType,'demonstration')!==false || strpos($jobType,'demo')!==false){
+                $task['workflow_state'] = 'ready_for_demo';
+            } elseif(strpos($jobType,'troubleshoot')!==false || strpos($jobType,'offline')!==false){
+                $task['workflow_state'] = 'ready_for_troubleshoot';
+            } else {
+                $task['workflow_state'] = 'ready_to_add';
+            }
         } elseif($consentAt !== '' && $addingDone){
             $task['workflow_state'] = '';
         } elseif($consentToken && $consentToken !== 'USED' && $consentToken !== ''){
