@@ -595,12 +595,12 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
               <div class="form-row">
                 <div class="form-group">
                   <label>Lead Type</label>
-                  <select id="fm-leadtype">
+                  <select id="fm-leadtype" onchange="onLeadTypeChange(this.value)">
                     <option>New Lead</option><option>Demo</option><option>3rd Party Lead</option>
                     <option>Troubleshoot</option><option>Existing Customer Lead</option><option>Outstation Lead</option>
                   </select>
                 </div>
-                <div class="form-group">
+                <div class="form-group" id="fm-profile-group">
                   <label>Company Profile</label>
                   <select id="fm-profile" onchange="updateModalGST()">
                     <option value="BGPT">BGPT — No GST</option>
@@ -630,9 +630,9 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
                     <option value="Demonstration">Demonstration</option>
                   </select>
                 </div>
-                <div class="form-group"><label>Device Qty</label><input type="number" id="fm-qty" value="1" min="1" oninput="updateModalGST()"></div>
+                <div class="form-group" id="fm-qty-group"><label>Device Qty</label><input type="number" id="fm-qty" value="1" min="1" oninput="updateModalGST()"></div>
               </div>
-              <div class="form-group" style="margin-bottom:12px">
+              <div class="form-group" id="fm-price-group" style="margin-bottom:12px">
                 <label>Standard Price (₹) <span id="fm-price-hint" style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none"></span></label>
                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
                   <input type="number" id="fm-price" placeholder="Auto-filled from job type" step="0.01" readonly
@@ -673,7 +673,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
                   </div>
                 </div>
               </div>
-              <div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:12px 14px">
+              <div id="fm-payment-section" style="background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:12px 14px">
                 <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px">💳 How will the customer pay?</div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap">
                   <button type="button" class="pay-mode-opt" onclick="selectPayMode('Cash')">💵 Cash</button>
@@ -2721,6 +2721,12 @@ function openCreateModal(){
   ['fm-leadtype','fm-profile','fm-job','fm-travel-by']
     .forEach(id=>{const el=document.getElementById(id);if(el){el.selectedIndex=0;el.disabled=false;}});
   const qty=document.getElementById('fm-qty');if(qty){qty.value=1;qty.disabled=false;}
+  // Reset Demo-hidden fields back to visible
+  ['fm-profile-group','fm-qty-group','fm-price-group','fm-payment-section'].forEach(function(id){
+    const el=document.getElementById(id); if(el) el.style.display='';
+  });
+  // Reset job select disabled state
+  const jobSel2=document.getElementById('fm-job');if(jobSel2) jobSel2.disabled=false;
   ['fm-urgent','fm-outstation'].forEach(id=>{const el=document.getElementById(id);if(el){el.checked=false;el.disabled=false;}});
   const gstBox=document.getElementById('fm-gst-box');if(gstBox)gstBox.style.display='none';
   const hint=document.getElementById('fm-price-hint');if(hint)hint.textContent='';
@@ -5341,6 +5347,62 @@ function copyQtLink(e){
 // ══════════════════════════════════════════════════════════
 // FREE SERVICE — show only for Troubleshoot / Demonstration
 // ══════════════════════════════════════════════════════════
+// ── LEAD TYPE CHANGE: Demo hides profile/qty/price/payment, sets Demonstration ──
+function onLeadTypeChange(leadType){
+  const isDemo = (leadType === 'Demo');
+
+  // Company profile — hide for Demo
+  const profileGrp = document.getElementById('fm-profile-group');
+  if(profileGrp) profileGrp.style.display = isDemo ? 'none' : '';
+
+  // Job type — auto-select Demonstration, lock it
+  const jobSel = document.getElementById('fm-job');
+  if(jobSel){
+    if(isDemo){
+      jobSel.value = 'Demonstration';
+      jobSel.disabled = true;
+      setModalJobPrice('Demonstration');
+    } else {
+      jobSel.disabled = false;
+      // Only reset if it was Demonstration
+      if(jobSel.value === 'Demonstration'){
+        jobSel.value = '';
+        setModalJobPrice('');
+      }
+    }
+  }
+
+  // Device qty — hide for Demo
+  const qtyGrp = document.getElementById('fm-qty-group');
+  if(qtyGrp) qtyGrp.style.display = isDemo ? 'none' : '';
+
+  // Standard price + collect price — hide for Demo
+  const priceGrp = document.getElementById('fm-price-group');
+  if(priceGrp) priceGrp.style.display = isDemo ? 'none' : '';
+
+  // Payment section — hide for Demo
+  const paySection = document.getElementById('fm-payment-section');
+  if(paySection) paySection.style.display = isDemo ? 'none' : '';
+
+  if(isDemo){
+    // Set price to 0 and payment to Free Service
+    const priceEl   = document.getElementById('fm-price');
+    const collectEl = document.getElementById('fm-price-collect');
+    if(priceEl)   priceEl.value   = '0';
+    if(collectEl) collectEl.value = '0';
+    selectPayMode('Free Service');
+  } else {
+    // Restore — clear pay mode so user must select
+    clearPayMode();
+    const priceEl   = document.getElementById('fm-price');
+    const collectEl = document.getElementById('fm-price-collect');
+    if(priceEl)   priceEl.value   = '';
+    if(collectEl) collectEl.value = '';
+  }
+
+  checkTaskFormReady();
+}
+
 function toggleFreeService(jobType){
   const freeJobs = ['Troubleshoot/Offline', 'Demonstration'];
   const btn = document.getElementById('free-service-btn');

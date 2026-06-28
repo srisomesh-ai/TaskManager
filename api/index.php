@@ -605,7 +605,7 @@ case 'update_task':
             $pdo->exec("CREATE TABLE IF NOT EXISTS balance_sheet_entries (id INT AUTO_INCREMENT PRIMARY KEY, type VARCHAR(20) DEFAULT 'sales', profile VARCHAR(10) DEFAULT 'BGPT', task_id VARCHAR(20) NULL, task_db_id INT NULL, date DATE NOT NULL, invoice_no VARCHAR(50), gps_serial_no VARCHAR(100), customer_type VARCHAR(50), name_on_server TEXT, server_name VARCHAR(50), device_model VARCHAR(100), service_type VARCHAR(100), license_plan VARCHAR(100), qty DECIMAL(10,2) DEFAULT 1, unit_price DECIMAL(10,2) DEFAULT 0, gst DECIMAL(10,2) DEFAULT 0, total_price DECIMAL(10,2) DEFAULT 0, payment_status VARCHAR(50), payment_received DECIMAL(10,2) DEFAULT 0, pending_payment DECIMAL(10,2) DEFAULT 0, payment_mode VARCHAR(50), payment_received_on DATE NULL, payment_transaction_details TEXT, pending_reason VARCHAR(100), discount_given DECIMAL(10,2) DEFAULT 0, discount_reason TEXT, discount_incharge VARCHAR(100), payment_reminder_date DATE NULL, technician_name VARCHAR(100), location VARCHAR(200), remarks TEXT, created_by_code VARCHAR(50), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
             // Refresh task data
             $bt=$pdo->prepare("SELECT t.*,u.name as tech_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?"); $bt->execute([$id]); $btask=$bt->fetch();
-            if ($btask && !$btask['bs_entry_id']) {
+            if ($btask && !$btask['bs_entry_id'] && strtolower($btask['device_details']??'') !== 'demonstration') {
                 $bqty=floatval($btask['device_qty']??1);
                 $btotal=floatval($btask['price_to_collect']??0);
                 $bunit=$bqty>0?$btotal/$bqty:$btotal;
@@ -666,8 +666,8 @@ case 'approve_task':
     $hrs=(time()-strtotime($t['created_at']))/3600;
     $stars=$hrs<=12?5:($hrs<=24?4:($hrs<=48?3:($hrs<=72?2:1)));
     $pdo->prepare("UPDATE tasks SET star_rating=? WHERE id=? AND (star_rating IS NULL OR star_rating=0)")->execute([$stars,$id]);
-    // Update BS entry if exists — mark payment as received by company
-    if ($t['bs_entry_id']) {
+    // Update BS entry if exists — mark payment as received (skip for Demonstration tasks)
+    if ($t['bs_entry_id'] && strtolower($t['device_details']??'') !== 'demonstration') {
         $pdo->prepare("UPDATE balance_sheet_entries SET payment_status='Collected',payment_received=?,pending_payment=0,payment_received_on=CURDATE() WHERE id=?")->execute([$collected,$t['bs_entry_id']]);
     } else {
         // Create BS entry now (fallback if not created at Awaiting Approval)
@@ -890,7 +890,7 @@ case 'save_device_install':
         $tr2 = $pdo->prepare("SELECT t.*,u.name as tech_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?");
         $tr2->execute([$tid]); $t2 = $tr2->fetch();
 
-        if ($t2 && !$t2['bs_entry_id']) {
+        if ($t2 && !$t2['bs_entry_id'] && strtolower($t2['device_details']??'') !== 'demonstration') {
             // Check all devices installed
             $totalQty = intval($t2['device_qty']??1);
             $doneCount = $pdo->prepare("SELECT COUNT(*) FROM task_device_installs WHERE task_id=? AND gps_serial_no IS NOT NULL AND gps_serial_no != ''");
