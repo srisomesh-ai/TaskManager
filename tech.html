@@ -3230,13 +3230,14 @@ async function submitTechUpdate(){
 
 // ── TECH ATTEND MODAL ─────────────────────────────────────────────────────
 function openTechAttend(taskId, jobTypeParam){
-  // Route to job-specific form — use jobTypeParam if passed (avoids _detailTask dependency)
   const job = (jobTypeParam || _detailTask?.device_details||'').toLowerCase();
+  showToast('DEBUG: job=' + job + ' param=' + (jobTypeParam||'none'));
   const isSpecialJob = job.includes('troubleshoot') || job.includes('offline') ||
                        (job.includes('vehicle to vehicle') || job.includes('v2v')) ||
                        job.includes('demonstration') || job.includes('demo') ||
                        job.includes('only remove') || job.includes('remove only');
   if(isSpecialJob){
+    showToast('DEBUG: routing to openJobOutcome');
     openJobOutcome(taskId);
     return;
   }
