@@ -3973,7 +3973,12 @@ async function adminCancelTask(taskId){
 let _consentPollTimer = null;
 
 async function handleAttendClick(taskId){
-  const task = _detailTask;
+  // Always fetch task to ensure we have latest data including jobType
+  let task = _detailTask && String(_detailTask.id) === String(taskId) ? _detailTask : null;
+  if(!task){
+    const fetched = await api('get_task', {id: taskId}).catch(()=>({}));
+    if(fetched && fetched.task){ task = fetched.task; _detailTask = task; }
+  }
   const jobType = task?.device_details || '';
 
   // Check consent first — if already done, go straight to job form
