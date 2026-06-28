@@ -1705,10 +1705,16 @@ function startApp(){
   const navLabel = document.getElementById('nav-my-tasks-label');
   if(navLabel) navLabel.textContent = isTech ? 'My Dashboard' : 'My Tasks';
 
-  // Navigate — tech goes to their own dashboard
-  const isAdmin2 = ['admin','assigner'].includes(currentUser.role);
-  const defaultPage = isAdmin2 ? 'dashboard' : 'my-tasks';
-  const last = isTech ? 'my-tasks' : (localStorage.getItem('bgps_last_page') || defaultPage);
+  // Technicians go to dedicated tech portal
+  if(isTech){
+    localStorage.setItem('bgps_tech_token', authToken);
+    localStorage.setItem('bgps_tech_user', JSON.stringify(currentUser));
+    window.location.href = 'tech.html';
+    return;
+  }
+  // Navigate admin/assigner
+  const defaultPage = 'dashboard';
+  const last = localStorage.getItem('bgps_last_page') || defaultPage;
   showPage(last);
 
   // Start real-time polling
