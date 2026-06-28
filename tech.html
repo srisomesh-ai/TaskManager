@@ -1080,7 +1080,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
 <!-- ═══════════════════════════════════════════════════
      JOB OUTCOME MODAL (Troubleshoot/Demo/Remove/V2V)
 ═══════════════════════════════════════════════════ -->
-<div id="job-outcome-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;align-items:center;justify-content:center;padding:16px;overflow-y:auto">
+<div id="job-outcome-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;align-items:center;justify-content:center;padding:16px;overflow-y:auto">
   <div style="background:#fff;border-radius:14px;width:100%;max-width:520px;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden;margin:auto">
     <div id="jo-header" style="background:linear-gradient(135deg,var(--accent),var(--accent2));padding:16px 20px;color:#fff;display:flex;align-items:center;justify-content:space-between">
       <div>
@@ -5067,182 +5067,61 @@ let _joJobType = null;
 
 function openJobOutcome(taskId){
   _joTaskId = taskId;
-  // If _detailTask not loaded, fetch first then retry
   if(!_detailTask || String(_detailTask.id) !== String(taskId)){
-    api('get_task', {id: taskId}).then(function(r){
-      if(r && r.task){ _detailTask = r.task; openJobOutcome(taskId); }
+    api('get_task',{id:taskId}).then(function(r){
+      if(r&&r.task){_detailTask=r.task; openJobOutcome(taskId);}
       else showToast('❌ Could not load task');
-    }).catch(function(){ showToast('❌ Network error'); });
+    }).catch(function(){showToast('❌ Network error');});
     return;
   }
-  const task = _detailTask;
-
-  const job = (task.device_details||'').toLowerCase();
-  let type = 'default';
-  if(job.includes('troubleshoot')||job.includes('offline'))          type='troubleshoot';
-  else if(job.includes('vehicle to vehicle')||job.includes('v2v'))   type='v2v';
-  else if(job.includes('demonstration')||job.includes('demo'))       type='demo';
-  else if(job.includes('only remove')||job.includes('remove only'))  type='remove';
-
+  var task = _detailTask;
+  var cust = (task.customer_name||'').replace(/"/g,'&quot;');
+  var ser  = (task.gps_serial_no||'').replace(/"/g,'&quot;');
+  var job  = (task.device_details||'').toLowerCase();
+  var type = job.includes('demonstration')||job.includes('demo') ? 'demo'
+           : job.includes('troubleshoot')||job.includes('offline') ? 'troubleshoot'
+           : job.includes('vehicle to vehicle')||job.includes('v2v') ? 'v2v'
+           : job.includes('only remove')||job.includes('remove only') ? 'remove'
+           : 'default';
   _joJobType = type;
 
-  const titles = {
-    troubleshoot: {icon:'🔧', title:'Troubleshoot Report',    sub:'GPS Offline Fix'},
-    v2v:          {icon:'🚗', title:'V2V Transfer Report',    sub:'Vehicle to Vehicle Change'},
-    demo:         {icon:'📱', title:'Demonstration Report',   sub:'Demo Visit'},
-    remove:       {icon:'🔴', title:'Device Removal Report',  sub:'GPS Device Removed'},
-    default:      {icon:'✅', title:'Job Completion Report',  sub:task.device_details||''},
-  };
-  const t = titles[type] || titles.default;
-  document.getElementById('jo-title').textContent    = t.icon + ' ' + t.title;
-  document.getElementById('jo-subtitle').textContent = task.task_id + ' · ' + (task.customer_name||'');
+  var icons  = {demo:'📱',troubleshoot:'🔧',v2v:'🚗',remove:'🔴',default:'✅'};
+  var titles2 = {demo:'Demonstration Report',troubleshoot:'Troubleshoot Report',v2v:'V2V Transfer',remove:'Device Removal',default:'Job Report'};
+  document.getElementById('jo-title').textContent    = (icons[type]||'✅')+' '+(titles2[type]||'Job Report');
+  document.getElementById('jo-subtitle').textContent = (task.task_id||'')+' · '+(task.customer_name||'');
 
-  const bodies = {
-    troubleshoot: `
-      <div class="form-group"><label>What was the issue found?</label>
-        <select id="jo-issue" class="form-input">
-          <option value="">Select issue…</option>
-          <option>GPS device offline — No power</option>
-          <option>GPS device offline — SIM issue</option>
-          <option>GPS device offline — Hardware fault</option>
-          <option>GPS device offline — Wiring issue</option>
-          <option>GPS device offline — Server not syncing</option>
-          <option>GPS device offline — Unknown</option>
-        </select>
-      </div>
-      <div class="form-group"><label>What steps did you take to fix it?</label>
-        <textarea id="jo-steps" class="form-input" rows="3" placeholder="e.g. Checked power supply, replaced SIM card, reconnected wiring…"></textarea>
-      </div>
-      <div class="form-group"><label>Is GPS back online now?</label>
-        <select id="jo-status" class="form-input">
-          <option value="">Select…</option>
-          <option value="yes">✅ Yes — GPS is back online</option>
-          <option value="partial">⚠️ Partially — Still investigating</option>
-          <option value="no">❌ No — Needs further action</option>
-        </select>
-      </div>
-      <div class="form-group"><label>Any hardware replaced?</label>
-        <select id="jo-hardware" class="form-input" onchange="document.getElementById('jo-hardware-detail').style.display=this.value==='yes'?'':'none'">
-          <option value="no">No</option>
-          <option value="yes">Yes</option>
-        </select>
-      </div>
-      <div class="form-group" id="jo-hardware-detail" style="display:none"><label>What was replaced?</label>
-        <input type="text" id="jo-hardware-txt" class="form-input" placeholder="e.g. SIM card, GPS device, wiring…">
-      </div>
-      <div class="form-group"><label>Remarks / Next action if still offline</label>
-        <textarea id="jo-remarks" class="form-input" rows="2" placeholder="Any follow-up needed?"></textarea>
-      </div>`,
+  var body = '';
+  if(type==='demo'){
+    body  = '<div class="form-group"><label>Company / Customer</label><input type="text" id="jo-company" class="form-input" value="'+cust+'" placeholder="Customer name"></div>';
+    body += '<div class="form-group"><label>Who attended? (Name & Designation)</label><input type="text" id="jo-attendee" class="form-input" placeholder="e.g. Ravi Kumar — Fleet Manager"></div>';
+    body += '<div class="form-group"><label>Products demonstrated</label><input type="text" id="jo-products" class="form-input" placeholder="e.g. Basic GPS, Engine Cut"></div>';
+    body += '<div class="form-group"><label>Customer interest level</label><select id="jo-interest" class="form-input"><option value="">Select…</option><option value="high">🔥 High — Ready to buy</option><option value="medium">👍 Medium — Considering</option><option value="low">👎 Low — Not sure</option><option value="none">❌ Not Interested</option></select></div>';
+    body += '<div class="form-group"><label>Concerns / questions raised</label><textarea id="jo-concerns" class="form-input" rows="2" placeholder="What did customer ask or say?"></textarea></div>';
+    body += '<div class="form-group"><label>Follow-up date (if needed)</label><input type="date" id="jo-fu-date" class="form-input"></div>';
+    body += '<div class="form-group"><label>Remarks</label><textarea id="jo-remarks" class="form-input" rows="2"></textarea></div>';
+  } else if(type==='troubleshoot'){
+    body  = '<div class="form-group"><label>Issue found?</label><select id="jo-issue" class="form-input"><option value="">Select…</option><option>GPS offline — No power</option><option>GPS offline — SIM issue</option><option>GPS offline — Hardware fault</option><option>GPS offline — Wiring issue</option><option>GPS offline — Unknown</option></select></div>';
+    body += '<div class="form-group"><label>Steps taken to fix</label><textarea id="jo-steps" class="form-input" rows="3" placeholder="What did you do to fix it?"></textarea></div>';
+    body += '<div class="form-group"><label>GPS back online?</label><select id="jo-status" class="form-input"><option value="">Select…</option><option value="yes">✅ Yes — Back online</option><option value="partial">⚠️ Partially — Still checking</option><option value="no">❌ No — Needs more work</option></select></div>';
+    body += '<div class="form-group"><label>Remarks</label><textarea id="jo-remarks" class="form-input" rows="2"></textarea></div>';
+  } else if(type==='v2v'){
+    body  = '<div class="form-group"><label>IMEI / GPS Serial No</label><input type="text" id="jo-imei" class="form-input" placeholder="IMEI or serial number"></div>';
+    body += '<div class="form-group"><label>New Vehicle Number</label><input type="text" id="jo-new-vehicle" class="form-input" placeholder="e.g. AP31AB1234"></div>';
+    body += '<div class="form-group"><label>Transfer confirmed?</label><select id="jo-v2v-done" class="form-input"><option value="">Select…</option><option value="yes">✅ Yes</option><option value="no">❌ No</option></select></div>';
+    body += '<div class="form-group"><label>Remarks</label><textarea id="jo-remarks" class="form-input" rows="2"></textarea></div>';
+  } else if(type==='remove'){
+    body  = '<div class="form-group"><label>GPS Serial No of removed device</label><input type="text" id="jo-serial" class="form-input" value="'+ser+'" placeholder="IMEI / Serial"></div>';
+    body += '<div class="form-group"><label>Reason for removal</label><select id="jo-reason" class="form-input"><option value="">Select…</option><option>Customer request — selling vehicle</option><option>Customer request — switching provider</option><option>Non-payment — device recovered</option><option>Other</option></select></div>';
+    body += '<div class="form-group"><label>Device disposition</label><select id="jo-device" class="form-input"><option value="returned">Handed to customer</option><option value="taken">Brought back</option></select></div>';
+    body += '<div class="form-group"><label>Remarks</label><textarea id="jo-remarks" class="form-input" rows="2"></textarea></div>';
+  } else {
+    body = '<div class="form-group"><label>Remarks</label><textarea id="jo-remarks" class="form-input" rows="3" placeholder="Job completion notes…"></textarea></div>';
+  }
 
-    v2v: `
-      <div class="form-group"><label>Enter IMEI / GPS Serial No</label>
-        <div style="display:flex;gap:8px">
-          <input type="text" id="jo-imei" class="form-input" placeholder="IMEI or serial number" style="flex:1">
-          <button type="button" onclick="joFetchVehicle()" class="ts-btn ts-btn-secondary" style="white-space:nowrap">🔍 Fetch</button>
-        </div>
-      </div>
-      <div id="jo-vehicle-info" style="display:none;background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:12px;font-size:13px"></div>
-      <div class="form-group"><label>New Vehicle Number *</label>
-        <input type="text" id="jo-new-vehicle" class="form-input" placeholder="e.g. AP31AB1234" style="text-transform:uppercase">
-      </div>
-      <div class="form-group"><label>New Vehicle Type</label>
-        <input type="text" id="jo-new-vtype" class="form-input" placeholder="e.g. Car, Truck, Bike…">
-      </div>
-      <div class="form-group"><label>V2V Transfer Confirmed?</label>
-        <select id="jo-v2v-done" class="form-input">
-          <option value="">Select…</option>
-          <option value="yes">✅ Yes — GPS transferred successfully</option>
-          <option value="no">❌ No — Issue encountered</option>
-        </select>
-      </div>
-      <div class="form-group"><label>Remarks</label>
-        <textarea id="jo-remarks" class="form-input" rows="2" placeholder="Any additional notes…"></textarea>
-      </div>`,
-
-    demo: `
-      <div class="form-group"><label>Company / Customer Name</label>
-        <input type="text" id="jo-company" class="form-input" placeholder="Company or customer name" value="${_detailTask?.customer_name||''}">
-      </div>
-      <div class="form-group"><label>Who attended the demo? (Name & Designation)</label>
-        <input type="text" id="jo-attendee" class="form-input" placeholder="e.g. Ravi Kumar — Fleet Manager">
-      </div>
-      <div class="form-group"><label>Products demonstrated</label>
-        <input type="text" id="jo-products" class="form-input" placeholder="e.g. Basic GPS, Engine Cut, VLTD">
-      </div>
-      <div class="form-group"><label>Customer interest level</label>
-        <select id="jo-interest" class="form-input">
-          <option value="">Select…</option>
-          <option value="high">🔥 High — Ready to buy</option>
-          <option value="medium">👍 Medium — Considering</option>
-          <option value="low">👎 Low — Not sure</option>
-          <option value="none">❌ Not Interested</option>
-        </select>
-      </div>
-      <div class="form-group"><label>Customer concerns / questions raised</label>
-        <textarea id="jo-concerns" class="form-input" rows="2" placeholder="What did the customer ask or say?"></textarea>
-      </div>
-      <div class="form-group"><label>Follow-up required?</label>
-        <select id="jo-followup" class="form-input" onchange="document.getElementById('jo-followup-date').style.display=this.value==='yes'?'':'none'">
-          <option value="no">No</option>
-          <option value="yes">Yes — Set follow-up date</option>
-        </select>
-      </div>
-      <div class="form-group" id="jo-followup-date" style="display:none"><label>Follow-up Date</label>
-        <input type="date" id="jo-fu-date" class="form-input">
-      </div>
-      <div class="form-group"><label>Remarks</label>
-        <textarea id="jo-remarks" class="form-input" rows="2" placeholder="Any other notes…"></textarea>
-      </div>`,
-
-    remove: `
-      <div class="form-group"><label>GPS Serial No of Removed Device *</label>
-        <input type="text" id="jo-serial" class="form-input" placeholder="IMEI / Serial number" value="${_detailTask?.gps_serial_no||''}">
-      </div>
-      <div class="form-group"><label>Reason for Removal *</label>
-        <select id="jo-reason" class="form-input">
-          <option value="">Select reason…</option>
-          <option>Customer request — selling vehicle</option>
-          <option>Customer request — switching provider</option>
-          <option>Customer request — no longer needed</option>
-          <option>Device fault — replacement needed</option>
-          <option>Non-payment — device recovered</option>
-          <option>Other</option>
-        </select>
-      </div>
-      <div class="form-group"><label>Next Plan</label>
-        <select id="jo-next" class="form-input">
-          <option value="">Select…</option>
-          <option>Customer will reinstall later</option>
-          <option>Customer switching to another provider</option>
-          <option>Vehicle sold — new owner to decide</option>
-          <option>No further action</option>
-        </select>
-      </div>
-      <div class="form-group"><label>Device Disposition</label>
-        <select id="jo-device" class="form-input">
-          <option value="">Select…</option>
-          <option value="returned">Handed over to customer</option>
-          <option value="taken">Brought back by technician</option>
-        </select>
-      </div>
-      <div class="form-group"><label>Device Condition</label>
-        <select id="jo-condition" class="form-input">
-          <option value="good">Good — Working</option>
-          <option value="damaged">Damaged</option>
-          <option value="missing_parts">Missing parts</option>
-        </select>
-      </div>
-      <div class="form-group"><label>Remarks</label>
-        <textarea id="jo-remarks" class="form-input" rows="2" placeholder="Any additional notes…"></textarea>
-      </div>`,
-  };
-
-  document.getElementById('jo-body').innerHTML = bodies[type] || `
-    <div class="form-group"><label>Remarks</label>
-      <textarea id="jo-remarks" class="form-input" rows="3" placeholder="Job completion notes…"></textarea>
-    </div>`;
-
-  document.getElementById('job-outcome-overlay').style.display = 'flex';
+  document.getElementById('jo-body').innerHTML = body;
+  var ov = document.getElementById('job-outcome-overlay');
+  if(!ov){ showToast('❌ Modal not found'); return; }
+  ov.style.display = 'flex';
 }
 
 function closeJobOutcome(){
