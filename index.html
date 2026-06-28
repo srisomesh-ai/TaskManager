@@ -231,7 +231,7 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
 .tu-card.selected{background:var(--accent-light);border-width:2px}
 .tu-card-icon{font-size:20px;line-height:1;margin-bottom:4px}
 .tu-card-title{font-size:11px;font-weight:800;color:var(--text);line-height:1.2;margin-bottom:2px}
-.tu-card-sub{font-size:9px;color:var(--text3);line-height:1.3}1.3}
+.tu-card-sub{font-size:9px;color:var(--text3);line-height:1.3}
 .tu-card.selected .tu-card-title{color:var(--accent)}
 
 /* DEVICE INSTALL CARDS */
@@ -3980,9 +3980,10 @@ async function handleAttendClick(taskId){
     if(techPanel){
       const info = document.createElement('div');
       info.style.cssText = 'background:var(--saffron-bg);border:1.5px solid var(--saffron);border-radius:8px;padding:12px 14px;margin-top:10px;font-size:12px;color:var(--text2);line-height:1.7';
+      info.setAttribute('data-consent-waiting','1');
       info.innerHTML = res.email_sent
         ? '<strong>📧 Consent email sent to customer.</strong><br>Waiting for customer to read T&C and confirm payment. This button will change to <strong>✅ Proceed with Installation</strong> automatically once confirmed.'
-        : '<strong>⚠️ Customer has no email on file.</strong><br>Share this link with customer manually:<br><span style="color:var(--accent2);word-break:break-all;font-size:11px">https://salmon-goldfish-110661.hostingersite.com/consent.php</span>';
+        : '<strong>⚠️ Customer has no email on file.</strong><br>Share this link with customer manually:<br><span style="color:var(--accent2);word-break:break-all;font-size:11px">/consent.php</span>';
       techPanel.appendChild(info);
     }
 
@@ -3999,19 +4000,20 @@ async function handleAttendClick(taskId){
         if(label) label.textContent = 'Proceed!';
         if(sub)   sub.textContent   = poll.name + ' confirmed';
 
-        // Update info toast
+        // Replace ALL info cards with single confirmed card
         const techPanel = document.getElementById('td-tech-actions');
         if(techPanel){
-          const existing = techPanel.querySelector('[data-consent-info]');
-          if(existing) existing.remove();
+          techPanel.querySelectorAll('[data-consent-info],[data-consent-waiting]').forEach(el=>el.remove());
           const done = document.createElement('div');
           done.setAttribute('data-consent-info','1');
           done.style.cssText = 'background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:12px 14px;margin-top:10px;font-size:12px;color:var(--green);line-height:1.7;font-weight:600';
-          done.innerHTML = '✅ <strong>Customer has confirmed!</strong><br>' + poll.name + ' agreed to T&C and payment. Click <strong>Proceed!</strong> to start installation.';
+          done.innerHTML = '✅ <strong>Customer has confirmed!</strong><br>' + poll.name + ' agreed. Tap <strong>Proceed!</strong> to continue.';
           techPanel.appendChild(done);
         }
 
-        // Change onclick to open attend directly
+        // Load task data then set button onclick
+        const taskData = await api('get_task', {id: taskId}).catch(()=>({}));
+        if(taskData && taskData.task) _detailTask = taskData.task;
         btn.setAttribute('onclick', 'openTechAttend(' + taskId + ')');
       }
     }, 8000);
