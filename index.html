@@ -3973,25 +3973,24 @@ async function adminCancelTask(taskId){
 let _consentPollTimer = null;
 
 async function handleAttendClick(taskId){
-  // Confirmation before proceeding
   const task = _detailTask;
-  const customerName = task?.customer_name || 'this customer';
-  const jobType      = task?.device_details || 'GPS Installation';
-  const location     = task?.location || '';
+  const jobType = task?.device_details || '';
 
+  // Check consent first — if already done, go straight to job form
+  const check = await api('check_consent', {id: taskId}).catch(()=>({}));
+  if(check.consented){
+    openTechAttend(taskId, jobType);
+    return;
+  }
+
+  // Consent not yet received — confirm before sending
+  const customerName = task?.customer_name || 'this customer';
+  const location     = task?.location || '';
   const confirmed = await showConfirm(
-    '<b>' + customerName + '</b><br>' + jobType + (location ? '<br>📍 ' + location : '') + '<br><br>This will send a <b>consent request</b> to the customer.',
+    '<b>' + customerName + '</b><br>' + (jobType||'GPS Installation') + (location ? '<br>📍 ' + location : '') + '<br><br>This will send a <b>consent request</b> to the customer.',
     'Ready to Proceed?', '🔧', 'Yes, Send Consent', 'Not Yet', '#0F766E'
   );
   if(!confirmed) return;
-
-  // Check if consent already received
-  const check = await api('check_consent', {id: taskId}).catch(()=>({}));
-  if(check.consented){
-    // Consent already done — go straight to attend form
-    openTechAttend(taskId);
-    return;
-  }
 
   // No consent yet — send consent request to customer
   const btn = document.getElementById('td-attend-btn-' + taskId);
