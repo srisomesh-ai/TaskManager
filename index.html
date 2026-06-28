@@ -5390,7 +5390,6 @@ function onLeadTypeChange(leadType){
   if(isDemo && jobSel){
     jobSel.value = 'Demonstration';
     setModalJobPrice('Demonstration');
-    checkTaskFormReady();
     toggleFreeService('Demonstration');
   }
 
@@ -5413,6 +5412,7 @@ function onLeadTypeChange(leadType){
   // For Demo: auto-select Free Service payment mode
   if(isDemo){
     selectPayMode('Free Service');
+    checkTaskFormReady();
   } else {
     // Restore fields if switching away from Demo
     clearPayMode();
