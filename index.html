@@ -3652,6 +3652,8 @@ async function submitTechUpdate(){
 
 // ── TECH ATTEND MODAL ─────────────────────────────────────────────────────
 function openTechAttend(taskId){
+  // DEBUG — remove after fix
+  console.log('openTechAttend called, taskId=', taskId, '_detailTask=', _detailTask?.device_details);
   // Route to job-specific form for non-installation jobs
   const job = (_detailTask?.device_details||'').toLowerCase();
   const isSpecialJob = job.includes('troubleshoot') || job.includes('offline') ||
@@ -5535,6 +5537,7 @@ let _joJobType = null;
 
 function openJobOutcome(taskId){
   _joTaskId  = taskId;
+  console.log('openJobOutcome called, taskId=', taskId, 'task=', _detailTask?.device_details);
   const task = _detailTask;
   if(!task){ showToast('⚠️ Please open the task first'); return; }
 
@@ -5707,7 +5710,7 @@ function openJobOutcome(taskId){
       <textarea id="jo-remarks" class="form-input" rows="3" placeholder="Job completion notes…"></textarea>
     </div>`;
 
-  document.getElementById('job-outcome-overlay').style.display = 'flex';
+  console.log('Showing job-outcome-overlay'); document.getElementById('job-outcome-overlay').style.display = 'flex'; console.log('Overlay display:', document.getElementById('job-outcome-overlay').style.display);
 }
 
 function closeJobOutcome(){
