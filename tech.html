@@ -5431,6 +5431,7 @@ async function submitJobOutcome(){
   const type   = _joJobType;
   const taskId = _joTaskId;
   const errEl  = document.getElementById('jo-err');
+  showToast('DEBUG type=' + type + ' taskId=' + taskId);
 
   // ── Validation ────────────────────────────────────────────────────────
   if(type === 'demo'){
