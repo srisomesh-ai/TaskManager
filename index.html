@@ -1656,6 +1656,21 @@ async function doLogin(){
     });
     const d = await r.json();
     if(d.success && d.token){
+      // Block technicians — they must use tech.html
+      if(d.user?.role === 'technician'){
+        err.textContent = '🔧 Please use the Technician Portal to login.';
+        btn.textContent='🔐 Sign In'; btn.disabled=false;
+        // Add link to tech portal
+        if(!document.getElementById('tech-portal-link')){
+          const lnk = document.createElement('a');
+          lnk.id='tech-portal-link';
+          lnk.href='tech.html';
+          lnk.textContent='Go to Technician Portal →';
+          lnk.style.cssText='display:block;text-align:center;margin-top:10px;color:rgba(255,255,255,.7);font-size:12px';
+          err.parentNode.appendChild(lnk);
+        }
+        return;
+      }
       localStorage.setItem('bgps_token', d.token);
       localStorage.setItem('bgps_user',  JSON.stringify(d.user));
       authToken   = d.token;
