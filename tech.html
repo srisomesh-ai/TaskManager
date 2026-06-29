@@ -5415,9 +5415,9 @@ async function submitJobOutcome(){
   if(res.success){
     closeJobOutcome();
     showToast('✅ Job report saved — task sent for approval');
+    var tid = _joTaskId;
     closeTaskDetail();
-    if(typeof loadTasks==='function') loadTasks();
-    if(typeof loadDashboard==='function') loadDashboard();
+    loadMyTasks().then(function(){ viewTask(tid); }).catch(function(){ viewTask(tid); });
   } else {
     showToast('❌ '+(res.error||'Save failed'));
   }
