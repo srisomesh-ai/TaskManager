@@ -1755,7 +1755,7 @@ function startApp(){
   if(navLabel) navLabel.textContent = isTech ? 'My Dashboard' : 'My Tasks';
 
   // Navigate — admin/assigner only (technicians use tech.html)
-  if(isTech){ showPage('my-tasks'); return; }
+  if(isTech){ window.location.href = 'tech.html'; return; }
   const defaultPage = 'dashboard';
   const last = localStorage.getItem('bgps_last_page') || defaultPage;
   showPage(last);
