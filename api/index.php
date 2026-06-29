@@ -659,6 +659,13 @@ case 'approve_task':
     $pending    = max(0, $totalPrice - $collected);
     // Hard block if payment pending
     if ($pending > 0) { echo json_encode(['error'=>'Cannot close — ₹'.number_format($pending,0).' still pending. Collect full payment first.','pending'=>$pending]); break; }
+    // Hard block if cash collected but not yet deposited by technician
+    $payMode       = strtolower($t['payment_mode']??'');
+    $depositStatus = $t['cash_deposit_status']??'';
+    if ($payMode === 'cash' && $depositStatus !== 'deposited' && floatval($t['amount_collected']??0) > 0){
+        echo json_encode(['error'=>'Cannot close — technician collected ₹'.number_format(floatval($t['amount_collected']),0).' cash but deposit not confirmed yet. Ask technician to submit cash deposit first.']);
+        break;
+    }
     // Close the task
     $pdo->prepare("UPDATE tasks SET task_status='Closed',closed_at=NOW() WHERE id=?")->execute([$id]);
     $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")->execute([$id,$userId,'Task approved and closed by manager. Full payment confirmed.']);
