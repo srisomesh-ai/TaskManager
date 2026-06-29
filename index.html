@@ -3248,7 +3248,6 @@ async function viewTask(id){
     const taskFullyPaid  = taskBalance <= 15;
     const cashPending    = (t.cash_deposit_status === 'pending' || t.cash_deposit_status === 'submitted');
     const cashSubmitted   = (t.cash_deposit_status === 'submitted');
-    console.log('ADMIN FOOTER DEBUG: status='+t.task_status+' deposit='+t.cash_deposit_status+' cashPending='+cashPending+' cashSubmitted='+cashSubmitted+' taskFullyPaid='+taskFullyPaid);
 
     const btns = [];
 
@@ -3264,7 +3263,7 @@ async function viewTask(id){
       return;
     }
 
-    if(t.task_status === 'Awaiting Approval'){
+    if(t.task_status === 'Awaiting Approval' || cashSubmitted){
 
       // ── Payment verification panel ──────────────────────────────────────
       const payVerifyHtml = `
