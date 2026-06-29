@@ -1077,6 +1077,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
     <div style="padding:18px 20px;max-height:70vh;overflow-y:auto">
       <div id="jo-body"></div>
     </div>
+    <div id="jo-err" style="display:none;color:var(--red);font-size:12px;padding:0 20px 8px;font-weight:600"></div>
     <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px">
       <button onclick="closeJobOutcome()" class="ts-btn ts-btn-secondary" style="flex:1">Cancel</button>
       <button id="jo-submit-btn" onclick="submitJobOutcome()" class="ts-btn ts-btn-primary" style="flex:2;background:var(--green)">✅ Submit Report</button>
@@ -5427,11 +5428,29 @@ async function joFetchVehicle(){
 }
 
 async function submitJobOutcome(){
+  const type   = _joJobType;
+  const taskId = _joTaskId;
+  const errEl  = document.getElementById('jo-err');
+
+  // ── Validation ────────────────────────────────────────────────────────
+  if(type === 'demo'){
+    const attendee = document.getElementById('jo-attendee')?.value.trim();
+    const products = document.getElementById('jo-products')?.value.trim();
+    const interest = document.getElementById('jo-interest')?.value;
+    if(!attendee){ if(errEl){errEl.textContent='⚠️ Please enter who attended the demo';errEl.style.display='';} return; }
+    if(!products){ if(errEl){errEl.textContent='⚠️ Please enter products demonstrated';errEl.style.display='';} return; }
+    if(!interest){ if(errEl){errEl.textContent='⚠️ Please select customer interest level';errEl.style.display='';} return; }
+  } else if(type === 'troubleshoot'){
+    const issue  = document.getElementById('jo-issue')?.value;
+    const status = document.getElementById('jo-status')?.value;
+    if(!issue){  if(errEl){errEl.textContent='⚠️ Please select the issue found';errEl.style.display='';} return; }
+    if(!status){ if(errEl){errEl.textContent='⚠️ Please select if GPS is back online';errEl.style.display='';} return; }
+  }
+  if(errEl) errEl.style.display = 'none';
+
   const btn = document.getElementById('jo-submit-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
 
-  const type   = _joJobType;
-  const taskId = _joTaskId;
   const fields = {};
   let summary  = '';
   let removedSerial = '';
@@ -5489,11 +5508,12 @@ async function submitJobOutcome(){
 
   if(res.success){
     closeJobOutcome();
-    showToast('✅ Job report saved — task sent for approval');
-    var tid = _joTaskId;
     closeTaskDetail();
-    loadMyTasks().then(function(){ viewTask(tid); }).catch(function(){ viewTask(tid); });
+    showToast('✅ Demo report submitted successfully');
+    loadMyTasks();
   } else {
+    btn.disabled = false;
+    btn.textContent = '✅ Submit Report';
     showToast('❌ '+(res.error||'Save failed'));
   }
 }
