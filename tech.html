@@ -5406,7 +5406,8 @@ async function submitJobOutcome(){
       }
     }catch(e){}
   }
-  document.getElementById('login-screen').style.display='flex';
+  // No valid tech token — redirect to main login page
+  window.location.href = 'index.html';
 })();
 </script>
 </body>
