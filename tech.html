@@ -5443,10 +5443,26 @@ async function joSubmit(){
   }).catch(function(){ return {}; });
 
   if(res && res.success){
+    // Close modal and drawer
     document.getElementById('jo-overlay').style.display = 'none';
-    closeTaskDetail();
     showToast('✅ ' + summary + ' submitted');
-    loadMyTasks();
+    // Update _detailTask so STATE 0 works immediately
+    if(_detailTask) _detailTask.task_status = res.status || 'Demo Done';
+    // Update the task in myAllTasks cache directly
+    if(typeof myAllTasks !== 'undefined'){
+      for(var i=0;i<myAllTasks.length;i++){
+        if(String(myAllTasks[i].id)===String(taskId)){
+          myAllTasks[i].task_status = res.status || 'Demo Done';
+          break;
+        }
+      }
+    }
+    // Refresh the attend button state immediately
+    if(typeof checkAndUpdateAttendBtn === 'function'){
+      checkAndUpdateAttendBtn(taskId, _detailTask);
+    }
+    // Refresh task list in background
+    setTimeout(function(){ if(typeof loadMyTasks==='function') loadMyTasks(); }, 1000);
   } else {
     btn.disabled = false;
     btn.textContent = '✅ Submit Report';
