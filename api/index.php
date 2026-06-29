@@ -221,11 +221,19 @@ case 'get_tasks':
     $limit = min(intval($_GET['limit'] ?? 500), 1000);
     // Ensure admin_viewed_at column exists
     try { $pdo->exec("ALTER TABLE tasks ADD COLUMN admin_viewed_at DATETIME DEFAULT NULL"); } catch(Exception $e){}
-    try { $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cash_deposit_status VARCHAR(20) DEFAULT NULL"); } catch(Exception $e){}
+    try {
+        $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cash_deposit_status VARCHAR(20) DEFAULT NULL");
+        $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cash_deposit_method VARCHAR(50) DEFAULT NULL");
+        $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cash_handover_to VARCHAR(100) DEFAULT NULL");
+        $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cash_deposit_date DATE DEFAULT NULL");
+        $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cash_deposit_ref VARCHAR(100) DEFAULT NULL");
+        $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cash_deposit_notes TEXT DEFAULT NULL");
+        $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cash_submitted_at DATETIME DEFAULT NULL");
+    } catch(Exception $e){}
 
     $sql = "SELECT t.*,u.name as tech_name,u.name as technician_name,u.phone as tech_phone,c.name as creator_name,
             (SELECT MAX(a.created_at) FROM task_activities a WHERE a.task_id=t.id AND a.activity_type='remark') as last_tech_activity,
-            t.admin_viewed_at,t.cash_deposit_status
+            t.admin_viewed_at,t.cash_deposit_status,t.cash_deposit_method,t.cash_handover_to,t.cash_deposit_date,t.cash_deposit_ref,t.cash_deposit_notes,t.cash_submitted_at
             FROM tasks t
             LEFT JOIN users u ON t.assigned_to=u.id
             LEFT JOIN users c ON t.created_by=c.id"
@@ -663,7 +671,10 @@ case 'approve_task':
     $payMode       = strtolower($t['payment_mode']??'');
     $depositStatus = $t['cash_deposit_status']??'';
     if ($payMode === 'cash' && $depositStatus !== 'deposited' && floatval($t['amount_collected']??0) > 0){
-        echo json_encode(['error'=>'Cannot close — technician collected ₹'.number_format(floatval($t['amount_collected']),0).' cash but deposit not confirmed yet. Ask technician to submit cash deposit first.']);
+        $msg = $depositStatus === 'submitted'
+            ? 'Cannot close — cash deposit submitted by technician but not yet verified by admin. Please verify the deposit first.'
+            : 'Cannot close — technician collected ₹'.number_format(floatval($t['amount_collected']),0).' cash but has not submitted the deposit yet.';
+        echo json_encode(['error'=>$msg]);
         break;
     }
     // Close the task
@@ -1758,6 +1769,62 @@ case 'logout':
     $tok = $_SERVER['HTTP_X_AUTH_TOKEN'] ?? '';
     if($tok) $pdo->prepare("UPDATE users SET auth_token=NULL WHERE auth_token=?")->execute([$tok]);
     echo json_encode(['success'=>true]);
+    break;
+
+
+// ── TECHNICIAN: Submit cash deposit (→ 'submitted', awaiting admin verification) ──
+case 'confirm_cash_deposit':
+    $id = intval($body['id'] ?? 0);
+    if(!$id){ echo json_encode(['error'=>'Task ID required']); break; }
+    $task2 = $pdo->prepare("SELECT * FROM tasks WHERE id=?");
+    $task2->execute([$id]); $td = $task2->fetch();
+    if(!$td){ echo json_encode(['error'=>'Task not found']); break; }
+    if(intval($td['assigned_to']) !== $userId && !in_array($userRole,['admin','assigner'])){
+        echo json_encode(['error'=>'Not authorized']); break;
+    }
+    $depositMethod = trim($body['deposit_method'] ?? '');
+    if(!$depositMethod){ echo json_encode(['error'=>'Deposit method required']); break; }
+    $pdo->prepare("UPDATE tasks SET
+        cash_deposit_status='submitted',
+        cash_deposit_method=?,
+        cash_handover_to=?,
+        cash_deposit_date=?,
+        cash_deposit_ref=?,
+        cash_deposit_notes=?,
+        cash_submitted_at=NOW()
+        WHERE id=?")
+        ->execute([
+            $depositMethod,
+            trim($body['handover_to'] ?? ''),
+            trim($body['deposit_date'] ?? '') ?: null,
+            trim($body['deposit_ref'] ?? ''),
+            trim($body['remarks'] ?? ''),
+            $id
+        ]);
+    $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'remark')")
+        ->execute([$id, $userId, "💰 Cash deposit submitted — Method: {$depositMethod}. Awaiting admin verification."]);
+    echo json_encode(['success'=>true,'message'=>'Cash deposit submitted — admin will verify.']);
+    break;
+
+// ── ADMIN: Verify cash deposit (approve → 'deposited' / reject → back to 'pending') ──
+case 'verify_cash_deposit':
+    if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    $id2    = intval($body['id'] ?? 0);
+    $vact   = trim($body['action'] ?? 'approve');
+    if(!$id2){ echo json_encode(['error'=>'Task ID required']); break; }
+    if($vact === 'approve'){
+        $pdo->prepare("UPDATE tasks SET cash_deposit_status='deposited' WHERE id=?")
+            ->execute([$id2]);
+        $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'remark')")
+            ->execute([$id2, $userId, "✅ Cash deposit verified and confirmed by {$currentUser['name']}."]);
+        echo json_encode(['success'=>true,'message'=>'Cash deposit verified.']);
+    } else {
+        $pdo->prepare("UPDATE tasks SET cash_deposit_status='pending' WHERE id=?")
+            ->execute([$id2]);
+        $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'remark')")
+            ->execute([$id2, $userId, "❌ Cash deposit rejected by {$currentUser['name']} — technician must resubmit."]);
+        echo json_encode(['success'=>true,'message'=>'Deposit rejected — technician must resubmit.']);
+    }
     break;
 
 default:

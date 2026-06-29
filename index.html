@@ -3225,7 +3225,8 @@ async function viewTask(id){
     const taskCollected  = parseFloat(t.amount_collected||0);
     const taskBalance    = taskPrice - taskCollected;
     const taskFullyPaid  = taskBalance <= 15;
-    const cashPending    = (t.cash_deposit_status === 'pending');
+    const cashPending    = (t.cash_deposit_status === 'pending' || t.cash_deposit_status === 'submitted');
+    const cashSubmitted   = (t.cash_deposit_status === 'submitted');
 
     const btns = [];
 
@@ -3267,11 +3268,15 @@ async function viewTask(id){
               </div>
             </div>
           </div>
-          ${cashPending ? `<div style="background:var(--amber-bg);border:1.5px solid var(--amber);border-radius:7px;padding:9px 12px;font-size:12px;color:var(--saffron);font-weight:700;margin-bottom:8px">
-            🏦 Cash deposit not yet confirmed by technician
+          ${t.cash_deposit_status==='pending' ? `<div style="background:var(--amber-bg);border:1.5px solid var(--amber);border-radius:7px;padding:9px 12px;font-size:12px;color:var(--saffron);font-weight:700;margin-bottom:8px">
+            🏦 Cash collected — technician has not submitted deposit yet
           </div>` : ''}
-          ${t.payment_mode==='Cash' && !cashPending ? `<div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:7px;padding:9px 12px;font-size:12px;color:var(--green);font-weight:700;margin-bottom:8px">
-            ✅ Cash deposit confirmed by technician
+          ${t.cash_deposit_status==='submitted' ? `<div style="background:var(--blue-bg);border:1.5px solid var(--accent2);border-radius:7px;padding:9px 12px;font-size:12px;color:var(--accent2);font-weight:700;margin-bottom:8px">
+            📋 Deposit submitted by technician — verify below
+            <div style="font-size:11px;font-weight:400;color:var(--text2);margin-top:4px">Method: ${t.cash_deposit_method||'–'} | Date: ${t.cash_deposit_date||'–'} | Ref: ${t.cash_deposit_ref||'–'}${t.cash_handover_to?' | To: '+t.cash_handover_to:''}</div>
+          </div>` : ''}
+          ${t.cash_deposit_status==='deposited' ? `<div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:7px;padding:9px 12px;font-size:12px;color:var(--green);font-weight:700;margin-bottom:8px">
+            ✅ Cash deposit verified by admin
           </div>` : ''}
         </div>`;
 
@@ -3280,6 +3285,21 @@ async function viewTask(id){
 
       const btnRow = document.createElement('div');
       btnRow.style.cssText = 'display:flex;gap:8px;width:100%;flex-wrap:wrap';
+      // Verify deposit button — shown when technician has submitted
+      if(cashSubmitted){
+        const verifyBtn = document.createElement('button');
+        verifyBtn.className = 'ts-btn';
+        verifyBtn.style.cssText = 'background:var(--accent2);color:#fff;flex:1';
+        verifyBtn.innerHTML = '✅ Verify Cash Deposit';
+        verifyBtn.onclick = () => verifyDeposit(t.id, 'approve');
+        btnRow.appendChild(verifyBtn);
+        const rejectBtn = document.createElement('button');
+        rejectBtn.className = 'ts-btn';
+        rejectBtn.style.cssText = 'background:var(--red-bg);color:var(--red);border:1.5px solid var(--red);flex:1';
+        rejectBtn.innerHTML = '❌ Reject & Ask Resubmit';
+        rejectBtn.onclick = () => verifyDeposit(t.id, 'reject');
+        btnRow.appendChild(rejectBtn);
+      }
 
       // Approve & Close — block if payment pending OR cash not deposited
       if(taskFullyPaid && !cashPending){
@@ -3297,7 +3317,9 @@ async function viewTask(id){
         if(!taskFullyPaid){
           blockBtn.innerHTML = `⚠️ ₹${taskBalance.toLocaleString('en-IN')} balance pending`;
         } else if(cashPending){
-          blockBtn.innerHTML = '🏦 Waiting for tech to deposit cash';
+          blockBtn.innerHTML = cashSubmitted
+            ? '🏦 Deposit submitted — admin verification needed'
+            : '🏦 Waiting for tech to deposit cash';
         }
         btnRow.appendChild(blockBtn);
       }
@@ -3886,6 +3908,20 @@ async function submitTechAttend(){
 }
 
 // ── ADMIN ACTIONS ─────────────────────────────────────────────────────────
+async function verifyDeposit(taskId, action){
+  const msg = action === 'approve'
+    ? 'Confirm cash deposit is genuine and received?'
+    : 'Reject this deposit? Technician will need to resubmit.';
+  if(!confirm(msg)) return;
+  const res = await api('verify_cash_deposit',{},'POST',{id:taskId, action}).catch(()=>({}));
+  if(res.success){
+    showToast(action==='approve' ? '✅ Deposit verified' : '❌ Deposit rejected');
+    viewTask(taskId);
+  } else {
+    alert(res.error || 'Failed');
+  }
+}
+
 async function adminApproveTask(taskId){
   if(!confirm('Approve and close this task?')) return;
   const res = await api('approve_task',{},'POST',{id:taskId}).catch(()=>({}));
