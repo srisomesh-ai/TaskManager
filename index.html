@@ -349,7 +349,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
       <div class="nav-sec">Main</div>
       <div class="nav-item active" id="nav-dashboard" onclick="showPage('dashboard')"><span class="nav-icon">📊</span> Dashboard</div>
       <div class="nav-item" id="nav-tasks" onclick="showPage('tasks')"><span class="nav-icon">📋</span> All Tasks</div>
-      <div class="nav-item" id="nav-my-tasks" onclick="showPage('my-tasks')"><span class="nav-icon">🙋</span> My Tasks <span class="nav-badge" id="my-tasks-nav-badge" style="display:none;background:var(--red);color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:10px;margin-left:4px">0</span></div>
+
       <div class="nav-item" id="nav-urgent" onclick="showPage('urgent')"><span class="nav-icon">🚨</span> Urgent Tasks <span class="nav-badge" id="urgent-badge">0</span></div>
       <div class="nav-item admin-only" id="nav-approvals" onclick="showPage('approvals')"><span class="nav-icon">✅</span> Approvals <span class="nav-badge" id="approval-badge">0</span></div>
       <div class="nav-sec">Reports</div>
@@ -1155,6 +1155,13 @@ function startApp(){
     window.location.href = 'tech.html';
     return;
   }
+  // Tech goes to dedicated portal
+  if(isTech){
+    localStorage.setItem('bgps_tech_token', authToken);
+    localStorage.setItem('bgps_tech_user', JSON.stringify(currentUser));
+    window.location.href = 'tech.html';
+    return;
+  }
   const defaultPage = 'dashboard';
   const last = localStorage.getItem('bgps_last_page') || defaultPage;
   showPage(last);
@@ -1176,7 +1183,7 @@ async function doLogout(){
 
 // ── Load Dashboard ────────────────────────────────────────────────────────
 async function loadDashboard(){
-  if(currentUser?.role === 'technician'){ showPage('my-tasks'); return; }
+  if(currentUser?.role === 'technician'){ window.location.href='tech.html'; return; }
 
   document.getElementById('dash-welcome').textContent =
     'Welcome, ' + (currentUser.name||'') + '. Here is today\'s snapshot.';
