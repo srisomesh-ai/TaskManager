@@ -1020,196 +1020,47 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
           </div>
         </div>
       </div>
-    </div>
 
-<div id="cash-deposit-overlay" class="modal-overlay" onclick="closeCashDepositModal()" style="display:none"></div>
-<div id="cash-deposit-modal" class="modal" style="display:none;max-width:480px">
-  <div class="modal-hd">
-    <div>
-      <div class="modal-title">🏦 Confirm Cash Deposit</div>
-      <div id="cd-subtitle" class="modal-sub"></div>
+<div id="cd-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000" onclick="cdClose()"></div>
+<div id="cd-modal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;width:92%;max-width:440px;z-index:9001;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+  <div style="background:var(--accent);padding:14px 18px;display:flex;align-items:center;gap:10px">
+    <span style="font-size:22px">🏦</span>
+    <div style="flex:1">
+      <div style="font-size:14px;font-weight:800;color:#fff">Confirm Cash Deposit</div>
+      <div id="cd-sub" style="font-size:11px;color:rgba(255,255,255,.7)"></div>
     </div>
-    <button class="modal-close" onclick="closeCashDepositModal()">✕</button>
+    <button onclick="cdClose()" style="background:rgba(255,255,255,.2);border:none;color:#fff;width:28px;height:28px;border-radius:6px;font-size:16px;cursor:pointer">✕</button>
   </div>
-  <div class="modal-body" style="padding:16px 20px 20px">
-
-    <!-- Amount summary -->
-    <div id="cd-amount-box" style="background:var(--green-bg);border:2px solid var(--green);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">
-      <span style="font-size:13px;color:var(--green);font-weight:700">Cash Collected</span>
-      <span id="cd-amount" style="font-size:20px;font-weight:900;color:var(--green)">₹0</span>
+  <div style="padding:18px 20px">
+    <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:10px 14px;margin-bottom:16px;text-align:center">
+      <div style="font-size:11px;color:var(--text3);font-weight:600">Amount Collected</div>
+      <div id="cd-amt" style="font-size:22px;font-weight:800;color:var(--green)">₹0</div>
     </div>
-
-    <!-- Deposit method -->
-    <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--accent2);margin-bottom:10px">① How did you deposit the cash?</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px" id="cd-method-grid">
-      <div class="cd-method-btn" data-method="Cash Handed Over" onclick="selectDepositMethod(this)">
-        <div style="font-size:22px;margin-bottom:4px">💵</div>
-        <div style="font-size:12px;font-weight:800">Cash Handed Over</div>
-        <div style="font-size:10px;color:var(--text3)">Gave to office person</div>
-      </div>
-      <div class="cd-method-btn" data-method="Bank Transfer" onclick="selectDepositMethod(this)">
-        <div style="font-size:22px;margin-bottom:4px">🏦</div>
-        <div style="font-size:12px;font-weight:800">Bank Transfer</div>
-        <div style="font-size:10px;color:var(--text3)">NEFT / IMPS / RTGS</div>
-      </div>
-      <div class="cd-method-btn" data-method="ATM Deposit" onclick="selectDepositMethod(this)">
-        <div style="font-size:22px;margin-bottom:4px">🏧</div>
-        <div style="font-size:12px;font-weight:800">ATM Deposit</div>
-        <div style="font-size:10px;color:var(--text3)">Cash at ATM machine</div>
-      </div>
-      <div class="cd-method-btn" data-method="UPI Transfer" onclick="selectDepositMethod(this)">
-        <div style="font-size:22px;margin-bottom:4px">📱</div>
-        <div style="font-size:12px;font-weight:800">UPI Transfer</div>
-        <div style="font-size:10px;color:var(--text3)">PhonePe / GPay / Paytm</div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:8px">How are you depositing? *</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div onclick="cdMethod(this,'Cash Handed Over')" data-method="Cash Handed Over" style="border:2px solid var(--border);border-radius:8px;padding:10px;text-align:center;cursor:pointer;font-size:12px;font-weight:700">💵<br>Handed Over</div>
+        <div onclick="cdMethod(this,'Bank Transfer')" data-method="Bank Transfer" style="border:2px solid var(--border);border-radius:8px;padding:10px;text-align:center;cursor:pointer;font-size:12px;font-weight:700">🏦<br>Bank Transfer</div>
+        <div onclick="cdMethod(this,'ATM Deposit')" data-method="ATM Deposit" style="border:2px solid var(--border);border-radius:8px;padding:10px;text-align:center;cursor:pointer;font-size:12px;font-weight:700">🏧<br>ATM Deposit</div>
+        <div onclick="cdMethod(this,'UPI Transfer')" data-method="UPI Transfer" style="border:2px solid var(--border);border-radius:8px;padding:10px;text-align:center;cursor:pointer;font-size:12px;font-weight:700">📱<br>UPI Transfer</div>
       </div>
     </div>
-    <input type="hidden" id="cd-method">
-
-    <!-- Cash Handed Over → who received -->
-    <div id="cd-handover-box" style="display:none;margin-bottom:14px">
-      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--accent2);margin-bottom:8px">② Handed over to *</div>
-      <select id="cd-handover-person" class="ts-select" style="width:100%">
-        <option value="">— Select person —</option>
-        <option>Lohitha</option>
-        <option>Manoj</option>
-        <option>Tanuja</option>
-        <option>Sri Mam</option>
-      </select>
+    <div id="cd-person-box" style="display:none;margin-bottom:10px">
+      <label style="font-size:12px;font-weight:700;color:var(--text2)">Handed to (name)</label>
+      <input id="cd-person" type="text" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;margin-top:4px;font-size:13px" placeholder="Manager / Office person name">
     </div>
-
-    <!-- Bank / ATM / UPI → date + reference -->
-    <div id="cd-ref-box" style="display:none;margin-bottom:14px">
-      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--accent2);margin-bottom:8px">② Deposit Details *</div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Date of Deposit *</label>
-          <input type="date" id="cd-date" class="form-input">
-        </div>
-        <div class="form-group">
-          <label>Reference / UTR Number *</label>
-          <input type="text" id="cd-ref" class="form-input" placeholder="Ref/UTR number">
-        </div>
-      </div>
+    <div id="cd-ref-box" style="display:none;margin-bottom:10px">
+      <label style="font-size:12px;font-weight:700;color:var(--text2)">Reference / UTR Number</label>
+      <input id="cd-ref" type="text" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;margin-top:4px;font-size:13px" placeholder="Transaction reference">
     </div>
-
-    <!-- Remarks -->
-    <div style="margin-bottom:16px">
-      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--accent2);margin-bottom:8px">③ Remarks (optional)</div>
-      <textarea id="cd-remarks" rows="2" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;resize:none" placeholder="Any additional notes..."></textarea>
+    <div style="margin-bottom:14px">
+      <label style="font-size:12px;font-weight:700;color:var(--text2)">Remarks (optional)</label>
+      <textarea id="cd-remarks" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;margin-top:4px;font-size:13px;resize:none" rows="2" placeholder="Any notes..."></textarea>
     </div>
-
-    <button id="cd-submit-btn" class="ts-btn ts-btn-primary" style="width:100%;padding:14px;font-size:14px;background:var(--green)" onclick="submitCashDeposit()">
-      ✅ Confirm Deposit &amp; Submit for Approval
-    </button>
+    <div id="cd-err" style="color:var(--red);font-size:12px;margin-bottom:8px;display:none"></div>
+    <button id="cd-btn" onclick="cdSubmit()" style="width:100%;padding:13px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:800;cursor:pointer">✅ Confirm Deposit & Submit for Approval</button>
   </div>
 </div>
-
-<style>
-.cd-method-btn{border:2px solid var(--border);border-radius:10px;padding:12px 10px;text-align:center;cursor:pointer;transition:all .15s;background:var(--surface)}
-.cd-method-btn:hover{border-color:var(--accent);background:var(--accent-light)}
-.cd-method-btn.selected{border-color:var(--green);background:var(--green-bg)}
-</style>
-
-<!-- ═══════════════════════════════════════════════
-     QUICK TASK MODAL — Send enquiry link via WhatsApp
-═══════════════════════════════════════════════ -->
-<div id="quick-task-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;padding:16px" onclick="closeQuickTask()">
-<div id="quick-task-modal" onclick="event.stopPropagation()" style="background:#fff;border-radius:14px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden;display:flex;flex-direction:column">
-  <div class="modal-hd">
-    <div>
-      <div class="modal-title">⚡ Quick Task</div>
-      <div class="modal-sub">Send enquiry link to customer via WhatsApp</div>
-    </div>
-    <button class="modal-close" onclick="closeQuickTask()">✕</button>
-  </div>
-  <div class="modal-body" style="padding:20px">
-
-    <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:#1a6b3a;line-height:1.7">
-      📱 Enter customer details → WhatsApp message opens with the enquiry link.<br>
-      Customer fills the form → task is created automatically.
-    </div>
-
-    <div class="form-group" style="margin-bottom:12px">
-      <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:5px">Customer Name *</label>
-      <input type="text" id="qt-name" class="form-input" placeholder="e.g. Ramesh Kumar" style="width:100%">
-    </div>
-
-    <div class="form-group" style="margin-bottom:12px">
-      <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:5px">Mobile Number *</label>
-      <input type="tel" id="qt-phone" class="form-input" placeholder="10-digit mobile number" style="width:100%" maxlength="10">
-    </div>
-
-    <div class="form-group" style="margin-bottom:16px">
-      <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:5px">Discount Amount (₹)</label>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input type="number" id="qt-discount" class="form-input" placeholder="0" min="0" max="5000" value="0" style="width:120px">
-        <span style="font-size:12px;color:var(--text3)">₹ off per device (0 = no discount)</span>
-      </div>
-    </div>
-
-    <div id="qt-link-box" style="display:none;background:var(--surface2);border-radius:8px;padding:12px 14px;margin-bottom:14px;word-break:break-all;font-size:12px;color:var(--text3)">
-      <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Enquiry Link</div>
-      <div id="qt-link-text" style="color:var(--accent);font-size:11px"></div>
-    </div>
-
-    <div style="display:flex;gap:10px">
-      <button class="ts-btn ts-btn-secondary" style="flex:1" onclick="closeQuickTask()">Cancel</button>
-      <button class="ts-btn" style="flex:2;background:#25D366;color:#fff;font-size:14px" onclick="sendQuickTask()">
-        📱 Send via WhatsApp
-      </button>
-    </div>
-
-    <div style="margin-top:12px;text-align:center;font-size:11px;color:var(--text3)">
-      Or copy the link: <a id="qt-copy-link" href="#" onclick="copyQtLink(event)" style="color:var(--accent);font-weight:700">Copy Link</a>
-    </div>
-  </div>
-</div>
-<!-- blacklist inline warning shown inside form -->
-<!-- ═══════════════════════════════════════════════════
-     JOB OUTCOME MODAL (Troubleshoot/Demo/Remove/V2V)
-═══════════════════════════════════════════════════ -->
-<div id="job-outcome-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;align-items:center;justify-content:center;padding:16px;overflow-y:auto">
-  <div style="background:#fff;border-radius:14px;width:100%;max-width:520px;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden;margin:auto">
-    <div id="jo-header" style="background:linear-gradient(135deg,var(--accent),var(--accent2));padding:16px 20px;color:#fff;display:flex;align-items:center;justify-content:space-between">
-      <div>
-        <div id="jo-title" style="font-size:16px;font-weight:800">Job Report</div>
-        <div id="jo-subtitle" style="font-size:12px;opacity:.75;margin-top:2px"></div>
-      </div>
-      <button onclick="closeJobOutcome()" style="background:rgba(255,255,255,.2);border:none;color:#fff;width:30px;height:30px;border-radius:6px;font-size:16px;cursor:pointer">✕</button>
-    </div>
-    <div id="jo-body" style="padding:18px 20px;max-height:70vh;overflow-y:auto"></div>
-    <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:10px">
-      <button onclick="closeJobOutcome()" style="flex:1;padding:11px;background:var(--surface2);color:var(--text);border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Cancel</button>
-      <button id="jo-submit-btn" onclick="submitJobOutcome()" style="flex:2;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">✅ Submit & Close Task</button>
-    </div>
-  </div>
-</div>
-
-</body>
-</html>
-
-<!-- ═══════════════════════════════════════════════════
-     JOB OUTCOME MODAL (Troubleshoot/Demo/Remove/V2V)
-═══════════════════════════════════════════════════ -->
-<div id="job-outcome-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;align-items:center;justify-content:center;padding:16px;overflow-y:auto">
-  <div style="background:#fff;border-radius:14px;width:100%;max-width:520px;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden;margin:auto">
-    <div id="jo-header" style="background:linear-gradient(135deg,var(--accent),var(--accent2));padding:16px 20px;color:#fff;display:flex;align-items:center;justify-content:space-between">
-      <div>
-        <div id="jo-title" style="font-size:16px;font-weight:800">Job Report</div>
-        <div id="jo-subtitle" style="font-size:12px;opacity:.75;margin-top:2px"></div>
-      </div>
-      <button onclick="closeJobOutcome()" style="background:rgba(255,255,255,.2);border:none;color:#fff;width:30px;height:30px;border-radius:6px;font-size:16px;cursor:pointer">✕</button>
-    </div>
-    <div id="jo-body" style="padding:18px 20px;max-height:70vh;overflow-y:auto"></div>
-    <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:10px">
-      <button onclick="closeJobOutcome()" style="flex:1;padding:11px;background:var(--surface2);color:var(--text);border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Cancel</button>
-      <button id="jo-submit-btn" onclick="submitJobOutcome()" style="flex:2;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">✅ Submit & Close Task</button>
-    </div>
-  </div>
-</div>
-
-</body>
-</html>
 
 </div><!-- /app -->
 
@@ -1220,51 +1071,102 @@ let authToken   = '';
 let currentUser = null;
 
 // ── Cash deposit (referenced but not in original JS) ─────────────────────
+// ── Cash Deposit ─────────────────────────────────────────────────────────
+var _cdTaskId = null;
+var _cdMethod = '';
+
 function openCashDepositModal(taskId){
-  if(!_detailTask || String(_detailTask.id) !== String(taskId)){
+  _cdTaskId = taskId;
+  _cdMethod = '';
+  // Get task data
+  var t = _detailTask;
+  if(!t || String(t.id) !== String(taskId)){
+    // Fetch task then reopen
     api('get_task',{id:taskId}).then(function(r){
-      if(r&&r.task){_detailTask=r.task; openCashDepositModal(taskId);}
+      if(r&&r.task){ _detailTask=r.task; openCashDepositModal(taskId); }
+      else showToast('❌ Could not load task');
     });
     return;
   }
-  const t=_detailTask;
-  document.getElementById('cd-subtitle').textContent=t.task_id+' · '+t.customer_name;
-  document.getElementById('cd-amount').textContent='₹'+parseFloat(t.amount_collected||0).toLocaleString('en-IN');
-  document.getElementById('cd-method').value='';
-  document.getElementById('cd-handover-box').style.display='none';
-  document.getElementById('cd-ref-box').style.display='none';
-  document.querySelectorAll('.cd-method-btn').forEach(b=>b.classList.remove('selected'));
-  document.getElementById('cash-deposit-overlay').style.display='block';
-  document.getElementById('cash-deposit-modal').style.display='flex';
+  // Populate modal
+  document.getElementById('cd-sub').textContent = t.task_id + ' · ' + t.customer_name;
+  document.getElementById('cd-amt').textContent = '₹' + parseFloat(t.amount_collected||0).toLocaleString('en-IN');
+  document.getElementById('cd-person').value  = '';
+  document.getElementById('cd-ref').value     = '';
+  document.getElementById('cd-remarks').value = '';
+  document.getElementById('cd-person-box').style.display = 'none';
+  document.getElementById('cd-ref-box').style.display    = 'none';
+  document.getElementById('cd-err').style.display        = 'none';
+  document.getElementById('cd-btn').disabled   = false;
+  document.getElementById('cd-btn').textContent = '✅ Confirm Deposit & Submit for Approval';
+  // Clear method selection
+  document.querySelectorAll('[data-method]').forEach(function(el){
+    el.style.borderColor = 'var(--border)';
+    el.style.background  = '';
+    el.style.color       = '';
+  });
+  _cdMethod = '';
+  // Show modal
+  document.getElementById('cd-overlay').style.display = 'block';
+  document.getElementById('cd-modal').style.display   = 'block';
 }
-function closeCashDepositModal(){
-  document.getElementById('cash-deposit-overlay').style.display='none';
-  document.getElementById('cash-deposit-modal').style.display='none';
+
+function cdClose(){
+  document.getElementById('cd-overlay').style.display = 'none';
+  document.getElementById('cd-modal').style.display   = 'none';
 }
-function selectDepositMethod(el){
-  document.querySelectorAll('.cd-method-btn').forEach(b=>b.classList.remove('selected'));
-  el.classList.add('selected');
-  const m=el.dataset.method;
-  document.getElementById('cd-method').value=m;
-  document.getElementById('cd-handover-box').style.display=m==='Cash Handed Over'?'':'none';
-  document.getElementById('cd-ref-box').style.display=m!=='Cash Handed Over'?'':'none';
+
+function cdMethod(el, method){
+  _cdMethod = method;
+  document.querySelectorAll('[data-method]').forEach(function(e){
+    e.style.borderColor = 'var(--border)';
+    e.style.background  = '';
+    e.style.color       = '';
+  });
+  el.style.borderColor = 'var(--green)';
+  el.style.background  = 'var(--green-bg)';
+  el.style.color       = 'var(--green)';
+  document.getElementById('cd-person-box').style.display = (method === 'Cash Handed Over') ? '' : 'none';
+  document.getElementById('cd-ref-box').style.display    = (method !== 'Cash Handed Over') ? '' : 'none';
 }
-async function submitCashDeposit(){
-  const method=document.getElementById('cd-method').value;
-  if(!method){showToast('⚠️ Select deposit method');return;}
-  const btn=document.getElementById('cd-submit-btn');
-  btn.disabled=true;btn.textContent='Submitting…';
-  const res=await api('confirm_cash_deposit',{},'POST',{
-    id:_detailTask?.id,deposit_method:method,
-    handover_to:document.getElementById('cd-handover-person')?.value||'',
-    deposit_date:document.getElementById('cd-date')?.value||'',
-    deposit_ref:document.getElementById('cd-ref')?.value||'',
-    remarks:document.getElementById('cd-remarks')?.value||''
-  }).catch(()=>({}));
-  btn.disabled=false;btn.textContent='✅ Confirm Deposit & Submit for Approval';
-  if(res.success){closeCashDepositModal();showToast('✅ Submitted for approval');closeTaskDetail();loadMyTasks();}
-  else showToast('❌ '+(res.error||'Failed'));
+
+async function cdSubmit(){
+  var errEl = document.getElementById('cd-err');
+  errEl.style.display = 'none';
+  if(!_cdMethod){
+    errEl.textContent = '⚠️ Please select how you are depositing the cash';
+    errEl.style.display = '';
+    return;
+  }
+  if(!_cdTaskId){
+    errEl.textContent = '⚠️ Task not loaded. Close and reopen the task.';
+    errEl.style.display = '';
+    return;
+  }
+  var btn = document.getElementById('cd-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Submitting…';
+  var payload = {
+    id:             _cdTaskId,
+    deposit_method: _cdMethod,
+    handover_to:    document.getElementById('cd-person').value  || '',
+    deposit_ref:    document.getElementById('cd-ref').value     || '',
+    remarks:        document.getElementById('cd-remarks').value || ''
+  };
+  var res = await api('confirm_cash_deposit', {}, 'POST', payload).catch(function(){ return {}; });
+  btn.disabled = false;
+  btn.textContent = '✅ Confirm Deposit & Submit for Approval';
+  if(res && res.success){
+    cdClose();
+    showToast('✅ Cash deposit submitted — admin will verify');
+    closeTaskDetail();
+    loadMyTasks();
+  } else {
+    errEl.textContent = '❌ ' + (res.error || 'Failed — please try again');
+    errEl.style.display = '';
+  }
 }
+
 
 // ── showPage (tech: my-tasks and urgent only) ─────────────────────────────
 function showPage(name){
