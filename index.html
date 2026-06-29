@@ -5992,6 +5992,78 @@ async function joFetchVehicle(){
   } catch(e){ info.innerHTML = '❌ Could not fetch — check connection'; }
 }
 
+async function submitJobOutcome(){
+  const btn = document.getElementById('jo-submit-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  const type   = _joJobType;
+  const taskId = _joTaskId;
+  const fields = {};
+  let summary  = '';
+  let removedSerial = '';
+
+  if(type === 'troubleshoot'){
+    fields['Issue Found']      = document.getElementById('jo-issue')?.value||'';
+    fields['Steps Taken']      = document.getElementById('jo-steps')?.value||'';
+    fields['GPS Back Online']  = document.getElementById('jo-status')?.value||'';
+    fields['Hardware Replaced']= document.getElementById('jo-hardware')?.value==='yes'
+                                  ? (document.getElementById('jo-hardware-txt')?.value||'Yes') : 'No';
+    fields['Remarks']          = document.getElementById('jo-remarks')?.value||'';
+    summary = '🔧 Troubleshoot Report';
+  } else if(type === 'v2v'){
+    fields['IMEI']            = document.getElementById('jo-imei')?.value||'';
+    fields['New Vehicle No']  = document.getElementById('jo-new-vehicle')?.value||'';
+    fields['New Vehicle Type']= document.getElementById('jo-new-vtype')?.value||'';
+    fields['Transfer Done']   = document.getElementById('jo-v2v-done')?.value||'';
+    fields['Remarks']         = document.getElementById('jo-remarks')?.value||'';
+    summary = '🚗 V2V Transfer Report';
+  } else if(type === 'demo'){
+    fields['Company/Customer'] = document.getElementById('jo-company')?.value||'';
+    fields['Attendee']         = document.getElementById('jo-attendee')?.value||'';
+    fields['Products Demo']    = document.getElementById('jo-products')?.value||'';
+    fields['Interest Level']   = document.getElementById('jo-interest')?.value||'';
+    fields['Concerns Raised']  = document.getElementById('jo-concerns')?.value||'';
+    fields['Follow-up']        = document.getElementById('jo-followup')?.value==='yes'
+                                   ? ('Yes — ' + (document.getElementById('jo-fu-date')?.value||'')) : 'No';
+    fields['Remarks']          = document.getElementById('jo-remarks')?.value||'';
+    summary = '📱 Demo Report';
+  } else if(type === 'remove'){
+    removedSerial              = document.getElementById('jo-serial')?.value||'';
+    fields['GPS Serial']       = removedSerial;
+    fields['Reason']           = document.getElementById('jo-reason')?.value||'';
+    fields['Next Plan']        = document.getElementById('jo-next')?.value||'';
+    fields['Device Disposition']= document.getElementById('jo-device')?.value||'';
+    fields['Device Condition'] = document.getElementById('jo-condition')?.value||'';
+    fields['Remarks']          = document.getElementById('jo-remarks')?.value||'';
+    summary = '🔴 Device Removal Report';
+  } else {
+    fields['Remarks'] = document.getElementById('jo-remarks')?.value||'';
+    summary = '✅ Job Completed';
+  }
+
+  const res = await api('save_job_outcome', {}, 'POST', {
+    task_id: taskId,
+    job_type: type,
+    summary,
+    fields,
+    removed_serial: removedSerial,
+    close_task: true,
+  }).catch(()=>({}));
+
+  btn.disabled = false;
+  btn.textContent = '✅ Submit & Close Task';
+
+  if(res.success){
+    closeJobOutcome();
+    showToast('✅ Job report saved — task sent for approval');
+    closeTaskDetail();
+    if(typeof loadTasks==='function') loadTasks();
+    if(typeof loadDashboard==='function') loadDashboard();
+  } else {
+    showToast('❌ '+(res.error||'Save failed'));
+  }
+}
+
 </script>
 
 <!-- ═══════════════════════════════════════════

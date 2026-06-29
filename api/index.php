@@ -1369,22 +1369,14 @@ case 'save_job_outcome':
             preg_match('/\d{4}-\d{2}-\d{2}/', $followup, $m);
             $fuDate = $m[0] ?? '';
         }
-        // First update task_status — simple, guaranteed to work
-        $pdo->prepare("UPDATE tasks SET task_status='Demo Done', updated_at=NOW() WHERE id=?")
-            ->execute([$jid]);
-        // Then try to save extra demo fields (columns may not exist yet)
-        try {
-            $pdo->prepare("UPDATE tasks SET demo_interest=?, demo_followup_date=? WHERE id=?")
-                ->execute([$interest, $fuDate ?: null, $jid]);
-        } catch(Exception $e){}
+        $pdo->prepare("UPDATE tasks SET task_status='Demo Done', demo_interest=?, demo_followup_date=?, updated_at=NOW() WHERE id=?")
+            ->execute([$interest, $fuDate ?: null, $jid]);
         // Send customer thank-you email
         $taskRow = $pdo->prepare("SELECT t.*,u.name as tech_name,u.phone as tech_phone FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?");
         $taskRow->execute([$jid]); $tr = $taskRow->fetch();
-        if($tr && !empty($tr['email'])){
-            try {
-                require_once __DIR__.'/mailer.php';
-                sendDemoDoneCustomer($tr, $tr['tech_name']??'', $fields);
-            } catch(Exception $e){}
+        if($tr && $tr['email']){
+            require_once __DIR__.'/mailer.php';
+            sendDemoDoneCustomer($tr, $tr['tech_name']??'', $fields);
         }
     } else {
         $newStatus = ($body['close_task']??false) ? 'Awaiting Approval' : 'In Progress';
