@@ -1252,6 +1252,7 @@ function selectDepositMethod(el){
   document.getElementById('cd-ref-box').style.display=m!=='Cash Handed Over'?'':'none';
 }
 async function submitCashDeposit(){
+  alert('submitCashDeposit called. _detailTask=' + (_detailTask ? _detailTask.id : 'NULL') + ' method=' + document.getElementById('cd-method').value);
   const method=document.getElementById('cd-method').value;
   if(!method){showToast('⚠️ Select deposit method');return;}
   if(!_detailTask){showToast('⚠️ Task data not loaded — please close and reopen the task');return;}
