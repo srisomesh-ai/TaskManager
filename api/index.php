@@ -283,8 +283,12 @@ case 'get_tasks':
         $hasUnseenUpdate = $lastActivity && (!$adminViewed || strcmp($lastActivity, $adminViewed) > 0);
 
         // Priority order: most actionable first
-        if($status === 'Awaiting Approval'){
+        if($status === 'Awaiting Approval' && ($task['cash_deposit_status']??'') === 'submitted'){
+            $task['workflow_state'] = 'cash_submitted';
+        } elseif($status === 'Awaiting Approval'){
             $task['workflow_state'] = 'approve_now';
+        } elseif($status === 'Awaiting Approval' && ($task['cash_deposit_status']??'') === 'pending'){
+            $task['workflow_state'] = 'cash_pending_deposit';
         } elseif($status === 'Closed' || $status === 'Cancelled'){
             $task['workflow_state'] = '';
         } elseif($addingDone && $amtCollected > 0 && ($task['cash_deposit_status']??'') === 'pending'){
