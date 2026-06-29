@@ -1339,8 +1339,8 @@ async function doLogin(){
     });
     const d = await r.json();
     if(d.success && d.token){
-      localStorage.setItem('bgps_token', d.token);
-      localStorage.setItem('bgps_user',  JSON.stringify(d.user));
+      // In tech.html — do not save to bgps_token to avoid overwriting admin session
+      // localStorage.setItem('bgps_token', d.token);
       authToken   = d.token;
       currentUser = d.user;
       startApp();
@@ -1437,8 +1437,8 @@ async function doLogout(){
   stopPolling();
   try{ await api('logout',{},'POST',{}); }catch(e){}
   authToken = ''; currentUser = null;
-  localStorage.removeItem('bgps_token');
-  localStorage.removeItem('bgps_user');
+  localStorage.removeItem('bgps_tech_token');
+  localStorage.removeItem('bgps_tech_user');
   document.getElementById('app').classList.remove('show');
   document.getElementById('login-screen').style.display = 'flex';
 }
@@ -1820,7 +1820,7 @@ function renderActivityLog(activities){
 
 // ── INIT ──────────────────────────────────────────────────────────────────
 (async function(){
-  const token = localStorage.getItem('bgps_token');
+  const token = localStorage.getItem('bgps_tech_token');
   if(!token){
     document.getElementById('login-screen').style.display='flex';
     document.addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
