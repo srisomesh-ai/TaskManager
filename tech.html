@@ -1159,8 +1159,14 @@ async function cdSubmit(){
   if(res && res.success){
     cdClose();
     showToast('✅ Cash deposit submitted — admin will verify');
+    // Refresh task detail so button updates to new state
+    const tid = _cdTaskId;
     closeTaskDetail();
-    loadMyTasks();
+    loadMyTasks().then(function(){
+      viewTask(tid);
+    }).catch(function(){
+      viewTask(tid);
+    });
   } else {
     errEl.textContent = '❌ ' + (res.error || 'Failed — please try again');
     errEl.style.display = '';
