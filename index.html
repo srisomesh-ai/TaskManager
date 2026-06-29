@@ -1148,7 +1148,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
         </div><!-- /body -->
 
         <!-- FOOTER (admin actions) -->
-        <div id="td-admin-footer" style="display:none;padding:14px 20px;border-top:1px solid var(--border);background:var(--surface);display:flex;gap:8px;flex-wrap:wrap;flex-shrink:0"></div>
+        <div id="td-admin-footer" style="display:none;padding:14px 20px;border-top:1px solid var(--border);background:var(--surface);gap:8px;flex-wrap:wrap;flex-shrink:0"></div>
 
       </div><!-- /task-detail-drawer -->
 
@@ -3263,7 +3263,8 @@ async function viewTask(id){
       return;
     }
 
-    if(t.task_status === 'Awaiting Approval' || cashSubmitted){
+    const cashDeposited = (t.cash_deposit_status === 'deposited');
+    if(t.task_status === 'Awaiting Approval' || cashSubmitted || cashDeposited){
 
       // ── Payment verification panel ──────────────────────────────────────
       const payVerifyHtml = `
@@ -3323,7 +3324,7 @@ async function viewTask(id){
       }
 
       // Approve & Close — block if payment pending OR cash not deposited
-      if(taskFullyPaid && !cashPending){
+      if(taskFullyPaid && (!cashPending || cashDeposited)){
         const approveBtn = document.createElement('button');
         approveBtn.className = 'ts-btn';
         approveBtn.style.cssText = 'background:var(--green);color:#fff;flex:2;min-width:140px';
