@@ -380,3 +380,28 @@ echo json_encode([
     'payment_rem' => count($unpaidTasks),
     'log'         => $log,
 ]);
+
+// ── JOB: Demo Follow-up Reminder — send email on follow-up date ───────────
+$demoFollowups = $pdo->query("
+    SELECT t.*, u.name as tech_name
+    FROM tasks t
+    LEFT JOIN users u ON t.assigned_to = u.id
+    WHERE t.task_status = 'Demo Done'
+    AND t.demo_followup_date IS NOT NULL
+    AND DATE(t.demo_followup_date) = CURDATE()
+    AND t.email IS NOT NULL AND t.email != ''
+    AND NOT EXISTS (
+        SELECT 1 FROM task_activities ta
+        WHERE ta.task_id = t.id
+        AND ta.remark LIKE '%Follow-up reminder sent%'
+        AND DATE(ta.created_at) = CURDATE()
+    )
+")->fetchAll();
+
+foreach($demoFollowups as $task){
+    sendDemoFollowupCustomer($task);
+    $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'remark')")
+        ->execute([$task['id'], 0, '📧 Follow-up reminder sent to customer — ' . $task['email']]);
+}
+if(count($demoFollowups)) echo "Demo follow-ups sent: " . count($demoFollowups) . "\n";
+

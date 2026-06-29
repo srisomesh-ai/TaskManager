@@ -532,3 +532,87 @@ function sendCancelCustomer($task, $reason, $details, $techName){
     );
 }
 
+
+// ── DEMO DONE — Customer Thank You Email ─────────────────────────────────
+function sendDemoDoneCustomer(array $task, string $techName, array $fields = []): void {
+    if (!$task['email']) return;
+    $interest = $fields['Interest Level'] ?? '';
+    $products = $fields['Products Demo']  ?? ($task['device_details'] ?? 'GPS Tracker');
+    $concerns = $fields['Concerns Raised']?? '';
+    $followup = $fields['Follow-up']      ?? 'No';
+    $remarks  = $fields['Remarks']        ?? '';
+
+    $interestLabel = match(true){
+        str_contains($interest,'high')   => '🔥 High — Ready to proceed',
+        str_contains($interest,'medium') => '👍 Medium — Considering',
+        str_contains($interest,'low')    => '👎 Low — Not sure yet',
+        str_contains($interest,'none')   => '❌ Not interested at this time',
+        default => $interest
+    };
+
+    $content = '
+    <div class="greeting">Dear ' . htmlspecialchars($task['customer_name']) . ',</div>
+    <p style="font-size:14px;color:#4a5568;margin-bottom:16px">
+        Thank you for your valuable time today. We hope our GPS demonstration was informative and helpful for your business.
+    </p>
+    <hr class="divider">
+    <div class="details">
+        <div class="row"><div class="label">Task ID</div><div class="value blue">' . $task['task_id'] . '</div></div>
+        <div class="row"><div class="label">Products Shown</div><div class="value">' . htmlspecialchars($products) . '</div></div>
+        ' . ($concerns ? '<div class="row"><div class="label">Your Questions</div><div class="value">' . nl2br(htmlspecialchars($concerns)) . '</div></div>' : '') . '
+        ' . ($followup !== 'No' ? '<div class="row"><div class="label">Follow-up</div><div class="value highlight">' . htmlspecialchars($followup) . '</div></div>' : '') . '
+        ' . ($remarks ? '<div class="row"><div class="label">Notes</div><div class="value">' . nl2br(htmlspecialchars($remarks)) . '</div></div>' : '') . '
+    </div>
+    ' . ($techName ? '
+    <div class="tech-box">
+        <div style="font-size:12px;font-weight:700;color:#4a5568;text-transform:uppercase;margin-bottom:6px">Your Demonstration Executive</div>
+        <div class="name">' . htmlspecialchars($techName) . '</div>
+    </div>' : '') . '
+    <p style="font-size:14px;color:#4a5568;margin-top:16px">
+        If you have any questions about our GPS solutions or would like to proceed with an installation, please feel free to reach out to us.
+    </p>
+    <p style="font-size:14px;color:#4a5568;margin-top:8px">
+        📞 <strong>Call us:</strong> <a href="tel:+918885888832" style="color:#1a3a6b">+91 8885888832</a><br>
+        📧 <strong>Email:</strong> <a href="mailto:info@bharatgps.com" style="color:#1a3a6b">info@bharatgps.com</a>
+    </p>
+    <p style="font-size:14px;font-weight:700;color:#1a3a6b;margin-top:12px">Thank you for considering Bharat GPS Tracker! 🚗</p>
+    ';
+
+    sendMail(
+        $task['email'],
+        $task['customer_name'],
+        'Thank you for the GPS Demonstration — ' . $task['task_id'] . ' | Bharat GPS Tracker',
+        emailTemplate($content)
+    );
+}
+
+// ── DEMO FOLLOW-UP — Reminder Email to Customer ──────────────────────────
+function sendDemoFollowupCustomer(array $task): void {
+    if (!$task['email']) return;
+    $content = '
+    <div class="greeting">Dear ' . htmlspecialchars($task['customer_name']) . ',</div>
+    <p style="font-size:14px;color:#4a5568;margin-bottom:16px">
+        We hope you are doing well! We wanted to follow up on the GPS demonstration we conducted for you recently.
+    </p>
+    <div class="details">
+        <div class="row"><div class="label">Task ID</div><div class="value blue">' . $task['task_id'] . '</div></div>
+        <div class="row"><div class="label">Service</div><div class="value">GPS Tracker Demonstration</div></div>
+    </div>
+    <p style="font-size:14px;color:#4a5568;margin-top:16px">
+        Have you had a chance to consider our GPS tracking solution? We would love to help you get started.<br><br>
+        If you have any questions or would like to schedule an installation, simply reply to this email or call us.
+    </p>
+    <p style="font-size:14px;color:#4a5568;margin-top:8px">
+        📞 <strong>Call us:</strong> <a href="tel:+918885888832" style="color:#1a3a6b">+91 8885888832</a><br>
+        📧 <strong>Email:</strong> <a href="mailto:info@bharatgps.com" style="color:#1a3a6b">info@bharatgps.com</a>
+    </p>
+    <p style="font-size:14px;font-weight:700;color:#1a3a6b;margin-top:12px">We look forward to hearing from you!</p>
+    ';
+    sendMail(
+        $task['email'],
+        $task['customer_name'],
+        'Following up on your GPS Demonstration — ' . $task['task_id'] . ' | Bharat GPS Tracker',
+        emailTemplate($content)
+    );
+}
+

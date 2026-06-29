@@ -25,6 +25,11 @@ $token = $_SERVER['HTTP_X_AUTH_TOKEN'] ?? $_GET['token'] ?? '';
 $pdo = getDB();
 // Migration: admin_viewed_at per task (track when admin last viewed)
 try { $pdo->exec("ALTER TABLE tasks ADD COLUMN admin_viewed_at DATETIME DEFAULT NULL"); } catch(Exception $e){}
+try {
+    $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS demo_interest VARCHAR(20) DEFAULT NULL");
+    $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS demo_followup_date DATE DEFAULT NULL");
+    $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS demo_converted_at DATETIME DEFAULT NULL");
+} catch(Exception $e){}
 // ── Migration: cash deposit columns ──────────────────────────────────────
 try {
     $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cash_deposit_status VARCHAR(20) DEFAULT NULL");
@@ -290,6 +295,10 @@ case 'get_tasks':
             $task['workflow_state'] = 'cash_pending_deposit'; // Tech has cash, not deposited yet
         } elseif($status === 'Awaiting Approval'){
             $task['workflow_state'] = 'approve_now';          // Ready to approve
+        } elseif($status === 'Demo Done'){
+            $task['workflow_state'] = 'demo_done';
+        } elseif($status === 'Demo Converted'){
+            $task['workflow_state'] = '';
         } elseif($status === 'Closed' || $status === 'Cancelled'){
             $task['workflow_state'] = '';
         } elseif($addingDone && $amtCollected > 0 && ($task['cash_deposit_status']??'') === 'pending'){
@@ -1347,10 +1356,33 @@ case 'save_job_outcome':
     $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'tech')")
         ->execute([$jid, $userId, trim($remark)]);
 
-    // Close the task
-    $newStatus = $body['close_task']??false ? 'Awaiting Approval' : 'In Progress';
-    $pdo->prepare("UPDATE tasks SET task_status=?, updated_at=NOW() WHERE id=?")
-        ->execute([$newStatus, $jid]);
+    // Set task status based on job type
+    $isDemo = ($jtype === 'demo');
+    if($isDemo){
+        // Demo tasks go to 'Demo Done' — NOT closed, awaiting conversion or follow-up
+        $newStatus = 'Demo Done';
+        // Save demo fields to task for future reference
+        $interest   = $fields['Interest Level'] ?? '';
+        $followup   = $fields['Follow-up']      ?? '';
+        $fuDate     = '';
+        if(strpos($followup,'Yes') !== false){
+            preg_match('/\d{4}-\d{2}-\d{2}/', $followup, $m);
+            $fuDate = $m[0] ?? '';
+        }
+        $pdo->prepare("UPDATE tasks SET task_status='Demo Done', demo_interest=?, demo_followup_date=?, updated_at=NOW() WHERE id=?")
+            ->execute([$interest, $fuDate ?: null, $jid]);
+        // Send customer thank-you email
+        $taskRow = $pdo->prepare("SELECT t.*,u.name as tech_name,u.phone as tech_phone FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?");
+        $taskRow->execute([$jid]); $tr = $taskRow->fetch();
+        if($tr && $tr['email']){
+            require_once __DIR__.'/mailer.php';
+            sendDemoDoneCustomer($tr, $tr['tech_name']??'', $fields);
+        }
+    } else {
+        $newStatus = ($body['close_task']??false) ? 'Awaiting Approval' : 'In Progress';
+        $pdo->prepare("UPDATE tasks SET task_status=?, updated_at=NOW() WHERE id=?")
+            ->execute([$newStatus, $jid]);
+    }
 
     // For removal — save serial number
     if(!empty($body['removed_serial'])){
@@ -1851,6 +1883,51 @@ case 'verify_cash_deposit':
         echo json_encode(['success'=>true,'message'=>'Deposit rejected — technician must resubmit.']);
     }
     break;
+
+// ── CONVERT DEMO TO INSTALLATION ──────────────────────────────────────────
+case 'convert_demo_to_installation':
+    if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    $id3 = intval($body['id']??0);
+    if(!$id3){ echo json_encode(['error'=>'Task ID required']); break; }
+    $src = $pdo->prepare("SELECT * FROM tasks WHERE id=?");
+    $src->execute([$id3]); $srcTask = $src->fetch();
+    if(!$srcTask){ echo json_encode(['error'=>'Task not found']); break; }
+    // Mark original demo task as converted
+    $pdo->prepare("UPDATE tasks SET task_status='Demo Converted', demo_converted_at=NOW() WHERE id=?")
+        ->execute([$id3]);
+    $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")
+        ->execute([$id3, $userId, "✅ Demo converted to installation task by {$currentUser['name']}."]);
+    // Create new installation task
+    $year2 = date('Y');
+    $cnt2  = $pdo->query("SELECT COUNT(*) FROM tasks WHERE task_id LIKE 'ID-$year2-%'")->fetchColumn();
+    $newId = 'ID-' . $year2 . '-' . str_pad($cnt2+1, 4, '0', STR_PAD_LEFT);
+    $pdo->prepare("INSERT INTO tasks (task_id,customer_name,contact_number,email,location,lead_type,device_details,device_qty,price_to_collect,payment_mode,assigned_to,task_status,general_notes,profile,created_by)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+        ->execute([
+            $newId, $srcTask['customer_name'], $srcTask['contact_number'],
+            $srcTask['email'], $srcTask['location'], 'Existing Customer Lead',
+            $body['job_type'] ?? 'Basic/Normal', intval($body['device_qty']??1),
+            floatval($body['price']??0), $body['payment_mode']??'Cash',
+            $srcTask['assigned_to'], 'Open',
+            'Converted from demo task ' . $srcTask['task_id'],
+            $srcTask['profile']??'BGPT', $userId
+        ]);
+    echo json_encode(['success'=>true,'new_task_id'=>$newId,'message'=>'New installation task '.$newId.' created.']);
+    break;
+
+// ── MARK DEMO AS LOST ─────────────────────────────────────────────────────
+case 'mark_demo_lost':
+    if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    $id4 = intval($body['id']??0);
+    $reason = trim($body['reason']??'Not interested');
+    if(!$id4){ echo json_encode(['error'=>'Task ID required']); break; }
+    $pdo->prepare("UPDATE tasks SET task_status='Cancelled', closed_at=NOW() WHERE id=?")
+        ->execute([$id4]);
+    $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")
+        ->execute([$id4, $userId, "❌ Demo marked as lost — Reason: {$reason}"]);
+    echo json_encode(['success'=>true,'message'=>'Demo task marked as lost.']);
+    break;
+
 
 default:
     http_response_code(404);

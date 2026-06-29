@@ -2794,6 +2794,7 @@ function getWorkflowBadge(t){
     'consent_sent':            '<span class="wf-badge" style="background:var(--blue-bg);color:var(--blue)">CONSENT SENT</span>',
     'ready_to_add':            '<span class="wf-badge" style="background:var(--green-bg);color:var(--green)">READY TO ADD</span>',
     'ready_for_demo':          '<span class="wf-badge" style="background:var(--blue-bg);color:var(--blue);animation:pulse-badge 1.5s infinite">📱 DEMO READY</span>',
+    'demo_done':               '<span class="wf-badge" style="background:#e8f5ec;color:#1a7a3a;animation:pulse-badge 1.5s infinite">📱 DEMO DONE — Follow Up</span>',
     'ready_for_troubleshoot':  '<span class="wf-badge" style="background:#e0eeee;color:var(--accent)">🔧 FIX READY</span>',
     'postponed_after_consent': '<span class="wf-badge" style="background:#fdecea;color:#c0392b;animation:pulse-badge 1.5s infinite">⏸️ POSTPONED</span>',
     'cash_pending_deposit':    '<span class="wf-badge" style="background:var(--amber-bg);color:var(--saffron);animation:pulse-badge 1.5s infinite">🏦 DEPOSIT PENDING</span>',
@@ -3278,6 +3279,31 @@ async function viewTask(id){
     const btns = [];
 
     // ── CLOSED task — nothing to do, show closed banner ──────────────────
+    // ── DEMO DONE task — show follow-up action buttons ──────────────────
+    if(t.task_status === 'Demo Done'){
+      adFooter.style.display = 'flex';
+      const demoInterest = t.demo_interest || '';
+      const demoFollowup = t.demo_followup_date || '';
+      adFooter.innerHTML = `
+        <div style="width:100%">
+          <div style="background:var(--blue-bg);border:1.5px solid var(--blue);border-radius:10px;padding:14px 16px;margin-bottom:12px">
+            <div style="font-size:11px;font-weight:800;color:var(--blue);text-transform:uppercase;margin-bottom:8px">📱 Demo Completed — Awaiting Customer Decision</div>
+            ${demoInterest ? '<div style="font-size:13px;margin-bottom:4px">Interest Level: <strong>'+demoInterest+'</strong></div>' : ''}
+            ${demoFollowup ? '<div style="font-size:12px;color:var(--text3)">📅 Follow-up date: <strong>'+demoFollowup+'</strong></div>' : ''}
+            <div style="font-size:12px;color:var(--text3);margin-top:4px">✅ Customer thank-you email has been sent automatically</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button onclick="openConvertDemoModal(${t.id})" class="ts-btn" style="background:var(--green);color:#fff;flex:2">
+              🔄 Convert to Installation
+            </button>
+            <button onclick="markDemoLost(${t.id})" class="ts-btn" style="background:var(--red-bg);color:var(--red);border:1.5px solid var(--red);flex:1">
+              ❌ Mark as Lost
+            </button>
+          </div>
+        </div>`;
+      return;
+    }
+
     if(t.task_status === 'Closed'){
       adFooter.style.display = 'flex';
       adFooter.innerHTML = `
@@ -3956,6 +3982,52 @@ async function submitTechAttend(){
 }
 
 // ── ADMIN ACTIONS ─────────────────────────────────────────────────────────
+// ── DEMO TASK ACTIONS ─────────────────────────────────────────────────────
+var _convertDemoTaskId = null;
+
+function openConvertDemoModal(taskId){
+  _convertDemoTaskId = taskId;
+  document.getElementById('convert-demo-overlay').style.display = 'block';
+  document.getElementById('convert-demo-modal').style.display  = 'block';
+}
+
+function closeConvertDemoModal(){
+  document.getElementById('convert-demo-overlay').style.display = 'none';
+  document.getElementById('convert-demo-modal').style.display   = 'none';
+}
+
+async function submitConvertDemo(){
+  if(!_convertDemoTaskId) return;
+  const res = await api('convert_demo_to_installation',{},'POST',{
+    id:           _convertDemoTaskId,
+    job_type:     document.getElementById('cd-job-type').value,
+    device_qty:   document.getElementById('cd-qty').value,
+    price:        document.getElementById('cd-price').value,
+    payment_mode: document.getElementById('cd-paymode').value,
+  }).catch(()=>({}));
+  if(res.success){
+    closeConvertDemoModal();
+    showToast('✅ Installation task '+res.new_task_id+' created!');
+    closeTaskDetail();
+    loadTasksPage();
+  } else {
+    alert(res.error || 'Failed to convert');
+  }
+}
+
+async function markDemoLost(taskId){
+  const reason = prompt('Reason for marking as lost?', 'Customer not interested');
+  if(reason === null) return; // cancelled
+  const res = await api('mark_demo_lost',{},'POST',{id:taskId, reason}).catch(()=>({}));
+  if(res.success){
+    showToast('Demo task marked as lost');
+    closeTaskDetail();
+    loadTasksPage();
+  } else {
+    alert(res.error || 'Failed');
+  }
+}
+
 async function verifyDeposit(taskId, action){
   const msg = action === 'approve'
     ? 'Confirm cash deposit is genuine and received?'
@@ -6157,6 +6229,47 @@ async function submitJobOutcome(){
       <button onclick="closeJobOutcome()" style="flex:1;padding:11px;background:var(--surface2);color:var(--text);border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Cancel</button>
       <button id="jo-submit-btn" onclick="submitJobOutcome()" style="flex:2;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">✅ Submit & Close Task</button>
     </div>
+  </div>
+</div>
+
+
+<!-- CONVERT DEMO TO INSTALLATION MODAL -->
+<div id="convert-demo-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000" onclick="closeConvertDemoModal()"></div>
+<div id="convert-demo-modal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;width:92%;max-width:440px;z-index:9001;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+  <div style="background:var(--green);padding:14px 18px;display:flex;align-items:center;gap:10px">
+    <div style="flex:1;font-size:15px;font-weight:800;color:#fff">🔄 Convert Demo to Installation</div>
+    <button onclick="closeConvertDemoModal()" style="background:rgba(255,255,255,.2);border:none;color:#fff;width:28px;height:28px;border-radius:6px;font-size:16px;cursor:pointer">✕</button>
+  </div>
+  <div style="padding:18px 20px">
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">A new installation task will be created for this customer. The demo task will be marked as converted.</p>
+    <div class="form-group" style="margin-bottom:12px">
+      <label>Job Type</label>
+      <select id="cd-job-type" class="form-input">
+        <option value="Basic/Normal">Basic/Normal GPS</option>
+        <option value="Engine Cut">Engine Cut GPS</option>
+        <option value="Engine Status">Engine Status GPS</option>
+        <option value="VLTD">VLTD</option>
+        <option value="Micro GPS">Micro GPS</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label>Device Qty</label>
+      <input type="number" id="cd-qty" class="form-input" value="1" min="1">
+    </div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label>Price to Collect (₹)</label>
+      <input type="number" id="cd-price" class="form-input" placeholder="e.g. 2500">
+    </div>
+    <div class="form-group" style="margin-bottom:16px">
+      <label>Payment Mode</label>
+      <select id="cd-paymode" class="form-input">
+        <option value="Cash">Cash</option>
+        <option value="UPI">UPI</option>
+        <option value="Bank Transfer">Bank Transfer</option>
+        <option value="Cheque">Cheque</option>
+      </select>
+    </div>
+    <button onclick="submitConvertDemo()" class="ts-btn ts-btn-primary" style="width:100%;background:var(--green)">✅ Create Installation Task</button>
   </div>
 </div>
 
