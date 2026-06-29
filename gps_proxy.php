@@ -201,6 +201,23 @@ if($action === 'create_user'){
 
     $srv = $servers[$server_id];
 
+    // Auto-fetch manager_id from support@bharatgps.com if not provided
+    if(!$manager_id){
+        $MANAGER_EMAIL = 'support@bharatgps.com';
+        $search_r = do_get($srv['base'].'/admin/clients?search_phrase='.rawurlencode($MANAGER_EMAIL).'&limit=5&lang=en&user_api_hash='.rawurlencode($srv['hash']));
+        $clients = [];
+        if(is_array($search_r['json'])){
+            if(isset($search_r['json']['data']) && is_array($search_r['json']['data'])) $clients = $search_r['json']['data'];
+            elseif(isset($search_r['json'][0])) $clients = array_values($search_r['json']);
+        }
+        foreach($clients as $c){
+            if(strcasecmp(trim($c['email']??''), $MANAGER_EMAIL) === 0){
+                $manager_id = intval($c['id'] ?? 0);
+                break;
+            }
+        }
+    }
+
     // Get valid map IDs from server
     $maps_r = do_get($srv['base'].'/edit_setup_data?lang=en&user_api_hash='.rawurlencode($srv['hash']));
     $valid_maps = [1,2,3,4]; // fallback
