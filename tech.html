@@ -3735,6 +3735,36 @@ async function checkAndUpdateAttendBtn(taskId, taskObj){
 
   const t = taskObj || _detailTask;
 
+  // STATE 0: Task already completed — hide button, show status
+  const taskStatus = t?.task_status || '';
+  if(taskStatus === 'Demo Done'){
+    btn.style.display = 'none';
+    if(status) status.innerHTML = `
+      <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--green);line-height:1.7">
+        📱 <strong>Demo report submitted</strong><br>
+        Demo is done and report has been sent. Admin will follow up with the customer.<br>
+        <span style="font-size:10px;color:var(--text3)">Task status: Demo Done</span>
+      </div>`;
+    return;
+  }
+  if(taskStatus === 'Awaiting Approval'){
+    btn.style.display = 'none';
+    if(status) status.innerHTML = `
+      <div style="background:var(--blue-bg);border:1.5px solid var(--blue);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--blue);line-height:1.7">
+        ⏳ <strong>Awaiting Admin Approval</strong><br>
+        Your report has been submitted. Waiting for manager to approve and close the task.
+      </div>`;
+    return;
+  }
+  if(['Closed','Cancelled','Demo Converted'].includes(taskStatus)){
+    btn.style.display = 'none';
+    if(status) status.innerHTML = `
+      <div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text3)">
+        ✅ Task ${taskStatus.toLowerCase()}
+      </div>`;
+    return;
+  }
+
   // STATE 3: Adding done, payment pending — show Update Payment Status
   const installs = t?.device_installs || [];
   const qty      = parseInt(t?.device_qty||1);
