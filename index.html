@@ -1339,7 +1339,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
               <div style="font-size:15px;font-weight:800;color:#fff" id="attend-title">🔧 Installation</div>
               <div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px" id="attend-subtitle">Select installation status</div>
             </div>
-            <button onclick="closeTechAttend()" style="background:rgba(255,255,255,.2);border:none;color:#fff;width:30px;height:30px;border-radius:7px;font-size:17px;cursor:pointer">✕</button>
+            <button id="attend-close-btn" onclick="closeTechAttend()" style="background:rgba(255,255,255,.2);border:none;color:#fff;width:30px;height:30px;border-radius:7px;font-size:17px;cursor:pointer">✕</button>
           </div>
 
           <div style="overflow-y:auto;flex:1;padding:18px 20px">
@@ -1505,7 +1505,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
 
           <!-- Footer -->
           <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;flex-shrink:0;background:var(--surface);border-radius:0 0 14px 14px">
-            <button class="ts-btn ts-btn-secondary" onclick="closeTechAttend()">Cancel</button>
+            <button class="ts-btn ts-btn-secondary" id="attend-cancel-btn" onclick="closeTechAttend()">Cancel</button>
             <button class="ts-btn ts-btn-primary" id="attend-submit-btn" onclick="submitTechAttend()" style="display:none">Submit</button>
           </div>
         </div>
@@ -4511,17 +4511,23 @@ function checkAttendAllDevicesSaved(){
   const assignSection = document.getElementById('attend-assign-section');
   const paySection    = document.getElementById('attend-payment-section');
   const submitBtn     = document.getElementById('attend-submit-btn');
+  const cancelBtn     = document.getElementById('attend-cancel-btn');
+  const closeBtn      = document.getElementById('attend-close-btn');
   if(allDone){
+    // Device pushed — hide cancel/close so tech cannot go back
+    if(cancelBtn) cancelBtn.style.display='none';
+    if(closeBtn)  closeBtn.style.display='none';
     // Show assign panel — pre-fill email from task
     if(assignSection){
       assignSection.style.display='';
       const emailEl = document.getElementById('assign-email');
       if(emailEl && _detailTask?.email) emailEl.value = _detailTask.email;
     }
-    // Payment and submit hidden until assign is done (or skipped)
     if(paySection)  paySection.style.display='none';
     if(submitBtn)   submitBtn.style.display='none';
   } else {
+    if(cancelBtn)     cancelBtn.style.display='';
+    if(closeBtn)      closeBtn.style.display='';
     if(assignSection) assignSection.style.display='none';
     if(paySection)    paySection.style.display='none';
     if(submitBtn)     submitBtn.style.display='none';
@@ -4529,8 +4535,13 @@ function checkAttendAllDevicesSaved(){
 }
 
 function showPaymentAfterAssign(){
-  const paySection = document.getElementById('attend-payment-section');
-  const submitBtn  = document.getElementById('attend-submit-btn');
+  const paySection  = document.getElementById('attend-payment-section');
+  const submitBtn   = document.getElementById('attend-submit-btn');
+  const cancelBtn   = document.getElementById('attend-cancel-btn');
+  const closeBtn    = document.getElementById('attend-close-btn');
+  // Hide cancel/close — device already pushed, cannot go back
+  if(cancelBtn) cancelBtn.style.display='none';
+  if(closeBtn)  closeBtn.style.display='none';
   if(paySection) paySection.style.display='';
   if(submitBtn){
     submitBtn.style.display='';
