@@ -787,8 +787,35 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
               <!-- Device cards container — one per device qty -->
               <div id="attend-device-cards"></div>
 
+              <!-- STEP 3: Assign to customer GPS account -->
+              <div id="attend-assign-section" style="display:none;background:var(--blue-bg);border:1.5px solid var(--accent2);border-radius:8px;padding:14px;margin-bottom:14px">
+                <div style="font-size:12px;font-weight:800;color:var(--accent2);margin-bottom:10px">👤 Step 3 — Assign Device to Customer Account</div>
+                <div class="form-row" style="margin-bottom:8px">
+                  <div class="form-group" style="flex:1">
+                    <label>Customer Email</label>
+                    <input type="email" id="assign-email" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px" placeholder="customer@email.com">
+                  </div>
+                  <div class="form-group" style="flex:0 0 auto;padding-top:4px">
+                    <label>&nbsp;</label>
+                    <button onclick="checkGpsUser()" style="padding:8px 14px;background:var(--accent2);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">🔍 Check</button>
+                  </div>
+                </div>
+                <div id="assign-status" style="font-size:12px;margin-bottom:8px"></div>
+                <div id="assign-create-form" style="display:none">
+                  <div style="margin-bottom:8px">
+                    <label style="font-size:11px;font-weight:700;color:var(--text2)">Set Password for new account</label>
+                    <input type="text" id="assign-password" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;margin-top:4px" placeholder="Min 6 characters">
+                  </div>
+                  <button onclick="createGpsUser()" style="width:100%;padding:9px;background:var(--accent2);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:800;cursor:pointer">➕ Create Account & Assign Device</button>
+                </div>
+                <div id="assign-found-form" style="display:none">
+                  <button onclick="assignGpsDevice()" style="width:100%;padding:9px;background:var(--green);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:800;cursor:pointer">🔗 Assign Device to This Account</button>
+                </div>
+                <div id="assign-done" style="display:none;padding:8px 10px;background:var(--green-bg);border:1.5px solid var(--green);border-radius:6px;font-size:12px;color:var(--green);font-weight:700">✅ Device assigned to customer account</div>
+              </div>
+
               <!-- Payment collection — shown after devices -->
-              <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:14px;margin-bottom:12px;margin-top:4px">
+              <div id="attend-payment-section" style="display:none;background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:14px;margin-bottom:12px;margin-top:4px">
                 <div style="font-size:12px;font-weight:800;color:var(--green);margin-bottom:10px">💰 Payment Collection</div>
                 <div class="form-row">
                   <div class="form-group">
@@ -4192,14 +4219,112 @@ async function pushDeviceToServer(idx){
 function checkAttendAllDevicesSaved(){
   let allDone=true;
   for(let i=1;i<=_attendTaskQty;i++){ if(!_attendSavedDevices[i]?.pushed){allDone=false;break;} }
-  const paySection=document.getElementById('attend-payment-section');
-  const submitBtn=document.getElementById('attend-submit-btn');
-  if(paySection) paySection.style.display=allDone?'':'none';
-  if(submitBtn){
-    submitBtn.style.display=allDone?'':'none';
-    if(allDone){ submitBtn.textContent='✅ Submit — Request Approval'; submitBtn.style.background='var(--green)'; }
+  const assignSection = document.getElementById('attend-assign-section');
+  const paySection    = document.getElementById('attend-payment-section');
+  const submitBtn     = document.getElementById('attend-submit-btn');
+  if(allDone){
+    if(assignSection){
+      assignSection.style.display='';
+      const emailEl = document.getElementById('assign-email');
+      if(emailEl && _detailTask?.email) emailEl.value = _detailTask.email;
+    }
+    if(paySection)  paySection.style.display='none';
+    if(submitBtn)   submitBtn.style.display='none';
+  } else {
+    if(assignSection) assignSection.style.display='none';
+    if(paySection)    paySection.style.display='none';
+    if(submitBtn)     submitBtn.style.display='none';
   }
 }
+
+function showPaymentAfterAssign(){
+  const paySection = document.getElementById('attend-payment-section');
+  const submitBtn  = document.getElementById('attend-submit-btn');
+  if(paySection) paySection.style.display='';
+  if(submitBtn){
+    submitBtn.style.display='';
+    submitBtn.textContent='✅ Submit — Request Approval';
+    submitBtn.style.background='var(--green)';
+  }
+}
+
+let _gpsFoundUserId = null;
+
+async function checkGpsUser(){
+  const email    = document.getElementById('assign-email')?.value.trim();
+  const statusEl = document.getElementById('assign-status');
+  const createEl = document.getElementById('assign-create-form');
+  const foundEl  = document.getElementById('assign-found-form');
+  if(!email){ statusEl.textContent='⚠️ Enter email first'; return; }
+  const firstDev = _attendSavedDevices[1];
+  if(!firstDev){ statusEl.textContent='⚠️ Save device first'; return; }
+  const serverId = firstDev.server_id;
+  statusEl.innerHTML='<span style="color:var(--text3)">🔍 Checking…</span>';
+  createEl.style.display='none'; foundEl.style.display='none';
+  _gpsFoundUserId = null;
+  const r = await fetch('gps_proxy.php?action=find_user&server_id='+serverId+'&email='+encodeURIComponent(email),
+    {headers:{'X-Auth-Token':authToken}}).then(r=>r.json()).catch(()=>({}));
+  if(r.found){
+    _gpsFoundUserId = r.user?.id;
+    statusEl.innerHTML='<span style="color:var(--green);font-weight:700">✅ Account found — '+escHtml(r.user?.email||email)+'</span>';
+    foundEl.style.display=''; createEl.style.display='none';
+  } else {
+    statusEl.innerHTML='<span style="color:var(--saffron);font-weight:700">⚠️ No account found — will create new</span>';
+    foundEl.style.display='none'; createEl.style.display='';
+  }
+}
+
+async function createGpsUser(){
+  const email    = document.getElementById('assign-email')?.value.trim();
+  const password = document.getElementById('assign-password')?.value.trim();
+  const statusEl = document.getElementById('assign-status');
+  if(!password || password.length < 6){ alert('Password must be at least 6 characters'); return; }
+  const firstDev = _attendSavedDevices[1];
+  const serverId = firstDev?.server_id;
+  const phone    = _detailTask?.contact_number||'';
+  statusEl.innerHTML='<span style="color:var(--text3)">⏳ Creating account…</span>';
+  const fd = new FormData();
+  fd.append('server_id', serverId); fd.append('email', email);
+  fd.append('password', password);  fd.append('phone', phone);
+  const r = await fetch('gps_proxy.php?action=create_user',
+    {method:'POST',headers:{'X-Auth-Token':authToken},body:fd}).then(r=>r.json()).catch(()=>({}));
+  if(r.success){
+    _gpsFoundUserId = r.user_id;
+    statusEl.innerHTML='<span style="color:var(--green);font-weight:700">✅ Account created</span>';
+    await assignGpsDevice();
+  } else {
+    statusEl.innerHTML='<span style="color:var(--red)">❌ '+escHtml(r.error||'Failed')+'</span>';
+  }
+}
+
+async function assignGpsDevice(){
+  const statusEl = document.getElementById('assign-status');
+  const doneEl   = document.getElementById('assign-done');
+  if(!_gpsFoundUserId){ statusEl.innerHTML='<span style="color:var(--red)">❌ No user ID</span>'; return; }
+  statusEl.innerHTML='<span style="color:var(--text3)">⏳ Assigning device…</span>';
+  const results = [];
+  for(const [idx, dev] of Object.entries(_attendSavedDevices)){
+    if(!dev.pushed) continue;
+    const fd = new FormData();
+    fd.append('server_id', dev.server_id); fd.append('device_id', dev.device_id);
+    fd.append('user_id', _gpsFoundUserId);
+    const r = await fetch('gps_proxy.php?action=assign_device',
+      {method:'POST',headers:{'X-Auth-Token':authToken},body:fd}).then(r=>r.json()).catch(()=>({}));
+    results.push(r.success);
+  }
+  const allOk = results.every(Boolean);
+  if(allOk){
+    document.getElementById('assign-create-form').style.display='none';
+    document.getElementById('assign-found-form').style.display='none';
+    statusEl.innerHTML='';
+    if(doneEl) doneEl.style.display='';
+    setTimeout(showPaymentAfterAssign, 800);
+  } else {
+    statusEl.innerHTML='<span style="color:var(--red)">❌ Assignment failed — try again</span>';
+  }
+}
+
+function escHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 
 // ════════════════════════════════════════════════════════
 // PAYMENT MODAL — Smart collection with enforcement

@@ -136,4 +136,139 @@ if($action === 'update'){
     exit;
 }
 
+// ── Helper: GET request ───────────────────────────────────────────────────
+function do_get($url){
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL,            $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT,        15);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_USERAGENT,      'Mozilla/5.0');
+    $body = curl_exec($ch); curl_close($ch);
+    return ['json'=>json_decode($body,true), 'raw'=>$body];
+}
+
+function parse_gps_err($json, $body){
+    if(!is_array($json)) return substr($body,0,200);
+    if(isset($json['errors'])){
+        $e=$json['errors'];
+        if(is_array($e)){$p=[];foreach($e as $k=>$v)$p[]=$k.':'.(is_array($v)?implode(',',$v):$v);return implode('|',$p);}
+        return strval($e);
+    }
+    if(isset($json['message'])) return $json['message'];
+    return substr($body,0,200);
+}
+
+// ── FIND USER — check if email exists on a GPS server ────────────────────
+if($action === 'find_user'){
+    $server_id = intval($_GET['server_id'] ?? 0);
+    $email     = trim($_GET['email'] ?? '');
+    if(!$email)     { echo json_encode(['success'=>false,'error'=>'Email required']); exit; }
+    if(!$server_id) { echo json_encode(['success'=>false,'error'=>'server_id required']); exit; }
+    if(!isset($servers[$server_id])) { echo json_encode(['success'=>false,'error'=>'Invalid server']); exit; }
+
+    $srv = $servers[$server_id];
+
+    // Search via admin/clients
+    $r = do_get($srv['base'].'/admin/clients?search_phrase='.rawurlencode($email).'&limit=10&lang=en&user_api_hash='.rawurlencode($srv['hash']));
+    $clients = [];
+    if(is_array($r['json'])){
+        if(isset($r['json']['data']) && is_array($r['json']['data'])) $clients = $r['json']['data'];
+        elseif(isset($r['json'][0])) $clients = array_values($r['json']);
+    }
+    $found = array_filter($clients, fn($c) => strcasecmp(trim($c['email']??''), $email) === 0);
+    if(!empty($found)){
+        $u = array_values($found)[0];
+        echo json_encode(['success'=>true,'found'=>true,'user'=>['id'=>$u['id'],'email'=>$u['email'],'name'=>$u['name']??$email]]);
+    } else {
+        echo json_encode(['success'=>true,'found'=>false]);
+    }
+    exit;
+}
+
+// ── CREATE USER — create account on GPS server, linked to manager ─────────
+if($action === 'create_user'){
+    $server_id  = intval($_POST['server_id'] ?? 0);
+    $email      = trim($_POST['email'] ?? '');
+    $password   = trim($_POST['password'] ?? '');
+    $phone      = trim($_POST['phone'] ?? '');
+    $manager_id = intval($_POST['manager_id'] ?? 0);
+    if(!$email)     { echo json_encode(['success'=>false,'error'=>'Email required']); exit; }
+    if(!$password || strlen($password) < 6) { echo json_encode(['success'=>false,'error'=>'Password must be at least 6 characters']); exit; }
+    if(!$server_id) { echo json_encode(['success'=>false,'error'=>'server_id required']); exit; }
+    if(!isset($servers[$server_id])) { echo json_encode(['success'=>false,'error'=>'Invalid server']); exit; }
+
+    $srv = $servers[$server_id];
+
+    // Get valid map IDs from server
+    $maps_r = do_get($srv['base'].'/edit_setup_data?lang=en&user_api_hash='.rawurlencode($srv['hash']));
+    $valid_maps = [1,2,3,4]; // fallback
+    if(is_array($maps_r['json'])){
+        $am = $maps_r['json']['item']['available_maps'] ?? $maps_r['json']['available_maps'] ?? null;
+        if(is_array($am)) $valid_maps = array_values(array_map('intval', $am));
+    }
+
+    $fields = [
+        'email'                 => $email,
+        'password'              => $password,
+        'password_confirmation' => $password,
+        'phone_number'          => $phone,
+        'active'                => '1',
+        'group_id'              => '2',
+        'enable_devices_limit'  => '1',
+        'devices_limit'         => '10',
+        'password_generate'     => '0',
+        'account_created'       => '1',
+        'email_verification'    => '0',
+    ];
+    if($manager_id) $fields['manager_id'] = strval($manager_id);
+    foreach($valid_maps as $i => $mid) $fields['available_maps['.$i.']'] = strval($mid);
+
+    $result = do_post($srv['base'].'/admin/client?lang=en&user_api_hash='.rawurlencode($srv['hash']), $fields);
+    $json   = $result['json'];
+    if(($json['status'] ?? null) == 1){
+        $uid = $json['item']['id'] ?? $json['id'] ?? null;
+        echo json_encode(['success'=>true,'user_id'=>$uid,'message'=>'Account created on '.$srv['name']]);
+    } else {
+        echo json_encode(['success'=>false,'error'=>parse_gps_err($json,$result['raw'])]);
+    }
+    exit;
+}
+
+// ── ASSIGN DEVICE — link device to user account ───────────────────────────
+if($action === 'assign_device'){
+    $server_id = intval($_POST['server_id'] ?? 0);
+    $device_id = intval($_POST['device_id'] ?? 0);
+    $user_id   = intval($_POST['user_id']   ?? 0);
+    if(!$server_id || !$device_id || !$user_id){
+        echo json_encode(['success'=>false,'error'=>'server_id, device_id, user_id all required']); exit;
+    }
+    if(!isset($servers[$server_id])) { echo json_encode(['success'=>false,'error'=>'Invalid server']); exit; }
+
+    $srv = $servers[$server_id];
+
+    // POST /api/admin/device/{device_id}/user
+    $result = do_post(
+        $srv['base'].'/admin/device/'.$device_id.'/user?lang=en&user_api_hash='.rawurlencode($srv['hash']),
+        ['user_id' => strval($user_id)]
+    );
+    $json = $result['json'];
+    if(($json['status'] ?? null) == 1){
+        echo json_encode(['success'=>true,'message'=>'Device assigned to user on '.$srv['name']]);
+    } else {
+        // Fallback: edit_device with user_id
+        $r2 = do_post($srv['base'].'/edit_device?lang=en&user_api_hash='.rawurlencode($srv['hash']),
+            ['id'=>strval($device_id),'user_id'=>strval($user_id)]);
+        $j2 = $r2['json'];
+        if(($j2['status'] ?? null) == 1){
+            echo json_encode(['success'=>true,'message'=>'Device assigned via edit_device on '.$srv['name']]);
+        } else {
+            echo json_encode(['success'=>false,'error'=>parse_gps_err($j2,$r2['raw'])]);
+        }
+    }
+    exit;
+}
+
+
 echo json_encode(['success'=>false,'error'=>'Unknown action']);
