@@ -350,6 +350,13 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
 
   <div class="main-layout">
     <div class="sidebar" id="sidebar">
+      <div style="padding:16px 16px 8px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:8px">
+        <div class="sb-avatar" id="sb-avatar">T</div>
+        <div>
+          <div class="sb-name" id="sb-name">–</div>
+          <div class="sb-role" id="sb-role">TECHNICIAN</div>
+        </div>
+      </div>
       <div class="nav-sec">My Work</div>
       <div class="nav-item active" id="nav-my-tasks" onclick="showPage('my-tasks')">
         <span class="nav-icon">🙋</span>
@@ -1286,9 +1293,9 @@ function startTechApp(){
   document.getElementById('tb-name').textContent  =currentUser.name||'Tech';
   document.getElementById('tb-role').textContent  ='TECHNICIAN';
   document.getElementById('tb-avatar').textContent=(currentUser.name||'T')[0].toUpperCase();
-  document.getElementById('sb-name').textContent  =currentUser.name||'Tech';
-  document.getElementById('sb-role').textContent  ='TECHNICIAN';
-  document.getElementById('sb-avatar').textContent=(currentUser.name||'T')[0].toUpperCase();
+  const sbName=document.getElementById('sb-name'); if(sbName) sbName.textContent=currentUser.name||'Tech';
+  const sbRole=document.getElementById('sb-role'); if(sbRole) sbRole.textContent='TECHNICIAN';
+  const sbAvatar=document.getElementById('sb-avatar'); if(sbAvatar) sbAvatar.textContent=(currentUser.name||'T')[0].toUpperCase();
   showPage('my-tasks');
   startPolling();
 }
@@ -1390,9 +1397,9 @@ function startApp(){
   document.getElementById('tb-name').textContent    = name;
   document.getElementById('tb-role').textContent    = role;
   document.getElementById('tb-avatar').textContent  = initials;
-  document.getElementById('sb-name').textContent    = name;
-  document.getElementById('sb-role').textContent    = role;
-  document.getElementById('sb-avatar').textContent  = initials;
+  const _sbn=document.getElementById('sb-name'); if(_sbn) _sbn.textContent=name;
+  const _sbr=document.getElementById('sb-role'); if(_sbr) _sbr.textContent=role;
+  const _sba=document.getElementById('sb-avatar'); if(_sba) _sba.textContent=initials;
 
   // Show/hide role-based elements
   const isAdmin      = ['admin','assigner'].includes(currentUser.role);
