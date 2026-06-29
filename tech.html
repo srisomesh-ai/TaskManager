@@ -5427,26 +5427,32 @@ async function joSubmit(){
   }).catch(function(){ return {}; });
 
   if(res && res.success){
-    // Close modal and drawer
+    // 1. Close modal
     document.getElementById('jo-overlay').style.display = 'none';
-    showToast('✅ ' + summary + ' submitted');
-    // Update _detailTask so STATE 0 works immediately
-    if(_detailTask) _detailTask.task_status = res.status || 'Demo Done';
-    // Update the task in myAllTasks cache directly
+    // 2. Update _detailTask status immediately
+    var newStatus = res.status || 'Demo Done';
+    if(_detailTask) _detailTask.task_status = newStatus;
+    // 3. Update myAllTasks cache
     if(typeof myAllTasks !== 'undefined'){
-      for(var i=0;i<myAllTasks.length;i++){
-        if(String(myAllTasks[i].id)===String(taskId)){
-          myAllTasks[i].task_status = res.status || 'Demo Done';
+      for(var ii=0;ii<myAllTasks.length;ii++){
+        if(String(myAllTasks[ii].id)===String(taskId)){
+          myAllTasks[ii].task_status = newStatus;
           break;
         }
       }
     }
-    // Refresh the attend button state immediately
-    if(typeof checkAndUpdateAttendBtn === 'function'){
-      checkAndUpdateAttendBtn(taskId, _detailTask);
-    }
-    // Refresh task list in background
-    setTimeout(function(){ if(typeof loadMyTasks==='function') loadMyTasks(); }, 1000);
+    // 4. Hide the button immediately - don't wait for API
+    var doneBtn = document.getElementById('td-attend-btn-' + taskId);
+    if(doneBtn){ doneBtn.style.display='none'; doneBtn.style.opacity='0'; }
+    // 5. Show status message
+    var statusEl = document.getElementById('td-consent-status-' + taskId);
+    if(statusEl) statusEl.innerHTML =
+      '<div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--green);line-height:1.6">' +
+      '📱 <strong>Demo report submitted!</strong><br>Admin will review and follow up with the customer.</div>';
+    showToast('✅ ' + summary + ' submitted');
+    // 6. Reload tasks after delay — but renderMyTasks will re-call checkAndUpdateAttendBtn
+    //    which now fetches fresh from API so will get Demo Done status
+    setTimeout(function(){ if(typeof loadMyTasks==='function') loadMyTasks(); }, 2000);
   } else {
     btn.disabled = false;
     btn.textContent = '✅ Submit Report';
