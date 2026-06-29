@@ -1221,7 +1221,13 @@ let currentUser = null;
 
 // ── Cash deposit (referenced but not in original JS) ─────────────────────
 function openCashDepositModal(taskId){
-  const t=_detailTask; if(!t) return;
+  if(!_detailTask || String(_detailTask.id) !== String(taskId)){
+    api('get_task',{id:taskId}).then(function(r){
+      if(r&&r.task){_detailTask=r.task; openCashDepositModal(taskId);}
+    });
+    return;
+  }
+  const t=_detailTask;
   document.getElementById('cd-subtitle').textContent=t.task_id+' · '+t.customer_name;
   document.getElementById('cd-amount').textContent='₹'+parseFloat(t.amount_collected||0).toLocaleString('en-IN');
   document.getElementById('cd-method').value='';
