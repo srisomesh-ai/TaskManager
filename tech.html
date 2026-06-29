@@ -1221,7 +1221,15 @@ let currentUser = null;
 
 // ── Cash deposit (referenced but not in original JS) ─────────────────────
 function openCashDepositModal(taskId){
-  const t=_detailTask; if(!t) return;
+  // Ensure _detailTask is loaded
+  if(!_detailTask || String(_detailTask.id) !== String(taskId)){
+    api('get_task',{id:taskId}).then(function(r){
+      if(r&&r.task){ _detailTask=r.task; openCashDepositModal(taskId); }
+      else showToast('❌ Could not load task');
+    }).catch(function(){ showToast('❌ Network error'); });
+    return;
+  }
+  const t=_detailTask;
   document.getElementById('cd-subtitle').textContent=t.task_id+' · '+t.customer_name;
   document.getElementById('cd-amount').textContent='₹'+parseFloat(t.amount_collected||0).toLocaleString('en-IN');
   document.getElementById('cd-method').value='';
@@ -1246,10 +1254,11 @@ function selectDepositMethod(el){
 async function submitCashDeposit(){
   const method=document.getElementById('cd-method').value;
   if(!method){showToast('⚠️ Select deposit method');return;}
+  if(!_detailTask){showToast('⚠️ Task data not loaded — please close and reopen the task');return;}
   const btn=document.getElementById('cd-submit-btn');
   btn.disabled=true;btn.textContent='Submitting…';
   const res=await api('confirm_cash_deposit',{},'POST',{
-    id:_detailTask?.id,deposit_method:method,
+    id:_detailTask.id,deposit_method:method,
     handover_to:document.getElementById('cd-handover-person')?.value||'',
     deposit_date:document.getElementById('cd-date')?.value||'',
     deposit_ref:document.getElementById('cd-ref')?.value||'',
