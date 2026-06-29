@@ -25,6 +25,18 @@ $token = $_SERVER['HTTP_X_AUTH_TOKEN'] ?? $_GET['token'] ?? '';
 $pdo = getDB();
 // Migration: admin_viewed_at per task (track when admin last viewed)
 try { $pdo->exec("ALTER TABLE tasks ADD COLUMN admin_viewed_at DATETIME DEFAULT NULL"); } catch(Exception $e){}
+// ── Migration: cash deposit columns ──────────────────────────────────────
+try {
+    $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cash_deposit_status VARCHAR(20) DEFAULT NULL");
+    $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cash_deposit_method VARCHAR(50) DEFAULT NULL");
+    $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cash_handover_to VARCHAR(100) DEFAULT NULL");
+    $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cash_deposit_date DATE DEFAULT NULL");
+    $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cash_deposit_ref VARCHAR(100) DEFAULT NULL");
+    $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cash_deposit_notes TEXT DEFAULT NULL");
+    $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cash_submitted_at DATETIME DEFAULT NULL");
+} catch(Exception $e){}
+
+
 
 
 // Auth
