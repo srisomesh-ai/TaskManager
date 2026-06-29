@@ -1803,6 +1803,7 @@ case 'confirm_cash_deposit':
     if(!$depositMethod){ echo json_encode(['error'=>'Deposit method required']); break; }
     $pdo->prepare("UPDATE tasks SET
         cash_deposit_status='submitted',
+        task_status='Awaiting Approval',
         cash_deposit_method=?,
         cash_handover_to=?,
         cash_deposit_date=?,
