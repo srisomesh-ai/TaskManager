@@ -3688,15 +3688,33 @@ async function handleAttendClick(taskId){
     // Start polling every 8 seconds
     if(_consentPollTimer) clearInterval(_consentPollTimer);
     _consentPollTimer = setInterval(async ()=>{
+      // Stop polling if task already completed
+      const curStatus = _detailTask?.task_status || '';
+      if(['Demo Done','Awaiting Approval','Closed','Cancelled','Demo Converted'].includes(curStatus)){
+        clearInterval(_consentPollTimer); _consentPollTimer = null; return;
+      }
       const poll = await api('check_consent', {id: taskId}).catch(()=>({}));
       if(poll.consented){
         clearInterval(_consentPollTimer);
         _consentPollTimer = null;
-        // Customer confirmed — change button to green proceed
-        if(btn){ btn.style.background = 'var(--green)'; btn.disabled = false; }
-        if(icon)  icon.textContent  = '✅';
-        if(label) label.textContent = 'Proceed!';
-        if(sub)   sub.textContent   = poll.name + ' confirmed';
+        // Customer confirmed — change button based on job type
+        const jl = (_detailTask?.device_details||'').toLowerCase();
+        const isD = jl.includes('demonstration')||jl.includes('demo');
+        const isT = jl.includes('troubleshoot')||jl.includes('offline');
+        if(btn){ btn.style.background = 'var(--green)'; btn.disabled = false; btn.style.opacity='1'; btn.style.pointerEvents=''; }
+        if(isD){
+          if(icon)  icon.textContent  = '📱';
+          if(label) label.textContent = 'Demo Done';
+          if(sub)   sub.textContent   = 'Tap to record demo report';
+        } else if(isT){
+          if(icon)  icon.textContent  = '🔧';
+          if(label) label.textContent = 'Fix Done';
+          if(sub)   sub.textContent   = 'Tap to record outcome';
+        } else {
+          if(icon)  icon.textContent  = '✅';
+          if(label) label.textContent = 'Proceed!';
+          if(sub)   sub.textContent   = poll.name + ' confirmed';
+        }
 
         // Update info toast
         const techPanel = document.getElementById('td-tech-actions');
@@ -3710,8 +3728,13 @@ async function handleAttendClick(taskId){
           techPanel.appendChild(done);
         }
 
-        // Change onclick to open attend directly
-        btn.setAttribute('onclick', 'openTechAttend(' + taskId + ')');
+        // Change onclick based on job type
+        const jl2 = (_detailTask?.device_details||'').toLowerCase();
+        if(jl2.includes('demonstration')||jl2.includes('demo')||jl2.includes('troubleshoot')||jl2.includes('offline')){
+          btn.setAttribute('onclick', 'openJobOutcome(' + taskId + ')');
+        } else {
+          btn.setAttribute('onclick', 'openTechAttend(' + taskId + ')');
+        }
       }
     }, 8000);
   } else {
