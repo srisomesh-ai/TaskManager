@@ -3791,9 +3791,11 @@ async function checkAndUpdateAttendBtn(taskId){
   // STATE 3b: Cash collected but deposit not yet confirmed
   if(addingDone && paid && t?.cash_deposit_status === 'pending'){
     btn.className     = 'ts-btn';
-    btn.style.background = 'var(--saffron)';
-    btn.style.border  = 'none';
-    btn.style.display = '';
+    btn.style.background    = 'var(--saffron)';
+    btn.style.border        = 'none';
+    btn.style.display       = '';
+    btn.style.opacity       = '1';
+    btn.style.pointerEvents = '';
     btn.setAttribute('onclick','openCashDepositModal('+t.id+')');
     if(icon)  icon.textContent  = '🏦';
     if(label) label.textContent = 'Confirm Cash Deposit';
