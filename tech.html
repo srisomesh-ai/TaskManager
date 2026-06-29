@@ -3742,15 +3742,33 @@ async function checkAndUpdateAttendBtn(taskId, taskObj){
   // Check consent status from server
   const res = await api('check_consent', {id: taskId}).catch(()=>({}));
 
-  // STATE 2: Consent received — Proceed to Adding
+  // STATE 2: Consent received — label depends on job type
   if(res.consented){
-    btn.style.background = 'var(--green)';
-    btn.style.border     = 'none';
-    btn.style.display    = '';
-    btn.setAttribute('onclick', 'openTechAttend(' + taskId + ')');
-    if(icon)  icon.textContent  = '➕';
-    if(label) label.textContent = 'Proceed to Adding';
-    if(sub)   sub.textContent   = 'Customer confirmed';
+    const jobLower2 = (taskObj?.device_details||'').toLowerCase();
+    const isDemo2   = jobLower2.includes('demonstration') || jobLower2.includes('demo');
+    const isTrbl2   = jobLower2.includes('troubleshoot')  || jobLower2.includes('offline');
+    btn.style.background    = 'var(--green)';
+    btn.style.border        = 'none';
+    btn.style.display       = '';
+    btn.style.opacity       = '1';
+    btn.style.pointerEvents = '';
+    btn.setAttribute('onclick', 'openJobOutcome(' + taskId + ')');
+    if(isDemo2){
+      if(icon)  icon.textContent  = '📱';
+      if(label) label.textContent = 'Demo Done';
+      if(sub)   sub.textContent   = 'Tap to record demo report';
+      btn.setAttribute('onclick', 'openJobOutcome(' + taskId + ')');
+    } else if(isTrbl2){
+      if(icon)  icon.textContent  = '🔧';
+      if(label) label.textContent = 'Fix Done';
+      if(sub)   sub.textContent   = 'Tap to record outcome';
+      btn.setAttribute('onclick', 'openJobOutcome(' + taskId + ')');
+    } else {
+      if(icon)  icon.textContent  = '➕';
+      if(label) label.textContent = 'Proceed to Adding';
+      if(sub)   sub.textContent   = 'Customer confirmed';
+      btn.setAttribute('onclick', 'openTechAttend(' + taskId + ')');
+    }
     if(status) status.innerHTML = `
       <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--green);line-height:1.6">
         ✅ <strong>${res.name||'Customer'}</strong> confirmed T&amp;C and payment.<br>

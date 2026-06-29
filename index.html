@@ -602,12 +602,12 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
               <div class="form-row">
                 <div class="form-group">
                   <label>Lead Type</label>
-                  <select id="fm-leadtype">
+                  <select id="fm-leadtype" onchange="onLeadTypeChange(this.value)">
                     <option>New Lead</option><option>Demo</option><option>3rd Party Lead</option>
                     <option>Troubleshoot</option><option>Existing Customer Lead</option><option>Outstation Lead</option>
                   </select>
                 </div>
-                <div class="form-group">
+                <div class="form-group" id="fm-profile-group">
                   <label>Company Profile</label>
                   <select id="fm-profile" onchange="updateModalGST()">
                     <option value="BGPT">BGPT — No GST</option>
@@ -637,9 +637,9 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
                     <option value="Demonstration">Demonstration</option>
                   </select>
                 </div>
-                <div class="form-group"><label>Device Qty</label><input type="number" id="fm-qty" value="1" min="1" oninput="updateModalGST()"></div>
+                <div class="form-group" id="fm-qty-group"><label>Device Qty</label><input type="number" id="fm-qty" value="1" min="1" oninput="updateModalGST()"></div>
               </div>
-              <div class="form-group" style="margin-bottom:12px">
+              <div class="form-group" id="fm-price-group" style="margin-bottom:12px">
                 <label>Standard Price (₹) <span id="fm-price-hint" style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none"></span></label>
                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
                   <input type="number" id="fm-price" placeholder="Auto-filled from job type" step="0.01" readonly
@@ -680,7 +680,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
                   </div>
                 </div>
               </div>
-              <div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:12px 14px">
+              <div id="fm-payment-section" style="background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:12px 14px">
                 <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px">💳 How will the customer pay?</div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap">
                   <button type="button" class="pay-mode-opt" onclick="selectPayMode('Cash')">💵 Cash</button>
@@ -2766,6 +2766,7 @@ function openCreateModal(){
   ['fm-customer','fm-contact','fm-email','fm-location','fm-price','fm-reminder',
    'fm-pay-reminder','fm-outstation-loc','fm-travel-amt','fm-notes']
     .forEach(id=>{const el=document.getElementById(id);if(el){el.value='';el.disabled=false;}});
+  onLeadTypeChange(''); // Reset Demo-hidden fields
   ['fm-leadtype','fm-profile','fm-job','fm-travel-by']
     .forEach(id=>{const el=document.getElementById(id);if(el){el.selectedIndex=0;el.disabled=false;}});
   const qty=document.getElementById('fm-qty');if(qty){qty.value=1;qty.disabled=false;}
@@ -2792,6 +2793,8 @@ function getWorkflowBadge(t){
     'tech_updated':            '<span class="wf-badge wf-tech-updated">UPDATED</span>',
     'consent_sent':            '<span class="wf-badge" style="background:var(--blue-bg);color:var(--blue)">CONSENT SENT</span>',
     'ready_to_add':            '<span class="wf-badge" style="background:var(--green-bg);color:var(--green)">READY TO ADD</span>',
+    'ready_for_demo':          '<span class="wf-badge" style="background:var(--blue-bg);color:var(--blue);animation:pulse-badge 1.5s infinite">📱 DEMO READY</span>',
+    'ready_for_troubleshoot':  '<span class="wf-badge" style="background:#e0eeee;color:var(--accent)">🔧 FIX READY</span>',
     'postponed_after_consent': '<span class="wf-badge" style="background:#fdecea;color:#c0392b;animation:pulse-badge 1.5s infinite">⏸️ POSTPONED</span>',
     'cash_pending_deposit':    '<span class="wf-badge" style="background:var(--amber-bg);color:var(--saffron);animation:pulse-badge 1.5s infinite">🏦 DEPOSIT PENDING</span>',
     'cash_submitted':          '<span class="wf-badge" style="background:var(--blue-bg);color:var(--accent2);animation:pulse-badge 1.5s infinite">📋 VERIFY DEPOSIT</span>',
@@ -5565,6 +5568,55 @@ function copyQtLink(e){
 // ══════════════════════════════════════════════════════════
 // FREE SERVICE — show only for Troubleshoot / Demonstration
 // ══════════════════════════════════════════════════════════
+// ── DEMO LEAD TYPE ────────────────────────────────────────────────────────
+function onLeadTypeChange(leadType){
+  const isDemo = (leadType === 'Demo');
+
+  // Company profile — hide for Demo
+  const pg = document.getElementById('fm-profile-group');
+  if(pg) pg.style.display = isDemo ? 'none' : '';
+
+  // Job type — auto Demonstration, lock it
+  const job = document.getElementById('fm-job');
+  if(job){
+    if(isDemo){
+      job.value = 'Demonstration';
+      job.disabled = true;
+      setModalJobPrice('Demonstration');
+    } else {
+      job.disabled = false;
+      if(job.value === 'Demonstration'){ job.value = ''; setModalJobPrice(''); }
+    }
+  }
+
+  // Device qty — hide for Demo
+  const qg = document.getElementById('fm-qty-group');
+  if(qg) qg.style.display = isDemo ? 'none' : '';
+
+  // Standard price group — hide for Demo
+  const prg = document.getElementById('fm-price-group');
+  if(prg) prg.style.display = isDemo ? 'none' : '';
+
+  // Payment section — hide for Demo
+  const ps = document.getElementById('fm-payment-section');
+  if(ps) ps.style.display = isDemo ? 'none' : '';
+
+  if(isDemo){
+    const pr = document.getElementById('fm-price');
+    const pc = document.getElementById('fm-price-collect');
+    if(pr) pr.value = '0';
+    if(pc) pc.value = '0';
+    selectPayMode('Free Service');
+  } else {
+    clearPayMode();
+    const pr = document.getElementById('fm-price');
+    const pc = document.getElementById('fm-price-collect');
+    if(pr) pr.value = '';
+    if(pc) pc.value = '';
+  }
+  checkTaskFormReady();
+}
+
 function toggleFreeService(jobType){
   const freeJobs = ['Troubleshoot/Offline', 'Demonstration'];
   const btn = document.getElementById('free-service-btn');
