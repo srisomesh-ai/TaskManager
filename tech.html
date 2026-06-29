@@ -3756,146 +3756,128 @@ async function checkAndUpdateAttendBtn(taskId, taskObj){
   const status = document.getElementById('td-consent-status-' + taskId);
   if(!btn) return;
 
-  const t = taskObj || _detailTask;
+  // Always get fresh task data from API — never rely on cache
+  var freshTask = null;
+  try {
+    var fr = await api('get_task', {id: taskId});
+    if(fr && fr.task) freshTask = fr.task;
+  } catch(e){}
 
-  // STATE 0: Task already completed — hide button, show status
-  const taskStatus = t?.task_status || '';
+  var t = freshTask || taskObj || _detailTask;
+  if(freshTask) _detailTask = freshTask; // update cache with fresh data
+
+  var taskStatus = (t && t.task_status) ? t.task_status : '';
+
+  // ── COMPLETED STATES — hide button ───────────────────────────────────
   if(taskStatus === 'Demo Done'){
     btn.style.display = 'none';
-    if(status) status.innerHTML = `
-      <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--green);line-height:1.7">
-        📱 <strong>Demo report submitted</strong><br>
-        Demo is done and report has been sent. Admin will follow up with the customer.<br>
-        <span style="font-size:10px;color:var(--text3)">Task status: Demo Done</span>
-      </div>`;
+    btn.style.opacity = '0';
+    if(status) status.innerHTML =
+      '<div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--green);line-height:1.6">' +
+      '📱 <strong>Demo report submitted</strong><br>' +
+      'Demo is done. Admin will follow up with the customer.</div>';
     return;
   }
   if(taskStatus === 'Awaiting Approval'){
     btn.style.display = 'none';
-    if(status) status.innerHTML = `
-      <div style="background:var(--blue-bg);border:1.5px solid var(--blue);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--blue);line-height:1.7">
-        ⏳ <strong>Awaiting Admin Approval</strong><br>
-        Your report has been submitted. Waiting for manager to approve and close the task.
-      </div>`;
+    btn.style.opacity = '0';
+    if(status) status.innerHTML =
+      '<div style="background:var(--blue-bg);border:1.5px solid var(--blue);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--blue);line-height:1.6">' +
+      '⏳ <strong>Awaiting Admin Approval</strong><br>' +
+      'Your report has been submitted. Waiting for manager to approve.</div>';
     return;
   }
-  if(['Closed','Cancelled','Demo Converted'].includes(taskStatus)){
+  if(taskStatus === 'Closed' || taskStatus === 'Cancelled' || taskStatus === 'Demo Converted'){
     btn.style.display = 'none';
-    if(status) status.innerHTML = `
-      <div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text3)">
-        ✅ Task ${taskStatus.toLowerCase()}
-      </div>`;
+    btn.style.opacity = '0';
+    if(status) status.innerHTML =
+      '<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text3)">' +
+      '✅ Task ' + taskStatus.toLowerCase() + '</div>';
     return;
   }
 
-  // STATE 3: Adding done, payment pending — show Update Payment Status
-  const installs = t?.device_installs || [];
-  const qty      = parseInt(t?.device_qty||1);
-  const addingDone = installs.length >= qty && installs.every(d=>d.gps_serial_no && d.name_on_server);
-  const paid       = parseFloat(t?.amount_collected||0) > 0;
+  // ── ADDING DONE STATES ─────────────────────────────────────────────────
+  var installs  = (t && t.device_installs) ? t.device_installs : [];
+  var qty       = parseInt((t && t.device_qty) ? t.device_qty : 1);
+  var addingDone= installs.length >= qty && installs.every(function(d){ return d.gps_serial_no && d.name_on_server; });
+  var paid      = parseFloat((t && t.amount_collected) ? t.amount_collected : 0) > 0;
+  var depositStatus = (t && t.cash_deposit_status) ? t.cash_deposit_status : '';
 
-  // STATE 3b: Cash collected but deposit not yet confirmed
-  if(addingDone && paid && t?.cash_deposit_status === 'pending'){
-    btn.className     = 'ts-btn';
-    btn.style.background    = 'var(--saffron)';
-    btn.style.border        = 'none';
-    btn.style.display       = '';
-    btn.style.opacity       = '1';
-    btn.style.pointerEvents = '';
-    btn.setAttribute('onclick','openCashDepositModal('+t.id+')');
+  if(addingDone && paid && depositStatus === 'pending'){
+    btn.style.background = 'var(--saffron)'; btn.style.border = 'none';
+    btn.style.display = ''; btn.style.opacity = '1'; btn.style.pointerEvents = '';
+    btn.setAttribute('onclick','openCashDepositModal('+taskId+')');
     if(icon)  icon.textContent  = '🏦';
     if(label) label.textContent = 'Confirm Cash Deposit';
     if(sub)   sub.textContent   = 'Deposit cash & submit for approval';
-    if(status) status.innerHTML = `
-      <div style="background:var(--amber-bg);border:1.5px solid var(--amber);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--saffron);line-height:1.7">
-        🏦 <strong>Cash Deposit Pending</strong><br>
-        You collected cash. Please deposit and confirm within 24 hours.<br>
-        <span style="font-size:10px;color:var(--text3)">Once confirmed, task will be submitted for approval.</span>
-      </div>`;
     return;
   }
-
   if(addingDone && !paid){
-    btn.style.background = 'var(--saffron)';
-    btn.style.border     = 'none';
-    btn.setAttribute('onclick', 'openPaymentModal(' + taskId + ')');
+    btn.style.background = 'var(--saffron)'; btn.style.border = 'none';
+    btn.style.display = ''; btn.style.opacity = '1'; btn.style.pointerEvents = '';
+    btn.setAttribute('onclick','openPaymentModal('+taskId+')');
     if(icon)  icon.textContent  = '💳';
     if(label) label.textContent = 'Update Payment';
     if(sub)   sub.textContent   = 'Payment pending';
-    if(status) status.innerHTML = `
-      <div style="background:var(--saffron-bg);border:1.5px solid var(--saffron);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--saffron);line-height:1.6">
-        💳 Adding complete. <strong>Payment pending.</strong><br>
-        <span style="font-size:10px;color:var(--text3)">Tap to collect payment</span>
-      </div>`;
     return;
   }
-
-  // STATE 3 done: paid — hide attend button entirely
   if(addingDone && paid){
-    btn.style.display = 'none';
+    btn.style.display = 'none'; btn.style.opacity = '0';
     if(status) status.innerHTML = '';
     return;
   }
 
-  // Check consent status from server
-  const res = await api('check_consent', {id: taskId}).catch(()=>({}));
+  // ── CHECK CONSENT ──────────────────────────────────────────────────────
+  var res = {};
+  try { res = await api('check_consent', {id: taskId}); } catch(e){}
 
-  // STATE 2: Consent received — label depends on job type
   if(res.consented){
-    const jobLower2 = (taskObj?.device_details||'').toLowerCase();
-    const isDemo2   = jobLower2.includes('demonstration') || jobLower2.includes('demo');
-    const isTrbl2   = jobLower2.includes('troubleshoot')  || jobLower2.includes('offline');
-    btn.style.background    = 'var(--green)';
-    btn.style.border        = 'none';
-    btn.style.display       = '';
-    btn.style.opacity       = '1';
-    btn.style.pointerEvents = '';
-    btn.setAttribute('onclick', 'openJobOutcome(' + taskId + ')');
-    if(isDemo2){
+    var jobLower = ((t && t.device_details) ? t.device_details : '').toLowerCase();
+    var isDemo   = jobLower.includes('demonstration') || jobLower.includes('demo');
+    var isTrbl   = jobLower.includes('troubleshoot')  || jobLower.includes('offline');
+    btn.style.background = 'var(--green)'; btn.style.border = 'none';
+    btn.style.display = ''; btn.style.opacity = '1'; btn.style.pointerEvents = '';
+    if(isDemo){
+      btn.setAttribute('onclick','openJobOutcome('+taskId+')');
       if(icon)  icon.textContent  = '📱';
       if(label) label.textContent = 'Demo Done';
       if(sub)   sub.textContent   = 'Tap to record demo report';
-      btn.setAttribute('onclick', 'openJobOutcome(' + taskId + ')');
-    } else if(isTrbl2){
+    } else if(isTrbl){
+      btn.setAttribute('onclick','openJobOutcome('+taskId+')');
       if(icon)  icon.textContent  = '🔧';
       if(label) label.textContent = 'Fix Done';
       if(sub)   sub.textContent   = 'Tap to record outcome';
-      btn.setAttribute('onclick', 'openJobOutcome(' + taskId + ')');
     } else {
+      btn.setAttribute('onclick','openTechAttend('+taskId+')');
       if(icon)  icon.textContent  = '➕';
       if(label) label.textContent = 'Proceed to Adding';
       if(sub)   sub.textContent   = 'Customer confirmed';
-      btn.setAttribute('onclick', 'openTechAttend(' + taskId + ')');
     }
-    if(status) status.innerHTML = `
-      <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--green);line-height:1.6">
-        ✅ <strong>${res.name||'Customer'}</strong> confirmed T&amp;C and payment.<br>
-        <span style="font-size:10px;color:var(--text3)">Confirmed: ${(res.consented_at||'').replace('T',' ').slice(0,16)}</span>
-      </div>`;
+    if(status) status.innerHTML =
+      '<div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--green);line-height:1.6">' +
+      '✅ <strong>' + (res.name||'Customer') + '</strong> confirmed T&C and payment.' +
+      '</div>';
     return;
   }
 
-  // STATE 1b: Consent email already sent — waiting for customer
   if(res.sent){
-    btn.style.display = 'none'; // hide attend button
-    if(status) status.innerHTML = `
-      <div style="background:var(--blue-bg);border:1.5px solid var(--blue);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--blue);line-height:1.7">
-        ⏳ <strong>Waiting for Customer</strong><br>
-        Consent email has been sent. Waiting for the customer to confirm.<br>
-        <span style="font-size:10px;color:var(--text3)">The button will unlock automatically once customer confirms.</span>
-      </div>`;
+    btn.style.display = 'none'; btn.style.opacity = '0';
+    if(status) status.innerHTML =
+      '<div style="background:var(--blue-bg);border:1.5px solid var(--blue);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--blue);line-height:1.6">' +
+      '⏳ <strong>Waiting for Customer</strong><br>Consent sent. Button unlocks once customer confirms.</div>';
     return;
   }
 
-  // STATE 1: No consent sent yet — show Attend button
-  btn.style.background = 'var(--accent)';
-  btn.style.display    = '';
-  btn.setAttribute('onclick', 'handleAttendClick(' + taskId + ')');
+  // ── DEFAULT: Show Attend button ────────────────────────────────────────
+  btn.style.background = 'var(--accent)'; btn.style.border = 'none';
+  btn.style.display = ''; btn.style.opacity = '1'; btn.style.pointerEvents = '';
+  btn.setAttribute('onclick','handleAttendClick('+taskId+')');
   if(icon)  icon.textContent  = '🔧';
   if(label) label.textContent = 'Attend';
-  if(sub)   sub.textContent   = t?.device_details||'Start task';
+  if(sub)   sub.textContent   = (t && t.device_details) ? t.device_details : 'Start task';
   if(status) status.innerHTML = '';
 }
+
 
 // ════════════════════════════════════════════════════════
 // DEVICE INSTALLATION — IMEI Search + GPS Server Push
