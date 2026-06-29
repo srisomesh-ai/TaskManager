@@ -1065,29 +1065,25 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════
-     JOB OUTCOME MODAL (Demo / Troubleshoot / V2V / Remove)
-     ═══════════════════════════════════════════════════════ -->
-<div id="job-outcome-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;overflow-y:auto;padding:20px">
-  <div style="background:#fff;border-radius:14px;width:100%;max-width:480px;margin:0 auto;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">
-    <div style="background:var(--accent);padding:14px 18px;display:flex;align-items:center;gap:10px">
+<div id="jo-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;overflow-y:auto;padding:16px">
+  <div style="background:#fff;border-radius:14px;width:100%;max-width:460px;margin:0 auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div id="jo-header" style="background:var(--accent);padding:14px 18px;display:flex;align-items:center;gap:10px;border-radius:14px 14px 0 0">
       <div style="flex:1">
-        <div id="jo-title" style="font-size:15px;font-weight:800;color:#fff">Job Report</div>
+        <div id="jo-title" style="font-size:15px;font-weight:800;color:#fff">Report</div>
         <div id="jo-subtitle" style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px"></div>
       </div>
-      <button onclick="closeJobOutcome()" style="background:rgba(255,255,255,.2);border:none;color:#fff;width:28px;height:28px;border-radius:6px;font-size:16px;cursor:pointer">✕</button>
+      <button onclick="joClose()" style="background:rgba(255,255,255,.2);border:none;color:#fff;width:28px;height:28px;border-radius:6px;font-size:16px;cursor:pointer;flex-shrink:0">✕</button>
     </div>
-    <div style="padding:18px 20px;max-height:70vh;overflow-y:auto">
+    <div style="padding:16px 18px;max-height:60vh;overflow-y:auto">
       <div id="jo-body"></div>
     </div>
-    <div id="jo-err" style="display:none;color:var(--red);font-size:12px;padding:0 20px 8px;font-weight:600"></div>
-    <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px">
-      <button onclick="closeJobOutcome()" class="ts-btn ts-btn-secondary" style="flex:1">Cancel</button>
-      <button id="jo-submit-btn" onclick="submitJobOutcome()" class="ts-btn ts-btn-primary" style="flex:2;background:var(--green)">✅ Submit Report</button>
+    <div id="jo-err" style="display:none;margin:0 18px 10px;padding:10px 12px;background:#fdecea;border:1.5px solid var(--red);border-radius:8px;color:var(--red);font-size:12px;font-weight:700"></div>
+    <div style="padding:14px 18px;border-top:1px solid var(--border);display:flex;gap:8px;border-radius:0 0 14px 14px">
+      <button onclick="joClose()" style="flex:1;padding:10px;background:var(--surface2);border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Cancel</button>
+      <button id="jo-btn" onclick="joSubmit()" style="flex:2;padding:10px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">✅ Submit Report</button>
     </div>
   </div>
 </div>
-
 
 </div><!-- /app -->
 
@@ -5303,226 +5299,167 @@ function blProceed(){
 // ════════════════════════════════════════════════════════
 // JOB OUTCOME FORMS — Troubleshoot / Demo / Remove / V2V
 // ════════════════════════════════════════════════════════
-let _joTaskId = null;
-let _joJobType = null;
+// ══════════════════════════════════════════════════════════════
+// JOB OUTCOME — Demo / Troubleshoot / V2V / Remove
+// ══════════════════════════════════════════════════════════════
+var _joTaskId  = null;
+var _joJobType = null;
 
-function openJobOutcome(taskId){
-  _joTaskId = taskId;
-  // Load task if not in memory
-  if(!_detailTask || String(_detailTask.id) !== String(taskId)){
-    api('get_task',{id:taskId}).then(function(r){
-      if(r&&r.task){_detailTask=r.task; openJobOutcome(taskId);}
-      else showToast('❌ Could not load task');
-    });
-    return;
-  }
-  var task = _detailTask;
-  var job  = (task.device_details||'').toLowerCase();
-  var type = 'default';
-  if(job.includes('troubleshoot')||job.includes('offline'))        type='troubleshoot';
-  else if(job.includes('vehicle to vehicle')||job.includes('v2v')) type='v2v';
-  else if(job.includes('demonstration')||job.includes('demo'))     type='demo';
-  else if(job.includes('only remove')||job.includes('remove only'))type='remove';
-  _joJobType = type;
-
-  var icons2  = {demo:'📱',troubleshoot:'🔧',v2v:'🚗',remove:'🔴',default:'✅'};
-  var titles2 = {demo:'Demonstration Report',troubleshoot:'Troubleshoot Report',v2v:'V2V Transfer',remove:'Device Removal Report',default:'Job Report'};
-  document.getElementById('jo-title').textContent    = (icons2[type]||'✅') + ' ' + (titles2[type]||'Job Report');
-  document.getElementById('jo-subtitle').textContent = (task.task_id||'') + ' · ' + (task.customer_name||'');
-
-  var body = '';
-  if(type === 'demo'){
-    body  = '<div class="form-group"><label>Company / Customer Name</label>';
-    body += '<input type="text" id="jo-company" class="form-input" placeholder="Company or customer name" value="' + (task.customer_name||'').replace(/"/g,'') + '"></div>';
-    body += '<div class="form-group"><label>Who attended the demo? (Name & Designation)</label>';
-    body += '<input type="text" id="jo-attendee" class="form-input" placeholder="e.g. Ravi Kumar — Fleet Manager"></div>';
-    body += '<div class="form-group"><label>Products demonstrated</label>';
-    body += '<input type="text" id="jo-products" class="form-input" placeholder="e.g. Basic GPS, Engine Cut, VLTD"></div>';
-    body += '<div class="form-group"><label>Customer interest level</label>';
-    body += '<select id="jo-interest" class="form-input"><option value="">Select…</option>';
-    body += '<option value="high">🔥 High — Ready to buy</option>';
-    body += '<option value="medium">👍 Medium — Considering</option>';
-    body += '<option value="low">👎 Low — Not sure</option>';
-    body += '<option value="none">❌ Not Interested</option></select></div>';
-    body += '<div class="form-group"><label>Customer concerns / questions raised</label>';
-    body += '<textarea id="jo-concerns" class="form-input" rows="2" placeholder="What did the customer ask?"></textarea></div>';
-    body += '<div class="form-group"><label>Follow-up required?</label>';
-    body += '<select id="jo-followup" class="form-input" onchange="joToggleFollowup(this.value)">';
-    body += '<option value="no">No</option><option value="yes">Yes — Set follow-up date</option></select></div>';
-    body += '<div class="form-group" id="jo-followup-date" style="display:none"><label>Follow-up Date</label>';
-    body += '<input type="date" id="jo-fu-date" class="form-input"></div>';
-    body += '<div class="form-group"><label>Remarks</label>';
-    body += '<textarea id="jo-remarks" class="form-input" rows="2"></textarea></div>';
-  } else if(type === 'troubleshoot'){
-    body  = '<div class="form-group"><label>What was the issue found?</label>';
-    body += '<select id="jo-issue" class="form-input"><option value="">Select issue…</option>';
-    body += '<option>GPS offline — No power</option><option>GPS offline — SIM issue</option>';
-    body += '<option>GPS offline — Hardware fault</option><option>GPS offline — Wiring issue</option>';
-    body += '<option>GPS offline — Unknown</option></select></div>';
-    body += '<div class="form-group"><label>Steps taken to fix</label>';
-    body += '<textarea id="jo-steps" class="form-input" rows="3" placeholder="What did you do?"></textarea></div>';
-    body += '<div class="form-group"><label>Is GPS back online?</label>';
-    body += '<select id="jo-status" class="form-input"><option value="">Select…</option>';
-    body += '<option value="yes">✅ Yes</option><option value="partial">⚠️ Partially</option>';
-    body += '<option value="no">❌ No</option></select></div>';
-    body += '<div class="form-group"><label>Remarks</label>';
-    body += '<textarea id="jo-remarks" class="form-input" rows="2"></textarea></div>';
-  } else if(type === 'v2v'){
-    body  = '<div class="form-group"><label>IMEI / GPS Serial No</label>';
-    body += '<input type="text" id="jo-imei" class="form-input" placeholder="IMEI or serial"></div>';
-    body += '<div class="form-group"><label>New Vehicle Number</label>';
-    body += '<input type="text" id="jo-new-vehicle" class="form-input" placeholder="e.g. AP31AB1234"></div>';
-    body += '<div class="form-group"><label>Transfer Confirmed?</label>';
-    body += '<select id="jo-v2v-done" class="form-input"><option value="">Select…</option>';
-    body += '<option value="yes">✅ Yes</option><option value="no">❌ No</option></select></div>';
-    body += '<div class="form-group"><label>Remarks</label>';
-    body += '<textarea id="jo-remarks" class="form-input" rows="2"></textarea></div>';
-  } else if(type === 'remove'){
-    body  = '<div class="form-group"><label>GPS Serial No *</label>';
-    body += '<input type="text" id="jo-serial" class="form-input" value="' + (task.gps_serial_no||'').replace(/"/g,'') + '" placeholder="IMEI / Serial"></div>';
-    body += '<div class="form-group"><label>Reason for Removal</label>';
-    body += '<select id="jo-reason" class="form-input"><option value="">Select…</option>';
-    body += '<option>Customer request — selling vehicle</option>';
-    body += '<option>Non-payment — device recovered</option><option>Other</option></select></div>';
-    body += '<div class="form-group"><label>Device Disposition</label>';
-    body += '<select id="jo-device" class="form-input"><option value="returned">Handed to customer</option>';
-    body += '<option value="taken">Brought back by technician</option></select></div>';
-    body += '<div class="form-group"><label>Remarks</label>';
-    body += '<textarea id="jo-remarks" class="form-input" rows="2"></textarea></div>';
-  } else {
-    body = '<div class="form-group"><label>Remarks</label>';
-    body += '<textarea id="jo-remarks" class="form-input" rows="3" placeholder="Job completion notes…"></textarea></div>';
-  }
-
-  document.getElementById('jo-body').innerHTML = body;
-  var ov = document.getElementById('job-outcome-overlay');
-  if(!ov){ showToast('❌ Form not found'); return; }
-  ov.style.display = 'flex';
+function joClose(){
+  document.getElementById('jo-overlay').style.display = 'none';
+  _joTaskId  = null;
+  _joJobType = null;
 }
 
+function joOpen(taskId){
+  _joTaskId = null;
+  _joJobType = null;
 
-function joToggleFollowup(val){
-  var el = document.getElementById('jo-followup-date');
-  if(el) el.style.display = val === 'yes' ? '' : 'none';
-}
+  // Always fetch fresh task data
+  api('get_task', {id: taskId}).then(function(r){
+    if(!r || !r.task){ showToast('❌ Could not load task'); return; }
+    var task = r.task;
+    _detailTask = task;
+    _joTaskId   = task.id;
 
-function closeJobOutcome(){
-  document.getElementById('job-outcome-overlay').style.display = 'none';
-}
+    var job = (task.device_details||'').toLowerCase();
+    var type = 'default';
+    if(job.includes('demonstration') || job.includes('demo'))          type = 'demo';
+    else if(job.includes('troubleshoot') || job.includes('offline'))   type = 'troubleshoot';
+    else if(job.includes('vehicle to vehicle') || job.includes('v2v')) type = 'v2v';
+    else if(job.includes('only remove') || job.includes('remove only'))type = 'remove';
+    _joJobType = type;
 
-async function joFetchVehicle(){
-  const imei = document.getElementById('jo-imei')?.value?.trim();
-  if(!imei){ showToast('⚠️ Enter IMEI first'); return; }
-  const info = document.getElementById('jo-vehicle-info');
-  info.style.display = 'block';
-  info.innerHTML = '⏳ Fetching vehicle details…';
-  try {
-    const r = await fetch(GPS_PROXY+'?action=find&keyword='+encodeURIComponent(imei), {headers:{'X-Auth-Token':authToken}});
-    const data = await r.json();
-    if(data.device){
-      const d = data.device;
-      info.innerHTML = `<b>Name:</b> ${d.name||'–'} &nbsp;·&nbsp; <b>Vehicle:</b> ${d.plate_number||'–'} &nbsp;·&nbsp; <b>Type:</b> ${d.vehicle_type||'–'}`;
-      if(document.getElementById('jo-new-vehicle') && !document.getElementById('jo-new-vehicle').value)
-        document.getElementById('jo-new-vehicle').value = d.plate_number||'';
+    // Set header
+    var icons  = {demo:'📱',troubleshoot:'🔧',v2v:'🚗',remove:'🔴',default:'✅'};
+    var titles = {demo:'Demonstration Report',troubleshoot:'Troubleshoot Report',v2v:'V2V Transfer',remove:'Device Removal',default:'Job Report'};
+    document.getElementById('jo-title').textContent    = (icons[type]||'✅') + ' ' + (titles[type]||'Job Report');
+    document.getElementById('jo-subtitle').textContent = (task.task_id||'') + ' · ' + (task.customer_name||'');
+
+    // Build body
+    var b = '';
+    if(type === 'demo'){
+      b += '<div style="margin-bottom:12px"><label style="font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px">Who attended? (Name & Role) *</label>';
+      b += '<input id="jo-attendee" type="text" style="width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px" placeholder="e.g. Ravi Kumar — Fleet Manager"></div>';
+      b += '<div style="margin-bottom:12px"><label style="font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px">Products demonstrated *</label>';
+      b += '<input id="jo-products" type="text" style="width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px" placeholder="e.g. Basic GPS, Engine Cut, VLTD"></div>';
+      b += '<div style="margin-bottom:12px"><label style="font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px">Customer interest level *</label>';
+      b += '<select id="jo-interest" style="width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px"><option value="">Select…</option>';
+      b += '<option value="high">🔥 High — Ready to buy</option><option value="medium">👍 Medium — Considering</option>';
+      b += '<option value="low">👎 Low — Not sure</option><option value="none">❌ Not Interested</option></select></div>';
+      b += '<div style="margin-bottom:12px"><label style="font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px">Customer concerns / questions</label>';
+      b += '<textarea id="jo-concerns" rows="2" style="width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;resize:none" placeholder="What did the customer ask?"></textarea></div>';
+      b += '<div style="margin-bottom:12px"><label style="font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px">Follow-up date (if needed)</label>';
+      b += '<input id="jo-fudate" type="date" style="width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px"></div>';
+      b += '<div style="margin-bottom:4px"><label style="font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px">Remarks</label>';
+      b += '<textarea id="jo-remarks" rows="2" style="width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;resize:none"></textarea></div>';
+    } else if(type === 'troubleshoot'){
+      b += '<div style="margin-bottom:12px"><label style="font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px">Issue found *</label>';
+      b += '<select id="jo-issue" style="width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px"><option value="">Select…</option>';
+      b += '<option>No power</option><option>SIM issue</option><option>Hardware fault</option><option>Wiring issue</option><option>Unknown</option></select></div>';
+      b += '<div style="margin-bottom:12px"><label style="font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px">Steps taken to fix</label>';
+      b += '<textarea id="jo-steps" rows="3" style="width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;resize:none" placeholder="What did you do?"></textarea></div>';
+      b += '<div style="margin-bottom:12px"><label style="font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px">GPS back online? *</label>';
+      b += '<select id="jo-status" style="width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px"><option value="">Select…</option>';
+      b += '<option value="yes">✅ Yes</option><option value="partial">⚠️ Partially</option><option value="no">❌ No</option></select></div>';
+      b += '<div style="margin-bottom:4px"><label style="font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px">Remarks</label>';
+      b += '<textarea id="jo-remarks" rows="2" style="width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;resize:none"></textarea></div>';
     } else {
-      info.innerHTML = '❌ Device not found on server';
+      b += '<div style="margin-bottom:4px"><label style="font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px">Remarks</label>';
+      b += '<textarea id="jo-remarks" rows="4" style="width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;resize:none" placeholder="Job completion notes…"></textarea></div>';
     }
-  } catch(e){ info.innerHTML = '❌ Could not fetch — check connection'; }
+
+    document.getElementById('jo-body').innerHTML = b;
+    document.getElementById('jo-err').style.display = 'none';
+    document.getElementById('jo-btn').disabled = false;
+    document.getElementById('jo-btn').textContent = '✅ Submit Report';
+    document.getElementById('jo-overlay').style.display = 'block';
+  }).catch(function(){ showToast('❌ Network error'); });
 }
 
-async function submitJobOutcome(){
-  const type   = _joJobType;
-  const taskId = _joTaskId;
-  const errEl  = document.getElementById('jo-err');
-  const btn    = document.getElementById('jo-submit-btn');
+// Keep openJobOutcome as alias for backward compat
+function openJobOutcome(taskId){ joOpen(taskId); }
 
-  // Block multiple clicks immediately
+async function joSubmit(){
+  var btn = document.getElementById('jo-btn');
+  var err = document.getElementById('jo-err');
+
+  // Block double-click
   if(btn.disabled) return;
-  btn.disabled = true;
-  btn.textContent = 'Saving…';
-  if(errEl) errEl.style.display = 'none';
 
-  // Validate required fields
+  var type   = _joJobType;
+  var taskId = _joTaskId;
+
+  if(!taskId){ showToast('❌ Task not loaded'); return; }
+
+  // Validate
+  err.style.display = 'none';
   if(type === 'demo'){
-    var attendee = (document.getElementById('jo-attendee')?.value||'').trim();
-    var products = (document.getElementById('jo-products')?.value||'').trim();
-    var interest = document.getElementById('jo-interest')?.value||'';
-    if(!attendee || !products || !interest){
-      if(errEl){ errEl.textContent='⚠️ Please fill: Who attended, Products demonstrated, and Interest level'; errEl.style.display=''; }
-      btn.disabled = false; btn.textContent = '✅ Submit Report';
-      return;
-    }
+    var a = (document.getElementById('jo-attendee')?.value||'').trim();
+    var p = (document.getElementById('jo-products')?.value||'').trim();
+    var i = (document.getElementById('jo-interest')?.value||'');
+    if(!a){ err.textContent='⚠️ Enter who attended the demo'; err.style.display=''; return; }
+    if(!p){ err.textContent='⚠️ Enter products demonstrated'; err.style.display=''; return; }
+    if(!i){ err.textContent='⚠️ Select customer interest level'; err.style.display=''; return; }
   } else if(type === 'troubleshoot'){
-    var issue  = document.getElementById('jo-issue')?.value||'';
-    var status = document.getElementById('jo-status')?.value||'';
-    if(!issue || !status){
-      if(errEl){ errEl.textContent='⚠️ Please fill: Issue found and GPS status'; errEl.style.display=''; }
-      btn.disabled = false; btn.textContent = '✅ Submit Report';
-      return;
-    }
+    var iss = (document.getElementById('jo-issue')?.value||'');
+    var st  = (document.getElementById('jo-status')?.value||'');
+    if(!iss){ err.textContent='⚠️ Select the issue found'; err.style.display=''; return; }
+    if(!st){  err.textContent='⚠️ Select if GPS is back online'; err.style.display=''; return; }
   }
+
+  // Disable button
+  btn.disabled = true;
+  btn.textContent = '⏳ Saving…';
 
   // Collect fields
   var fields = {};
   var summary = '';
-  var removedSerial = '';
-
   if(type === 'demo'){
-    fields['Company/Customer'] = document.getElementById('jo-company')?.value||'';
-    fields['Attendee']         = document.getElementById('jo-attendee')?.value||'';
-    fields['Products Demo']    = document.getElementById('jo-products')?.value||'';
-    fields['Interest Level']   = document.getElementById('jo-interest')?.value||'';
-    fields['Concerns Raised']  = document.getElementById('jo-concerns')?.value||'';
-    fields['Follow-up']        = document.getElementById('jo-followup')?.value==='yes'
-                                   ? ('Yes — ' + (document.getElementById('jo-fu-date')?.value||'')) : 'No';
-    fields['Remarks']          = document.getElementById('jo-remarks')?.value||'';
+    fields['Attendee']        = document.getElementById('jo-attendee')?.value||'';
+    fields['Products Demo']   = document.getElementById('jo-products')?.value||'';
+    fields['Interest Level']  = document.getElementById('jo-interest')?.value||'';
+    fields['Concerns Raised'] = document.getElementById('jo-concerns')?.value||'';
+    fields['Follow-up Date']  = document.getElementById('jo-fudate')?.value||'No';
+    fields['Remarks']         = document.getElementById('jo-remarks')?.value||'';
     summary = '📱 Demo Report';
   } else if(type === 'troubleshoot'){
-    fields['Issue Found']      = document.getElementById('jo-issue')?.value||'';
-    fields['Steps Taken']      = document.getElementById('jo-steps')?.value||'';
-    fields['GPS Back Online']  = document.getElementById('jo-status')?.value||'';
-    fields['Remarks']          = document.getElementById('jo-remarks')?.value||'';
+    fields['Issue Found']     = document.getElementById('jo-issue')?.value||'';
+    fields['Steps Taken']     = document.getElementById('jo-steps')?.value||'';
+    fields['GPS Back Online'] = document.getElementById('jo-status')?.value||'';
+    fields['Remarks']         = document.getElementById('jo-remarks')?.value||'';
     summary = '🔧 Troubleshoot Report';
-  } else if(type === 'v2v'){
-    fields['IMEI']             = document.getElementById('jo-imei')?.value||'';
-    fields['New Vehicle No']   = document.getElementById('jo-new-vehicle')?.value||'';
-    fields['Transfer Done']    = document.getElementById('jo-v2v-done')?.value||'';
-    fields['Remarks']          = document.getElementById('jo-remarks')?.value||'';
-    summary = '🚗 V2V Transfer Report';
-  } else if(type === 'remove'){
-    removedSerial              = document.getElementById('jo-serial')?.value||'';
-    fields['GPS Serial']       = removedSerial;
-    fields['Reason']           = document.getElementById('jo-reason')?.value||'';
-    fields['Device Disposition']= document.getElementById('jo-device')?.value||'';
-    fields['Remarks']          = document.getElementById('jo-remarks')?.value||'';
-    summary = '🔴 Device Removal Report';
   } else {
     fields['Remarks'] = document.getElementById('jo-remarks')?.value||'';
-    summary = '✅ Job Completed';
+    summary = '✅ Job Report';
   }
 
-  var res = await api('save_job_outcome', {}, 'POST', {
-    task_id: taskId,
+  var res = await api('save_job_outcome',{},'POST',{
+    task_id:  taskId,
     job_type: type,
-    summary: summary,
-    fields: fields,
-    removed_serial: removedSerial,
-    close_task: true,
+    summary:  summary,
+    fields:   fields,
+    close_task: true
   }).catch(function(){ return {}; });
 
   if(res && res.success){
-    // Hide modal immediately and permanently
-    var ov = document.getElementById('job-outcome-overlay');
-    if(ov) ov.style.display = 'none';
+    document.getElementById('jo-overlay').style.display = 'none';
     closeTaskDetail();
-    showToast('✅ ' + summary + ' submitted successfully');
+    showToast('✅ ' + summary + ' submitted');
     loadMyTasks();
   } else {
     btn.disabled = false;
     btn.textContent = '✅ Submit Report';
-    if(errEl){ errEl.textContent = '❌ ' + (res.error||'Failed — please try again'); errEl.style.display=''; }
+    err.textContent = '❌ ' + (res.error||'Failed — try again');
+    err.style.display = '';
   }
 }
+
+// Old names for backward compat
+function submitJobOutcome(){ joSubmit(); }
+function closeJobOutcome(){  joClose();  }
+function joToggleFollowup(v){ }
+
 
 
 
