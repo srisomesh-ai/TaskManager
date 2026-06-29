@@ -2921,7 +2921,7 @@ async function viewTask(id){
         <div id="td-consent-status-${t.id}" style="margin-top:10px"></div>
       `;
       // Check consent status immediately when panel loads
-      checkAndUpdateAttendBtn(t.id);
+      checkAndUpdateAttendBtn(t.id, t);
     }
   } else {
     techPanel.style.display = 'none';
@@ -3772,7 +3772,7 @@ async function handleAttendClick(taskId){
 // Poll timer cleared in closeTaskDetail above
 
 // ── Check consent and update Attend button state on task open ─────────────
-async function checkAndUpdateAttendBtn(taskId){
+async function checkAndUpdateAttendBtn(taskId, taskObj){
   const btn    = document.getElementById('td-attend-btn-'  + taskId);
   const icon   = document.getElementById('td-attend-icon-' + taskId);
   const label  = document.getElementById('td-attend-label-'+ taskId);
@@ -3780,7 +3780,7 @@ async function checkAndUpdateAttendBtn(taskId){
   const status = document.getElementById('td-consent-status-' + taskId);
   if(!btn) return;
 
-  const t = _detailTask;
+  const t = taskObj || _detailTask;
 
   // STATE 3: Adding done, payment pending — show Update Payment Status
   const installs = t?.device_installs || [];
