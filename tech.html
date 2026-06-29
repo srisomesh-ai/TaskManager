@@ -5424,7 +5424,9 @@ async function joSubmit(){
     summary:  summary,
     fields:   fields,
     close_task: true
-  }).catch(function(){ return {}; });
+  }).catch(function(e){ return {error: 'Network: '+e}; });
+
+  alert('API response: ' + JSON.stringify(res));
 
   if(res && res.success){
     // 1. Close modal
