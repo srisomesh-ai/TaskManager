@@ -2683,7 +2683,7 @@ async function viewTask(id){
   const isAdmin    = ['admin','assigner'].includes(currentUser?.role);
   const isTech     = currentUser?.role === 'technician';
   const isAssigned = String(t.assigned_to) === String(currentUser?.id);
-  const isLocked   = ['Awaiting Approval','Closed','Cancelled'].includes(t.task_status);
+  const isLocked   = ['Awaiting Approval','Closed','Cancelled','Demo Done','Demo Converted'].includes(t.task_status);
 
   // Visual gray header for closed/cancelled tasks
   const drawerHdr = document.getElementById('task-detail-header');
@@ -2841,7 +2841,9 @@ async function viewTask(id){
       const lockMsg = {
         'Awaiting Approval':'⏳ Awaiting manager approval — no edits allowed',
         'Closed':'✅ Task closed',
-        'Cancelled':'❌ Task cancelled'
+        'Cancelled':'❌ Task cancelled',
+        'Demo Done':'📱 Demo report submitted — admin will follow up with customer',
+        'Demo Converted':'🔄 Demo converted to installation task'
       }[t.task_status] || '🔒 Locked';
       techPanel.innerHTML = `
         <div style="background:${t.task_status==='Closed'?'var(--green-bg)':'var(--surface2)'};border:1.5px solid ${t.task_status==='Closed'?'var(--green)':'var(--border)'};border-radius:8px;padding:14px;text-align:center">
