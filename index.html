@@ -321,6 +321,11 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
     <input type="password" id="l-pass" class="linput" placeholder="Password" autocomplete="current-password">
     <button class="lbtn" id="l-btn" onclick="doLogin()">🔐 Sign In</button>
     <div class="lerr" id="l-err"></div>
+    <div style="text-align:center;margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,.12)">
+      <a href="tech.html" style="color:rgba(255,255,255,.6);font-size:12px;text-decoration:none">
+        🔧 Technician? Login here →
+      </a>
+    </div>
   </div>
 </div>
 
@@ -1705,14 +1710,8 @@ function startApp(){
   const navLabel = document.getElementById('nav-my-tasks-label');
   if(navLabel) navLabel.textContent = isTech ? 'My Dashboard' : 'My Tasks';
 
-  // Technician → redirect to dedicated tech portal
-  if(isTech){
-    localStorage.setItem('bgps_tech_token', authToken);
-    localStorage.setItem('bgps_tech_user', JSON.stringify(currentUser));
-    window.location.href = 'tech.html';
-    return;
-  }
-  // Admin/Assigner → show dashboard
+  // Navigate — admin/assigner only (technicians use tech.html)
+  if(isTech){ showPage('my-tasks'); return; }
   const defaultPage = 'dashboard';
   const last = localStorage.getItem('bgps_last_page') || defaultPage;
   showPage(last);

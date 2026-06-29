@@ -324,7 +324,12 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
     <label class="llabel" style="margin-top:12px">Password</label>
     <input class="linput" type="password" id="l-pass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
     <div class="lerr" id="l-err"></div>
-    <button class="lbtn" id="l-btn" onclick="doLogin()" style="margin-top:16px">Sign In</button>
+    <button class="lbtn" id="l-btn" onclick="doLogin()" style="margin-top:16px">🔐 Sign In</button>
+    <div style="text-align:center;margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,.12)">
+      <a href="index.html" style="color:rgba(255,255,255,.6);font-size:12px;text-decoration:none">
+        ← Back to Admin Login
+      </a>
+    </div>
   </div>
 </div>
 
@@ -5406,8 +5411,8 @@ async function submitJobOutcome(){
       }
     }catch(e){}
   }
-  // No valid tech token — redirect to main login page
-  window.location.href = 'index.html';
+  // No valid token — show the tech login form
+  document.getElementById('login-screen').style.display='flex';
 })();
 </script>
 </body>
