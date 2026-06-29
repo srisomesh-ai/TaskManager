@@ -5431,47 +5431,40 @@ async function submitJobOutcome(){
   const type   = _joJobType;
   const taskId = _joTaskId;
   const errEl  = document.getElementById('jo-err');
-  showToast('DEBUG type=' + type + ' taskId=' + taskId);
+  const btn    = document.getElementById('jo-submit-btn');
 
-  // ── Validation ────────────────────────────────────────────────────────
-  if(type === 'demo'){
-    const attendee = document.getElementById('jo-attendee')?.value.trim();
-    const products = document.getElementById('jo-products')?.value.trim();
-    const interest = document.getElementById('jo-interest')?.value;
-    if(!attendee){ if(errEl){errEl.textContent='⚠️ Please enter who attended the demo';errEl.style.display='';} return; }
-    if(!products){ if(errEl){errEl.textContent='⚠️ Please enter products demonstrated';errEl.style.display='';} return; }
-    if(!interest){ if(errEl){errEl.textContent='⚠️ Please select customer interest level';errEl.style.display='';} return; }
-  } else if(type === 'troubleshoot'){
-    const issue  = document.getElementById('jo-issue')?.value;
-    const status = document.getElementById('jo-status')?.value;
-    if(!issue){  if(errEl){errEl.textContent='⚠️ Please select the issue found';errEl.style.display='';} return; }
-    if(!status){ if(errEl){errEl.textContent='⚠️ Please select if GPS is back online';errEl.style.display='';} return; }
-  }
+  // Block multiple clicks immediately
+  if(btn.disabled) return;
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
   if(errEl) errEl.style.display = 'none';
 
-  const btn = document.getElementById('jo-submit-btn');
-  btn.disabled = true; btn.textContent = 'Saving…';
+  // Validate required fields
+  if(type === 'demo'){
+    var attendee = (document.getElementById('jo-attendee')?.value||'').trim();
+    var products = (document.getElementById('jo-products')?.value||'').trim();
+    var interest = document.getElementById('jo-interest')?.value||'';
+    if(!attendee || !products || !interest){
+      if(errEl){ errEl.textContent='⚠️ Please fill: Who attended, Products demonstrated, and Interest level'; errEl.style.display=''; }
+      btn.disabled = false; btn.textContent = '✅ Submit Report';
+      return;
+    }
+  } else if(type === 'troubleshoot'){
+    var issue  = document.getElementById('jo-issue')?.value||'';
+    var status = document.getElementById('jo-status')?.value||'';
+    if(!issue || !status){
+      if(errEl){ errEl.textContent='⚠️ Please fill: Issue found and GPS status'; errEl.style.display=''; }
+      btn.disabled = false; btn.textContent = '✅ Submit Report';
+      return;
+    }
+  }
 
-  const fields = {};
-  let summary  = '';
-  let removedSerial = '';
+  // Collect fields
+  var fields = {};
+  var summary = '';
+  var removedSerial = '';
 
-  if(type === 'troubleshoot'){
-    fields['Issue Found']      = document.getElementById('jo-issue')?.value||'';
-    fields['Steps Taken']      = document.getElementById('jo-steps')?.value||'';
-    fields['GPS Back Online']  = document.getElementById('jo-status')?.value||'';
-    fields['Hardware Replaced']= document.getElementById('jo-hardware')?.value==='yes'
-                                  ? (document.getElementById('jo-hardware-txt')?.value||'Yes') : 'No';
-    fields['Remarks']          = document.getElementById('jo-remarks')?.value||'';
-    summary = '🔧 Troubleshoot Report';
-  } else if(type === 'v2v'){
-    fields['IMEI']            = document.getElementById('jo-imei')?.value||'';
-    fields['New Vehicle No']  = document.getElementById('jo-new-vehicle')?.value||'';
-    fields['New Vehicle Type']= document.getElementById('jo-new-vtype')?.value||'';
-    fields['Transfer Done']   = document.getElementById('jo-v2v-done')?.value||'';
-    fields['Remarks']         = document.getElementById('jo-remarks')?.value||'';
-    summary = '🚗 V2V Transfer Report';
-  } else if(type === 'demo'){
+  if(type === 'demo'){
     fields['Company/Customer'] = document.getElementById('jo-company')?.value||'';
     fields['Attendee']         = document.getElementById('jo-attendee')?.value||'';
     fields['Products Demo']    = document.getElementById('jo-products')?.value||'';
@@ -5481,13 +5474,23 @@ async function submitJobOutcome(){
                                    ? ('Yes — ' + (document.getElementById('jo-fu-date')?.value||'')) : 'No';
     fields['Remarks']          = document.getElementById('jo-remarks')?.value||'';
     summary = '📱 Demo Report';
+  } else if(type === 'troubleshoot'){
+    fields['Issue Found']      = document.getElementById('jo-issue')?.value||'';
+    fields['Steps Taken']      = document.getElementById('jo-steps')?.value||'';
+    fields['GPS Back Online']  = document.getElementById('jo-status')?.value||'';
+    fields['Remarks']          = document.getElementById('jo-remarks')?.value||'';
+    summary = '🔧 Troubleshoot Report';
+  } else if(type === 'v2v'){
+    fields['IMEI']             = document.getElementById('jo-imei')?.value||'';
+    fields['New Vehicle No']   = document.getElementById('jo-new-vehicle')?.value||'';
+    fields['Transfer Done']    = document.getElementById('jo-v2v-done')?.value||'';
+    fields['Remarks']          = document.getElementById('jo-remarks')?.value||'';
+    summary = '🚗 V2V Transfer Report';
   } else if(type === 'remove'){
     removedSerial              = document.getElementById('jo-serial')?.value||'';
     fields['GPS Serial']       = removedSerial;
     fields['Reason']           = document.getElementById('jo-reason')?.value||'';
-    fields['Next Plan']        = document.getElementById('jo-next')?.value||'';
     fields['Device Disposition']= document.getElementById('jo-device')?.value||'';
-    fields['Device Condition'] = document.getElementById('jo-condition')?.value||'';
     fields['Remarks']          = document.getElementById('jo-remarks')?.value||'';
     summary = '🔴 Device Removal Report';
   } else {
@@ -5495,29 +5498,29 @@ async function submitJobOutcome(){
     summary = '✅ Job Completed';
   }
 
-  const res = await api('save_job_outcome', {}, 'POST', {
+  var res = await api('save_job_outcome', {}, 'POST', {
     task_id: taskId,
     job_type: type,
-    summary,
-    fields,
+    summary: summary,
+    fields: fields,
     removed_serial: removedSerial,
     close_task: true,
-  }).catch(()=>({}));
+  }).catch(function(){ return {}; });
 
-  btn.disabled = false;
-  btn.textContent = '✅ Submit & Close Task';
-
-  if(res.success){
-    closeJobOutcome();
+  if(res && res.success){
+    // Hide modal immediately and permanently
+    var ov = document.getElementById('job-outcome-overlay');
+    if(ov) ov.style.display = 'none';
     closeTaskDetail();
-    showToast('✅ Demo report submitted successfully');
+    showToast('✅ ' + summary + ' submitted successfully');
     loadMyTasks();
   } else {
     btn.disabled = false;
     btn.textContent = '✅ Submit Report';
-    showToast('❌ '+(res.error||'Save failed'));
+    if(errEl){ errEl.textContent = '❌ ' + (res.error||'Failed — please try again'); errEl.style.display=''; }
   }
 }
+
 
 
 // ── Init: auto-login if token saved ──────────────────────────────────────
