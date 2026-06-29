@@ -3840,10 +3840,10 @@ async function checkAndUpdateAttendBtn(taskId, taskObj){
     btn.style.background = 'var(--green)'; btn.style.border = 'none';
     btn.style.display = ''; btn.style.opacity = '1'; btn.style.pointerEvents = '';
     if(isDemo){
-      btn.setAttribute('onclick','openJobOutcome('+taskId+')');
+      btn.setAttribute('onclick','location.href="demo-report.html?id="+taskId');
       if(icon)  icon.textContent  = '📱';
       if(label) label.textContent = 'Demo Done';
-      if(sub)   sub.textContent   = 'Tap to record demo report';
+      if(sub)   sub.textContent   = 'Tap to fill demo report';
     } else if(isTrbl){
       btn.setAttribute('onclick','openJobOutcome('+taskId+')');
       if(icon)  icon.textContent  = '🔧';
@@ -5425,8 +5425,6 @@ async function joSubmit(){
     fields:   fields,
     close_task: true
   }).catch(function(e){ return {error: 'Network: '+e}; });
-
-  alert('API response: ' + JSON.stringify(res));
 
   if(res && res.success){
     // 1. Close modal
