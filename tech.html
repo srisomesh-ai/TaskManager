@@ -2711,13 +2711,35 @@ async function viewTask(id){
   const stepPayDone = parseFloat(t.amount_collected||0) >= parseFloat(t.price_to_collect||0) - 15
                    && parseFloat(t.price_to_collect||0) > 0;
 
-  var stagesDef = [
-    {icon:'📋', label:'Created',      done:true,           active:!stepHasTechAct},
-    {icon:'🔧', label:'Tech Working', done:stepHasTechAct, active:stepHasTechAct && !stepAddingDone},
-    {icon:'🛰', label:'Installed',    done:stepAddingDone, active:stepAddingDone && !stepPayDone && !isClosed},
-    {icon:'💰', label:'Payment',      done:stepPayDone,    active:stepPayDone && !isClosed},
-    {icon:'🎯', label:'Closed',       done:isClosed,       active:false}
-  ];
+  const jobTypeLower2 = (t.device_details||'').toLowerCase();
+  const isDemo2        = jobTypeLower2.includes('demonstration') || jobTypeLower2.includes('demo');
+  const isTrbl2        = jobTypeLower2.includes('troubleshoot')  || jobTypeLower2.includes('offline');
+  const stepReportDone = isClosed || t.task_status === 'Awaiting Approval';
+
+  var stagesDef;
+  if(isDemo2){
+    stagesDef = [
+      {icon:'📋', label:'Created',      done:true,            active:!stepHasTechAct},
+      {icon:'🔧', label:'Tech Working', done:stepHasTechAct,  active:stepHasTechAct && !stepReportDone},
+      {icon:'📱', label:'Demo Done',    done:stepReportDone,  active:stepReportDone && !isClosed},
+      {icon:'🎯', label:'Closed',       done:isClosed,        active:false}
+    ];
+  } else if(isTrbl2){
+    stagesDef = [
+      {icon:'📋', label:'Created',      done:true,            active:!stepHasTechAct},
+      {icon:'🔧', label:'Tech Working', done:stepHasTechAct,  active:stepHasTechAct && !stepReportDone},
+      {icon:'🛠', label:'Fix Done',     done:stepReportDone,  active:stepReportDone && !isClosed},
+      {icon:'🎯', label:'Closed',       done:isClosed,        active:false}
+    ];
+  } else {
+    stagesDef = [
+      {icon:'📋', label:'Created',      done:true,           active:!stepHasTechAct},
+      {icon:'🔧', label:'Tech Working', done:stepHasTechAct, active:stepHasTechAct && !stepAddingDone},
+      {icon:'🛰', label:'Installed',    done:stepAddingDone, active:stepAddingDone && !stepPayDone && !isClosed},
+      {icon:'💰', label:'Payment',      done:stepPayDone,    active:stepPayDone && !isClosed},
+      {icon:'🎯', label:'Closed',       done:isClosed,       active:false}
+    ];
+  }
 
   function buildStepper(stages, isCancelled){
     if(isCancelled) return '<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;color:var(--text3)">❌ Task Cancelled</div>';

@@ -3087,13 +3087,36 @@ async function viewTask(id){
   const stepPayDone = parseFloat(t.amount_collected||0) >= parseFloat(t.price_to_collect||0) - 15
                    && parseFloat(t.price_to_collect||0) > 0;
 
-  var stagesDef = [
-    {icon:'📋', label:'Created',      done:true,           active:!stepHasTechAct},
-    {icon:'🔧', label:'Tech Working', done:stepHasTechAct, active:stepHasTechAct && !stepAddingDone},
-    {icon:'🛰', label:'Installed',    done:stepAddingDone, active:stepAddingDone && !stepPayDone && !isClosed},
-    {icon:'💰', label:'Payment',      done:stepPayDone,    active:stepPayDone && !isClosed},
-    {icon:'🎯', label:'Closed',       done:isClosed,       active:false}
-  ];
+  // Demo/Troubleshoot tasks have different timeline — no Install or Payment steps
+  const jobTypeLower = (t.device_details||'').toLowerCase();
+  const isDemo       = jobTypeLower.includes('demonstration') || jobTypeLower.includes('demo');
+  const isTrbl       = jobTypeLower.includes('troubleshoot')  || jobTypeLower.includes('offline');
+  const stepDemoReportDone = isClosed || t.task_status === 'Awaiting Approval';
+
+  var stagesDef;
+  if(isDemo){
+    stagesDef = [
+      {icon:'📋', label:'Created',      done:true,                active:!stepHasTechAct},
+      {icon:'🔧', label:'Tech Working', done:stepHasTechAct,      active:stepHasTechAct && !stepDemoReportDone},
+      {icon:'📱', label:'Demo Done',    done:stepDemoReportDone,  active:stepDemoReportDone && !isClosed},
+      {icon:'🎯', label:'Closed',       done:isClosed,            active:false}
+    ];
+  } else if(isTrbl){
+    stagesDef = [
+      {icon:'📋', label:'Created',      done:true,                active:!stepHasTechAct},
+      {icon:'🔧', label:'Tech Working', done:stepHasTechAct,      active:stepHasTechAct && !stepDemoReportDone},
+      {icon:'🛠', label:'Fix Done',     done:stepDemoReportDone,  active:stepDemoReportDone && !isClosed},
+      {icon:'🎯', label:'Closed',       done:isClosed,            active:false}
+    ];
+  } else {
+    stagesDef = [
+      {icon:'📋', label:'Created',      done:true,           active:!stepHasTechAct},
+      {icon:'🔧', label:'Tech Working', done:stepHasTechAct, active:stepHasTechAct && !stepAddingDone},
+      {icon:'🛰', label:'Installed',    done:stepAddingDone, active:stepAddingDone && !stepPayDone && !isClosed},
+      {icon:'💰', label:'Payment',      done:stepPayDone,    active:stepPayDone && !isClosed},
+      {icon:'🎯', label:'Closed',       done:isClosed,       active:false}
+    ];
+  }
 
   function buildStepper(stages, isCancelled){
     if(isCancelled) return '<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;color:var(--text3)">❌ Task Cancelled</div>';
