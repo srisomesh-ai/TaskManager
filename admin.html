@@ -143,11 +143,14 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:var(--text);padd
         </div>
         <div class="form-row">
           <div class="fg"><label>Role *</label>
-            <select id="um-role">
+            <select id="um-role" onchange="document.getElementById('tech-portal-note').style.display=this.value==='technician'?'':' none'">
               <option value="technician">Technician</option>
               <option value="assigner">Assigner</option>
               <option value="admin">Admin</option>
             </select>
+            <div id="tech-portal-note" style="display:none;margin-top:6px;padding:8px 10px;background:var(--blue-bg);border-radius:6px;font-size:11px;color:var(--blue)">
+              🔧 Technician login URL: <b>/tech.html</b>
+            </div>
           </div>
           <div class="fg"><label>Status</label>
             <select id="um-active">
