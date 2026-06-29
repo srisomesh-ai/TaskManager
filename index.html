@@ -1777,7 +1777,10 @@ async function doLogout(){
 
 // ── Load Dashboard ────────────────────────────────────────────────────────
 async function loadDashboard(){
-  if(currentUser?.role === 'technician'){ showPage('my-tasks'); return; }
+  if(currentUser?.role === 'technician'){
+    window.location.href = 'tech.html';
+    return;
+  }
 
   document.getElementById('dash-welcome').textContent =
     'Welcome, ' + (currentUser.name||'') + '. Here is today\'s snapshot.';
