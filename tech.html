@@ -5498,6 +5498,7 @@ async function submitJobOutcome(){
     summary = '✅ Job Completed';
   }
 
+  alert('Calling API: type=' + type + ' taskId=' + taskId);
   var res = await api('save_job_outcome', {}, 'POST', {
     task_id: taskId,
     job_type: type,
