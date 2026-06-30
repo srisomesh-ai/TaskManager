@@ -1021,6 +1021,21 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
         </div>
       </div>
 
+<!-- REUSABLE CONFIRM CARD -->
+<div id="confirm-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9500;align-items:center;justify-content:center;padding:20px">
+  <div id="confirm-card" style="background:#fff;border-radius:16px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.35);overflow:hidden">
+    <div style="padding:24px 22px 12px;text-align:center">
+      <div id="confirm-icon" style="font-size:40px;margin-bottom:10px">🔧</div>
+      <div id="confirm-title" style="font-size:16px;font-weight:800;color:var(--text);margin-bottom:8px"></div>
+      <div id="confirm-body" style="font-size:13px;color:var(--text2);line-height:1.6;white-space:pre-line;text-align:left;background:var(--surface2);border-radius:10px;padding:12px 14px;margin-top:8px"></div>
+    </div>
+    <div style="display:flex;gap:10px;padding:16px 22px 22px">
+      <button id="confirm-cancel-btn" onclick="_confirmResolve(false)" style="flex:1;padding:12px;background:var(--surface2);border:none;border-radius:10px;font-size:14px;font-weight:700;color:var(--text2);cursor:pointer">Cancel</button>
+      <button id="confirm-ok-btn" onclick="_confirmResolve(true)" style="flex:1;padding:12px;background:var(--accent);border:none;border-radius:10px;font-size:14px;font-weight:800;color:#fff;cursor:pointer">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <div id="cd-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000" onclick="cdClose()"></div>
 <div id="cd-modal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;width:92%;max-width:440px;z-index:9001;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">
   <div style="background:var(--accent);padding:14px 18px;display:flex;align-items:center;gap:10px">
@@ -2079,7 +2094,7 @@ async function saveTask(){
 
 // ── Delete Task ───────────────────────────────────────────────────────────
 async function deleteTask(id, taskId){
-  if(!confirm(`Delete task ${taskId}? This cannot be undone.`)) return;
+  if(!(await showConfirm({icon:'🗑️',title:'Delete Task?',body:'Delete task ' + taskId + '? This cannot be undone.',okText:'Delete',cancelText:'Cancel'}))) return;
   const res = await api('delete_task',{},'POST',{id}).catch(()=>({}));
   if(res.success) loadTasks();
   else alert(res.error||'Delete failed.');
@@ -3265,7 +3280,7 @@ async function submitTechUpdate(){
                             custResp.toLowerCase().includes('vehicle not ready') ||
                             parts.join('|').toLowerCase().includes('vehicle not ready');
   if(isFreeServiceTask && vehicleNotReady){
-    const convert = confirm('🚗 Vehicle was not available for this free service visit.\n\nConvert to chargeable visit?\n\n• Click OK to charge ₹300 (visit charge)\n• Click Cancel to keep as free service');
+    const convert = await showConfirm({icon:'🚗',title:'Vehicle Not Available',body:'Vehicle was not available for this free service visit.\n\nConvert to chargeable visit?\n\n• Confirm to charge ₹300 (visit charge)\n• Cancel to keep as free service',okText:'Charge ₹300',cancelText:'Keep Free'});
     if(convert){
       body.price_to_collect = 300;
       body.payment_mode     = 'Cash';
@@ -3556,7 +3571,7 @@ async function submitTechAttend(){
 
 // ── ADMIN ACTIONS ─────────────────────────────────────────────────────────
 async function adminApproveTask(taskId){
-  if(!confirm('Approve and close this task?')) return;
+  if(!(await showConfirm({icon:'✅',title:'Approve & Close?',body:'Approve and close this task?',okText:'Approve',cancelText:'Cancel'}))) return;
   const res = await api('approve_task',{},'POST',{id:taskId}).catch(()=>({}));
   if(res.success){
     closeTaskDetail();
@@ -3616,7 +3631,7 @@ async function confirmSendBack(taskId){
 }
 
 async function adminCancelTask(taskId){
-  if(!confirm('Cancel this task? This cannot be undone.')) return;
+  if(!(await showConfirm({icon:'❌',title:'Cancel Task?',body:'Cancel this task? This cannot be undone.',okText:'Yes, Cancel',cancelText:'Go Back'}))) return;
   const res = await api('update_task',{},'POST',{id:taskId,task_status:'Cancelled',remark:'🚫 Cancelled by admin'}).catch(()=>({}));
   if(res.success){
     closeTaskDetail();
@@ -3629,6 +3644,24 @@ async function adminCancelTask(taskId){
 // ════════════════════════════════════════════════════════
 let _consentPollTimer = null;
 
+// ── Reusable styled confirm card (replaces browser confirm()) ──────────
+let _confirmResolver = null;
+function showConfirm(opts){
+  return new Promise(function(resolve){
+    _confirmResolver = resolve;
+    document.getElementById('confirm-icon').textContent  = opts.icon  || '❓';
+    document.getElementById('confirm-title').textContent = opts.title || 'Are you sure?';
+    document.getElementById('confirm-body').textContent  = opts.body  || '';
+    document.getElementById('confirm-ok-btn').textContent = opts.okText || 'Confirm';
+    document.getElementById('confirm-cancel-btn').textContent = opts.cancelText || 'Cancel';
+    document.getElementById('confirm-overlay').style.display = 'flex';
+  });
+}
+function _confirmResolve(val){
+  document.getElementById('confirm-overlay').style.display = 'none';
+  if(_confirmResolver){ _confirmResolver(val); _confirmResolver = null; }
+}
+
 async function handleAttendClick(taskId){
   // Confirmation before proceeding
   const task = _detailTask;
@@ -3636,13 +3669,13 @@ async function handleAttendClick(taskId){
   const jobType      = task?.device_details || 'GPS Installation';
   const location     = task?.location || '';
 
-  const confirmed = confirm(
-    '🔧 Ready for Installation?\n\n' +
-    'Customer: ' + customerName + '\n' +
-    'Job: ' + jobType + (location ? '\nLocation: ' + location : '') + '\n\n' +
-    'This will send a consent & payment confirmation request to the customer.\n\n' +
-    'Are you sure you are at the location and ready to proceed?'
-  );
+  const confirmed = await showConfirm({
+    icon: '🔧',
+    title: 'Ready for Installation?',
+    body: 'Customer: ' + customerName + '\nJob: ' + jobType + (location ? '\nLocation: ' + location : '') + '\n\nThis will send a consent & payment confirmation request to the customer.\n\nAre you sure you are at the location and ready to proceed?',
+    okText: '✅ Yes, Proceed',
+    cancelText: 'Cancel'
+  });
   if(!confirmed) return;
 
   // Check if consent already received
