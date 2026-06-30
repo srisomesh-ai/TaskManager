@@ -122,6 +122,7 @@ case 'get_stats':
         SUM(task_status='Closed') closed,
         SUM(task_status='Cancelled') cancelled,
         SUM(task_status='Demo Sent') demo_sent,
+        SUM(task_status='Demo Done') demo_done,
         SUM(task_status='Awaiting Approval') awaiting_approval,
         SUM(CASE WHEN task_status='Closed'
             AND device_details NOT IN ('Troubleshoot/Offline','Troubleshoot','Offline','Demo','Demonstration','Only Remove')

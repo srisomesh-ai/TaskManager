@@ -430,6 +430,11 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
             <div class="stat-val" id="s-awaiting">–</div>
             <div class="stat-lbl">Awaiting</div>
           </div>
+          <div class="stat-card" style="border-bottom-color:#1a7a3a" onclick="showPage('tasks',{status:'Demo Done'})">
+            <div class="stat-ghost">📱</div>
+            <div class="stat-val" id="s-demo-done">–</div>
+            <div class="stat-lbl">Demo Done</div>
+          </div>
           <div class="stat-card" style="border-bottom-color:#c0392b">
             <div class="stat-ghost">💳</div>
             <div class="stat-val" id="s-payment">–</div>
@@ -524,6 +529,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
             <option>Task Pending</option>
             <option>Awaiting Approval</option>
             <option>Demo Sent</option>
+            <option>Demo Done</option>
             <option>Closed</option>
             <option>Cancelled</option>
             <option>Re-Adding</option>
@@ -891,6 +897,8 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
             <option>In Progress</option>
             <option>Task Pending</option>
             <option>Awaiting Approval</option>
+            <option>Demo Sent</option>
+            <option>Demo Done</option>
             <option>Closed</option>
             <option>Cancelled</option>
           </select>
@@ -1814,6 +1822,7 @@ async function loadDashboard(){
   sv('s-awaiting',     stats.awaiting_approval || 0);
   sv('s-payment',      stats.payment_pending   || 0);
   sv('s-troubleshoot', stats.troubleshoot_done || 0);
+  sv('s-demo-done',    stats.demo_done || 0);
 
   // ── 3. Nav sidebar badges ───────────────────────────────────
   const apprCount = parseInt(stats.awaiting_approval || 0);
@@ -1829,6 +1838,7 @@ async function loadDashboard(){
   const paymentPending = allActive.filter(t => t.workflow_state === 'payment_pending');
   const techUpdated      = allActive.filter(t => t.workflow_state === 'tech_updated');
   const cashPending      = allActive.filter(t => t.workflow_state === 'cash_pending_deposit');
+  const demoDone        = allActive.filter(t => t.workflow_state === 'demo_done');
   const critical       = urgent.filter(t => parseInt(t.age_hours||0) >= 48);
   const warning        = urgent.filter(t => { const h=parseInt(t.age_hours||0); return h>=24 && h<48; });
 
@@ -1848,6 +1858,11 @@ async function loadDashboard(){
     banners += `<div class="dash-alert" style="background:var(--amber-bg);border-left:4px solid var(--amber);color:#7a4500">
       🟠 <strong>${techUpdated.length} task${techUpdated.length>1?'s':''}</strong> updated by technician — not reviewed yet.
       <button class="dal-btn" style="background:var(--amber);color:#fff" onclick="showPage('tasks')">Review →</button>
+    </div>`;
+  if(demoDone.length)
+    banners += `<div class="dash-alert" style="background:var(--green-bg);border-left:4px solid var(--green);color:var(--green)">
+      📱 <strong>${demoDone.length} demo${demoDone.length>1?'s':''}</strong> completed — needs follow-up decision (Convert or Mark as Lost).
+      <button class="dal-btn" style="background:var(--green)" onclick="showPage('tasks',{status:'Demo Done'})">Review →</button>
     </div>`;
   if(cashPending.length)
     banners += `<div class="dash-alert" style="background:var(--amber-bg);border-left:4px solid var(--amber);color:var(--saffron)">
@@ -1941,6 +1956,26 @@ async function loadDashboard(){
             </div>
             <button onclick="event.stopPropagation();markTaskViewed(${t.id},this)" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:10px;font-weight:700;cursor:pointer;color:var(--text2)">✓ Done</button>
           </div>`).join('')}
+        </div>
+      </div>`;
+    }
+
+    // Demo Done panel
+    if(demoDone.length){
+      panelsHtml += `<div class="dash-action-panel">
+        <div class="dash-action-hd" style="background:linear-gradient(135deg,#1a7a3a,#27AE60)">
+          <div class="dash-action-hd-title">📱 Demo Done — Needs Decision</div>
+          <span class="dash-action-count">${demoDone.length}</span>
+        </div>
+        <div class="dash-action-body">
+          ${demoDone.slice(0,6).map(t => `<div class="dash-action-row" onclick="viewTask(${t.id})">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;font-weight:700">${t.customer_name||'–'} <span style="color:var(--text3);font-weight:400">· ${t.task_id||''}</span></div>
+              <div style="font-size:11px;color:var(--text3);margin-top:2px">${t.tech_name||t.technician_name||'Unassigned'} · ${t.demo_interest?('Interest: '+t.demo_interest):''}</div>
+            </div>
+            <button onclick="event.stopPropagation();viewTask(${t.id})" style="background:var(--green);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer">View →</button>
+          </div>`).join('')}
+          ${demoDone.length>6?`<div style="padding:8px 16px;font-size:11px;color:var(--text3);text-align:center">+${demoDone.length-6} more — <a href="#" onclick="showPage('tasks',{status:'Demo Done'});return false">See all</a></div>`:''}
         </div>
       </div>`;
     }
@@ -2297,6 +2332,7 @@ function statusPill(s){
     'Task Pending':      'background:#fff0e0;color:#d4680a',
     'Awaiting Approval': 'background:#f0eaf8;color:#5b2d8e',
     'Demo Sent':         'background:#e8f0fb;color:#1a56a0',
+    'Demo Done':         'background:#e8f5ec;color:#1a7a3a',
     'Closed':            'background:#e8f5ec;color:#1a7a3a',
     'Cancelled':         'background:#f0f2f5;color:#8a9ab0',
     'Re-Adding':         'background:#fff3e0;color:#e07b00',
