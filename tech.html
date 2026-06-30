@@ -3805,8 +3805,6 @@ async function checkAndUpdateAttendBtn(taskId, taskObj){
 
   const t = taskObj || _detailTask;
 
-  console.log('[DEBUG checkAndUpdateAttendBtn] taskId=', taskId, 'task_status=', t?.task_status, 'source=', taskObj ? 'taskObj' : '_detailTask');
-
   // STATE 0: Demo report already submitted — task waiting on admin, hide button entirely
   if(t?.task_status === 'Demo Done'){
     btn.style.display = 'none';
@@ -3892,7 +3890,7 @@ async function checkAndUpdateAttendBtn(taskId, taskObj){
       } else {
         if(icon)  icon.textContent  = '🎬';
         if(label) label.textContent = 'Proceed for Demo';
-        if(sub)   sub.textContent   = 'DEBUG status=' + (t?.task_status||'?') + ' — tap to start';
+        if(sub)   sub.textContent   = 'Customer confirmed — tap to start';
         btn.setAttribute('onclick', 'proceedForDemo(' + taskId + ')');
       }
     } else if(isTrbl2){
@@ -5570,7 +5568,8 @@ async function submitJobOutcome(){
     closeTaskDetail();
     loadMyTasks().then(function(){ viewTask(tid); }).catch(function(){ viewTask(tid); });
   } else {
-    showToast('❌ '+(res.error||'Save failed'));
+    // Keep modal open on failure so technician knows to retry — do NOT close or clear flags
+    showToast('❌ Save failed: ' + (res.error || 'Unknown error — please try again'));
   }
 }
 

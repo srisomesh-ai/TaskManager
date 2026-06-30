@@ -1360,39 +1360,54 @@ case 'save_job_outcome':
 
     // Set task status based on job type
     $isDemo = ($jtype === 'demo');
-    if($isDemo){
-        // Demo tasks go to 'Demo Done' — NOT closed, awaiting conversion or follow-up
-        $newStatus = 'Demo Done';
-        // Save demo fields to task for future reference
-        $interest   = $fields['Interest Level'] ?? '';
-        $followup   = $fields['Follow-up']      ?? '';
-        $fuDate     = '';
-        if(strpos($followup,'Yes') !== false){
-            preg_match('/\d{4}-\d{2}-\d{2}/', $followup, $m);
-            $fuDate = $m[0] ?? '';
+    $statusUpdateOk = false;
+    $statusErrMsg = '';
+    try {
+        if($isDemo){
+            // Demo tasks go to 'Demo Done' — NOT closed, awaiting conversion or follow-up
+            $newStatus = 'Demo Done';
+            // Save demo fields to task for future reference
+            $interest   = $fields['Interest Level'] ?? '';
+            $followup   = $fields['Follow-up']      ?? '';
+            $fuDate     = '';
+            if(strpos($followup,'Yes') !== false){
+                preg_match('/\d{4}-\d{2}-\d{2}/', $followup, $m);
+                $fuDate = $m[0] ?? '';
+            }
+            $pdo->prepare("UPDATE tasks SET task_status='Demo Done', demo_interest=?, demo_followup_date=?, updated_at=NOW() WHERE id=?")
+                ->execute([$interest ?: null, $fuDate ?: null, $jid]);
+            $statusUpdateOk = true;
+            // Send customer thank-you email (failure here must not block success response)
+            try {
+                $taskRow = $pdo->prepare("SELECT t.*,u.name as tech_name,u.phone as tech_phone FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?");
+                $taskRow->execute([$jid]); $tr = $taskRow->fetch();
+                if($tr && $tr['email']){
+                    require_once __DIR__.'/mailer.php';
+                    sendDemoDoneCustomer($tr, $tr['tech_name']??'', $fields);
+                }
+            } catch(Exception $mailEx){ /* email failure should not block task status save */ }
+        } else {
+            $newStatus = ($body['close_task']??false) ? 'Awaiting Approval' : 'In Progress';
+            $pdo->prepare("UPDATE tasks SET task_status=?, updated_at=NOW() WHERE id=?")
+                ->execute([$newStatus, $jid]);
+            $statusUpdateOk = true;
         }
-        $pdo->prepare("UPDATE tasks SET task_status='Demo Done', demo_interest=?, demo_followup_date=?, updated_at=NOW() WHERE id=?")
-            ->execute([$interest, $fuDate ?: null, $jid]);
-        // Send customer thank-you email
-        $taskRow = $pdo->prepare("SELECT t.*,u.name as tech_name,u.phone as tech_phone FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?");
-        $taskRow->execute([$jid]); $tr = $taskRow->fetch();
-        if($tr && $tr['email']){
-            require_once __DIR__.'/mailer.php';
-            sendDemoDoneCustomer($tr, $tr['tech_name']??'', $fields);
+
+        // For removal — save serial number
+        if(!empty($body['removed_serial'])){
+            $pdo->prepare("UPDATE tasks SET gps_serial_no=?, updated_at=NOW() WHERE id=?")
+                ->execute([$body['removed_serial'], $jid]);
         }
+    } catch(Exception $statusEx){
+        $statusErrMsg = $statusEx->getMessage();
+    }
+
+    if($statusUpdateOk){
+        echo json_encode(['success'=>true, 'status'=>$newStatus]);
     } else {
-        $newStatus = ($body['close_task']??false) ? 'Awaiting Approval' : 'In Progress';
-        $pdo->prepare("UPDATE tasks SET task_status=?, updated_at=NOW() WHERE id=?")
-            ->execute([$newStatus, $jid]);
+        http_response_code(500);
+        echo json_encode(['success'=>false, 'error'=>'Could not update task status: ' . $statusErrMsg]);
     }
-
-    // For removal — save serial number
-    if(!empty($body['removed_serial'])){
-        $pdo->prepare("UPDATE tasks SET gps_serial_no=?, updated_at=NOW() WHERE id=?")
-            ->execute([$body['removed_serial'], $jid]);
-    }
-
-    echo json_encode(['success'=>true, 'status'=>$newStatus]);
     break;
 
 // ============================================================
