@@ -4034,6 +4034,7 @@ function closeConvertDemoModal(){
 
 async function submitConvertDemo(){
   if(!_convertDemoTaskId) return;
+  const taskIdToReopen = _convertDemoTaskId;
   const res = await api('convert_demo_to_installation',{},'POST',{
     id:           _convertDemoTaskId,
     job_type:     document.getElementById('cd-job-type').value,
@@ -4043,9 +4044,9 @@ async function submitConvertDemo(){
   }).catch(()=>({}));
   if(res.success){
     closeConvertDemoModal();
-    showToast('✅ Installation task '+res.new_task_id+' created!');
+    showToast('✅ Task '+res.task_id+' converted — '+(res.consent_sent?'consent sent to customer':'no email on file, send consent manually'));
     closeTaskDetail();
-    loadTasksPage();
+    loadTasksPage().then(function(){ viewTask(taskIdToReopen); });
   } else {
     alert(res.error || 'Failed to convert');
   }
@@ -6273,11 +6274,11 @@ async function submitJobOutcome(){
 <div id="convert-demo-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000" onclick="closeConvertDemoModal()"></div>
 <div id="convert-demo-modal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;width:92%;max-width:440px;z-index:9001;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">
   <div style="background:var(--green);padding:14px 18px;display:flex;align-items:center;gap:10px">
-    <div style="flex:1;font-size:15px;font-weight:800;color:#fff">🔄 Convert Demo to Installation</div>
+    <div style="flex:1;font-size:15px;font-weight:800;color:#fff">🔄 Convert to Installation (Same Task)</div>
     <button onclick="closeConvertDemoModal()" style="background:rgba(255,255,255,.2);border:none;color:#fff;width:28px;height:28px;border-radius:6px;font-size:16px;cursor:pointer">✕</button>
   </div>
   <div style="padding:18px 20px">
-    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">A new installation task will be created for this customer. The demo task will be marked as converted.</p>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">This same task will be converted to an installation job. A fresh consent request will be sent to the customer, and the technician will see Send Consent → Proceed for Adding next.</p>
     <div class="form-group" style="margin-bottom:12px">
       <label>Job Type</label>
       <select id="cd-job-type" class="form-input">
@@ -6305,7 +6306,7 @@ async function submitJobOutcome(){
         <option value="Cheque">Cheque</option>
       </select>
     </div>
-    <button onclick="submitConvertDemo()" class="ts-btn ts-btn-primary" style="width:100%;background:var(--green)">✅ Create Installation Task</button>
+    <button onclick="submitConvertDemo()" class="ts-btn ts-btn-primary" style="width:100%;background:var(--green)">✅ Convert &amp; Send Consent</button>
   </div>
 </div>
 

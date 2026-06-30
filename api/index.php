@@ -1920,7 +1920,7 @@ case 'verify_cash_deposit':
     }
     break;
 
-// ── CONVERT DEMO TO INSTALLATION ──────────────────────────────────────────
+// ── CONVERT DEMO TO INSTALLATION (IN-PLACE — same Task ID) ────────────────
 case 'convert_demo_to_installation':
     if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     $id3 = intval($body['id']??0);
@@ -1928,27 +1928,68 @@ case 'convert_demo_to_installation':
     $src = $pdo->prepare("SELECT * FROM tasks WHERE id=?");
     $src->execute([$id3]); $srcTask = $src->fetch();
     if(!$srcTask){ echo json_encode(['error'=>'Task not found']); break; }
-    // Mark original demo task as converted
-    $pdo->prepare("UPDATE tasks SET task_status='Demo Converted', demo_converted_at=NOW() WHERE id=?")
-        ->execute([$id3]);
-    $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")
-        ->execute([$id3, $userId, "✅ Demo converted to installation task by {$currentUser['name']}."]);
-    // Create new installation task
-    $year2 = date('Y');
-    $cnt2  = $pdo->query("SELECT COUNT(*) FROM tasks WHERE task_id LIKE 'ID-$year2-%'")->fetchColumn();
-    $newId = 'ID-' . $year2 . '-' . str_pad($cnt2+1, 4, '0', STR_PAD_LEFT);
-    $pdo->prepare("INSERT INTO tasks (task_id,customer_name,contact_number,email,location,lead_type,device_details,device_qty,price_to_collect,payment_mode,assigned_to,task_status,general_notes,profile,created_by)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-        ->execute([
-            $newId, $srcTask['customer_name'], $srcTask['contact_number'],
-            $srcTask['email'], $srcTask['location'], 'Existing Customer Lead',
-            $body['job_type'] ?? 'Basic/Normal', intval($body['device_qty']??1),
-            floatval($body['price']??0), $body['payment_mode']??'Cash',
-            $srcTask['assigned_to'], 'Open',
-            'Converted from demo task ' . $srcTask['task_id'],
-            $srcTask['profile']??'BGPT', $userId
-        ]);
-    echo json_encode(['success'=>true,'new_task_id'=>$newId,'message'=>'New installation task '.$newId.' created.']);
+    if($srcTask['task_status'] !== 'Demo Done'){
+        echo json_encode(['error'=>'Task is not in Demo Done status — cannot convert']); break;
+    }
+
+    $newJobType = trim($body['job_type'] ?? 'Basic/Normal');
+    $newQty     = max(1, intval($body['device_qty'] ?? 1));
+    $newPrice   = floatval($body['price'] ?? 0);
+    $newPayMode = $body['payment_mode'] ?? 'Cash';
+
+    try {
+        $pdo->beginTransaction();
+
+        // Update the SAME task in place: demo -> installation job
+        $pdo->prepare("UPDATE tasks SET
+                task_status = 'Task Pending',
+                lead_type   = 'Existing Customer Lead',
+                device_details = ?,
+                device_qty = ?,
+                price_to_collect = ?,
+                payment_mode = ?,
+                amount_collected = 0,
+                payment_status = 'Pending',
+                demo_converted_at = NOW(),
+                consent_token = NULL,
+                customer_consent_at = NULL,
+                customer_consent_name = NULL,
+                customer_consent_mobile = NULL,
+                updated_at = NOW()
+            WHERE id=?")
+            ->execute([$newJobType, $newQty, $newPrice, $newPayMode, $id3]);
+
+        // Clear any leftover device-install rows from a prior cycle on this task (safety — normally none for a pure demo)
+        $pdo->prepare("DELETE FROM task_device_installs WHERE task_id=?")->execute([$id3]);
+
+        $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")
+            ->execute([$id3, $userId, "✅ Demo converted to installation by {$currentUser['name']}. Job: {$newJobType} x{$newQty}, Price: ₹{$newPrice}. Same task ID continues — consent will be re-sent to customer."]);
+
+        $pdo->commit();
+    } catch(Exception $convEx){
+        $pdo->rollBack();
+        echo json_encode(['error'=>'Conversion failed: '.$convEx->getMessage()]);
+        break;
+    }
+
+    // Re-send consent on the SAME task so customer confirms the installation visit
+    $consentSent = false;
+    try {
+        $cToken = bin2hex(random_bytes(24));
+        $pdo->prepare("UPDATE tasks SET consent_token=? WHERE id=?")->execute([$cToken, $id3]);
+        $taskStmt2 = $pdo->prepare("SELECT t.*, u.name as tech_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?");
+        $taskStmt2->execute([$id3]);
+        $taskRow2 = $taskStmt2->fetch();
+        if($taskRow2 && !empty($taskRow2['email'])){
+            require_once __DIR__.'/mailer.php';
+            sendConsentRequest($taskRow2, $taskRow2['tech_name'] ?? 'BharatGPS Team');
+            $consentSent = true;
+        }
+        $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'system')")
+            ->execute([$id3, $userId, "📩 Consent request sent to customer for installation visit" . ($consentSent ? " via email" : " (no email on file)")]);
+    } catch(Exception $mailEx){ /* consent email failure must not fail the conversion */ }
+
+    echo json_encode(['success'=>true, 'task_id'=>$srcTask['task_id'], 'consent_sent'=>$consentSent, 'message'=>'Task '.$srcTask['task_id'].' converted to installation. Consent request sent to customer.']);
     break;
 
 // ── MARK DEMO AS LOST ─────────────────────────────────────────────────────
