@@ -2767,14 +2767,17 @@ async function viewTask(id){
 
   // ── TASK INFO GRID ─────────────────────────────────────
   const infoItems = [
-    ['👤 Assigned To',    t.tech_name || t.technician_name || '<span style="color:var(--text3)">Unassigned</span>'],
-    ['🔧 Job Type',       t.device_details || '–'],
+    ['👤 Customer Name',  t.customer_name || '–'],
+    ['📞 Contact Number', t.contact_number || '–'],
+    ['📧 Email ID',       t.email || '<span style="color:var(--text3)">Not provided</span>'],
     ['📍 Location',       t.location || '–'],
     ['📊 Lead Type',      t.lead_type || '–'],
-    ['🏢 Profile',        t.profile || 'BGPT'],
+    ['🏢 Company Profile',t.profile || 'BGPT'],
+    ['🔧 Job Type',       t.device_details || '–'],
+    ['🔢 Device Qty',     t.device_qty || 1],
+    ['🙋 Assigned To',    t.tech_name || t.technician_name || '<span style="color:var(--text3)">Unassigned</span>'],
     ['📅 Created',        (t.created_at||'').slice(0,10) || '–'],
     ['⏰ Reminder',       t.reminder_date || '–'],
-    ['🔢 Device Qty',     t.device_qty || 1],
   ];
   if(t.is_outstation){
     infoItems.push(['📍 Outstation', t.outstation_location || 'Yes']);
