@@ -31,6 +31,8 @@ try {
     $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS demo_interest VARCHAR(20) DEFAULT NULL");
     $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS demo_followup_date DATE DEFAULT NULL");
     $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS demo_converted_at DATETIME DEFAULT NULL");
+    // Full demo report fields — saved so the form can be re-opened read-only with exact prior answers
+    $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS demo_report_json TEXT DEFAULT NULL");
 } catch(Exception $e){}
 // ── Migration: cash deposit columns ──────────────────────────────────────
 try {
@@ -1374,8 +1376,9 @@ case 'save_job_outcome':
                 preg_match('/\d{4}-\d{2}-\d{2}/', $followup, $m);
                 $fuDate = $m[0] ?? '';
             }
-            $pdo->prepare("UPDATE tasks SET task_status='Demo Done', demo_interest=?, demo_followup_date=?, updated_at=NOW() WHERE id=?")
-                ->execute([$interest ?: null, $fuDate ?: null, $jid]);
+            $reportJson = json_encode($fields);
+            $pdo->prepare("UPDATE tasks SET task_status='Demo Done', demo_interest=?, demo_followup_date=?, demo_report_json=?, updated_at=NOW() WHERE id=?")
+                ->execute([$interest ?: null, $fuDate ?: null, $reportJson, $jid]);
             $statusUpdateOk = true;
             // Send customer thank-you email (failure here must not block success response)
             try {

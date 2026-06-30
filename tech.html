@@ -3806,9 +3806,17 @@ async function checkAndUpdateAttendBtn(taskId, taskObj){
 
   const t = taskObj || _detailTask;
 
-  // STATE 0: Demo report already submitted — task waiting on admin, hide button entirely
+  // STATE 0: Demo report already submitted — show View Report button (read-only), not Attend
   if(t?.task_status === 'Demo Done'){
-    btn.style.display = 'none';
+    btn.style.background    = 'var(--green)';
+    btn.style.border        = 'none';
+    btn.style.display       = '';
+    btn.style.opacity       = '1';
+    btn.style.pointerEvents = '';
+    btn.setAttribute('onclick', 'openJobOutcome(' + taskId + ')');
+    if(icon)  icon.textContent  = '📄';
+    if(label) label.textContent = 'View Demo Report';
+    if(sub)   sub.textContent   = 'Already submitted — tap to view';
     if(status) status.innerHTML = `
       <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--green);line-height:1.7">
         ✅ <strong>Demo report submitted.</strong><br>
@@ -5365,6 +5373,41 @@ function openJobOutcome(taskId){
   document.getElementById('jo-subtitle').textContent = (task.task_id||'') + ' · ' + (task.customer_name||'');
 
   var body = '';
+  // If a demo report was already submitted, show it READ-ONLY instead of a blank form
+  var priorDemo = null;
+  if(type === 'demo' && task.demo_report_json){
+    try { priorDemo = JSON.parse(task.demo_report_json); } catch(e){ priorDemo = null; }
+  }
+  if(type === 'demo' && priorDemo){
+    document.getElementById('jo-title').textContent = '✅ Demo Report (Already Submitted)';
+    body  = '<div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--green);margin-bottom:14px">';
+    body += '✅ This demonstration report was already submitted and is awaiting admin review. Showing your submitted answers below (read-only).</div>';
+    var roFields = [
+      ['Company / Customer Name', priorDemo['Company/Customer']],
+      ['Who attended the demo', priorDemo['Attendee']],
+      ['Products demonstrated', priorDemo['Products Demo']],
+      ['Customer interest level', priorDemo['Interest Level']],
+      ['Customer concerns / questions raised', priorDemo['Concerns Raised']],
+      ['Follow-up required', priorDemo['Follow-up']],
+      ['Remarks', priorDemo['Remarks']],
+    ];
+    roFields.forEach(function(f){
+      body += '<div class="form-group"><label>' + f[0] + '</label>';
+      body += '<div style="background:var(--surface2);border-radius:6px;padding:10px 12px;font-size:13px;color:var(--text);white-space:pre-wrap">' + ((f[1]||'').toString().trim() || '—') + '</div></div>';
+    });
+    document.getElementById('jo-body').innerHTML = body;
+    var ov2 = document.getElementById('job-outcome-overlay');
+    if(!ov2){ showToast('❌ Form not found'); return; }
+    // Hide submit button — nothing to submit, report already saved
+    var submitBtn2 = document.getElementById('jo-submit-btn');
+    if(submitBtn2) submitBtn2.style.display = 'none';
+    ov2.style.display = 'flex';
+    return;
+  }
+  // Ensure submit button is visible for fresh (non-readonly) forms
+  var submitBtnReset = document.getElementById('jo-submit-btn');
+  if(submitBtnReset) submitBtnReset.style.display = '';
+
   if(type === 'demo'){
     body  = '<div class="form-group"><label>Company / Customer Name <span style="color:var(--red)">*</span></label>';
     body += '<input type="text" id="jo-company" class="form-input" placeholder="Company or customer name" oninput="checkJoFormReady()" value="' + (task.customer_name||'').replace(/"/g,'') + '"></div>';
