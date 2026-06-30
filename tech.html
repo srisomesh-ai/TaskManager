@@ -3662,6 +3662,40 @@ function _confirmResolve(val){
   if(_confirmResolver){ _confirmResolver(val); _confirmResolver = null; }
 }
 
+// ── Proceed for Demo — success step before demo report ─────────────────
+async function proceedForDemo(taskId){
+  const task = _detailTask;
+  const customerName = task?.customer_name || 'the customer';
+
+  await showSuccess({
+    icon: '🎉',
+    title: 'Great! All Set',
+    body: customerName + ' has confirmed. You can now go ahead with the demonstration.\n\nOnce the demo is complete, tap the green button again to submit the demo report.',
+    okText: 'Start Demo'
+  });
+
+  localStorage.setItem('demo_proceeded_' + taskId, '1');
+  checkAndUpdateAttendBtn(taskId, _detailTask);
+}
+
+// ── Reusable success card (single OK button) ────────────────────────────
+function showSuccess(opts){
+  return new Promise(function(resolve){
+    _confirmResolver = function(){ resolve(true); };
+    document.getElementById('confirm-icon').textContent  = opts.icon  || '✅';
+    document.getElementById('confirm-title').textContent = opts.title || 'Success';
+    document.getElementById('confirm-body').textContent  = opts.body  || '';
+    const okBtn = document.getElementById('confirm-ok-btn');
+    const cancelBtn = document.getElementById('confirm-cancel-btn');
+    okBtn.textContent = opts.okText || 'OK';
+    okBtn.style.flex = '1';
+    cancelBtn.style.display = 'none';
+    document.getElementById('confirm-overlay').style.display = 'flex';
+  }).finally(function(){
+    document.getElementById('confirm-cancel-btn').style.display = '';
+  });
+}
+
 async function handleAttendClick(taskId){
   // Confirmation before proceeding
   const task = _detailTask;
@@ -3835,10 +3869,18 @@ async function checkAndUpdateAttendBtn(taskId, taskObj){
     btn.style.pointerEvents = '';
     btn.setAttribute('onclick', 'openJobOutcome(' + taskId + ')');
     if(isDemo2){
-      if(icon)  icon.textContent  = '📱';
-      if(label) label.textContent = 'Demo Done';
-      if(sub)   sub.textContent   = 'Tap to record demo report';
-      btn.setAttribute('onclick', 'openJobOutcome(' + taskId + ')');
+      const demoProceeded = localStorage.getItem('demo_proceeded_' + taskId) === '1';
+      if(demoProceeded){
+        if(icon)  icon.textContent  = '📱';
+        if(label) label.textContent = 'Demo Complete';
+        if(sub)   sub.textContent   = 'Tap to record demo report';
+        btn.setAttribute('onclick', 'openJobOutcome(' + taskId + ')');
+      } else {
+        if(icon)  icon.textContent  = '🎬';
+        if(label) label.textContent = 'Proceed for Demo';
+        if(sub)   sub.textContent   = 'Customer confirmed — tap to start';
+        btn.setAttribute('onclick', 'proceedForDemo(' + taskId + ')');
+      }
     } else if(isTrbl2){
       if(icon)  icon.textContent  = '🔧';
       if(label) label.textContent = 'Fix Done';
@@ -5471,6 +5513,7 @@ async function submitJobOutcome(){
   btn.textContent = '✅ Submit & Close Task';
 
   if(res.success){
+    localStorage.removeItem('demo_proceeded_' + taskId);
     closeJobOutcome();
     showToast('✅ Job report saved — task sent for approval');
     var tid = _joTaskId;
