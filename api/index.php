@@ -362,14 +362,29 @@ case 'get_task':
 case 'create_task':
     if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     $year = date('Y');
-    $cnt  = $pdo->query("SELECT COUNT(*) FROM tasks WHERE task_id LIKE 'ID-$year-%'")->fetchColumn();
     // Check for task ID offset (set via admin panel to start from a specific number)
     $idOffset = 0;
     try {
         $offRow = $pdo->query("SELECT key_value FROM app_settings WHERE key_name='task_id_offset'")->fetch();
         if($offRow) $idOffset = intval($offRow['key_value']);
     } catch(Exception $e){}
-    $taskId = "ID-$year-".str_pad($cnt+1+$idOffset,4,'0',STR_PAD_LEFT);
+    // Use MAX(existing number) instead of COUNT() — COUNT breaks after deletions
+    // (e.g. deleting tasks then creating new ones would reuse old IDs and collide).
+    // MAX() always continues from the highest number ever issued this year, regardless of deletions.
+    $maxRow = $pdo->query("SELECT MAX(CAST(SUBSTRING(task_id, 9) AS UNSIGNED)) AS maxnum FROM tasks WHERE task_id LIKE 'ID-$year-%'")->fetch();
+    $maxNum = intval($maxRow['maxnum'] ?? 0);
+    $nextNum = max($maxNum + 1, $idOffset + 1);
+    $taskId = "ID-$year-".str_pad($nextNum,4,'0',STR_PAD_LEFT);
+    // Safety: if this exact task_id somehow already exists (race condition), bump until free
+    $guard = 0;
+    while($guard < 20){
+        $exists = $pdo->prepare("SELECT 1 FROM tasks WHERE task_id=? LIMIT 1");
+        $exists->execute([$taskId]);
+        if(!$exists->fetchColumn()) break;
+        $nextNum++;
+        $taskId = "ID-$year-".str_pad($nextNum,4,'0',STR_PAD_LEFT);
+        $guard++;
+    }
     $at  = !empty($body['assigned_to']) ? intval($body['assigned_to']) : null;
     $rd  = !empty($body['reminder_date']) ? $body['reminder_date'] : null;
     $prd = !empty($body['payment_reminder_date']) ? $body['payment_reminder_date'] : null;
