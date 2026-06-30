@@ -572,8 +572,8 @@ function sendDemoDoneCustomer(array $task, string $techName, array $fields = [])
         If you have any questions about our GPS solutions or would like to proceed with an installation, please feel free to reach out to us.
     </p>
     <p style="font-size:14px;color:#4a5568;margin-top:8px">
-        📞 <strong>Call us:</strong> <a href="tel:+918885888832" style="color:#1a3a6b">+91 8885888832</a><br>
-        📧 <strong>Email:</strong> <a href="mailto:info@bharatgps.com" style="color:#1a3a6b">info@bharatgps.com</a>
+        📞 <strong>Call us:</strong> <a href="tel:+919849849824" style="color:#1a3a6b">+91 9849849824</a><br>
+        📧 <strong>Email:</strong> <a href="mailto:sales@bharatgps.com" style="color:#1a3a6b">sales@bharatgps.com</a>
     </p>
     <p style="font-size:14px;font-weight:700;color:#1a3a6b;margin-top:12px">Thank you for considering Bharat GPS Tracker! 🚗</p>
     ';
@@ -603,8 +603,8 @@ function sendDemoFollowupCustomer(array $task): void {
         If you have any questions or would like to schedule an installation, simply reply to this email or call us.
     </p>
     <p style="font-size:14px;color:#4a5568;margin-top:8px">
-        📞 <strong>Call us:</strong> <a href="tel:+918885888832" style="color:#1a3a6b">+91 8885888832</a><br>
-        📧 <strong>Email:</strong> <a href="mailto:info@bharatgps.com" style="color:#1a3a6b">info@bharatgps.com</a>
+        📞 <strong>Call us:</strong> <a href="tel:+919849849824" style="color:#1a3a6b">+91 9849849824</a><br>
+        📧 <strong>Email:</strong> <a href="mailto:sales@bharatgps.com" style="color:#1a3a6b">sales@bharatgps.com</a>
     </p>
     <p style="font-size:14px;font-weight:700;color:#1a3a6b;margin-top:12px">We look forward to hearing from you!</p>
     ';
