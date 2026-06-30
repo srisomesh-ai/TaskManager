@@ -1633,7 +1633,7 @@ let authToken = '', currentUser = null;
 // ── API helper ────────────────────────────────────────────────────────────
 async function api(action, params={}, method='GET', body=null){
   const url = API + '?action=' + action + (method==='GET' ? '&'+new URLSearchParams(params) : '');
-  const opts = {method, headers:{'X-Auth-Token': authToken}};
+  const opts = {method, cache:'no-store', headers:{'X-Auth-Token': authToken}};
   if(body){ opts.headers['Content-Type']='application/json'; opts.body=JSON.stringify(body); }
   const r = await fetch(url, opts);
   const text = await r.text();
