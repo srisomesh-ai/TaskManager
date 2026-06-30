@@ -1094,7 +1094,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
     </div>
     <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px">
       <button onclick="closeJobOutcome()" class="ts-btn ts-btn-secondary" style="flex:1">Cancel</button>
-      <button id="jo-submit-btn" onclick="submitJobOutcome()" class="ts-btn ts-btn-primary" style="flex:2;background:var(--green)">✅ Submit Report</button>
+      <button id="jo-submit-btn" onclick="submitJobOutcome()" class="ts-btn ts-btn-primary" style="flex:2;background:var(--text3);opacity:.5;cursor:not-allowed" disabled>✅ Submit Report</button>
     </div>
   </div>
 </div>
@@ -5353,27 +5353,27 @@ function openJobOutcome(taskId){
 
   var body = '';
   if(type === 'demo'){
-    body  = '<div class="form-group"><label>Company / Customer Name</label>';
-    body += '<input type="text" id="jo-company" class="form-input" placeholder="Company or customer name" value="' + (task.customer_name||'').replace(/"/g,'') + '"></div>';
-    body += '<div class="form-group"><label>Who attended the demo? (Name & Designation)</label>';
-    body += '<input type="text" id="jo-attendee" class="form-input" placeholder="e.g. Ravi Kumar — Fleet Manager"></div>';
-    body += '<div class="form-group"><label>Products demonstrated</label>';
-    body += '<input type="text" id="jo-products" class="form-input" placeholder="e.g. Basic GPS, Engine Cut, VLTD"></div>';
-    body += '<div class="form-group"><label>Customer interest level</label>';
-    body += '<select id="jo-interest" class="form-input"><option value="">Select…</option>';
+    body  = '<div class="form-group"><label>Company / Customer Name <span style="color:var(--red)">*</span></label>';
+    body += '<input type="text" id="jo-company" class="form-input" placeholder="Company or customer name" oninput="checkJoFormReady()" value="' + (task.customer_name||'').replace(/"/g,'') + '"></div>';
+    body += '<div class="form-group"><label>Who attended the demo? (Name & Designation) <span style="color:var(--red)">*</span></label>';
+    body += '<input type="text" id="jo-attendee" class="form-input" placeholder="e.g. Ravi Kumar — Fleet Manager" oninput="checkJoFormReady()"></div>';
+    body += '<div class="form-group"><label>Products demonstrated <span style="color:var(--red)">*</span></label>';
+    body += '<input type="text" id="jo-products" class="form-input" placeholder="e.g. Basic GPS, Engine Cut, VLTD" oninput="checkJoFormReady()"></div>';
+    body += '<div class="form-group"><label>Customer interest level <span style="color:var(--red)">*</span></label>';
+    body += '<select id="jo-interest" class="form-input" onchange="checkJoFormReady()"><option value="">Select…</option>';
     body += '<option value="high">🔥 High — Ready to buy</option>';
     body += '<option value="medium">👍 Medium — Considering</option>';
     body += '<option value="low">👎 Low — Not sure</option>';
     body += '<option value="none">❌ Not Interested</option></select></div>';
-    body += '<div class="form-group"><label>Customer concerns / questions raised</label>';
-    body += '<textarea id="jo-concerns" class="form-input" rows="2" placeholder="What did the customer ask?"></textarea></div>';
-    body += '<div class="form-group"><label>Follow-up required?</label>';
-    body += '<select id="jo-followup" class="form-input" onchange="joToggleFollowup(this.value)">';
+    body += '<div class="form-group"><label>Customer concerns / questions raised <span style="color:var(--red)">*</span></label>';
+    body += '<textarea id="jo-concerns" class="form-input" rows="2" placeholder="What did the customer ask? (Write None if no concerns)" oninput="checkJoFormReady()"></textarea></div>';
+    body += '<div class="form-group"><label>Follow-up required? <span style="color:var(--red)">*</span></label>';
+    body += '<select id="jo-followup" class="form-input" onchange="joToggleFollowup(this.value);checkJoFormReady()"><option value="">Select…</option>';
     body += '<option value="no">No</option><option value="yes">Yes — Set follow-up date</option></select></div>';
-    body += '<div class="form-group" id="jo-followup-date" style="display:none"><label>Follow-up Date</label>';
-    body += '<input type="date" id="jo-fu-date" class="form-input"></div>';
-    body += '<div class="form-group"><label>Remarks</label>';
-    body += '<textarea id="jo-remarks" class="form-input" rows="2"></textarea></div>';
+    body += '<div class="form-group" id="jo-followup-date" style="display:none"><label>Follow-up Date <span style="color:var(--red)">*</span></label>';
+    body += '<input type="date" id="jo-fu-date" class="form-input" oninput="checkJoFormReady()"></div>';
+    body += '<div class="form-group"><label>Remarks <span style="color:var(--red)">*</span></label>';
+    body += '<textarea id="jo-remarks" class="form-input" rows="2" placeholder="Write None if nothing else to add" oninput="checkJoFormReady()"></textarea></div>';
   } else if(type === 'troubleshoot'){
     body  = '<div class="form-group"><label>What was the issue found?</label>';
     body += '<select id="jo-issue" class="form-input"><option value="">Select issue…</option>';
@@ -5419,6 +5419,41 @@ function openJobOutcome(taskId){
   var ov = document.getElementById('job-outcome-overlay');
   if(!ov){ showToast('❌ Form not found'); return; }
   ov.style.display = 'flex';
+  checkJoFormReady();
+}
+
+// ── Validate demo report form — submit stays disabled until all required fields filled ──
+function checkJoFormReady(){
+  var btn = document.getElementById('jo-submit-btn');
+  if(!btn) return;
+  if(_joJobType !== 'demo'){
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.style.background = 'var(--green)';
+    btn.style.cursor = 'pointer';
+    return;
+  }
+
+  var company   = document.getElementById('jo-company')?.value.trim();
+  var attendee  = document.getElementById('jo-attendee')?.value.trim();
+  var products  = document.getElementById('jo-products')?.value.trim();
+  var interest  = document.getElementById('jo-interest')?.value;
+  var concerns  = document.getElementById('jo-concerns')?.value.trim();
+  var followup  = document.getElementById('jo-followup')?.value;
+  var remarks   = document.getElementById('jo-remarks')?.value.trim();
+
+  var ready = !!company && !!attendee && !!products && !!interest && !!concerns && !!followup && !!remarks;
+
+  // If follow-up is Yes, the follow-up date is also required
+  if(ready && followup === 'yes'){
+    var fuDate = document.getElementById('jo-fu-date')?.value;
+    if(!fuDate) ready = false;
+  }
+
+  btn.disabled = !ready;
+  btn.style.opacity = ready ? '1' : '.5';
+  btn.style.background = ready ? 'var(--green)' : 'var(--text3)';
+  btn.style.cursor = ready ? 'pointer' : 'not-allowed';
 }
 
 
@@ -5453,6 +5488,7 @@ async function joFetchVehicle(){
 
 async function submitJobOutcome(){
   const btn = document.getElementById('jo-submit-btn');
+  if(btn.disabled) return; // safety: block submit until form complete
   btn.disabled = true; btn.textContent = 'Saving…';
 
   const type   = _joJobType;
@@ -5509,8 +5545,8 @@ async function submitJobOutcome(){
     close_task: true,
   }).catch(()=>({}));
 
-  btn.disabled = false;
   btn.textContent = '✅ Submit & Close Task';
+  checkJoFormReady(); // re-validate (also restores disabled state appropriately on failure)
 
   if(res.success){
     localStorage.removeItem('demo_proceeded_' + taskId);
