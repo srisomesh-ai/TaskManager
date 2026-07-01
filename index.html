@@ -628,7 +628,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
               <div class="form-row">
                 <div class="form-group">
                   <label>Job Type</label>
-                  <select id="fm-job" onchange="setModalJobPrice(this.value);checkTaskFormReady();toggleFreeService(this.value)">
+                  <select id="fm-job" onchange="setModalJobPrice(this.value);checkTaskFormReady();toggleFreeService(this.value);checkInventory()">
                     <option value="">Select Job Type</option>
                     <option value="Basic/Normal">Basic/Normal GPS</option>
                     <option value="Engine Status">Engine Status GPS</option>
@@ -644,7 +644,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
                     <option value="Demonstration">Demonstration</option>
                   </select>
                 </div>
-                <div class="form-group" id="fm-qty-group"><label>Device Qty</label><input type="number" id="fm-qty" value="1" min="1" oninput="updateModalGST()"></div>
+                <div class="form-group" id="fm-qty-group"><label>Device Qty</label><input type="number" id="fm-qty" value="1" min="1" oninput="updateModalGST();checkInventory()"></div>
               </div>
               <div class="form-group" id="fm-price-group" style="margin-bottom:12px">
                 <label>Standard Price (₹) <span id="fm-price-hint" style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none"></span></label>
@@ -717,7 +717,11 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
               <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--accent2);margin-bottom:12px">📋 Assignment</div>
               <div class="form-group" style="margin-bottom:12px">
                 <label>Assign Technician</label>
-                <select id="fm-tech" onchange="handleTechChange()"><option value="">Unassigned</option></select>
+                <select id="fm-tech" onchange="handleTechChange();checkInventory()"><option value="">Unassigned</option></select>
+              </div>
+              <!-- INVENTORY CHECK WIDGET -->
+              <div id="inv-check-box" style="display:none;margin-bottom:12px;border-radius:8px;overflow:hidden;border:1.5px solid var(--border)">
+                <div id="inv-check-inner"></div>
               </div>
               <div id="fm-reminder-wrap" style="margin-bottom:12px">
                 <div style="background:var(--saffron-bg);border:1.5px solid var(--saffron);border-radius:7px;padding:10px 14px">
@@ -2699,6 +2703,131 @@ function clearPayMode(){
   document.querySelectorAll('.pay-mode-opt').forEach(b=>b.classList.remove('selected'));
 }
 
+// ── INVENTORY CHECK on task creation form ──────────────────────────────
+function checkInventory(){
+  var box    = document.getElementById('inv-check-box');
+  var inner  = document.getElementById('inv-check-inner');
+  if(!box || !inner) return;
+
+  var techSel  = document.getElementById('fm-tech');
+  var jobSel   = document.getElementById('fm-job');
+  var qtyInput = document.getElementById('fm-qty');
+  if(!techSel || !jobSel || !qtyInput) return;
+
+  var techId   = techSel.value;
+  var techName = techSel.options[techSel.selectedIndex]?.text || '';
+  var jobVal   = (jobSel.value || '').toLowerCase();
+  var qtyNeed  = parseInt(qtyInput.value) || 1;
+
+  // Only show if tech selected and job has a device
+  var isDemoOrTrouble = jobVal.includes('demo') || jobVal.includes('troubleshoot') || jobVal.includes('offline') || jobVal.includes('service');
+  if(!techId || !jobVal || isDemoOrTrouble){
+    box.style.display = 'none';
+    return;
+  }
+
+  // Load inventory data from localStorage (shared with inventory.html)
+  var items = [], movements = [];
+  try {
+    items     = JSON.parse(localStorage.getItem('inv_items') || '[]');
+    movements = JSON.parse(localStorage.getItem('inv_movements') || '[]');
+  } catch(e){ box.style.display = 'none'; return; }
+
+  if(!items.length){ box.style.display = 'none'; return; }
+
+  // Match job type to inventory item (GPS Tracker category)
+  // Match by keywords: basic, vltd, engine cut, obd
+  function matchItem(job){
+    var j = job.toLowerCase();
+    return items.find(function(i){
+      if(i.category !== 'GPS Tracker') return false;
+      var n = (i.name + ' ' + (i.model||'')).toLowerCase();
+      if(j.includes('vltd') && n.includes('vltd'))  return true;
+      if((j.includes('engine cut') || j.includes('relay')) && n.includes('engine cut')) return true;
+      if(j.includes('obd') && n.includes('obd'))    return true;
+      if((j.includes('basic') || j.includes('normal') || j.includes('standard')) && n.includes('basic')) return true;
+      return false;
+    }) || items.find(function(i){ return i.category === 'GPS Tracker'; }); // fallback to first GPS item
+  }
+
+  var item = matchItem(jobVal);
+  if(!item){ box.style.display = 'none'; return; }
+
+  // Compute how much this technician holds
+  var techMovs = movements.filter(function(m){ return m.techName === techName && m.itemId === item.id; });
+  var techHeld = techMovs.reduce(function(s, m){
+    if(m.type === 'out')    return s + m.qty;
+    if(m.type === 'return') return s - m.qty;
+    return s;
+  }, 0);
+  techHeld = Math.max(0, techHeld);
+
+  // Compute office stock
+  var allMovs = movements.filter(function(m){ return m.itemId === item.id; });
+  var totalIn  = allMovs.filter(function(m){ return m.type === 'in'; }).reduce(function(s,m){ return s+m.qty; }, 0);
+  var totalOut = allMovs.filter(function(m){ return m.type === 'out'; }).reduce(function(s,m){ return s+m.qty; }, 0);
+  var returns  = allMovs.filter(function(m){ return m.type === 'return'; }).reduce(function(s,m){ return s+m.qty; }, 0);
+  var officeStock = (item.opening || 0) + totalIn - totalOut + returns;
+  officeStock = Math.max(0, officeStock);
+
+  var afterInstall = techHeld - qtyNeed;
+  var canFulfill   = techHeld >= qtyNeed;
+  var canFromOffice = officeStock >= qtyNeed;
+
+  // Build status message
+  var bg, border, html;
+
+  if(canFulfill){
+    // Tech has enough
+    bg = 'var(--green-bg)'; border = 'var(--green)';
+    html  = '<div style="padding:10px 14px;background:' + bg + ';border-left:4px solid ' + border + '">';
+    html += '<div style="font-size:12px;font-weight:800;color:var(--green);margin-bottom:6px">✅ ' + techName + ' has enough stock</div>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">';
+    html += invStat('With Tech', techHeld, 'var(--green)');
+    html += invStat('Needed', qtyNeed, 'var(--text)');
+    html += invStat('Remaining after', afterInstall, afterInstall >= 0 ? 'var(--green)' : 'var(--red)');
+    html += '</div></div>';
+
+  } else if(canFromOffice){
+    // Tech doesn't have enough but office does — needs to collect from office
+    bg = 'var(--amber-bg)'; border = 'var(--amber)';
+    html  = '<div style="padding:10px 14px;background:' + bg + ';border-left:4px solid ' + border + '">';
+    html += '<div style="font-size:12px;font-weight:800;color:#7a4500;margin-bottom:6px">⚠️ ' + techName + ' needs to collect from office</div>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">';
+    html += invStat('With Tech', techHeld, 'var(--amber)');
+    html += invStat('Needed', qtyNeed, 'var(--text)');
+    html += invStat('Office Stock', officeStock, 'var(--green)');
+    html += '</div>';
+    var need = qtyNeed - techHeld;
+    html += '<div style="margin-top:8px;font-size:11px;color:#7a4500;background:rgba(245,166,35,.15);border-radius:5px;padding:6px 10px">📦 Issue <strong>' + need + ' unit(s)</strong> from office to ' + techName + ' before dispatch</div>';
+    html += '</div>';
+
+  } else {
+    // Neither tech nor office has enough
+    bg = 'var(--red-bg)'; border = 'var(--red)';
+    html  = '<div style="padding:10px 14px;background:' + bg + ';border-left:4px solid ' + border + '">';
+    html += '<div style="font-size:12px;font-weight:800;color:var(--red);margin-bottom:6px">🚨 Insufficient stock — reorder needed</div>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">';
+    html += invStat('With Tech', techHeld, 'var(--red)');
+    html += invStat('Office Stock', officeStock, 'var(--red)');
+    html += invStat('Needed', qtyNeed, 'var(--text)');
+    html += '</div>';
+    var short = qtyNeed - techHeld - officeStock;
+    html += '<div style="margin-top:8px;font-size:11px;color:var(--red);background:rgba(231,76,60,.1);border-radius:5px;padding:6px 10px">🚨 Short by <strong>' + short + ' unit(s)</strong> — add stock in Inventory before dispatching</div>';
+    html += '</div>';
+  }
+
+  inner.innerHTML = html;
+  box.style.display = '';
+}
+
+function invStat(label, val, color){
+  return '<div style="background:rgba(0,0,0,.04);border-radius:6px;padding:7px 10px;text-align:center">' +
+    '<div style="font-size:18px;font-weight:900;color:' + color + '">' + val + '</div>' +
+    '<div style="font-size:10px;color:var(--text3);font-weight:600;margin-top:2px">' + label + '</div>' +
+  '</div>';
+}
+
 function handleTechChange(){
   const val=document.getElementById('fm-tech')?.value||'';
   const rw=document.getElementById('fm-reminder-wrap');
@@ -2804,6 +2933,7 @@ function openCreateModal(){
    'fm-pay-reminder','fm-outstation-loc','fm-travel-amt','fm-notes']
     .forEach(id=>{const el=document.getElementById(id);if(el){el.value='';el.disabled=false;}});
   onLeadTypeChange(''); // Reset Demo-hidden fields
+  var invBox = document.getElementById('inv-check-box'); if(invBox) invBox.style.display='none';
   ['fm-leadtype','fm-profile','fm-job','fm-travel-by']
     .forEach(id=>{const el=document.getElementById(id);if(el){el.selectedIndex=0;el.disabled=false;}});
   const qty=document.getElementById('fm-qty');if(qty){qty.value=1;qty.disabled=false;}
