@@ -184,6 +184,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
   <div class="nav-item" onclick="showPage('items')" id="nav-items">
     <span class="nav-icon">⚙️</span> Item Master
   </div>
+  <div id="inv-admin-section" style="display:none">
+    <div class="nav-sec">Admin</div>
+    <div class="nav-item" onclick="openStockReset()" style="color:rgba(255,100,100,.85)">
+      <span class="nav-icon">🔄</span> Reset Stock Counts
+    </div>
+  </div>
   <div class="sb-footer">
     <div class="sb-back" onclick="window.location.href='index.html'">← Back to CRM</div>
   </div>
@@ -572,6 +578,11 @@ var _invUser = null;
   var roleEl = document.getElementById('inv-user-role');
   if(nameEl) nameEl.textContent = _invUser.name || 'User';
   if(roleEl) roleEl.textContent = (_invUser.role || '').toUpperCase();
+  // Show admin-only sidebar section
+  if(_invUser.role === 'admin'){
+    var adminSec = document.getElementById('inv-admin-section');
+    if(adminSec) adminSec.style.display = '';
+  }
 })();
 
 document.addEventListener('DOMContentLoaded', function(){
@@ -1093,6 +1104,61 @@ function categoryBadge(cat){
   var m = map[cat] || ['','📦'];
   return '<span class="badge ' + m[0] + '">' + m[1] + ' ' + esc(cat) + '</span>';
 }
+
+
+// ── STOCK RESET (admin only) ──────────────────────────────────────────
+function openStockReset(){
+  if(_invUser && _invUser.role !== 'admin'){ showToast('❌ Admin only'); return; }
+  document.getElementById('stock-reset-overlay').style.display = 'flex';
+}
+
+function closeStockReset(){
+  document.getElementById('stock-reset-overlay').style.display = 'none';
+}
+
+function confirmStockReset(){
+  var btn = document.getElementById('stock-reset-btn');
+  btn.disabled = true; btn.textContent = 'Resetting…';
+  var token = localStorage.getItem('bgps_token') || '';
+  fetch('api/index.php?action=stock_reset_movements', {
+    method: 'POST', cache: 'no-store',
+    headers: { 'X-Auth-Token': token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({})
+  }).then(function(r){ return r.json(); })
+    .then(function(d){
+      btn.disabled = false; btn.textContent = 'Yes, Reset';
+      if(d.success){
+        closeStockReset();
+        showToast('✅ Stock counts reset — all movements cleared');
+        loadData();
+      } else {
+        showToast('❌ ' + (d.error || 'Reset failed'));
+      }
+    }).catch(function(){
+      btn.disabled = false; btn.textContent = 'Yes, Reset';
+      showToast('❌ Network error');
+    });
+}
 </script>
+<!-- STOCK RESET CONFIRM MODAL -->
+<div id="stock-reset-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9500;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--surface);border-radius:16px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.35);overflow:hidden">
+    <div style="padding:24px 22px 12px;text-align:center">
+      <div style="font-size:44px;margin-bottom:10px">🔄</div>
+      <div style="font-size:16px;font-weight:800;color:var(--text);margin-bottom:8px">Reset Stock Counts?</div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.6;background:var(--red-bg);border-radius:10px;padding:12px 14px;margin-top:8px;text-align:left">
+        ⚠️ This will <strong>delete all stock movements</strong> (stock-in, issues, returns).<br><br>
+        All item quantities will go back to <strong>zero</strong>.<br><br>
+        <strong>Item names and categories are not affected.</strong><br><br>
+        This cannot be undone.
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;padding:16px 22px 22px">
+      <button onclick="closeStockReset()" style="flex:1;padding:12px;background:var(--surface2);border:none;border-radius:10px;font-size:14px;font-weight:700;color:var(--text2);cursor:pointer">Cancel</button>
+      <button onclick="confirmStockReset()" id="stock-reset-btn" style="flex:1;padding:12px;background:var(--red);border:none;border-radius:10px;font-size:14px;font-weight:800;color:#fff;cursor:pointer">Yes, Reset</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

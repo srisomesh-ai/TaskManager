@@ -2083,6 +2083,15 @@ case 'pl_get_public':
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage(),'items'=>[]]); }
     break;
 
+case 'stock_reset_movements':
+    if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Admin only']); break; }
+    try {
+        $deleted = $pdo->exec("DELETE FROM stock_movements");
+        $pdo->prepare("INSERT INTO stock_movements (item_id, move_type, qty, ref_note, move_date, done_by) SELECT id, 'adjustment', 0, 'Reset by admin', CURDATE(), ? FROM stock_items WHERE 1=0")->execute([$cu['name']]);
+        echo json_encode(['success'=>true, 'deleted'=>$deleted]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 // ── GPS STOCK INVENTORY API (stock_ prefix, no collision with inv_ invoicing) ──
 
 case 'stock_get':
