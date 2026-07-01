@@ -1114,9 +1114,21 @@ function openStockReset(){
 
 function closeStockReset(){
   document.getElementById('stock-reset-overlay').style.display = 'none';
+  var pwd = document.getElementById('stock-reset-pwd');
+  if(pwd) pwd.value = '';
+  var err = document.getElementById('stock-reset-err');
+  if(err) err.style.display = 'none';
 }
 
 function confirmStockReset(){
+  var pwd = document.getElementById('stock-reset-pwd')?.value || '';
+  var errEl = document.getElementById('stock-reset-err');
+  if(pwd !== '7330984620'){
+    if(errEl) errEl.style.display = '';
+    document.getElementById('stock-reset-pwd').focus();
+    return;
+  }
+  if(errEl) errEl.style.display = 'none';
   var btn = document.getElementById('stock-reset-btn');
   btn.disabled = true; btn.textContent = 'Resetting…';
   var token = localStorage.getItem('bgps_token') || '';
@@ -1151,6 +1163,11 @@ function confirmStockReset(){
         All item quantities will go back to <strong>zero</strong>.<br><br>
         <strong>Item names and categories are not affected.</strong><br><br>
         This cannot be undone.
+      </div>
+      <div style="margin-top:14px;text-align:left">
+        <label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:6px">Enter admin password to confirm</label>
+        <input type="password" id="stock-reset-pwd" placeholder="Password" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;outline:none" onkeydown="if(event.key==='Enter') confirmStockReset()">
+        <div id="stock-reset-err" style="display:none;color:var(--red);font-size:12px;font-weight:700;margin-top:6px">❌ Incorrect password</div>
       </div>
     </div>
     <div style="display:flex;gap:10px;padding:16px 22px 22px">
