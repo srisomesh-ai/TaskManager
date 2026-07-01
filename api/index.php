@@ -60,20 +60,21 @@ try {
         min_stock   INT NOT NULL DEFAULT 5,
         notes       TEXT DEFAULT NULL,
         created_by  VARCHAR(100) DEFAULT NULL,
-        created_at  DATETIME DEFAULT NOW(),
-        updated_at  DATETIME DEFAULT NOW() ON UPDATE NOW()
+        created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-
+} catch(Exception $e){}
+try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS inventory_movements (
         id          INT AUTO_INCREMENT PRIMARY KEY,
         item_id     INT NOT NULL,
-        type        ENUM('in','out','return','adjustment') NOT NULL,
+        type        VARCHAR(20) NOT NULL,
         qty         INT NOT NULL DEFAULT 1,
         tech_name   VARCHAR(100) DEFAULT NULL,
         ref_note    VARCHAR(255) DEFAULT NULL,
         move_date   DATE NOT NULL,
         done_by     VARCHAR(100) DEFAULT NULL,
-        created_at  DATETIME DEFAULT NOW(),
+        created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (item_id) REFERENCES inventory_items(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 } catch(Exception $e){}
@@ -2133,6 +2134,10 @@ case 'inv_save_movement':
 // ── GET INVENTORY STOCK SUMMARY (computed) ───────────────────────────
 case 'inv_get_stock':
     if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    // Ensure tables exist before querying
+    try { $pdo->exec("CREATE TABLE IF NOT EXISTS inventory_items (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(150) NOT NULL, category VARCHAR(50) NOT NULL, model VARCHAR(100) DEFAULT NULL, unit VARCHAR(20) NOT NULL DEFAULT 'Pcs', opening_bal INT NOT NULL DEFAULT 0, min_stock INT NOT NULL DEFAULT 5, notes TEXT DEFAULT NULL, created_by VARCHAR(100) DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch(Exception $e){}
+    try { $pdo->exec("CREATE TABLE IF NOT EXISTS inventory_movements (id INT AUTO_INCREMENT PRIMARY KEY, item_id INT NOT NULL, type VARCHAR(20) NOT NULL, qty INT NOT NULL DEFAULT 1, tech_name VARCHAR(100) DEFAULT NULL, ref_note VARCHAR(255) DEFAULT NULL, move_date DATE NOT NULL, done_by VARCHAR(100) DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch(Exception $e){}
+    try {
     $items = $pdo->query("SELECT i.*,
         COALESCE((SELECT SUM(qty) FROM inventory_movements WHERE item_id=i.id AND type='in'),0) as total_in,
         COALESCE((SELECT SUM(qty) FROM inventory_movements WHERE item_id=i.id AND type='out'),0) as total_out,
@@ -2157,6 +2162,7 @@ case 'inv_get_stock':
         if($row['type']==='return') $techStock[$n][$iid] -= intval($row['qty']);
     }
     echo json_encode(['items'=>$items,'tech_stock'=>$techStock]);
+    } catch(Exception $stockEx){ echo json_encode(['error'=>'DB error: '.$stockEx->getMessage(),'items'=>[],'tech_stock'=>[]]); }
     break;
 
 // ════════════════════════════════════════════════════════════════════
