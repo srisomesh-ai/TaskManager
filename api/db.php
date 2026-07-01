@@ -187,33 +187,6 @@ function getDB() {
                 setting_value LONGTEXT,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-
-            // ── GPS INVENTORY STOCK TABLES ────────────────────────────
-            "CREATE TABLE IF NOT EXISTS inventory_items (
-                id          INT AUTO_INCREMENT PRIMARY KEY,
-                name        VARCHAR(150) NOT NULL,
-                category    VARCHAR(50)  NOT NULL,
-                model       VARCHAR(100) DEFAULT NULL,
-                unit        VARCHAR(20)  NOT NULL DEFAULT 'Pcs',
-                opening_bal INT          NOT NULL DEFAULT 0,
-                min_stock   INT          NOT NULL DEFAULT 5,
-                notes       TEXT         DEFAULT NULL,
-                created_by  VARCHAR(100) DEFAULT NULL,
-                created_at  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
-                updated_at  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-
-            "CREATE TABLE IF NOT EXISTS inventory_movements (
-                id          INT AUTO_INCREMENT PRIMARY KEY,
-                item_id     INT          NOT NULL,
-                move_type   VARCHAR(20)  NOT NULL,
-                qty         INT          NOT NULL DEFAULT 1,
-                tech_name   VARCHAR(100) DEFAULT NULL,
-                ref_note    VARCHAR(255) DEFAULT NULL,
-                move_date   DATE         NOT NULL,
-                done_by     VARCHAR(100) DEFAULT NULL,
-                created_at  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
         );
 
         foreach ($migrations as $sql) {
