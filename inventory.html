@@ -599,7 +599,7 @@ function invApi(action, params, method, body){
 
 function loadData(){
   Promise.all([
-    invApi('inv_get_stock').then(function(d){
+    invApi('stock_get').then(function(d){
       _items = (d.items || []).map(function(r){
         return { id: String(r.id), name: r.name, category: r.category, model: r.model||'', unit: r.unit,
           opening: parseInt(r.opening_bal||0), minStock: parseInt(r.min_stock||0), notes: r.notes||'' };
@@ -614,7 +614,7 @@ function loadData(){
         });
       });
     }),
-    invApi('inv_get_movements').then(function(d){
+    invApi('stock_get_movements').then(function(d){
       _movements = (d.movements || []).map(function(m){
         return { id: String(m.id), type: m.move_type, itemId: String(m.item_id),
           qty: parseInt(m.qty||0), techName: m.tech_name||'', date: m.move_date||'', ref: m.ref_note||'', by: m.done_by||'', itemName: m.item_name||'' };
@@ -974,7 +974,7 @@ function saveItem(){
     notes:    document.getElementById('im-notes').value.trim(),
   };
   var wasEdit = !!_editItemId;
-  invApi('inv_save_item', null, 'POST', {
+  invApi('stock_save_item', null, 'POST', {
     id: _editItemId || 0, name: item.name, category: item.category,
     model: item.model, unit: item.unit, opening_bal: item.opening,
     min_stock: item.minStock, notes: item.notes
@@ -990,7 +990,7 @@ function deleteItem(id){
   var hasMovements = _movements.some(function(m){ return m.itemId === id; });
   if(hasMovements){ showToast('⚠️ Cannot delete — item has movement history'); return; }
   if(!confirm('Delete "' + item.name + '"?')) return;
-  invApi('inv_delete_item', null, 'POST', {id: id})
+  invApi('stock_delete_item', null, 'POST', {id: id})
     .then(function(d){
       if(d.success){ showToast('🗑️ Item deleted'); loadData(); }
       else showToast('❌ ' + (d.error||'Delete failed'));
@@ -1066,7 +1066,7 @@ function saveMovement(){
 
   var byUser = (_invUser && _invUser.name) ? _invUser.name : 'Admin';
 
-  invApi('inv_save_movement', null, 'POST', {
+  invApi('stock_save_movement', null, 'POST', {
     item_id: itemId, type: type, qty: qty,
     tech_name: (type==='out'||type==='return') ? tech : '',
     ref_note: ref, move_date: date

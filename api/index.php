@@ -2011,7 +2011,7 @@ case 'mark_demo_lost':
 // ════════════════════════════════════════════════════
 
 // ── GET STOCK SUMMARY ────────────────────────────────
-case 'inv_get_stock':
+case 'stock_get':
     if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     try {
         // Seed default items if table is empty
@@ -2055,7 +2055,7 @@ case 'inv_get_stock':
     break;
 
 // ── GET MOVEMENTS ────────────────────────────────────
-case 'inv_get_movements':
+case 'stock_get_movements':
     if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     try {
         $w=[]; $p=[];
@@ -2071,7 +2071,7 @@ case 'inv_get_movements':
     break;
 
 // ── SAVE ITEM (add or edit) ──────────────────────────
-case 'inv_save_item':
+case 'stock_save_item':
     if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     $iid=intval($body['id']??0); $name=trim($body['name']??''); $cat=trim($body['category']??'');
     if(!$name||!$cat){ echo json_encode(['error'=>'Name and category required']); break; }
@@ -2091,7 +2091,7 @@ case 'inv_save_item':
     break;
 
 // ── DELETE ITEM ──────────────────────────────────────
-case 'inv_delete_item':
+case 'stock_delete_item':
     if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     $iid=intval($body['id']??0);
     try {
@@ -2103,7 +2103,7 @@ case 'inv_delete_item':
     break;
 
 // ── SAVE MOVEMENT ────────────────────────────────────
-case 'inv_save_movement':
+case 'stock_save_movement':
     if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     $itemId=intval($body['item_id']??0); $type=trim($body['type']??'');
     $qty=intval($body['qty']??0); $tech=trim($body['tech_name']??'');
