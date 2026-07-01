@@ -2704,6 +2704,10 @@ function clearPayMode(){
 }
 
 // ── INVENTORY CHECK on task creation form ──────────────────────────────
+// Cache for inventory stock (refreshed each time task modal opens)
+var _invStockCache = null;
+var _invStockCacheTs = 0;
+
 function checkInventory(){
   var box    = document.getElementById('inv-check-box');
   var inner  = document.getElementById('inv-check-inner');
@@ -2716,59 +2720,76 @@ function checkInventory(){
 
   var techId   = techSel.value;
   var techName = techSel.options[techSel.selectedIndex]?.text || '';
-  var jobVal   = (jobSel.value || '').toLowerCase();
+  var jobVal   = (jobSel.value || '');
+  var jobLower = jobVal.toLowerCase();
   var qtyNeed  = parseInt(qtyInput.value) || 1;
 
-  // Only show if tech selected and job has a device
-  var isDemoOrTrouble = jobVal.includes('demo') || jobVal.includes('troubleshoot') || jobVal.includes('offline') || jobVal.includes('service');
-  if(!techId || !jobVal || isDemoOrTrouble){
-    box.style.display = 'none';
+  // Skip non-device jobs
+  var isNoDevice = jobLower.includes('demo') || jobLower.includes('troubleshoot') ||
+                   jobLower.includes('offline') || jobLower.includes('service') ||
+                   jobLower.includes('only remove') || !jobVal;
+  if(!techId || isNoDevice){ box.style.display = 'none'; return; }
+
+  // Fetch from DB API (cache for 60s to avoid hitting API on every keystroke)
+  var now = Date.now();
+  if(_invStockCache && (now - _invStockCacheTs) < 60000){
+    _renderInvCheck(_invStockCache, box, inner, techName, jobLower, qtyNeed);
     return;
   }
+  var token = authToken || localStorage.getItem('bgps_token') || '';
+  fetch('api/index.php?action=stock_get', { cache:'no-store', headers:{'X-Auth-Token':token} })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      _invStockCache = d;
+      _invStockCacheTs = Date.now();
+      _renderInvCheck(d, box, inner, techName, jobLower, qtyNeed);
+    })
+    .catch(function(){ box.style.display = 'none'; });
+}
 
-  // Load inventory data from localStorage (shared with inventory.html)
-  var items = [], movements = [];
-  try {
-    items     = JSON.parse(localStorage.getItem('inv_items') || '[]');
-    movements = JSON.parse(localStorage.getItem('inv_movements') || '[]');
-  } catch(e){ box.style.display = 'none'; return; }
-
+function _renderInvCheck(d, box, inner, techName, jobLower, qtyNeed){
+  var items     = d.items || [];
+  var techStock = d.tech_stock || {};
   if(!items.length){ box.style.display = 'none'; return; }
 
-  // Match job type to inventory item (GPS Tracker category)
-  // Match by keywords: basic, vltd, engine cut, obd
+  // Match job type → inventory item by keyword
+  // Covers any item name the user has set — matches on keywords in both job type and item name
   function matchItem(job){
     var j = job.toLowerCase();
-    return items.find(function(i){
-      if(i.category !== 'GPS Tracker') return false;
-      var n = (i.name + ' ' + (i.model||'')).toLowerCase();
-      if(j.includes('vltd') && n.includes('vltd'))  return true;
-      if((j.includes('engine cut') || j.includes('relay')) && n.includes('engine cut')) return true;
-      if(j.includes('obd') && n.includes('obd'))    return true;
-      if((j.includes('basic') || j.includes('normal') || j.includes('standard')) && n.includes('basic')) return true;
-      return false;
-    }) || items.find(function(i){ return i.category === 'GPS Tracker'; }); // fallback to first GPS item
+    // Exact keyword priority rules
+    var rules = [
+      { jobKeys:['vltd'],                          itemKeys:['vltd'] },
+      { jobKeys:['engine cut'],                    itemKeys:['engine cut'] },
+      { jobKeys:['engine status'],                 itemKeys:['engine status','engine cut','basic'] },
+      { jobKeys:['micro'],                         itemKeys:['micro'] },
+      { jobKeys:['magnet'],                        itemKeys:['magnet'] },
+      { jobKeys:['mic','sos'],                     itemKeys:['mic','sos'] },
+      { jobKeys:['obd'],                           itemKeys:['obd'] },
+      { jobKeys:['basic','normal','standard','gps'],itemKeys:['basic','normal','standard'] },
+    ];
+    for(var ri=0; ri<rules.length; ri++){
+      var rule = rules[ri];
+      var jobMatches = rule.jobKeys.some(function(k){ return j.includes(k); });
+      if(!jobMatches) continue;
+      var found = items.find(function(i){
+        var n = ((i.name||'') + ' ' + (i.model||'')).toLowerCase();
+        return rule.itemKeys.some(function(k){ return n.includes(k); });
+      });
+      if(found) return found;
+    }
+    // Fallback: first GPS Tracker category item
+    return items.find(function(i){ return (i.category||'').toLowerCase().includes('gps'); }) || null;
   }
 
-  var item = matchItem(jobVal);
+  var item = matchItem(jobLower);
   if(!item){ box.style.display = 'none'; return; }
 
-  // Compute how much this technician holds
-  var techMovs = movements.filter(function(m){ return m.techName === techName && m.itemId === item.id; });
-  var techHeld = techMovs.reduce(function(s, m){
-    if(m.type === 'out')    return s + m.qty;
-    if(m.type === 'return') return s - m.qty;
-    return s;
-  }, 0);
-  techHeld = Math.max(0, techHeld);
-
-  // Compute office stock
-  var allMovs = movements.filter(function(m){ return m.itemId === item.id; });
-  var totalIn  = allMovs.filter(function(m){ return m.type === 'in'; }).reduce(function(s,m){ return s+m.qty; }, 0);
-  var totalOut = allMovs.filter(function(m){ return m.type === 'out'; }).reduce(function(s,m){ return s+m.qty; }, 0);
-  var returns  = allMovs.filter(function(m){ return m.type === 'return'; }).reduce(function(s,m){ return s+m.qty; }, 0);
-  var officeStock = (item.opening || 0) + totalIn - totalOut + returns;
-  officeStock = Math.max(0, officeStock);
+  // Tech held = from tech_stock map { techName: { itemId: qty } }
+  var techHeld = 0;
+  if(techStock[techName] && techStock[techName][item.id]){
+    techHeld = Math.max(0, parseInt(techStock[techName][item.id]) || 0);
+  }
+  var officeStock = Math.max(0, parseInt(item.office_stock || 0));
 
   var afterInstall = techHeld - qtyNeed;
   var canFulfill   = techHeld >= qtyNeed;
@@ -2934,6 +2955,7 @@ function openCreateModal(){
     .forEach(id=>{const el=document.getElementById(id);if(el){el.value='';el.disabled=false;}});
   onLeadTypeChange(''); // Reset Demo-hidden fields
   var invBox = document.getElementById('inv-check-box'); if(invBox) invBox.style.display='none';
+  _invStockCache = null; // force fresh fetch next open
   ['fm-leadtype','fm-profile','fm-job','fm-travel-by']
     .forEach(id=>{const el=document.getElementById(id);if(el){el.selectedIndex=0;el.disabled=false;}});
   const qty=document.getElementById('fm-qty');if(qty){qty.value=1;qty.disabled=false;}
