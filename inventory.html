@@ -157,6 +157,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     <div class="tb-sub">GPS Stock & Accessories Management</div>
   </div>
   <div class="tb-sep"></div>
+  <div style="text-align:right;margin-right:12px">
+    <div id="inv-user-name" style="color:#fff;font-size:13px;font-weight:700;line-height:1.2">–</div>
+    <div id="inv-user-role" style="color:rgba(255,255,255,.5);font-size:10px;font-weight:600;letter-spacing:.5px">–</div>
+  </div>
   <button class="tb-btn" onclick="window.location.href='index.html'">← Back to CRM</button>
 </div>
 
@@ -550,9 +554,31 @@ const KEY_ITEMS = 'inv_items';
 const KEY_MOVEMENTS = 'inv_movements';
 
 // ── INIT ─────────────────────────────────────────────────────────────
+// ── AUTH GUARD ───────────────────────────────────────────────────────
+var _invUser = null;
+
+(function authGuard(){
+  var token = localStorage.getItem('bgps_token');
+  var raw   = localStorage.getItem('bgps_user');
+  if(!token || !raw){
+    window.location.href = 'index.html';
+    return;
+  }
+  try { _invUser = JSON.parse(raw); } catch(e){ window.location.href = 'index.html'; return; }
+  if(!_invUser || !['admin','assigner'].includes(_invUser.role)){
+    window.location.href = 'index.html';
+    return;
+  }
+  // Show logged-in user name in topbar
+  var nameEl = document.getElementById('inv-user-name');
+  var roleEl = document.getElementById('inv-user-role');
+  if(nameEl) nameEl.textContent = _invUser.name || 'User';
+  if(roleEl) roleEl.textContent = (_invUser.role || '').toUpperCase();
+})();
+
 document.addEventListener('DOMContentLoaded', function(){
+  if(!_invUser) return; // auth guard already redirecting
   loadData();
-  // set today as default date in movement modal
   document.getElementById('mv-m-date').value = today();
   loadTechs();
 });
@@ -599,9 +625,9 @@ function uid(){
 
 // ── LOAD TECHS FROM CRM API ──────────────────────────────────────────
 function loadTechs(){
-  var token = localStorage.getItem('bgps_token') || localStorage.getItem('bgps_tech_token') || '';
+  var token = localStorage.getItem('bgps_token') || '';
   if(!token) return;
-  fetch(API + '?action=get_users&role=technician', { cache: 'no-store', headers: { 'X-Auth-Token': token } })
+  fetch(API + '?action=get_users&role=technician', { cache: 'no-store', headers: { 'X-Auth-Token': localStorage.getItem('bgps_token') || '' } })
     .then(function(r){ return r.json(); })
     .then(function(d){
       _techs = (d.users || []).map(function(u){ return { id: u.id, name: u.name }; });
@@ -1011,8 +1037,7 @@ function saveMovement(){
 
   btn.disabled = true; btn.textContent = 'Saving…';
 
-  var byUser = localStorage.getItem('bgps_user_name') || localStorage.getItem('bgps_tech_user') || 'Admin';
-  try { byUser = JSON.parse(byUser).name || byUser; } catch(e){}
+  var byUser = (_invUser && _invUser.name) ? _invUser.name : 'Admin';
 
   _movements.push({
     id:       'mv_' + Date.now(),
