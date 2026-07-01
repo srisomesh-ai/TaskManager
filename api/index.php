@@ -2011,6 +2011,8 @@ case 'mark_demo_lost':
 case 'pl_get':
     if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Admin only']); break; }
     try {
+        // Ensure table exists
+        $pdo->exec("CREATE TABLE IF NOT EXISTS price_list (id INT AUTO_INCREMENT PRIMARY KEY, product_name VARCHAR(200) NOT NULL, category VARCHAR(100) NOT NULL DEFAULT 'GPS Device', server_name VARCHAR(100) DEFAULT NULL, description TEXT DEFAULT NULL, price_excl_gst DECIMAL(10,2) NOT NULL DEFAULT 0, gst_percent DECIMAL(5,2) NOT NULL DEFAULT 18, price_incl_gst DECIMAL(10,2) NOT NULL DEFAULT 0, is_active TINYINT(1) NOT NULL DEFAULT 1, sort_order INT NOT NULL DEFAULT 0, created_by VARCHAR(100) DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         // Seed defaults if empty
         $cnt = $pdo->query("SELECT COUNT(*) FROM price_list")->fetchColumn();
         if($cnt == 0){
@@ -2042,6 +2044,7 @@ case 'pl_get':
 
 case 'pl_save':
     if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Admin only']); break; }
+    try { $pdo->exec("CREATE TABLE IF NOT EXISTS price_list (id INT AUTO_INCREMENT PRIMARY KEY, product_name VARCHAR(200) NOT NULL, category VARCHAR(100) NOT NULL DEFAULT 'GPS Device', server_name VARCHAR(100) DEFAULT NULL, description TEXT DEFAULT NULL, price_excl_gst DECIMAL(10,2) NOT NULL DEFAULT 0, gst_percent DECIMAL(5,2) NOT NULL DEFAULT 18, price_incl_gst DECIMAL(10,2) NOT NULL DEFAULT 0, is_active TINYINT(1) NOT NULL DEFAULT 1, sort_order INT NOT NULL DEFAULT 0, created_by VARCHAR(100) DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch(Exception $e){}
     $id   = intval($body['id']??0);
     $name = trim($body['product_name']??'');
     $cat  = trim($body['category']??'GPS Device');

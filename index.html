@@ -6332,6 +6332,10 @@ var _plEditId = null;
 async function loadPriceList(){
   document.getElementById('pl-tbody').innerHTML = '<tr><td colspan="8" style="padding:40px;text-align:center;color:var(--text3)">⏳ Loading…</td></tr>';
   const res = await api('pl_get').catch(()=>({}));
+  if(res.error){
+    document.getElementById('pl-tbody').innerHTML = '<tr><td colspan="8" style="padding:40px;text-align:center;color:var(--red)">❌ Error: ' + res.error + '</td></tr>';
+    return;
+  }
   _plItems = res.items || [];
   renderPriceList();
 }
@@ -6437,7 +6441,8 @@ async function savePl(){
     showToast(_plEditId ? '✅ Item updated' : '✅ Item added');
     loadPriceList();
   } else {
-    showToast('❌ '+(res.error||'Save failed'));
+    showToast('❌ '+(res.error||'Save failed — check console'));
+    console.error('pl_save error:', res);
   }
 }
 
