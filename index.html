@@ -2726,46 +2726,49 @@ function checkInventory(){
     return;
   }
 
-  // Load inventory data from DB API
-  var token = authToken || localStorage.getItem('bgps_token') || '';
-  fetch('api/index.php?action=inv_get_stock', { cache: 'no-store', headers: { 'X-Auth-Token': token } })
-    .then(function(r){ return r.json(); })
-    .then(function(d){ _renderInvCheck(d, box, inner, techName, jobVal, qtyNeed); })
-    .catch(function(){ box.style.display = 'none'; });
-}
-
-function _renderInvCheck(d, box, inner, techName, jobVal, qtyNeed){
-  var items     = d.items || [];
-  var techStock = d.tech_stock || {};
+  // Load inventory data from localStorage (shared with inventory.html)
+  var items = [], movements = [];
+  try {
+    items     = JSON.parse(localStorage.getItem('inv_items') || '[]');
+    movements = JSON.parse(localStorage.getItem('inv_movements') || '[]');
+  } catch(e){ box.style.display = 'none'; return; }
 
   if(!items.length){ box.style.display = 'none'; return; }
 
-  // Match job type to GPS Tracker item
+  // Match job type to inventory item (GPS Tracker category)
+  // Match by keywords: basic, vltd, engine cut, obd
   function matchItem(job){
     var j = job.toLowerCase();
     return items.find(function(i){
       if(i.category !== 'GPS Tracker') return false;
-      var n = ((i.name||'') + ' ' + (i.model||'')).toLowerCase();
-      if(j.includes('vltd') && n.includes('vltd')) return true;
-      if((j.includes('engine cut')||j.includes('relay')) && n.includes('engine cut')) return true;
-      if(j.includes('obd') && n.includes('obd')) return true;
-      if((j.includes('basic')||j.includes('normal')||j.includes('standard')) && n.includes('basic')) return true;
+      var n = (i.name + ' ' + (i.model||'')).toLowerCase();
+      if(j.includes('vltd') && n.includes('vltd'))  return true;
+      if((j.includes('engine cut') || j.includes('relay')) && n.includes('engine cut')) return true;
+      if(j.includes('obd') && n.includes('obd'))    return true;
+      if((j.includes('basic') || j.includes('normal') || j.includes('standard')) && n.includes('basic')) return true;
       return false;
-    }) || items.find(function(i){ return i.category === 'GPS Tracker'; });
+    }) || items.find(function(i){ return i.category === 'GPS Tracker'; }); // fallback to first GPS item
   }
 
   var item = matchItem(jobVal);
   if(!item){ box.style.display = 'none'; return; }
 
-  // Tech stock from DB (tech_stock: { techName: { itemId: qty } })
-  var techHeld = 0;
-  if(techStock[techName] && techStock[techName][item.id]){
-    techHeld = Math.max(0, parseInt(techStock[techName][item.id]) || 0);
-  }
-  var officeStock = Math.max(0, parseInt(item.office_stock || 0));
+  // Compute how much this technician holds
+  var techMovs = movements.filter(function(m){ return m.techName === techName && m.itemId === item.id; });
+  var techHeld = techMovs.reduce(function(s, m){
+    if(m.type === 'out')    return s + m.qty;
+    if(m.type === 'return') return s - m.qty;
+    return s;
+  }, 0);
+  techHeld = Math.max(0, techHeld);
 
-  // prevent duplicate: close the block below
-  var _dummy = null;
+  // Compute office stock
+  var allMovs = movements.filter(function(m){ return m.itemId === item.id; });
+  var totalIn  = allMovs.filter(function(m){ return m.type === 'in'; }).reduce(function(s,m){ return s+m.qty; }, 0);
+  var totalOut = allMovs.filter(function(m){ return m.type === 'out'; }).reduce(function(s,m){ return s+m.qty; }, 0);
+  var returns  = allMovs.filter(function(m){ return m.type === 'return'; }).reduce(function(s,m){ return s+m.qty; }, 0);
+  var officeStock = (item.opening || 0) + totalIn - totalOut + returns;
+  officeStock = Math.max(0, officeStock);
 
   var afterInstall = techHeld - qtyNeed;
   var canFulfill   = techHeld >= qtyNeed;

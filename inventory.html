@@ -161,7 +161,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     <div id="inv-user-name" style="color:#fff;font-size:13px;font-weight:700;line-height:1.2">–</div>
     <div id="inv-user-role" style="color:rgba(255,255,255,.5);font-size:10px;font-weight:600;letter-spacing:.5px">–</div>
   </div>
-  <span id="load-label" style="display:none;color:rgba(255,255,255,.7);font-size:12px;font-weight:600">⏳ Loading…</span>
   <button class="tb-btn" onclick="window.location.href='index.html'">← Back to CRM</button>
 </div>
 
@@ -545,72 +544,91 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 const API = 'api/index.php';
 
 // ── DATA STORES ──────────────────────────────────────────────────────
-var _items     = [];   // item master (from DB)
-var _movements = [];   // movements (from DB)
-var _stocks    = [];   // computed stock summary (from DB)
-var _techStock = {};   // tech breakdown (from DB)
-var _techs     = [];   // CRM technicians
+var _items = [];         // item master
+var _movements = [];     // all stock movements
+var _techs = [];         // technicians from CRM
 var _editItemId = null;
-var _loading   = false;
+
+// ── STORAGE KEYS ─────────────────────────────────────────────────────
+const KEY_ITEMS = 'inv_items';
+const KEY_MOVEMENTS = 'inv_movements';
 
 // ── INIT ─────────────────────────────────────────────────────────────
+// ── AUTH GUARD ───────────────────────────────────────────────────────
+var _invUser = null;
+
+(function authGuard(){
+  var token = localStorage.getItem('bgps_token');
+  var raw   = localStorage.getItem('bgps_user');
+  if(!token || !raw){
+    window.location.href = 'index.html';
+    return;
+  }
+  try { _invUser = JSON.parse(raw); } catch(e){ window.location.href = 'index.html'; return; }
+  if(!_invUser || !['admin','assigner'].includes(_invUser.role)){
+    window.location.href = 'index.html';
+    return;
+  }
+  // Show logged-in user name in topbar
+  var nameEl = document.getElementById('inv-user-name');
+  var roleEl = document.getElementById('inv-user-role');
+  if(nameEl) nameEl.textContent = _invUser.name || 'User';
+  if(roleEl) roleEl.textContent = (_invUser.role || '').toUpperCase();
+})();
+
 document.addEventListener('DOMContentLoaded', function(){
-  if(!_invUser) return;
+  if(!_invUser) return; // auth guard already redirecting
+  loadData();
   document.getElementById('mv-m-date').value = today();
   loadTechs();
-  loadAll();
 });
 
 function today(){
   return new Date().toISOString().slice(0,10);
 }
 
-// ── API WRAPPER ───────────────────────────────────────────────────────
-function invApi(action, params, method, body){
-  var token = localStorage.getItem('bgps_token') || '';
-  var url = API + '?action=' + action;
-  if(method !== 'POST' && params){
-    Object.keys(params).forEach(function(k){ url += '&' + k + '=' + encodeURIComponent(params[k]); });
-  }
-  var opts = { method: method || 'GET', cache: 'no-store', headers: { 'X-Auth-Token': token } };
-  if(method === 'POST' && body){
-    opts.headers['Content-Type'] = 'application/json';
-    opts.body = JSON.stringify(body);
-  }
-  return fetch(url, opts).then(function(r){ return r.json(); });
+// ── PERSISTENCE (localStorage) ───────────────────────────────────────
+function loadData(){
+  try {
+    var rawItems = localStorage.getItem(KEY_ITEMS);
+    _items = rawItems ? JSON.parse(rawItems) : getDefaultItems();
+    var rawMv = localStorage.getItem(KEY_MOVEMENTS);
+    _movements = rawMv ? JSON.parse(rawMv) : [];
+    if(!rawItems) saveData(); // seed defaults
+  } catch(e) { _items = getDefaultItems(); _movements = []; }
+  refreshAll();
 }
 
-// ── LOAD ALL DATA ─────────────────────────────────────────────────────
-function loadAll(){
-  setLoading(true);
-  Promise.all([
-    invApi('inv_get_stock').then(function(d){
-      _stocks    = d.items || [];
-      _techStock = d.tech_stock || {};
-      _items     = _stocks;
-    }),
-    invApi('inv_get_movements').then(function(d){
-      _movements = d.movements || [];
-    })
-  ]).then(function(){
-    setLoading(false);
-    refreshAll();
-    populateMvItemSelect();
-  }).catch(function(){
-    setLoading(false);
-    showToast('❌ Could not load inventory data');
-  });
+function saveData(){
+  try {
+    localStorage.setItem(KEY_ITEMS, JSON.stringify(_items));
+    localStorage.setItem(KEY_MOVEMENTS, JSON.stringify(_movements));
+  } catch(e) { showToast('⚠️ Could not save — storage full'); }
 }
 
-function setLoading(on){
-  _loading = on;
-  var lbl = document.getElementById('load-label');
-  if(lbl) lbl.style.display = on ? '' : 'none';
+function getDefaultItems(){
+  return [
+    { id: uid(), name: 'GPS Tracker — Basic', category: 'GPS Tracker', model: 'TK303 / Standard', unit: 'Pcs', opening: 0, minStock: 5, notes: '' },
+    { id: uid(), name: 'GPS Tracker — VLTD', category: 'GPS Tracker', model: 'AIS 140 VLTD', unit: 'Pcs', opening: 0, minStock: 3, notes: 'AIS 140 compliant' },
+    { id: uid(), name: 'GPS Tracker — Engine Cut', category: 'GPS Tracker', model: 'With Relay', unit: 'Pcs', opening: 0, minStock: 3, notes: '' },
+    { id: uid(), name: 'GPS Tracker — OBD', category: 'GPS Tracker', model: 'OBD Plug-in', unit: 'Pcs', opening: 0, minStock: 2, notes: '' },
+    { id: uid(), name: 'Main Wire (4-Pin)', category: 'Wire / Cable', model: '4-Pin Connector', unit: 'Pcs', opening: 0, minStock: 10, notes: '' },
+    { id: uid(), name: 'Relay Wire', category: 'Wire / Cable', model: 'Engine Cut Relay', unit: 'Pcs', opening: 0, minStock: 5, notes: '' },
+    { id: uid(), name: 'SIM Card (Data)', category: 'SIM Card', model: 'IoT SIM', unit: 'Pcs', opening: 0, minStock: 10, notes: '' },
+    { id: uid(), name: 'Mounting Tape', category: 'Accessory', model: '3M Double-sided', unit: 'Roll', opening: 0, minStock: 5, notes: '' },
+  ];
+}
+
+function uid(){
+  return 'itm_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
 }
 
 // ── LOAD TECHS FROM CRM API ──────────────────────────────────────────
 function loadTechs(){
-  invApi('get_users', {role:'technician'})
+  var token = localStorage.getItem('bgps_token') || '';
+  if(!token) return;
+  fetch(API + '?action=get_users&role=technician', { cache: 'no-store', headers: { 'X-Auth-Token': localStorage.getItem('bgps_token') || '' } })
+    .then(function(r){ return r.json(); })
     .then(function(d){
       _techs = (d.users || []).map(function(u){ return { id: u.id, name: u.name }; });
       renderTechOptions();
@@ -636,33 +654,36 @@ function renderTechOptions(){
   renderTechCards();
 }
 
-// ── COMPUTED STOCK — from DB (pre-computed by inv_get_stock API) ──────
+// ── COMPUTED STOCK ───────────────────────────────────────────────────
 function computeStock(){
-  // Normalise DB field names to match rendering code
-  return (_stocks || []).map(function(i){
-    return {
-      id:          i.id,
-      name:        i.name,
-      category:    i.category,
-      model:       i.model || '',
-      unit:        i.unit,
-      opening:     parseInt(i.opening_bal || 0),
-      minStock:    parseInt(i.min_stock || 0),
-      notes:       i.notes || '',
-      totalIn:     parseInt(i.total_in || 0),
-      totalOut:    parseInt(i.total_out || 0),
-      returns:     parseInt(i.total_return || 0),
-      adj:         parseInt(i.total_adj || 0),
-      officeStock: parseInt(i.office_stock || 0),
-      withTechs:   parseInt(i.with_techs || 0),
-      closing:     parseInt(i.closing_bal || 0),
-    };
+  return _items.map(function(item){
+    var movs = _movements.filter(function(m){ return m.itemId === item.id; });
+    var totalIn  = movs.filter(function(m){ return m.type === 'in'; }).reduce(function(s,m){ return s + m.qty; }, 0);
+    var totalOut = movs.filter(function(m){ return m.type === 'out'; }).reduce(function(s,m){ return s + m.qty; }, 0);
+    var returns  = movs.filter(function(m){ return m.type === 'return'; }).reduce(function(s,m){ return s + m.qty; }, 0);
+    var adj      = movs.filter(function(m){ return m.type === 'adjustment'; }).reduce(function(s,m){ return s + m.qty; }, 0);
+    var withTechs = totalOut - returns;
+    var officeStock = item.opening + totalIn - totalOut + returns + adj;
+    var closing = officeStock + withTechs;
+    return Object.assign({}, item, {
+      totalIn: totalIn, totalOut: totalOut, returns: returns, adj: adj,
+      withTechs: Math.max(0, withTechs),
+      officeStock: officeStock,
+      closing: item.opening + totalIn - totalOut + returns + adj
+    });
   });
 }
 
 function techStock(){
-  // _techStock comes from DB as { techName: { itemId: qty } }
-  return _techStock || {};
+  var map = {};
+  _movements.filter(function(m){ return m.techName; }).forEach(function(m){
+    var name = m.techName;
+    if(!map[name]) map[name] = {};
+    if(!map[name][m.itemId]) map[name][m.itemId] = 0;
+    if(m.type === 'out')    map[name][m.itemId] += m.qty;
+    if(m.type === 'return') map[name][m.itemId] -= m.qty;
+  });
+  return map;
 }
 
 // ── REFRESH ALL ───────────────────────────────────────────────────────
@@ -777,7 +798,7 @@ function renderTechCards(){
   grid.innerHTML = techNames.map(function(name){
     var held = map[name] || {};
     var itemsHeld = Object.keys(held).map(function(itemId){
-      var item = _items.find(function(i){ return String(i.id) === String(itemId); });
+      var item = _items.find(function(i){ return i.id === itemId; });
       return { name: item ? item.name : 'Unknown', qty: held[itemId] };
     }).filter(function(i){ return i.qty > 0; });
 
@@ -803,8 +824,8 @@ function showTechDetail(name){
   var map = techStock();
   var held = map[name] || {};
   var rows = Object.keys(held).map(function(itemId){
-    var item = _items.find(function(i){ return String(i.id) === String(itemId); });
-    var lastMov = _movements.filter(function(m){ return m.tech_name === name && String(m.item_id) === String(itemId); }).slice(-1)[0];
+    var item = _items.find(function(i){ return i.id === itemId; });
+    var lastMov = _movements.filter(function(m){ return m.techName === name && m.itemId === itemId; }).slice(-1)[0];
     return { name: item ? item.name : 'Unknown', category: item ? item.category : '–', qty: held[itemId], last: lastMov ? lastMov.date : '–' };
   }).filter(function(i){ return i.qty > 0; });
 
@@ -826,12 +847,13 @@ function renderMovements(){
   var to     = (document.getElementById('mv-to')||{value:''}).value;
 
   var movs = _movements.filter(function(m){
-    var name = m.item_name || '';
-    return (!search || name.toLowerCase().includes(search) || (m.ref_note||'').toLowerCase().includes(search)) &&
+    var item = _items.find(function(i){ return i.id === m.itemId; });
+    var name = item ? item.name : '';
+    return (!search || name.toLowerCase().includes(search) || (m.ref||'').toLowerCase().includes(search)) &&
            (!type || m.type === type) &&
-           (!tech || m.tech_name === tech) &&
-           (!from || (m.move_date||'') >= from) &&
-           (!to   || (m.move_date||'') <= to);
+           (!tech || m.techName === tech) &&
+           (!from || m.date >= from) &&
+           (!to   || m.date <= to);
   }).slice().reverse();
 
   var body = document.getElementById('mv-body');
@@ -844,13 +866,13 @@ function renderMovements(){
     var typeMap = { in: ['📥 Stock In','var(--green-bg)','var(--green)'], out: ['📤 Issued','var(--amber-bg)','#7a4500'], return: ['🔄 Return','var(--blue-bg)','var(--blue)'], adjustment: ['⚙️ Adjust','var(--surface2)','var(--text2)'] };
     var td = typeMap[m.type] || ['–','',''];
     return '<tr>' +
-      '<td style="white-space:nowrap">' + (m.move_date || m.date || '') + '</td>' +
+      '<td style="white-space:nowrap">' + m.date + '</td>' +
       '<td><span class="badge" style="background:' + td[1] + ';color:' + td[2] + '">' + td[0] + '</span></td>' +
       '<td><strong>' + esc(item ? item.name : 'Unknown') + '</strong></td>' +
       '<td class="num"><strong>' + m.qty + '</strong></td>' +
-      '<td>' + esc(m.tech_name || '–') + '</td>' +
-      '<td style="color:var(--text3)">' + esc(m.ref_note || '–') + '</td>' +
-      '<td style="color:var(--text3)">' + esc(m.done_by || '–') + '</td>' +
+      '<td>' + esc(m.techName || '–') + '</td>' +
+      '<td style="color:var(--text3)">' + esc(m.ref || '–') + '</td>' +
+      '<td style="color:var(--text3)">' + esc(m.by || '–') + '</td>' +
     '</tr>';
   }).join('');
 }
@@ -884,7 +906,7 @@ function openItemModal(id){
   _editItemId = id || null;
   var title = document.getElementById('item-modal-title');
   if(id){
-    var item = _items.find(function(i){ return String(i.id) === String(id); });
+    var item = _items.find(function(i){ return i.id === id; });
     if(!item) return;
     title.textContent = '✏️ Edit Item';
     document.getElementById('im-name').value     = item.name;
@@ -911,43 +933,41 @@ function closeItemModal(){
 }
 
 function saveItem(){
-  var name = document.getElementById('im-name').value.trim();
-  var cat  = document.getElementById('im-category').value;
+  var name    = document.getElementById('im-name').value.trim();
+  var cat     = document.getElementById('im-category').value;
   if(!name || !cat){ showToast('⚠️ Name and Category are required'); return; }
-  var payload = {
-    id:          _editItemId || 0,
-    name:        name,
-    category:    cat,
-    model:       document.getElementById('im-model').value.trim(),
-    unit:        document.getElementById('im-unit').value,
-    opening_bal: parseInt(document.getElementById('im-opening').value) || 0,
-    min_stock:   parseInt(document.getElementById('im-min-stock').value) || 0,
-    notes:       document.getElementById('im-notes').value.trim(),
+  var item = {
+    id:       _editItemId || uid(),
+    name:     name,
+    category: cat,
+    model:    document.getElementById('im-model').value.trim(),
+    unit:     document.getElementById('im-unit').value,
+    opening:  parseInt(document.getElementById('im-opening').value) || 0,
+    minStock: parseInt(document.getElementById('im-min-stock').value) || 0,
+    notes:    document.getElementById('im-notes').value.trim(),
   };
-  var was_edit = !!_editItemId;
-  invApi('inv_save_item', null, 'POST', payload)
-    .then(function(d){
-      if(d.success){
-        closeItemModal();
-        showToast(was_edit ? '✅ Item updated' : '✅ Item added');
-        loadAll();
-      } else {
-        showToast('❌ ' + (d.error || 'Save failed'));
-      }
-    })
-    .catch(function(){ showToast('❌ Network error'); });
+  if(_editItemId){
+    var idx = _items.findIndex(function(i){ return i.id === _editItemId; });
+    if(idx > -1) _items[idx] = item;
+  } else {
+    _items.push(item);
+  }
+  saveData();
+  refreshAll();
+  closeItemModal();
+  showToast(_editItemId ? '✅ Item updated' : '✅ Item added');
 }
 
 function deleteItem(id){
-  var item = _items.find(function(i){ return String(i.id) === String(id); });
+  var item = _items.find(function(i){ return i.id === id; });
   if(!item) return;
+  var hasMovements = _movements.some(function(m){ return m.itemId === id; });
+  if(hasMovements){ showToast('⚠️ Cannot delete — item has movement history'); return; }
   if(!confirm('Delete "' + item.name + '"?')) return;
-  invApi('inv_delete_item', null, 'POST', {id: id})
-    .then(function(d){
-      if(d.success){ showToast('🗑️ Item deleted'); loadAll(); }
-      else showToast('❌ ' + (d.error || 'Delete failed'));
-    })
-    .catch(function(){ showToast('❌ Network error'); });
+  _items = _items.filter(function(i){ return i.id !== id; });
+  saveData();
+  refreshAll();
+  showToast('🗑️ Item deleted');
 }
 
 // ── MOVEMENT MODAL ────────────────────────────────────────────────────
@@ -958,7 +978,7 @@ function populateMvItemSelect(){
   sel.innerHTML = '<option value="">Select item…</option>';
   _items.forEach(function(i){
     var o = document.createElement('option');
-    o.value = String(i.id);
+    o.value = i.id;
     o.textContent = i.name + ' (' + i.category + ')';
     sel.appendChild(o);
   });
@@ -1019,27 +1039,25 @@ function saveMovement(){
 
   var byUser = (_invUser && _invUser.name) ? _invUser.name : 'Admin';
 
-  invApi('inv_save_movement', null, 'POST', {
-    item_id:   itemId,
-    type:      type,
-    qty:       qty,
-    tech_name: (type === 'out' || type === 'return') ? tech : '',
-    ref_note:  ref,
-    move_date: date,
-  }).then(function(d){
-    btn.disabled = false; btn.textContent = '✅ Save Movement';
-    if(d.success){
-      var labels = { in: 'Stock received', out: 'Issued to ' + tech, return: 'Return from ' + tech, adjustment: 'Adjustment saved' };
-      showToast('✅ ' + (labels[type] || 'Movement saved'));
-      closeMvModal();
-      loadAll();
-    } else {
-      showToast('❌ ' + (d.error || 'Save failed'));
-    }
-  }).catch(function(){
-    btn.disabled = false; btn.textContent = '✅ Save Movement';
-    showToast('❌ Network error');
+  _movements.push({
+    id:       'mv_' + Date.now(),
+    type:     type,
+    itemId:   itemId,
+    qty:      qty,
+    techName: (type === 'out' || type === 'return') ? tech : '',
+    date:     date,
+    ref:      ref,
+    by:       byUser,
+    ts:       Date.now(),
   });
+
+  saveData();
+  refreshAll();
+  closeMvModal();
+  btn.disabled = false; btn.textContent = '✅ Save Movement';
+
+  var labels = { in: 'Stock received', out: 'Issued to ' + tech, return: 'Return from ' + tech, adjustment: 'Adjustment saved' };
+  showToast('✅ ' + (labels[type] || 'Movement saved'));
 }
 
 // ── NAVIGATION ────────────────────────────────────────────────────────
