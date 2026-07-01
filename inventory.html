@@ -544,14 +544,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 const API = 'api/index.php';
 
 // ── DATA STORES ──────────────────────────────────────────────────────
-var _items     = [];  // item master (DB)
-var _movements = [];  // movements (DB)
-var _stocks    = [];  // computed stock from DB
-var _techStock = {};  // tech breakdown from DB
-var _techs     = [];  // CRM technicians
+var _items = [];         // item master
+var _movements = [];     // all stock movements
+var _techs = [];         // technicians from CRM
 var _editItemId = null;
 
-// ── API WRAPPER ───────────────────────────────────────────────────────
+// ── STORAGE KEYS ─────────────────────────────────────────────────────
+// ── API HELPER ───────────────────────────────────────────────────────
 function invApi(action, params, method, body){
   var token = localStorage.getItem('bgps_token') || '';
   var url = API + '?action=' + action;
@@ -559,18 +558,29 @@ function invApi(action, params, method, body){
     Object.keys(params).forEach(function(k){ url += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); });
   }
   var opts = { method: method || 'GET', cache: 'no-store', headers: { 'X-Auth-Token': token } };
-  if(method === 'POST' && body){
-    opts.headers['Content-Type'] = 'application/json';
-    opts.body = JSON.stringify(body);
-  }
+  if(method === 'POST' && body){ opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
   return fetch(url, opts).then(function(r){ return r.json(); });
 }
 
-// ── INIT ─────────────────────────────────────────────────────────────
+// ── AUTH GUARD ───────────────────────────────────────────────────────
+var _invUser = null;
+
+(function authGuard(){
+  var token = localStorage.getItem('bgps_token');
+  var raw   = localStorage.getItem('bgps_user');
+  if(!token || !raw){ window.location.href = 'index.html'; return; }
+  try { _invUser = JSON.parse(raw); } catch(e){ window.location.href = 'index.html'; return; }
+  if(!_invUser || !['admin','assigner'].includes(_invUser.role)){ window.location.href = 'index.html'; return; }
+  var nameEl = document.getElementById('inv-user-name');
+  var roleEl = document.getElementById('inv-user-role');
+  if(nameEl) nameEl.textContent = _invUser.name || 'User';
+  if(roleEl) roleEl.textContent = (_invUser.role || '').toUpperCase();
+})();
+
 document.addEventListener('DOMContentLoaded', function(){
   if(!_invUser) return;
+  loadData();
   document.getElementById('mv-m-date').value = today();
-  loadAll();
   loadTechs();
 });
 
@@ -578,18 +588,50 @@ function today(){
   return new Date().toISOString().slice(0,10);
 }
 
-// ── LOAD ALL FROM DB ─────────────────────────────────────────────────
-function loadAll(){
-  var lbl = document.getElementById('load-label');
+// ── LOAD FROM DB (replaces localStorage) ─────────────────────────────
+function loadData(){
+  var lbl = document.getElementById('inv-load-lbl');
   if(lbl) lbl.style.display = '';
   Promise.all([
     invApi('inv_get_stock').then(function(d){
-      _stocks    = d.items || [];
-      _techStock = d.tech_stock || {};
-      _items     = _stocks;
+      var rows = d.items || [];
+      // normalise DB fields to match the rest of the JS (opening, minStock etc)
+      _items = rows.map(function(r){
+        return {
+          id:       r.id,
+          name:     r.name,
+          category: r.category,
+          model:    r.model || '',
+          unit:     r.unit,
+          opening:  parseInt(r.opening_bal  || 0),
+          minStock: parseInt(r.min_stock    || 0),
+          notes:    r.notes || '',
+          // computed stock fields
+          totalIn:     parseInt(r.total_in     || 0),
+          totalOut:    parseInt(r.total_out    || 0),
+          returns:     parseInt(r.total_return || 0),
+          adj:         parseInt(r.total_adj    || 0),
+          officeStock: parseInt(r.office_stock || 0),
+          withTechs:   parseInt(r.with_techs   || 0),
+          closing:     parseInt(r.closing_bal  || 0),
+        };
+      });
+      _techStockMap = d.tech_stock || {};
     }),
     invApi('inv_get_movements').then(function(d){
-      _movements = d.movements || [];
+      _movements = (d.movements || []).map(function(m){
+        return {
+          id:       m.id,
+          type:     m.move_type,
+          itemId:   String(m.item_id),
+          qty:      parseInt(m.qty || 0),
+          techName: m.tech_name || '',
+          date:     m.move_date || '',
+          ref:      m.ref_note || '',
+          by:       m.done_by || '',
+          itemName: m.item_name || '',
+        };
+      });
     })
   ]).then(function(){
     if(lbl) lbl.style.display = 'none';
@@ -597,16 +639,27 @@ function loadAll(){
     populateMvItemSelect();
   }).catch(function(){
     if(lbl) lbl.style.display = 'none';
-    showToast('❌ Could not load inventory — check connection');
+    showToast('❌ Could not load inventory data');
   });
 }
+
+// _techStockMap from DB: { techName: { itemId: qty } }
+var _techStockMap = {};
+
+function saveData(){ /* data now saved to DB — no localStorage */ }
+
+
 // ── LOAD TECHS FROM CRM API ──────────────────────────────────────────
 function loadTechs(){
-  invApi('get_users', {role:'technician'})
+  var token = localStorage.getItem('bgps_token') || '';
+  if(!token) return;
+  fetch(API + '?action=get_users&role=technician', { cache: 'no-store', headers: { 'X-Auth-Token': localStorage.getItem('bgps_token') || '' } })
+    .then(function(r){ return r.json(); })
     .then(function(d){
       _techs = (d.users || []).map(function(u){ return { id: u.id, name: u.name }; });
       renderTechOptions();
-    }).catch(function(){});
+    })
+    .catch(function(){});
 }
 
 function renderTechOptions(){
@@ -627,31 +680,36 @@ function renderTechOptions(){
   renderTechCards();
 }
 
-// ── COMPUTED STOCK — normalised from DB fields ───────────────────────
+// ── COMPUTED STOCK ───────────────────────────────────────────────────
 function computeStock(){
-  return (_stocks || []).map(function(i){
-    return {
-      id:          i.id,
-      name:        i.name,
-      category:    i.category,
-      model:       i.model || '',
-      unit:        i.unit,
-      opening:     parseInt(i.opening_bal  || 0),
-      minStock:    parseInt(i.min_stock    || 0),
-      notes:       i.notes || '',
-      totalIn:     parseInt(i.total_in     || 0),
-      totalOut:    parseInt(i.total_out    || 0),
-      returns:     parseInt(i.total_return || 0),
-      adj:         parseInt(i.total_adj    || 0),
-      officeStock: parseInt(i.office_stock || 0),
-      withTechs:   parseInt(i.with_techs   || 0),
-      closing:     parseInt(i.closing_bal  || 0),
-    };
+  return _items.map(function(item){
+    var movs = _movements.filter(function(m){ return m.itemId === item.id; });
+    var totalIn  = movs.filter(function(m){ return m.type === 'in'; }).reduce(function(s,m){ return s + m.qty; }, 0);
+    var totalOut = movs.filter(function(m){ return m.type === 'out'; }).reduce(function(s,m){ return s + m.qty; }, 0);
+    var returns  = movs.filter(function(m){ return m.type === 'return'; }).reduce(function(s,m){ return s + m.qty; }, 0);
+    var adj      = movs.filter(function(m){ return m.type === 'adjustment'; }).reduce(function(s,m){ return s + m.qty; }, 0);
+    var withTechs = totalOut - returns;
+    var officeStock = item.opening + totalIn - totalOut + returns + adj;
+    var closing = officeStock + withTechs;
+    return Object.assign({}, item, {
+      totalIn: totalIn, totalOut: totalOut, returns: returns, adj: adj,
+      withTechs: Math.max(0, withTechs),
+      officeStock: officeStock,
+      closing: item.opening + totalIn - totalOut + returns + adj
+    });
   });
 }
 
 function techStock(){
-  return _techStock || {};
+  var map = {};
+  _movements.filter(function(m){ return m.techName; }).forEach(function(m){
+    var name = m.techName;
+    if(!map[name]) map[name] = {};
+    if(!map[name][m.itemId]) map[name][m.itemId] = 0;
+    if(m.type === 'out')    map[name][m.itemId] += m.qty;
+    if(m.type === 'return') map[name][m.itemId] -= m.qty;
+  });
+  return map;
 }
 
 // ── REFRESH ALL ───────────────────────────────────────────────────────
@@ -766,7 +824,7 @@ function renderTechCards(){
   grid.innerHTML = techNames.map(function(name){
     var held = map[name] || {};
     var itemsHeld = Object.keys(held).map(function(itemId){
-      var item = _items.find(function(i){ return String(i.id) === String(itemId); });
+      var item = _items.find(function(i){ return i.id === itemId; });
       return { name: item ? item.name : 'Unknown', qty: held[itemId] };
     }).filter(function(i){ return i.qty > 0; });
 
@@ -792,9 +850,9 @@ function showTechDetail(name){
   var map = techStock();
   var held = map[name] || {};
   var rows = Object.keys(held).map(function(itemId){
-    var item = _items.find(function(i){ return String(i.id) === String(itemId); });
-    var lastMov = _movements.filter(function(m){ return m.tech_name === name && String(m.item_id) === String(itemId); }).slice(-1)[0];
-    return { name: item ? item.name : 'Unknown', category: item ? item.category : '–', qty: held[itemId], last: lastMov ? lastMov.move_date : '–' };
+    var item = _items.find(function(i){ return i.id === itemId; });
+    var lastMov = _movements.filter(function(m){ return m.techName === name && m.itemId === itemId; }).slice(-1)[0];
+    return { name: item ? item.name : 'Unknown', category: item ? item.category : '–', qty: held[itemId], last: lastMov ? lastMov.date : '–' };
   }).filter(function(i){ return i.qty > 0; });
 
   document.getElementById('tech-detail-title').textContent = '👷 ' + name + ' — Current Stock';
@@ -815,12 +873,13 @@ function renderMovements(){
   var to     = (document.getElementById('mv-to')||{value:''}).value;
 
   var movs = _movements.filter(function(m){
-    var name = m.item_name || '';
-    return (!search || name.toLowerCase().includes(search) || (m.ref_note||'').toLowerCase().includes(search)) &&
-           (!type || m.move_type === type) &&
-           (!tech || m.tech_name === tech) &&
-           (!from || (m.move_date||'') >= from) &&
-           (!to   || (m.move_date||'') <= to);
+    var item = _items.find(function(i){ return i.id === m.itemId; });
+    var name = item ? item.name : '';
+    return (!search || name.toLowerCase().includes(search) || (m.ref||'').toLowerCase().includes(search)) &&
+           (!type || m.type === type) &&
+           (!tech || m.techName === tech) &&
+           (!from || m.date >= from) &&
+           (!to   || m.date <= to);
   }).slice().reverse();
 
   var body = document.getElementById('mv-body');
@@ -829,16 +888,17 @@ function renderMovements(){
     return;
   }
   body.innerHTML = movs.map(function(m){
+    var item = _items.find(function(i){ return i.id === m.itemId; });
     var typeMap = { in: ['📥 Stock In','var(--green-bg)','var(--green)'], out: ['📤 Issued','var(--amber-bg)','#7a4500'], return: ['🔄 Return','var(--blue-bg)','var(--blue)'], adjustment: ['⚙️ Adjust','var(--surface2)','var(--text2)'] };
     var td = typeMap[m.type] || ['–','',''];
     return '<tr>' +
-      '<td style="white-space:nowrap">' + (m.move_date||'') + '</td>' +
+      '<td style="white-space:nowrap">' + m.date + '</td>' +
       '<td><span class="badge" style="background:' + td[1] + ';color:' + td[2] + '">' + td[0] + '</span></td>' +
       '<td><strong>' + esc(item ? item.name : 'Unknown') + '</strong></td>' +
       '<td class="num"><strong>' + m.qty + '</strong></td>' +
-      '<td>' + esc(m.tech_name || '–') + '</td>' +
-      '<td style="color:var(--text3)">' + esc(m.ref_note || '–') + '</td>' +
-      '<td style="color:var(--text3)">' + esc(m.done_by || '–') + '</td>' +
+      '<td>' + esc(m.techName || '–') + '</td>' +
+      '<td style="color:var(--text3)">' + esc(m.ref || '–') + '</td>' +
+      '<td style="color:var(--text3)">' + esc(m.by || '–') + '</td>' +
     '</tr>';
   }).join('');
 }
@@ -872,16 +932,16 @@ function openItemModal(id){
   _editItemId = id || null;
   var title = document.getElementById('item-modal-title');
   if(id){
-    var item = _items.find(function(i){ return String(i.id) === String(id); });
+    var item = _items.find(function(i){ return i.id === id; });
     if(!item) return;
     title.textContent = '✏️ Edit Item';
-    document.getElementById('im-name').value      = item.name;
-    document.getElementById('im-category').value  = item.category;
-    document.getElementById('im-model').value     = item.model || '';
-    document.getElementById('im-unit').value      = item.unit;
-    document.getElementById('im-opening').value   = item.opening_bal  || item.opening  || 0;
-    document.getElementById('im-min-stock').value = item.min_stock    || item.minStock || 0;
-    document.getElementById('im-notes').value     = item.notes || '';
+    document.getElementById('im-name').value     = item.name;
+    document.getElementById('im-category').value = item.category;
+    document.getElementById('im-model').value    = item.model || '';
+    document.getElementById('im-unit').value     = item.unit;
+    document.getElementById('im-opening').value  = item.opening;
+    document.getElementById('im-min-stock').value= item.minStock;
+    document.getElementById('im-notes').value    = item.notes || '';
   } else {
     title.textContent = '➕ Add New Item';
     ['im-name','im-model','im-notes'].forEach(function(id){ document.getElementById(id).value = ''; });
@@ -913,7 +973,7 @@ function saveItem(){
     min_stock:   parseInt(document.getElementById('im-min-stock').value) || 0,
     notes:       document.getElementById('im-notes').value.trim(),
   }).then(function(d){
-    if(d.success){ closeItemModal(); showToast(wasEdit ? '✅ Item updated' : '✅ Item added'); loadAll(); }
+    if(d.success){ closeItemModal(); showToast(wasEdit ? '✅ Item updated' : '✅ Item added'); loadData(); }
     else showToast('❌ ' + (d.error || 'Save failed'));
   }).catch(function(){ showToast('❌ Network error'); });
 }
@@ -923,7 +983,7 @@ function deleteItem(id){
   if(!item || !confirm('Delete "' + (item.name||'') + '"?')) return;
   invApi('inv_delete_item', null, 'POST', {id: id})
     .then(function(d){
-      if(d.success){ showToast('🗑️ Item deleted'); loadAll(); }
+      if(d.success){ showToast('🗑️ Item deleted'); loadData(); }
       else showToast('❌ ' + (d.error || 'Delete failed'));
     }).catch(function(){ showToast('❌ Network error'); });
 }
@@ -985,7 +1045,8 @@ function saveMovement(){
 
   // Stock-out validation: check available office stock
   if(type === 'out'){
-    var stockInfo = computeStock().find(function(s){ return String(s.id) === String(itemId); });
+    var stocks = computeStock();
+    var stockInfo = stocks.find(function(s){ return s.id === itemId; });
     if(stockInfo && qty > stockInfo.officeStock){
       showToast('⚠️ Only ' + stockInfo.officeStock + ' in office stock — cannot issue ' + qty);
       return;
@@ -1007,7 +1068,7 @@ function saveMovement(){
       var labels = { in: 'Stock received', out: 'Issued to '+tech, return: 'Return from '+tech, adjustment: 'Adjustment saved' };
       showToast('✅ ' + (labels[type] || 'Movement saved'));
       closeMvModal();
-      loadAll();
+      loadData();
     } else {
       showToast('❌ ' + (d.error || 'Save failed'));
     }
