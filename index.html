@@ -367,6 +367,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
       <div class="nav-item admin-only" id="nav-invoicing" onclick="showPage('invoicing')"><span class="nav-icon">🧾</span> Invoicing</div>
       <div class="nav-item admin-only" onclick="window.open('inventory.html','_blank')"><span class="nav-icon">📦</span> Inventory</div>
       <div class="nav-sec admin-only">Admin</div>
+      <div class="nav-item super-admin-only" id="nav-price-list" onclick="showPage('price-list')"><span class="nav-icon">💲</span> Price List</div>
       <div class="nav-item super-admin-only" id="nav-blacklist" onclick="showPage('blacklist')"><span class="nav-icon">🚫</span> Blacklist</div>
       <div class="nav-item super-admin-only" id="nav-admin" onclick="showPage('admin')"><span class="nav-icon">⚙️</span> Admin Panel</div>
       <div class="sb-footer">
@@ -1094,6 +1095,71 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
       <div class="page" id="page-blacklist" style="padding:0;flex-direction:column">
         <iframe id="blacklist-iframe" src="about:blank" style="flex:1;width:100%;border:none;min-height:calc(100vh - 120px)"></iframe>
       </div>
+      <!-- PRICE LIST PAGE -->
+      <div class="page" id="page-price-list">
+        <div class="pg-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
+          <div>
+            <div style="font-size:21px;font-weight:900;color:var(--text)">💲 Price List</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:2px">All GPS services and devices with pricing — admin access only</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input id="pl-search" class="ts-input" placeholder="🔍 Search product…" oninput="renderPriceList()" style="width:180px">
+            <select id="pl-cat-filter" class="ts-input ts-select" onchange="renderPriceList()">
+              <option value="">All Categories</option>
+              <option>GPS Device</option>
+              <option>VLTD</option>
+              <option>Renewal</option>
+              <option>Accessory</option>
+              <option>Service</option>
+            </select>
+            <button class="ts-btn ts-btn-primary" onclick="openPlModal()">+ Add Item</button>
+          </div>
+        </div>
+
+        <!-- Summary cards -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:20px" id="pl-stats-row">
+          <div style="background:var(--surface);border-radius:12px;padding:16px;box-shadow:var(--shadow);border-bottom:3px solid var(--accent)">
+            <div style="font-size:26px;font-weight:900;color:var(--text)" id="pl-stat-total">–</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:4px;font-weight:600">Total Items</div>
+          </div>
+          <div style="background:var(--surface);border-radius:12px;padding:16px;box-shadow:var(--shadow);border-bottom:3px solid var(--green)">
+            <div style="font-size:26px;font-weight:900;color:var(--text)" id="pl-stat-active">–</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:4px;font-weight:600">Active Items</div>
+          </div>
+          <div style="background:var(--surface);border-radius:12px;padding:16px;box-shadow:var(--shadow);border-bottom:3px solid var(--blue)">
+            <div style="font-size:26px;font-weight:900;color:var(--text)" id="pl-stat-min">–</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:4px;font-weight:600">Min Price (excl GST)</div>
+          </div>
+          <div style="background:var(--surface);border-radius:12px;padding:16px;box-shadow:var(--shadow);border-bottom:3px solid var(--amber)">
+            <div style="font-size:26px;font-weight:900;color:var(--text)" id="pl-stat-max">–</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:4px;font-weight:600">Max Price (excl GST)</div>
+          </div>
+        </div>
+
+        <!-- Price table -->
+        <div style="background:var(--surface);border-radius:12px;box-shadow:var(--shadow);overflow:hidden">
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse" id="pl-table">
+              <thead>
+                <tr>
+                  <th style="padding:10px 14px;font-size:11px;font-weight:700;color:var(--text3);text-align:left;border-bottom:1px solid var(--line);background:var(--surface2);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap">Product / Service</th>
+                  <th style="padding:10px 14px;font-size:11px;font-weight:700;color:var(--text3);text-align:left;border-bottom:1px solid var(--line);background:var(--surface2);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap">Category</th>
+                  <th style="padding:10px 14px;font-size:11px;font-weight:700;color:var(--text3);text-align:left;border-bottom:1px solid var(--line);background:var(--surface2);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap">Server</th>
+                  <th style="padding:10px 14px;font-size:11px;font-weight:700;color:var(--text3);text-align:right;border-bottom:1px solid var(--line);background:var(--surface2);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap">Price (excl GST)</th>
+                  <th style="padding:10px 14px;font-size:11px;font-weight:700;color:var(--text3);text-align:center;border-bottom:1px solid var(--line);background:var(--surface2);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap">GST %</th>
+                  <th style="padding:10px 14px;font-size:11px;font-weight:700;color:var(--text3);text-align:right;border-bottom:1px solid var(--line);background:var(--surface2);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap">Price (incl GST)</th>
+                  <th style="padding:10px 14px;font-size:11px;font-weight:700;color:var(--text3);text-align:left;border-bottom:1px solid var(--line);background:var(--surface2);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap">Status</th>
+                  <th style="padding:10px 14px;font-size:11px;font-weight:700;color:var(--text3);text-align:left;border-bottom:1px solid var(--line);background:var(--surface2)"></th>
+                </tr>
+              </thead>
+              <tbody id="pl-tbody">
+                <tr><td colspan="8" style="padding:40px;text-align:center;color:var(--text3)">⏳ Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <div class="page" id="page-admin" style="padding:0;flex-direction:column">
         <iframe id="admin-iframe" src="about:blank"
           style="flex:1;width:100%;border:none;min-height:calc(100vh - 120px)">
@@ -1725,6 +1791,7 @@ function showPage(name, opts={}){
     'balance-sheet': syncBsAuth,
     'admin':         syncAdminAuth,
     'blacklist':     syncBlacklistAuth,
+     'price-list':    loadPriceList,
   };
   if(loaders[name]) loaders[name]();
 }
@@ -6254,6 +6321,133 @@ async function submitJobOutcome(){
   }
 }
 
+
+
+// ══════════════════════════════════════════════════
+// PRICE LIST — admin only
+// ══════════════════════════════════════════════════
+var _plItems = [];
+var _plEditId = null;
+
+async function loadPriceList(){
+  document.getElementById('pl-tbody').innerHTML = '<tr><td colspan="8" style="padding:40px;text-align:center;color:var(--text3)">⏳ Loading…</td></tr>';
+  const res = await api('pl_get').catch(()=>({}));
+  _plItems = res.items || [];
+  renderPriceList();
+}
+
+function renderPriceList(){
+  const search = (document.getElementById('pl-search')?.value||'').toLowerCase();
+  const cat    = document.getElementById('pl-cat-filter')?.value||'';
+  const items  = _plItems.filter(i=>
+    (!search || (i.product_name||'').toLowerCase().includes(search) || (i.server_name||'').toLowerCase().includes(search) || (i.description||'').toLowerCase().includes(search)) &&
+    (!cat    || i.category === cat)
+  );
+
+  // Stats
+  const active = _plItems.filter(i=>parseInt(i.is_active)===1);
+  const prices = active.map(i=>parseFloat(i.price_excl_gst||0));
+  document.getElementById('pl-stat-total').textContent  = _plItems.length;
+  document.getElementById('pl-stat-active').textContent = active.length;
+  document.getElementById('pl-stat-min').textContent    = prices.length ? '₹'+Math.min(...prices).toLocaleString('en-IN') : '–';
+  document.getElementById('pl-stat-max').textContent    = prices.length ? '₹'+Math.max(...prices).toLocaleString('en-IN') : '–';
+
+  const catColors = {'GPS Device':'background:#e8f0fb;color:#1a56a0','VLTD':'background:#f0eaf8;color:#5b2d8e','Renewal':'background:#e8f5ec;color:#1a7a3a','Accessory':'background:#FDF1DE;color:#7a4500','Service':'background:#FCE9E7;color:#E74C3C'};
+
+  const tbody = document.getElementById('pl-tbody');
+  if(!items.length){
+    tbody.innerHTML = '<tr><td colspan="8" style="padding:48px;text-align:center;color:var(--text3)">No items found</td></tr>';
+    return;
+  }
+  tbody.innerHTML = items.map(i=>{
+    const excl  = parseFloat(i.price_excl_gst||0);
+    const incl  = parseFloat(i.price_incl_gst||0);
+    const gst   = parseFloat(i.gst_percent||0);
+    const isAct = parseInt(i.is_active)===1;
+    const badge = catColors[i.category]||'background:var(--surface2);color:var(--text2)';
+    return `<tr style="${isAct?'':'opacity:.5'}">
+      <td style="padding:11px 14px;border-bottom:1px solid var(--line)">
+        <div style="font-weight:700;font-size:13px;color:var(--text)">${i.product_name||'–'}</div>
+        ${i.description?`<div style="font-size:11px;color:var(--text3);margin-top:2px">${i.description}</div>`:''}
+      </td>
+      <td style="padding:11px 14px;border-bottom:1px solid var(--line)"><span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;${badge}">${i.category||'–'}</span></td>
+      <td style="padding:11px 14px;border-bottom:1px solid var(--line);font-size:12px;color:var(--text2)">${i.server_name||'–'}</td>
+      <td style="padding:11px 14px;border-bottom:1px solid var(--line);text-align:right;font-weight:700;font-family:monospace">₹${excl.toLocaleString('en-IN',{minimumFractionDigits:2})}</td>
+      <td style="padding:11px 14px;border-bottom:1px solid var(--line);text-align:center;color:var(--text2)">${gst}%</td>
+      <td style="padding:11px 14px;border-bottom:1px solid var(--line);text-align:right;font-weight:900;color:var(--accent);font-family:monospace">₹${incl.toLocaleString('en-IN',{minimumFractionDigits:2})}</td>
+      <td style="padding:11px 14px;border-bottom:1px solid var(--line)">${isAct?'<span style="background:var(--green-bg);color:var(--green);padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700">✅ Active</span>':'<span style="background:var(--surface2);color:var(--text3);padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700">Inactive</span>'}</td>
+      <td style="padding:11px 14px;border-bottom:1px solid var(--line)">
+        <div style="display:flex;gap:6px">
+          <button onclick="openPlModal(${i.id})" style="background:var(--surface2);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text2)">✏️</button>
+          <button onclick="deletePl(${i.id})" style="background:var(--red-bg);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;color:var(--red)">🗑️</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function openPlModal(id){
+  _plEditId = id || null;
+  const item = id ? _plItems.find(i=>i.id==id) : null;
+  document.getElementById('pl-modal-title').textContent = item ? '✏️ Edit Price Item' : '➕ Add Price Item';
+  document.getElementById('pl-name').value      = item?.product_name || '';
+  document.getElementById('pl-category').value  = item?.category     || 'GPS Device';
+  document.getElementById('pl-server').value    = item?.server_name  || 'BharatGPS Server';
+  document.getElementById('pl-desc').value      = item?.description  || '';
+  document.getElementById('pl-price-excl').value= item?.price_excl_gst || '';
+  document.getElementById('pl-gst-pct').value   = item?.gst_percent  || '18';
+  document.getElementById('pl-sort').value      = item?.sort_order   || '0';
+  document.getElementById('pl-active').value    = item ? String(item.is_active) : '1';
+  calcPlGst();
+  document.getElementById('pl-modal-overlay').style.display = 'flex';
+}
+
+function closePlModal(){
+  document.getElementById('pl-modal-overlay').style.display = 'none';
+  _plEditId = null;
+}
+
+function calcPlGst(){
+  const excl = parseFloat(document.getElementById('pl-price-excl')?.value||0);
+  const gst  = parseFloat(document.getElementById('pl-gst-pct')?.value||0);
+  const incl = excl * (1 + gst/100);
+  const el   = document.getElementById('pl-price-incl-display');
+  if(el) el.textContent = '₹ ' + incl.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+async function savePl(){
+  const name = document.getElementById('pl-name').value.trim();
+  if(!name){ showToast('⚠️ Product name required'); return; }
+  const btn = document.getElementById('pl-save-btn');
+  btn.disabled=true; btn.textContent='Saving…';
+  const res = await api('pl_save',{},'POST',{
+    id:            _plEditId||0,
+    product_name:  name,
+    category:      document.getElementById('pl-category').value,
+    server_name:   document.getElementById('pl-server').value.trim(),
+    description:   document.getElementById('pl-desc').value.trim(),
+    price_excl_gst:parseFloat(document.getElementById('pl-price-excl').value)||0,
+    gst_percent:   parseFloat(document.getElementById('pl-gst-pct').value)||18,
+    sort_order:    parseInt(document.getElementById('pl-sort').value)||0,
+    is_active:     parseInt(document.getElementById('pl-active').value),
+  }).catch(()=>({}));
+  btn.disabled=false; btn.textContent='Save';
+  if(res.success){
+    closePlModal();
+    showToast(_plEditId ? '✅ Item updated' : '✅ Item added');
+    loadPriceList();
+  } else {
+    showToast('❌ '+(res.error||'Save failed'));
+  }
+}
+
+async function deletePl(id){
+  const item = _plItems.find(i=>i.id==id);
+  if(!item || !confirm('Delete "'+item.product_name+'"?')) return;
+  const res = await api('pl_delete',{},'POST',{id}).catch(()=>({}));
+  if(res.success){ showToast('🗑️ Deleted'); loadPriceList(); }
+  else showToast('❌ '+(res.error||'Delete failed'));
+}
 </script>
 
 <!-- ═══════════════════════════════════════════
@@ -6460,6 +6654,71 @@ async function submitJobOutcome(){
       </select>
     </div>
     <button onclick="submitConvertDemo()" class="ts-btn ts-btn-primary" style="width:100%;background:var(--green)">✅ Convert &amp; Send Consent</button>
+  </div>
+</div>
+
+<!-- PRICE LIST MODAL -->
+<div id="pl-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--surface);border-radius:16px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="padding:18px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;position:sticky;top:0;background:var(--surface)">
+      <div style="flex:1;font-size:15px;font-weight:800;color:var(--text)" id="pl-modal-title">Add Price Item</div>
+      <button onclick="closePlModal()" style="width:28px;height:28px;border-radius:50%;background:var(--surface2);border:none;cursor:pointer;font-size:16px;color:var(--text3)">×</button>
+    </div>
+    <div style="padding:18px 20px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Product / Service Name <span style="color:var(--red)">*</span></label>
+          <input class="form-input" id="pl-name" placeholder="e.g. Basic/Normal GPS">
+        </div>
+        <div class="form-group">
+          <label>Category <span style="color:var(--red)">*</span></label>
+          <select class="form-input" id="pl-category">
+            <option>GPS Device</option><option>VLTD</option><option>Renewal</option><option>Accessory</option><option>Service</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Server Name</label>
+          <input class="form-input" id="pl-server" placeholder="e.g. BharatGPS Server">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Description</label>
+          <input class="form-input" id="pl-desc" placeholder="Brief description of the service">
+        </div>
+        <div class="form-group">
+          <label>Price (excl GST) ₹ <span style="color:var(--red)">*</span></label>
+          <input class="form-input" id="pl-price-excl" type="number" min="0" step="0.01" placeholder="0.00" oninput="calcPlGst()">
+        </div>
+        <div class="form-group">
+          <label>GST % <span style="color:var(--red)">*</span></label>
+          <select class="form-input" id="pl-gst-pct" onchange="calcPlGst()">
+            <option value="0">0% (Exempt)</option>
+            <option value="5">5%</option>
+            <option value="12">12%</option>
+            <option value="18" selected>18%</option>
+            <option value="28">28%</option>
+          </select>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Price (incl GST) ₹</label>
+          <div style="background:var(--accent-light);border-radius:8px;padding:12px 14px;font-size:18px;font-weight:900;color:var(--accent)" id="pl-price-incl-display">₹ 0.00</div>
+        </div>
+        <div class="form-group">
+          <label>Sort Order</label>
+          <input class="form-input" id="pl-sort" type="number" min="0" value="0">
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select class="form-input" id="pl-active">
+            <option value="1">✅ Active</option>
+            <option value="0">❌ Inactive</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div style="padding:14px 20px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closePlModal()" class="ts-btn" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border)">Cancel</button>
+      <button onclick="savePl()" class="ts-btn ts-btn-primary" id="pl-save-btn">Save</button>
+    </div>
   </div>
 </div>
 

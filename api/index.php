@@ -2006,6 +2006,83 @@ case 'mark_demo_lost':
     break;
 
 
+// ── PRICE LIST API (admin only) ──────────────────────────────────────
+
+case 'pl_get':
+    if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Admin only']); break; }
+    try {
+        // Seed defaults if empty
+        $cnt = $pdo->query("SELECT COUNT(*) FROM price_list")->fetchColumn();
+        if($cnt == 0){
+            $defs = [
+                ['Basic/Normal GPS',     'GPS Device',  'BharatGPS Server',  'Standard GPS tracker installation',              3000, 18],
+                ['Engine Status GPS',    'GPS Device',  'BharatGPS Server',  'GPS with engine on/off monitoring',              3500, 18],
+                ['Engine Cut GPS',       'GPS Device',  'BharatGPS Server',  'GPS with remote engine cut/restore relay',       4500, 18],
+                ['Micro GPS',            'GPS Device',  'BharatGPS Server',  'Compact micro GPS tracker',                      3200, 18],
+                ['Magnet GPS',           'GPS Device',  'BharatGPS Server',  'Magnetic portable GPS tracker (no wiring)',      3000, 18],
+                ['MIC/SOS GPS',          'GPS Device',  'BharatGPS Server',  'GPS with microphone and SOS alert button',       4000, 18],
+                ['VLTD',                 'VLTD',        'BharatGPS Server',  'Vehicle Location Tracking Device — AIS 140',    8000, 18],
+                ['OBD GPS',              'GPS Device',  'BharatGPS Server',  'OBD port plug-in GPS tracker',                  2500, 18],
+                ['Annual Renewal',       'Renewal',     'BharatGPS Server',  'Annual subscription renewal per vehicle',        1200, 18],
+                ['VLTD Annual Renewal',  'Renewal',     'BharatGPS Server',  'AIS 140 VLTD annual subscription renewal',      2000, 18],
+                ['SIM Card',             'Accessory',   '',                  'IoT SIM card for GPS tracker',                    300, 18],
+                ['Troubleshoot Visit',   'Service',     '',                  'Technician visit for troubleshoot/repair',        500, 18],
+            ];
+            $ins = $pdo->prepare("INSERT INTO price_list (product_name,category,server_name,description,price_excl_gst,gst_percent,price_incl_gst,created_by,sort_order) VALUES (?,?,?,?,?,?,?,?,?)");
+            foreach($defs as $k=>$d){
+                $excl = $d[4]; $gst = $d[5];
+                $incl = round($excl * (1 + $gst/100), 2);
+                $ins->execute([$d[0],$d[1],$d[2],$d[3],$excl,$gst,$incl,'System',$k]);
+            }
+        }
+        $rows = $pdo->query("SELECT * FROM price_list ORDER BY sort_order, category, product_name")->fetchAll();
+        echo json_encode(['items'=>$rows]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage(),'items'=>[]]); }
+    break;
+
+case 'pl_save':
+    if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Admin only']); break; }
+    $id   = intval($body['id']??0);
+    $name = trim($body['product_name']??'');
+    $cat  = trim($body['category']??'GPS Device');
+    if(!$name){ echo json_encode(['error'=>'Product name required']); break; }
+    $srv   = trim($body['server_name']??'');
+    $desc  = trim($body['description']??'');
+    $excl  = floatval($body['price_excl_gst']??0);
+    $gst   = floatval($body['gst_percent']??18);
+    $incl  = round($excl * (1 + $gst/100), 2);
+    $sort  = intval($body['sort_order']??0);
+    $active= intval($body['is_active']??1);
+    try {
+        if($id){
+            $pdo->prepare("UPDATE price_list SET product_name=?,category=?,server_name=?,description=?,price_excl_gst=?,gst_percent=?,price_incl_gst=?,sort_order=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")
+                ->execute([$name,$cat,$srv,$desc,$excl,$gst,$incl,$sort,$active,$id]);
+            echo json_encode(['success'=>true,'id'=>$id,'price_incl_gst'=>$incl]);
+        } else {
+            $pdo->prepare("INSERT INTO price_list (product_name,category,server_name,description,price_excl_gst,gst_percent,price_incl_gst,sort_order,is_active,created_by) VALUES (?,?,?,?,?,?,?,?,?,?)")
+                ->execute([$name,$cat,$srv,$desc,$excl,$gst,$incl,$sort,$active,$cu['name']]);
+            echo json_encode(['success'=>true,'id'=>intval($pdo->lastInsertId()),'price_incl_gst'=>$incl]);
+        }
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'pl_delete':
+    if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Admin only']); break; }
+    $id = intval($body['id']??0);
+    try {
+        $pdo->prepare("DELETE FROM price_list WHERE id=?")->execute([$id]);
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'pl_get_public':
+    // For other roles to READ prices (assigner/technician can view but not edit)
+    try {
+        $rows = $pdo->query("SELECT id,product_name,category,server_name,price_excl_gst,gst_percent,price_incl_gst FROM price_list WHERE is_active=1 ORDER BY sort_order,category,product_name")->fetchAll();
+        echo json_encode(['items'=>$rows]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage(),'items'=>[]]); }
+    break;
+
 // ── GPS STOCK INVENTORY API (stock_ prefix, no collision with inv_ invoicing) ──
 
 case 'stock_get':
