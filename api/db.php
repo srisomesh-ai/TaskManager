@@ -235,9 +235,15 @@ function getDB() {
                 invoice_no      VARCHAR(100) DEFAULT NULL,
                 notes           TEXT         DEFAULT NULL,
                 stock_added     TINYINT(1)   NOT NULL DEFAULT 0,
+                received_date   DATE         DEFAULT NULL,
+                received_qty    INT          DEFAULT NULL,
+                received_by     VARCHAR(100) DEFAULT NULL,
                 created_by      VARCHAR(100) DEFAULT NULL,
                 created_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+            "ALTER TABLE purchases ADD COLUMN IF NOT EXISTS received_date DATE DEFAULT NULL AFTER stock_added",
+            "ALTER TABLE purchases ADD COLUMN IF NOT EXISTS received_qty INT DEFAULT NULL AFTER received_date",
+            "ALTER TABLE purchases ADD COLUMN IF NOT EXISTS received_by VARCHAR(100) DEFAULT NULL AFTER received_qty",
 
             "CREATE TABLE IF NOT EXISTS stock_movements (
                 id          INT AUTO_INCREMENT PRIMARY KEY,

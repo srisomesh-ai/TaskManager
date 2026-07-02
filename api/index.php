@@ -2137,14 +2137,32 @@ case 'pur_save':
     $inv     = trim($body['invoice_no']??'');
     $notes   = trim($body['notes']??'');
     try {
-        $pdo->prepare("INSERT INTO purchases (purchase_date,dealer_name,dealer_contact,item_id,qty,unit_price,gst_percent,unit_price_incl,total_excl,total_incl,invoice_no,notes,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
+        $pdo->prepare("INSERT INTO purchases (purchase_date,dealer_name,dealer_contact,item_id,qty,unit_price,gst_percent,unit_price_incl,total_excl,total_incl,invoice_no,notes,stock_added,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0,?)")
             ->execute([$date,$dealer,$contact,$itemId,$qty,$uprice,$gst,$uincl,$texcl,$tincl,$inv?:null,$notes?:null,$cu['name']]);
         $purId = intval($pdo->lastInsertId());
-        // Auto-add to stock as stock_in movement
-        $pdo->prepare("INSERT INTO stock_movements (item_id,move_type,qty,ref_note,move_date,done_by) VALUES (?,?,?,?,?,?)")
-            ->execute([$itemId,'in',$qty,'Purchase: '.$dealer.($inv?' INV#'.$inv:''),$date,$cu['name']]);
-        $pdo->prepare("UPDATE purchases SET stock_added=1 WHERE id=?")->execute([$purId]);
+        // Stock NOT added yet — added only when marked as received
         echo json_encode(['success'=>true,'id'=>$purId]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'pur_mark_received':
+    if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Admin only']); break; }
+    $id          = intval($body['id']??0);
+    $recDate     = trim($body['received_date']??date('Y-m-d'));
+    $recQty      = intval($body['received_qty']??0);
+    if(!$id||$recQty<1){ echo json_encode(['error'=>'ID and received qty required']); break; }
+    try {
+        $pur = $pdo->prepare("SELECT * FROM purchases WHERE id=?"); $pur->execute([$id]); $p = $pur->fetch();
+        if(!$p){ echo json_encode(['error'=>'Purchase not found']); break; }
+        if($p['stock_added']){ echo json_encode(['error'=>'Stock already added for this purchase']); break; }
+        // Add stock movement
+        $ref = 'Purchase received: '.$p['dealer_name'].($p['invoice_no']?' INV#'.$p['invoice_no']:'');
+        $pdo->prepare("INSERT INTO stock_movements (item_id,move_type,qty,ref_note,move_date,done_by) VALUES (?,?,?,?,?,?)")
+            ->execute([$p['item_id'],'in',$recQty,$ref,$recDate,$cu['name']]);
+        // Mark purchase as received
+        $pdo->prepare("UPDATE purchases SET stock_added=1, received_date=?, received_qty=?, received_by=? WHERE id=?")
+            ->execute([$recDate,$recQty,$cu['name'],$id]);
+        echo json_encode(['success'=>true]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
@@ -2154,9 +2172,11 @@ case 'pur_delete':
     try {
         $pur = $pdo->prepare("SELECT * FROM purchases WHERE id=?"); $pur->execute([$id]); $p = $pur->fetch();
         if(!$p){ echo json_encode(['error'=>'Not found']); break; }
-        // Remove the matching stock movement that was auto-created
-        $pdo->prepare("DELETE FROM stock_movements WHERE item_id=? AND move_type='in' AND qty=? AND move_date=? AND done_by=? LIMIT 1")
-            ->execute([$p['item_id'],$p['qty'],$p['purchase_date'],$p['created_by']]);
+        // Only remove stock movement if stock was already added (received)
+        if($p['stock_added']){
+            $pdo->prepare("DELETE FROM stock_movements WHERE item_id=? AND move_type='in' AND qty=? AND move_date=? LIMIT 1")
+                ->execute([$p['item_id'],$p['received_qty']??$p['qty'],$p['received_date']??$p['purchase_date']]);
+        }
         $pdo->prepare("DELETE FROM purchases WHERE id=?")->execute([$id]);
         echo json_encode(['success'=>true]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }

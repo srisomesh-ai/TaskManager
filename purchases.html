@@ -80,9 +80,13 @@ tr:hover td{background:var(--surface2)}
       <div class="stat-val" id="st-orders">–</div>
       <div class="stat-lbl">Total Lots</div>
     </div>
+    <div class="stat-card" style="border-bottom:3px solid var(--amber)">
+      <div class="stat-val" id="st-pending">–</div>
+      <div class="stat-lbl">⏳ Pending Delivery</div>
+    </div>
     <div class="stat-card" style="border-bottom:3px solid var(--blue)">
       <div class="stat-val" id="st-units">–</div>
-      <div class="stat-lbl">Total Units Purchased</div>
+      <div class="stat-lbl">Total Units Received</div>
     </div>
     <div class="stat-card" style="border-bottom:3px solid var(--red)">
       <div class="stat-val" id="st-spent">–</div>
@@ -115,12 +119,14 @@ tr:hover td{background:var(--surface2)}
             <th class="num">Unit Price (incl GST)</th>
             <th class="num">Total (incl GST)</th>
             <th>Invoice #</th>
+            <th>Status</th>
+            <th>Received Date</th>
             <th>Notes</th>
             <th></th>
           </tr>
         </thead>
         <tbody id="pur-tbody">
-          <tr><td colspan="11" style="padding:40px;text-align:center;color:var(--text3)">⏳ Loading…</td></tr>
+          <tr><td colspan="13" style="padding:40px;text-align:center;color:var(--text3)">⏳ Loading…</td></tr>
         </tbody>
       </table>
     </div>
@@ -193,14 +199,43 @@ tr:hover td{background:var(--surface2)}
           <label class="fl">Notes</label>
           <input class="finput" id="m-notes" placeholder="Any notes about this purchase lot…">
         </div>
-        <div class="fg full" style="background:var(--green-bg);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--green)">
-          ✅ <strong>This purchase will automatically add the quantity to inventory stock.</strong>
+        <div class="fg full" style="background:var(--amber-bg);border-radius:8px;padding:10px 14px;font-size:12px;color:#7a4500">
+          💳 <strong>This records the payment.</strong> Stock will be updated separately when goods are received.
         </div>
       </div>
     </div>
     <div class="mfoot">
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" id="m-save-btn" onclick="savePurchase()">Save & Add to Stock</button>
+      <button class="btn btn-primary" id="m-save-btn" onclick="savePurchase()">💳 Save Payment</button>
+    </div>
+  </div>
+</div>
+
+<!-- MARK RECEIVED MODAL -->
+<div class="overlay" id="rec-overlay">
+  <div class="modal" style="max-width:400px">
+    <div class="mhd">
+      <div class="mhd-title">📦 Mark Stock Received</div>
+      <button class="mclose" onclick="closeReceiveModal()">×</button>
+    </div>
+    <div class="mbody">
+      <div id="rec-summary" style="background:var(--surface2);border-radius:8px;padding:12px 14px;font-size:13px;margin-bottom:16px;line-height:1.8"></div>
+      <div class="fg">
+        <label class="fl">Date Received <span style="color:var(--red)">*</span></label>
+        <input class="finput" id="rec-date" type="date">
+      </div>
+      <div class="fg">
+        <label class="fl">Quantity Received <span style="color:var(--red)">*</span></label>
+        <input class="finput" id="rec-qty" type="number" min="1">
+        <div style="font-size:11px;color:var(--text3);margin-top:4px" id="rec-qty-hint"></div>
+      </div>
+      <div style="background:var(--green-bg);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--green)">
+        ✅ Once you confirm, the quantity will be added to inventory stock.
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-ghost" onclick="closeReceiveModal()">Cancel</button>
+      <button class="btn btn-primary" id="rec-save-btn" onclick="confirmReceived()" style="background:var(--green)">📦 Confirm Received</button>
     </div>
   </div>
 </div>
@@ -271,7 +306,7 @@ function load(){
     .then(function(r){return r.json();})
     .then(function(d){
       if(d.error){
-        document.getElementById('pur-tbody').innerHTML='<tr><td colspan="11" style="padding:40px;text-align:center;color:var(--red)">❌ '+d.error+'</td></tr>';
+        document.getElementById('pur-tbody').innerHTML='<tr><td colspan="13" style="padding:40px;text-align:center;color:var(--red)">❌ '+d.error+'</td></tr>';
         return;
       }
       _purchases = d.purchases||[];
@@ -281,13 +316,15 @@ function load(){
 }
 
 function updateStats(d){
-  var units = parseInt(d.total_units||0);
-  var spent = parseFloat(d.total_spent||0);
-  var avg   = units>0 ? (spent/units) : 0;
-  document.getElementById('st-orders').textContent = _purchases.length;
-  document.getElementById('st-units').textContent  = units;
-  document.getElementById('st-spent').textContent  = '₹'+spent.toLocaleString('en-IN',{minimumFractionDigits:2});
-  document.getElementById('st-avg').textContent    = avg>0?'₹'+avg.toLocaleString('en-IN',{minimumFractionDigits:2}):'–';
+  var units   = parseInt(d.total_units||0);
+  var spent   = parseFloat(d.total_spent||0);
+  var avg     = units>0 ? (spent/units) : 0;
+  var pending = _purchases.filter(function(p){ return !(p.stock_added=='1'||p.stock_added===1); }).length;
+  document.getElementById('st-orders').textContent  = _purchases.length;
+  document.getElementById('st-pending').textContent = pending;
+  document.getElementById('st-units').textContent   = units;
+  document.getElementById('st-spent').textContent   = '₹'+spent.toLocaleString('en-IN',{minimumFractionDigits:2});
+  document.getElementById('st-avg').textContent     = avg>0?'₹'+avg.toLocaleString('en-IN',{minimumFractionDigits:2}):'–';
 }
 
 function render(){
@@ -297,7 +334,7 @@ function render(){
   });
   var tbody = document.getElementById('pur-tbody');
   if(!rows.length){
-    tbody.innerHTML='<tr><td colspan="11" style="padding:40px;text-align:center;color:var(--text3)">No purchases found</td></tr>';
+    tbody.innerHTML='<tr><td colspan="13" style="padding:40px;text-align:center;color:var(--text3)">No purchases found</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map(function(p){
@@ -315,8 +352,15 @@ function render(){
       '<td class="num">₹'+uincl.toLocaleString('en-IN',{minimumFractionDigits:2})+'</td>'+
       '<td class="num" style="color:var(--accent);font-weight:900">₹'+tincl.toLocaleString('en-IN',{minimumFractionDigits:2})+'</td>'+
       '<td style="font-size:12px;color:var(--text2)">'+esc(p.invoice_no||'–')+'</td>'+
+      '<td>'+(p.stock_added=='1'||p.stock_added===1?
+        '<span style="background:var(--green-bg);color:var(--green);padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700">✅ Received</span>':
+        '<span style="background:var(--amber-bg);color:#7a4500;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700">⏳ Pending</span>')+'</td>'+
+      '<td style="font-size:12px;color:var(--text2)">'+(p.received_date?('<strong>'+p.received_date+'</strong><br><span style="font-size:11px;color:var(--text3)">Qty: '+p.received_qty+'</span>'):'–')+'</td>'+
       '<td style="font-size:12px;color:var(--text3);max-width:140px">'+esc(p.notes||'–')+'</td>'+
-      '<td><button onclick="deletePurchase('+p.id+')" style="background:var(--red-bg);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;color:var(--red)">🗑️</button></td>'+
+      '<td><div style="display:flex;gap:5px">'+
+        (!(p.stock_added=='1'||p.stock_added===1)?'<button onclick="openReceiveModal('+p.id+')" style="background:var(--green-bg);border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;color:var(--green);white-space:nowrap">📦 Receive</button>':'')+
+        '<button onclick="deletePurchase('+p.id+')" style="background:var(--red-bg);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;color:var(--red)">🗑️</button>'+
+      '</div></td>'+
     '</tr>';
   }).join('');
 }
@@ -376,13 +420,13 @@ function savePurchase(){
     gst_percent:     parseFloat(document.getElementById('m-gst').value)||18,
     notes:           document.getElementById('m-notes').value.trim(),
   }).then(function(d){
-    btn.disabled=false; btn.textContent='Save & Add to Stock';
+    btn.disabled=false; btn.textContent='💳 Save Payment';
     if(d.success){
       closeModal();
       showToast('✅ Purchase saved — stock updated');
       load();
     } else showToast('❌ '+(d.error||'Save failed'));
-  }).catch(function(){ btn.disabled=false; btn.textContent='Save & Add to Stock'; showToast('❌ Network error'); });
+  }).catch(function(){ btn.disabled=false; btn.textContent='💳 Save Payment'; showToast('❌ Network error'); });
 }
 
 function deletePurchase(id){
@@ -407,6 +451,50 @@ function showToast(msg){
   var t=document.getElementById('toast');
   t.textContent=msg; t.classList.add('show');
   setTimeout(function(){t.classList.remove('show');},3000);
+}
+
+// ── RECEIVE MODAL ─────────────────────────────────────────────────────
+var _recPurId = null;
+
+function openReceiveModal(id){
+  var p = _purchases.find(function(x){ return x.id==id; });
+  if(!p) return;
+  _recPurId = id;
+  var sumEl = document.getElementById('rec-summary');
+  sumEl.innerHTML = '<strong>'+esc(p.dealer_name)+'</strong><br>'+
+    '📦 Item: '+esc(p.item_name||'–')+'<br>'+
+    '💳 Payment date: '+p.purchase_date+'<br>'+
+    '🔢 Ordered qty: <strong>'+p.qty+'</strong>';
+  document.getElementById('rec-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('rec-qty').value  = p.qty;
+  document.getElementById('rec-qty-hint').textContent = 'Ordered: '+p.qty+' units';
+  document.getElementById('rec-overlay').classList.add('open');
+}
+
+function closeReceiveModal(){
+  document.getElementById('rec-overlay').classList.remove('open');
+  _recPurId = null;
+}
+
+function confirmReceived(){
+  var date = document.getElementById('rec-date').value;
+  var qty  = parseInt(document.getElementById('rec-qty').value)||0;
+  if(!date){ showToast('⚠️ Enter received date'); return; }
+  if(qty<1){ showToast('⚠️ Enter received quantity'); return; }
+  var btn = document.getElementById('rec-save-btn');
+  btn.disabled=true; btn.textContent='Saving…';
+  purApi('pur_mark_received','POST',{
+    id: _recPurId,
+    received_date: date,
+    received_qty: qty,
+  }).then(function(d){
+    btn.disabled=false; btn.textContent='📦 Confirm Received';
+    if(d.success){
+      closeReceiveModal();
+      showToast('✅ Stock received — inventory updated');
+      load();
+    } else showToast('❌ '+(d.error||'Failed'));
+  }).catch(function(){ btn.disabled=false; btn.textContent='📦 Confirm Received'; showToast('❌ Network error'); });
 }
 </script>
 </body>
