@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Purchases — BharatGPS</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --accent:#0E5C5C;--accent2:#137272;--accent-light:#E0EEEE;
+  --green:#27AE60;--green-bg:#e8f5ec;
+  --red:#E74C3C;--red-bg:#FCE9E7;
+  --amber:#F5A623;--amber-bg:#FDF1DE;
+  --blue:#2E86DE;--blue-bg:#E7F1FC;
+  --text:#16201F;--text2:#55676A;--text3:#8A9A98;
+  --surface:#fff;--surface2:#F3F6F5;--border:#D9E2E0;--line:#E9EFEE;
+  --shadow:0 2px 8px rgba(14,92,92,.08);
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#EFF3F2;color:var(--text);min-height:100vh}
+.content{padding:20px 22px}
+.pg-hd{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px}
+.pg-title{font-size:21px;font-weight:900;color:var(--text)}
+.pg-sub{font-size:12px;color:var(--text3);margin-top:2px}
+.stat-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:20px}
+.stat-card{background:var(--surface);border-radius:12px;padding:16px;box-shadow:var(--shadow)}
+.stat-val{font-size:22px;font-weight:900;color:var(--text);line-height:1}
+.stat-lbl{font-size:11px;color:var(--text3);margin-top:4px;font-weight:600}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+.fi{padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text);background:var(--surface);outline:none}
+.fi:focus{border-color:var(--accent)}
+.btn{padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:none}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-ghost{background:var(--surface2);color:var(--text2);border:1px solid var(--border)}
+.table-card{background:var(--surface);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead th{padding:10px 14px;font-size:11px;font-weight:700;color:var(--text3);text-align:left;border-bottom:1px solid var(--line);background:var(--surface2);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+td{padding:11px 14px;font-size:13px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--surface2)}
+.num{text-align:right;font-family:monospace;font-weight:700}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;align-items:center;justify-content:center;padding:20px}
+.overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:16px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.mhd{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;position:sticky;top:0;background:var(--surface)}
+.mhd-title{flex:1;font-size:15px;font-weight:800}
+.mclose{width:28px;height:28px;border-radius:50%;background:var(--surface2);border:none;cursor:pointer;font-size:16px;color:var(--text3)}
+.mbody{padding:18px 20px}
+.mfoot{padding:14px 20px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
+.fg{margin-bottom:14px}
+.fl{font-size:12px;font-weight:700;color:var(--text2);margin-bottom:5px;display:block}
+.finput{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text);background:var(--surface);outline:none}
+.finput:focus{border-color:var(--accent)}
+.fgrid{display:grid;gap:12px}
+.fgrid-2{grid-template-columns:1fr 1fr}
+.fgrid-3{grid-template-columns:1fr 1fr 1fr}
+.full{grid-column:1/-1}
+.total-box{background:var(--accent-light);border-radius:8px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center}
+.total-label{font-size:12px;font-weight:700;color:var(--text2)}
+.total-val{font-size:20px;font-weight:900;color:var(--accent)}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:#16201F;color:#fff;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;transition:transform .3s;pointer-events:none}
+.toast.show{transform:translateX(-50%) translateY(0)}
+.margin-pill{display:inline-block;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700}
+</style>
+</head>
+<body>
+<div class="content">
+  <div class="pg-hd">
+    <div>
+      <div class="pg-title">🛒 Purchases</div>
+      <div class="pg-sub">Lot-wise purchase tracking — admin only. Each purchase auto-updates inventory stock.</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="openModal()">+ New Purchase</button>
+    </div>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat-card" style="border-bottom:3px solid var(--accent)">
+      <div class="stat-val" id="st-orders">–</div>
+      <div class="stat-lbl">Total Lots</div>
+    </div>
+    <div class="stat-card" style="border-bottom:3px solid var(--blue)">
+      <div class="stat-val" id="st-units">–</div>
+      <div class="stat-lbl">Total Units Purchased</div>
+    </div>
+    <div class="stat-card" style="border-bottom:3px solid var(--red)">
+      <div class="stat-val" id="st-spent">–</div>
+      <div class="stat-lbl">Total Spent (incl GST)</div>
+    </div>
+    <div class="stat-card" style="border-bottom:3px solid var(--green)">
+      <div class="stat-val" id="st-avg">–</div>
+      <div class="stat-lbl">Avg Unit Cost (incl GST)</div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <input class="fi" id="f-search" placeholder="🔍 Search dealer, item…" oninput="render()">
+    <input class="fi" id="f-from" type="date" onchange="load()" title="From date">
+    <input class="fi" id="f-to"   type="date" onchange="load()" title="To date">
+    <button class="btn btn-ghost" onclick="clearFilters()">Clear</button>
+  </div>
+
+  <div class="table-card">
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Dealer</th>
+            <th>Item</th>
+            <th class="num">Qty</th>
+            <th class="num">Unit Price (excl GST)</th>
+            <th style="text-align:center">GST %</th>
+            <th class="num">Unit Price (incl GST)</th>
+            <th class="num">Total (incl GST)</th>
+            <th>Invoice #</th>
+            <th>Notes</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="pur-tbody">
+          <tr><td colspan="11" style="padding:40px;text-align:center;color:var(--text3)">⏳ Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="overlay" id="pur-overlay">
+  <div class="modal">
+    <div class="mhd">
+      <div class="mhd-title">🛒 New Purchase Lot</div>
+      <button class="mclose" onclick="closeModal()">×</button>
+    </div>
+    <div class="mbody">
+      <div class="fgrid fgrid-2">
+        <div class="fg">
+          <label class="fl">Purchase Date <span style="color:var(--red)">*</span></label>
+          <input class="finput" id="m-date" type="date">
+        </div>
+        <div class="fg">
+          <label class="fl">Invoice / Bill No.</label>
+          <input class="finput" id="m-inv" placeholder="e.g. INV-2024-001">
+        </div>
+        <div class="fg">
+          <label class="fl">Dealer Name <span style="color:var(--red)">*</span></label>
+          <input class="finput" id="m-dealer" placeholder="e.g. Dealer A">
+        </div>
+        <div class="fg">
+          <label class="fl">Dealer Contact</label>
+          <input class="finput" id="m-contact" placeholder="Phone / email">
+        </div>
+        <div class="fg full">
+          <label class="fl">Item (from Inventory) <span style="color:var(--red)">*</span></label>
+          <select class="finput" id="m-item" onchange="calcTotal()">
+            <option value="">Select item…</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="fl">Quantity <span style="color:var(--red)">*</span></label>
+          <input class="finput" id="m-qty" type="number" min="1" value="1" oninput="calcTotal()">
+        </div>
+        <div class="fg">
+          <label class="fl">Unit Price (excl GST) ₹ <span style="color:var(--red)">*</span></label>
+          <input class="finput" id="m-price" type="number" min="0" step="0.01" placeholder="0.00" oninput="calcTotal()">
+        </div>
+        <div class="fg">
+          <label class="fl">GST %</label>
+          <select class="finput" id="m-gst" onchange="calcTotal()">
+            <option value="0">0%</option>
+            <option value="5">5%</option>
+            <option value="12">12%</option>
+            <option value="18" selected>18%</option>
+            <option value="28">28%</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="fl">Unit Price (incl GST) ₹</label>
+          <div class="finput" id="m-unit-incl" style="background:var(--surface2);color:var(--text2)">–</div>
+        </div>
+        <div class="fg full">
+          <div class="total-box">
+            <div>
+              <div class="total-label">Total Amount (incl GST)</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:2px" id="m-total-breakdown">–</div>
+            </div>
+            <div class="total-val" id="m-total">₹ 0.00</div>
+          </div>
+        </div>
+        <div class="fg full">
+          <label class="fl">Notes</label>
+          <input class="finput" id="m-notes" placeholder="Any notes about this purchase lot…">
+        </div>
+        <div class="fg full" style="background:var(--green-bg);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--green)">
+          ✅ <strong>This purchase will automatically add the quantity to inventory stock.</strong>
+        </div>
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="m-save-btn" onclick="savePurchase()">Save & Add to Stock</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = 'api/index.php';
+const AUTH_TOKEN = (function(){
+  var p = new URLSearchParams(window.location.search);
+  return p.get('token') || localStorage.getItem('bgps_token') || '';
+})();
+const CURR_USER = (function(){
+  try{ return JSON.parse(localStorage.getItem('bgps_user')||'null'); }catch(e){ return null; }
+})();
+
+// Admin guard
+(function(){
+  if(!AUTH_TOKEN||!CURR_USER||CURR_USER.role!=='admin') window.location.href='index.html';
+})();
+
+var _purchases = [];
+var _items = [];
+
+function purApi(action, method, body){
+  var url = API+'?action='+action;
+  var opts = {method:method||'GET', cache:'no-store', headers:{'X-Auth-Token':AUTH_TOKEN}};
+  if(method==='POST'&&body){opts.headers['Content-Type']='application/json'; opts.body=JSON.stringify(body);}
+  return fetch(url,opts).then(function(r){return r.json();});
+}
+
+document.addEventListener('DOMContentLoaded', function(){
+  // Set default dates (current month)
+  var now = new Date();
+  var y = now.getFullYear(), m = String(now.getMonth()+1).padStart(2,'0');
+  document.getElementById('f-from').value = y+'-'+m+'-01';
+  document.getElementById('f-to').value   = new Date(y,now.getMonth()+1,0).toISOString().slice(0,10);
+  document.getElementById('m-date').value = now.toISOString().slice(0,10);
+  loadItems();
+  load();
+});
+
+function loadItems(){
+  purApi('stock_get').then(function(d){
+    _items = (d.items||[]);
+    var sel = document.getElementById('m-item');
+    sel.innerHTML = '<option value="">Select item…</option>';
+    _items.forEach(function(i){
+      var o = document.createElement('option');
+      o.value = i.id;
+      o.textContent = i.name + ' ('+i.category+')';
+      sel.appendChild(o);
+    });
+  }).catch(function(){});
+}
+
+function load(){
+  var from = document.getElementById('f-from').value;
+  var to   = document.getElementById('f-to').value;
+  var url  = 'pur_get';
+  if(from) url+='&from='+from;
+  if(to)   url+='&to='+to;
+  // Use query params in GET
+  purApi('pur_get'+(from||to?'__PARAMS__':''), 'GET').then; // can't chain query params this way
+  // Direct fetch instead:
+  var fullUrl = API+'?action=pur_get'+(from?'&from='+from:'')+(to?'&to='+to:'');
+  fetch(fullUrl,{cache:'no-store',headers:{'X-Auth-Token':AUTH_TOKEN}})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.error){
+        document.getElementById('pur-tbody').innerHTML='<tr><td colspan="11" style="padding:40px;text-align:center;color:var(--red)">❌ '+d.error+'</td></tr>';
+        return;
+      }
+      _purchases = d.purchases||[];
+      updateStats(d);
+      render();
+    }).catch(function(){ showToast('❌ Could not load purchases'); });
+}
+
+function updateStats(d){
+  var units = parseInt(d.total_units||0);
+  var spent = parseFloat(d.total_spent||0);
+  var avg   = units>0 ? (spent/units) : 0;
+  document.getElementById('st-orders').textContent = _purchases.length;
+  document.getElementById('st-units').textContent  = units;
+  document.getElementById('st-spent').textContent  = '₹'+spent.toLocaleString('en-IN',{minimumFractionDigits:2});
+  document.getElementById('st-avg').textContent    = avg>0?'₹'+avg.toLocaleString('en-IN',{minimumFractionDigits:2}):'–';
+}
+
+function render(){
+  var search = (document.getElementById('f-search').value||'').toLowerCase();
+  var rows = _purchases.filter(function(p){
+    return !search||(p.dealer_name||'').toLowerCase().includes(search)||(p.item_name||'').toLowerCase().includes(search)||(p.invoice_no||'').toLowerCase().includes(search);
+  });
+  var tbody = document.getElementById('pur-tbody');
+  if(!rows.length){
+    tbody.innerHTML='<tr><td colspan="11" style="padding:40px;text-align:center;color:var(--text3)">No purchases found</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(function(p){
+    var uprice = parseFloat(p.unit_price||0);
+    var uincl  = parseFloat(p.unit_price_incl||0);
+    var tincl  = parseFloat(p.total_incl||0);
+    var gst    = parseFloat(p.gst_percent||0);
+    return '<tr>'+
+      '<td style="white-space:nowrap;color:var(--text2)">'+p.purchase_date+'</td>'+
+      '<td><strong>'+esc(p.dealer_name)+'</strong>'+(p.dealer_contact?'<br><span style="font-size:11px;color:var(--text3)">'+esc(p.dealer_contact)+'</span>':'')+'</td>'+
+      '<td>'+esc(p.item_name||'–')+' <span style="font-size:11px;color:var(--text3)">('+esc(p.unit||'')+')</span></td>'+
+      '<td class="num"><strong>'+p.qty+'</strong></td>'+
+      '<td class="num">₹'+uprice.toLocaleString('en-IN',{minimumFractionDigits:2})+'</td>'+
+      '<td style="text-align:center;color:var(--text2)">'+gst+'%</td>'+
+      '<td class="num">₹'+uincl.toLocaleString('en-IN',{minimumFractionDigits:2})+'</td>'+
+      '<td class="num" style="color:var(--accent);font-weight:900">₹'+tincl.toLocaleString('en-IN',{minimumFractionDigits:2})+'</td>'+
+      '<td style="font-size:12px;color:var(--text2)">'+esc(p.invoice_no||'–')+'</td>'+
+      '<td style="font-size:12px;color:var(--text3);max-width:140px">'+esc(p.notes||'–')+'</td>'+
+      '<td><button onclick="deletePurchase('+p.id+')" style="background:var(--red-bg);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;color:var(--red)">🗑️</button></td>'+
+    '</tr>';
+  }).join('');
+}
+
+function calcTotal(){
+  var qty   = parseInt(document.getElementById('m-qty').value)||0;
+  var price = parseFloat(document.getElementById('m-price').value)||0;
+  var gst   = parseFloat(document.getElementById('m-gst').value)||0;
+  var uincl = price*(1+gst/100);
+  var texcl = price*qty;
+  var tincl = uincl*qty;
+  document.getElementById('m-unit-incl').textContent = '₹ '+uincl.toLocaleString('en-IN',{minimumFractionDigits:2});
+  document.getElementById('m-total').textContent = '₹ '+tincl.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('m-total-breakdown').textContent = qty+' units × ₹'+uincl.toFixed(2)+' = ₹'+texcl.toFixed(2)+' excl GST';
+}
+
+function openModal(){
+  document.getElementById('m-date').value    = new Date().toISOString().slice(0,10);
+  document.getElementById('m-inv').value     = '';
+  document.getElementById('m-dealer').value  = '';
+  document.getElementById('m-contact').value = '';
+  document.getElementById('m-item').value    = '';
+  document.getElementById('m-qty').value     = '1';
+  document.getElementById('m-price').value   = '';
+  document.getElementById('m-gst').value     = '18';
+  document.getElementById('m-notes').value   = '';
+  document.getElementById('m-unit-incl').textContent = '–';
+  document.getElementById('m-total').textContent = '₹ 0.00';
+  document.getElementById('m-total-breakdown').textContent = '–';
+  document.getElementById('pur-overlay').classList.add('open');
+  document.getElementById('m-dealer').focus();
+}
+
+function closeModal(){
+  document.getElementById('pur-overlay').classList.remove('open');
+}
+
+function savePurchase(){
+  var dealer = document.getElementById('m-dealer').value.trim();
+  var itemId = document.getElementById('m-item').value;
+  var qty    = parseInt(document.getElementById('m-qty').value)||0;
+  var price  = parseFloat(document.getElementById('m-price').value)||0;
+  if(!dealer){ showToast('⚠️ Dealer name required'); return; }
+  if(!itemId){ showToast('⚠️ Select an item'); return; }
+  if(qty<1)  { showToast('⚠️ Quantity must be at least 1'); return; }
+  if(price<=0){ showToast('⚠️ Enter unit price'); return; }
+  var btn = document.getElementById('m-save-btn');
+  btn.disabled=true; btn.textContent='Saving…';
+  purApi('pur_save','POST',{
+    purchase_date:   document.getElementById('m-date').value,
+    invoice_no:      document.getElementById('m-inv').value.trim(),
+    dealer_name:     dealer,
+    dealer_contact:  document.getElementById('m-contact').value.trim(),
+    item_id:         itemId,
+    qty:             qty,
+    unit_price:      price,
+    gst_percent:     parseFloat(document.getElementById('m-gst').value)||18,
+    notes:           document.getElementById('m-notes').value.trim(),
+  }).then(function(d){
+    btn.disabled=false; btn.textContent='Save & Add to Stock';
+    if(d.success){
+      closeModal();
+      showToast('✅ Purchase saved — stock updated');
+      load();
+    } else showToast('❌ '+(d.error||'Save failed'));
+  }).catch(function(){ btn.disabled=false; btn.textContent='Save & Add to Stock'; showToast('❌ Network error'); });
+}
+
+function deletePurchase(id){
+  var p = _purchases.find(function(x){return x.id==id;});
+  if(!p||!confirm('Delete this purchase lot ('+p.dealer_name+', '+p.qty+' units)?\n\nThis will also remove it from stock movements.')) return;
+  purApi('pur_delete','POST',{id:id}).then(function(d){
+    if(d.success){ showToast('🗑️ Purchase deleted — stock adjusted'); load(); }
+    else showToast('❌ '+(d.error||'Delete failed'));
+  }).catch(function(){ showToast('❌ Network error'); });
+}
+
+function clearFilters(){
+  document.getElementById('f-search').value='';
+  document.getElementById('f-from').value='';
+  document.getElementById('f-to').value='';
+  load();
+}
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(function(){t.classList.remove('show');},3000);
+}
+</script>
+</body>
+</html>

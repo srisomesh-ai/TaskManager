@@ -220,6 +220,25 @@ function getDB() {
                 updated_at  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
+            "CREATE TABLE IF NOT EXISTS purchases (
+                id              INT AUTO_INCREMENT PRIMARY KEY,
+                purchase_date   DATE         NOT NULL,
+                dealer_name     VARCHAR(150) NOT NULL,
+                dealer_contact  VARCHAR(50)  DEFAULT NULL,
+                item_id         INT          NOT NULL,
+                qty             INT          NOT NULL DEFAULT 1,
+                unit_price      DECIMAL(10,2) NOT NULL DEFAULT 0,
+                gst_percent     DECIMAL(5,2)  NOT NULL DEFAULT 18,
+                unit_price_incl DECIMAL(10,2) NOT NULL DEFAULT 0,
+                total_excl      DECIMAL(10,2) NOT NULL DEFAULT 0,
+                total_incl      DECIMAL(10,2) NOT NULL DEFAULT 0,
+                invoice_no      VARCHAR(100) DEFAULT NULL,
+                notes           TEXT         DEFAULT NULL,
+                stock_added     TINYINT(1)   NOT NULL DEFAULT 0,
+                created_by      VARCHAR(100) DEFAULT NULL,
+                created_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
             "CREATE TABLE IF NOT EXISTS stock_movements (
                 id          INT AUTO_INCREMENT PRIMARY KEY,
                 item_id     INT          NOT NULL,

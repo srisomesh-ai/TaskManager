@@ -2098,6 +2098,70 @@ case 'stock_reset_movements':
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
+// ── PURCHASES API (admin only) ───────────────────────────────────────
+
+case 'pur_get':
+    if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Admin only']); break; }
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS purchases (id INT AUTO_INCREMENT PRIMARY KEY, purchase_date DATE NOT NULL, dealer_name VARCHAR(150) NOT NULL, dealer_contact VARCHAR(50) DEFAULT NULL, item_id INT NOT NULL, qty INT NOT NULL DEFAULT 1, unit_price DECIMAL(10,2) NOT NULL DEFAULT 0, gst_percent DECIMAL(5,2) NOT NULL DEFAULT 18, unit_price_incl DECIMAL(10,2) NOT NULL DEFAULT 0, total_excl DECIMAL(10,2) NOT NULL DEFAULT 0, total_incl DECIMAL(10,2) NOT NULL DEFAULT 0, invoice_no VARCHAR(100) DEFAULT NULL, notes TEXT DEFAULT NULL, stock_added TINYINT(1) NOT NULL DEFAULT 0, created_by VARCHAR(100) DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $from = $_GET['from'] ?? '';
+        $to   = $_GET['to']   ?? '';
+        $w=[]; $p=[];
+        if($from){ $w[]="p.purchase_date>=?"; $p[]=$from; }
+        if($to)  { $w[]="p.purchase_date<=?"; $p[]=$to; }
+        $where = $w ? 'WHERE '.implode(' AND ',$w) : '';
+        $stmt = $pdo->prepare("SELECT p.*, s.name as item_name, s.unit FROM purchases p LEFT JOIN stock_items s ON p.item_id=s.id $where ORDER BY p.purchase_date DESC, p.created_at DESC");
+        $stmt->execute($p);
+        $rows = $stmt->fetchAll();
+        // Summary stats
+        $total_spent = array_sum(array_column($rows,'total_incl'));
+        $total_units = array_sum(array_column($rows,'qty'));
+        echo json_encode(['purchases'=>$rows,'total_spent'=>$total_spent,'total_units'=>$total_units]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage(),'purchases'=>[]]); }
+    break;
+
+case 'pur_save':
+    if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Admin only']); break; }
+    try { $pdo->exec("CREATE TABLE IF NOT EXISTS purchases (id INT AUTO_INCREMENT PRIMARY KEY, purchase_date DATE NOT NULL, dealer_name VARCHAR(150) NOT NULL, dealer_contact VARCHAR(50) DEFAULT NULL, item_id INT NOT NULL, qty INT NOT NULL DEFAULT 1, unit_price DECIMAL(10,2) NOT NULL DEFAULT 0, gst_percent DECIMAL(5,2) NOT NULL DEFAULT 18, unit_price_incl DECIMAL(10,2) NOT NULL DEFAULT 0, total_excl DECIMAL(10,2) NOT NULL DEFAULT 0, total_incl DECIMAL(10,2) NOT NULL DEFAULT 0, invoice_no VARCHAR(100) DEFAULT NULL, notes TEXT DEFAULT NULL, stock_added TINYINT(1) NOT NULL DEFAULT 0, created_by VARCHAR(100) DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch(Exception $e){}
+    $dealer  = trim($body['dealer_name']??'');
+    $itemId  = intval($body['item_id']??0);
+    $qty     = intval($body['qty']??0);
+    $date    = trim($body['purchase_date']??date('Y-m-d'));
+    if(!$dealer||!$itemId||$qty<1){ echo json_encode(['error'=>'Dealer, item and qty required']); break; }
+    $contact = trim($body['dealer_contact']??'');
+    $uprice  = floatval($body['unit_price']??0);
+    $gst     = floatval($body['gst_percent']??18);
+    $uincl   = round($uprice*(1+$gst/100),2);
+    $texcl   = round($uprice*$qty,2);
+    $tincl   = round($uincl*$qty,2);
+    $inv     = trim($body['invoice_no']??'');
+    $notes   = trim($body['notes']??'');
+    try {
+        $pdo->prepare("INSERT INTO purchases (purchase_date,dealer_name,dealer_contact,item_id,qty,unit_price,gst_percent,unit_price_incl,total_excl,total_incl,invoice_no,notes,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
+            ->execute([$date,$dealer,$contact,$itemId,$qty,$uprice,$gst,$uincl,$texcl,$tincl,$inv?:null,$notes?:null,$cu['name']]);
+        $purId = intval($pdo->lastInsertId());
+        // Auto-add to stock as stock_in movement
+        $pdo->prepare("INSERT INTO stock_movements (item_id,move_type,qty,ref_note,move_date,done_by) VALUES (?,?,?,?,?,?)")
+            ->execute([$itemId,'in',$qty,'Purchase: '.$dealer.($inv?' INV#'.$inv:''),$date,$cu['name']]);
+        $pdo->prepare("UPDATE purchases SET stock_added=1 WHERE id=?")->execute([$purId]);
+        echo json_encode(['success'=>true,'id'=>$purId]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'pur_delete':
+    if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Admin only']); break; }
+    $id = intval($body['id']??0);
+    try {
+        $pur = $pdo->prepare("SELECT * FROM purchases WHERE id=?"); $pur->execute([$id]); $p = $pur->fetch();
+        if(!$p){ echo json_encode(['error'=>'Not found']); break; }
+        // Remove the matching stock movement that was auto-created
+        $pdo->prepare("DELETE FROM stock_movements WHERE item_id=? AND move_type='in' AND qty=? AND move_date=? AND done_by=? LIMIT 1")
+            ->execute([$p['item_id'],$p['qty'],$p['purchase_date'],$p['created_by']]);
+        $pdo->prepare("DELETE FROM purchases WHERE id=?")->execute([$id]);
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 // ── GPS STOCK INVENTORY API (stock_ prefix, no collision with inv_ invoicing) ──
 
 case 'stock_get':

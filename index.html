@@ -368,6 +368,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
       <div class="nav-item admin-only" onclick="window.open('inventory.html','_blank')"><span class="nav-icon">📦</span> Inventory</div>
       <div class="nav-sec admin-only">Admin</div>
       <div class="nav-item super-admin-only" id="nav-price-list" onclick="showPage('price-list')"><span class="nav-icon">💲</span> Price List</div>
+      <div class="nav-item super-admin-only" id="nav-purchases" onclick="showPage('purchases')"><span class="nav-icon">🛒</span> Purchases</div>
       <div class="nav-item super-admin-only" id="nav-blacklist" onclick="showPage('blacklist')"><span class="nav-icon">🚫</span> Blacklist</div>
       <div class="nav-item super-admin-only" id="nav-admin" onclick="showPage('admin')"><span class="nav-icon">⚙️</span> Admin Panel</div>
       <div class="sb-footer">
@@ -1100,6 +1101,11 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
           style="flex:1;width:100%;border:none;min-height:calc(100vh - 54px)">
         </iframe>
       </div>
+      <div class="page" id="page-purchases" style="padding:0;flex-direction:column">
+        <iframe id="pur-iframe" src="about:blank"
+          style="flex:1;width:100%;border:none;min-height:calc(100vh - 54px)">
+        </iframe>
+      </div>
 
       <div class="page" id="page-admin" style="padding:0;flex-direction:column">
         <iframe id="admin-iframe" src="about:blank"
@@ -1733,6 +1739,7 @@ function showPage(name, opts={}){
     'admin':         syncAdminAuth,
     'blacklist':     syncBlacklistAuth,
      'price-list':    syncPlAuth,
+     'purchases':     syncPurAuth,
   };
   if(loaders[name]) loaders[name]();
 }
@@ -5545,6 +5552,12 @@ async function loadApprovalsPage(){
 }
 
 async function loadApprovals(){ return loadApprovalsPage(); }
+
+function syncPurAuth(){
+  const iframe = document.getElementById('pur-iframe');
+  if(!iframe) return;
+  iframe.src = 'purchases.html?token=' + encodeURIComponent(authToken||'');
+}
 
 function syncPlAuth(){
   const iframe = document.getElementById('pl-iframe');
