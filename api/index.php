@@ -2012,7 +2012,8 @@ case 'pl_get':
     if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Admin only']); break; }
     try {
         // Ensure table exists
-        $pdo->exec("CREATE TABLE IF NOT EXISTS price_list (id INT AUTO_INCREMENT PRIMARY KEY, product_name VARCHAR(200) NOT NULL, category VARCHAR(100) NOT NULL DEFAULT 'GPS Device', server_name VARCHAR(100) DEFAULT NULL, description TEXT DEFAULT NULL, price_excl_gst DECIMAL(10,2) NOT NULL DEFAULT 0, gst_percent DECIMAL(5,2) NOT NULL DEFAULT 18, price_incl_gst DECIMAL(10,2) NOT NULL DEFAULT 0, is_active TINYINT(1) NOT NULL DEFAULT 1, sort_order INT NOT NULL DEFAULT 0, created_by VARCHAR(100) DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $pdo->exec("CREATE TABLE IF NOT EXISTS price_list (id INT AUTO_INCREMENT PRIMARY KEY, product_name VARCHAR(200) NOT NULL, category VARCHAR(100) NOT NULL DEFAULT 'GPS Device', server_name VARCHAR(100) DEFAULT NULL, description TEXT DEFAULT NULL, buying_price DECIMAL(10,2) NOT NULL DEFAULT 0, price_excl_gst DECIMAL(10,2) NOT NULL DEFAULT 0, gst_percent DECIMAL(5,2) NOT NULL DEFAULT 18, price_incl_gst DECIMAL(10,2) NOT NULL DEFAULT 0, is_active TINYINT(1) NOT NULL DEFAULT 1, sort_order INT NOT NULL DEFAULT 0, created_by VARCHAR(100) DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        try { $pdo->exec("ALTER TABLE price_list ADD COLUMN IF NOT EXISTS buying_price DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER description"); } catch(Exception $e){}
         // Seed defaults if empty
         $cnt = $pdo->query("SELECT COUNT(*) FROM price_list")->fetchColumn();
         if($cnt == 0){
@@ -2030,11 +2031,11 @@ case 'pl_get':
                 ['SIM Card',             'Accessory',   '',                  'IoT SIM card for GPS tracker',                    300, 18],
                 ['Troubleshoot Visit',   'Service',     '',                  'Technician visit for troubleshoot/repair',        500, 18],
             ];
-            $ins = $pdo->prepare("INSERT INTO price_list (product_name,category,server_name,description,price_excl_gst,gst_percent,price_incl_gst,created_by,sort_order) VALUES (?,?,?,?,?,?,?,?,?)");
+            $ins = $pdo->prepare("INSERT INTO price_list (product_name,category,server_name,description,buying_price,price_excl_gst,gst_percent,price_incl_gst,created_by,sort_order) VALUES (?,?,?,?,?,?,?,?,?,?)");
             foreach($defs as $k=>$d){
                 $excl = $d[4]; $gst = $d[5];
                 $incl = round($excl * (1 + $gst/100), 2);
-                $ins->execute([$d[0],$d[1],$d[2],$d[3],$excl,$gst,$incl,'System',$k]);
+                $ins->execute([$d[0],$d[1],$d[2],$d[3],0,$excl,$gst,$incl,'System',$k]);
             }
         }
         $rows = $pdo->query("SELECT * FROM price_list ORDER BY sort_order, category, product_name")->fetchAll();
@@ -2044,13 +2045,15 @@ case 'pl_get':
 
 case 'pl_save':
     if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Admin only']); break; }
-    try { $pdo->exec("CREATE TABLE IF NOT EXISTS price_list (id INT AUTO_INCREMENT PRIMARY KEY, product_name VARCHAR(200) NOT NULL, category VARCHAR(100) NOT NULL DEFAULT 'GPS Device', server_name VARCHAR(100) DEFAULT NULL, description TEXT DEFAULT NULL, price_excl_gst DECIMAL(10,2) NOT NULL DEFAULT 0, gst_percent DECIMAL(5,2) NOT NULL DEFAULT 18, price_incl_gst DECIMAL(10,2) NOT NULL DEFAULT 0, is_active TINYINT(1) NOT NULL DEFAULT 1, sort_order INT NOT NULL DEFAULT 0, created_by VARCHAR(100) DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch(Exception $e){}
+    try { $pdo->exec("CREATE TABLE IF NOT EXISTS price_list (id INT AUTO_INCREMENT PRIMARY KEY, product_name VARCHAR(200) NOT NULL, category VARCHAR(100) NOT NULL DEFAULT 'GPS Device', server_name VARCHAR(100) DEFAULT NULL, description TEXT DEFAULT NULL, buying_price DECIMAL(10,2) NOT NULL DEFAULT 0, price_excl_gst DECIMAL(10,2) NOT NULL DEFAULT 0, gst_percent DECIMAL(5,2) NOT NULL DEFAULT 18, price_incl_gst DECIMAL(10,2) NOT NULL DEFAULT 0, is_active TINYINT(1) NOT NULL DEFAULT 1, sort_order INT NOT NULL DEFAULT 0, created_by VARCHAR(100) DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch(Exception $e){}
+    try { $pdo->exec("ALTER TABLE price_list ADD COLUMN IF NOT EXISTS buying_price DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER description"); } catch(Exception $e){}
     $id   = intval($body['id']??0);
     $name = trim($body['product_name']??'');
     $cat  = trim($body['category']??'GPS Device');
     if(!$name){ echo json_encode(['error'=>'Product name required']); break; }
     $srv   = trim($body['server_name']??'');
     $desc  = trim($body['description']??'');
+    $buying = floatval($body['buying_price']??0);
     $excl  = floatval($body['price_excl_gst']??0);
     $gst   = floatval($body['gst_percent']??18);
     $incl  = round($excl * (1 + $gst/100), 2);
@@ -2058,12 +2061,12 @@ case 'pl_save':
     $active= intval($body['is_active']??1);
     try {
         if($id){
-            $pdo->prepare("UPDATE price_list SET product_name=?,category=?,server_name=?,description=?,price_excl_gst=?,gst_percent=?,price_incl_gst=?,sort_order=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")
-                ->execute([$name,$cat,$srv,$desc,$excl,$gst,$incl,$sort,$active,$id]);
+            $pdo->prepare("UPDATE price_list SET product_name=?,category=?,server_name=?,description=?,buying_price=?,price_excl_gst=?,gst_percent=?,price_incl_gst=?,sort_order=?,is_active=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")
+                ->execute([$name,$cat,$srv,$desc,$buying,$excl,$gst,$incl,$sort,$active,$id]);
             echo json_encode(['success'=>true,'id'=>$id,'price_incl_gst'=>$incl]);
         } else {
-            $pdo->prepare("INSERT INTO price_list (product_name,category,server_name,description,price_excl_gst,gst_percent,price_incl_gst,sort_order,is_active,created_by) VALUES (?,?,?,?,?,?,?,?,?,?)")
-                ->execute([$name,$cat,$srv,$desc,$excl,$gst,$incl,$sort,$active,$cu['name']]);
+            $pdo->prepare("INSERT INTO price_list (product_name,category,server_name,description,buying_price,price_excl_gst,gst_percent,price_incl_gst,sort_order,is_active,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?)")
+                ->execute([$name,$cat,$srv,$desc,$buying,$excl,$gst,$incl,$sort,$active,$cu['name']]);
             echo json_encode(['success'=>true,'id'=>intval($pdo->lastInsertId()),'price_incl_gst'=>$incl]);
         }
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }

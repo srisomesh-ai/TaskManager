@@ -194,6 +194,7 @@ function getDB() {
                 category    VARCHAR(100) NOT NULL DEFAULT 'GPS Device',
                 server_name VARCHAR(100) DEFAULT NULL,
                 description TEXT         DEFAULT NULL,
+                buying_price   DECIMAL(10,2) NOT NULL DEFAULT 0,
                 price_excl_gst DECIMAL(10,2) NOT NULL DEFAULT 0,
                 gst_percent    DECIMAL(5,2)  NOT NULL DEFAULT 18,
                 price_incl_gst DECIMAL(10,2) NOT NULL DEFAULT 0,
@@ -203,6 +204,7 @@ function getDB() {
                 created_at  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
                 updated_at  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+            "ALTER TABLE price_list ADD COLUMN IF NOT EXISTS buying_price DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER description",
 
             "CREATE TABLE IF NOT EXISTS stock_items (
                 id          INT AUTO_INCREMENT PRIMARY KEY,

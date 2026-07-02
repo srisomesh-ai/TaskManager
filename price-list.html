@@ -140,7 +140,8 @@ tr:hover td{background:var(--surface2)}
             <th>Product / Service</th>
             <th>Category</th>
             <th>Server</th>
-            <th class="num">Price (excl GST) ₹</th>
+            <th class="num">Buying Price ₹</th>
+            <th class="num">Selling (excl GST) ₹</th>
             <th style="text-align:center">GST %</th>
             <th class="num">Price (incl GST) ₹</th>
             <th>Status</th>
@@ -148,7 +149,7 @@ tr:hover td{background:var(--surface2)}
           </tr>
         </thead>
         <tbody id="pl-tbody">
-          <tr><td colspan="9" style="padding:40px;text-align:center;color:var(--text3)">⏳ Loading…</td></tr>
+          <tr><td colspan="10" style="padding:40px;text-align:center;color:var(--text3)">⏳ Loading…</td></tr>
         </tbody>
       </table>
     </div>
@@ -187,8 +188,12 @@ tr:hover td{background:var(--surface2)}
           <label class="form-label">Description</label>
           <input class="form-input" id="m-desc" placeholder="Brief description">
         </div>
+        <div class="form-group full">
+          <label class="form-label">Buying Price ₹ <span style="color:var(--text3);font-weight:400;font-size:11px">(your purchase cost — not shown to customer)</span></label>
+          <input class="form-input" id="m-buying" type="number" min="0" step="0.01" placeholder="0.00">
+        </div>
         <div class="form-group">
-          <label class="form-label">Price (excl GST) ₹ <span style="color:var(--red)">*</span></label>
+          <label class="form-label">Selling Price (excl GST) ₹ <span style="color:var(--red)">*</span></label>
           <input class="form-input" id="m-price" type="number" min="0" step="0.01" placeholder="0.00" oninput="calcGst()">
         </div>
         <div class="form-group">
@@ -268,10 +273,10 @@ var _editId = null;
 document.addEventListener('DOMContentLoaded', function(){ load(); });
 
 function load(){
-  document.getElementById('pl-tbody').innerHTML = '<tr><td colspan="9" style="padding:40px;text-align:center;color:var(--text3)">⏳ Loading…</td></tr>';
+  document.getElementById('pl-tbody').innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--text3)">⏳ Loading…</td></tr>';
   plApi('pl_get').then(function(d){
     if(d.error){
-      document.getElementById('pl-tbody').innerHTML = '<tr><td colspan="9" style="padding:40px;text-align:center;color:var(--red)">❌ ' + d.error + '</td></tr>';
+      document.getElementById('pl-tbody').innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--red)">❌ ' + d.error + '</td></tr>';
       return;
     }
     _items = d.items || [];
@@ -309,7 +314,7 @@ function render(){
 
   var tbody = document.getElementById('pl-tbody');
   if(!filtered.length){
-    tbody.innerHTML = '<tr><td colspan="9" style="padding:40px;text-align:center;color:var(--text3)">No items found</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--text3)">No items found</td></tr>';
     return;
   }
 
@@ -324,6 +329,7 @@ function render(){
       '<td><strong>' + esc(i.product_name) + '</strong>' + (i.description ? '<br><span style="font-size:11px;color:var(--text3)">' + esc(i.description) + '</span>' : '') + '</td>' +
       '<td><span class="badge" style="' + badge + '">' + esc(i.category) + '</span></td>' +
       '<td style="font-size:12px;color:var(--text2)">' + esc(i.server_name || '–') + '</td>' +
+      '<td class="num" style="color:var(--text2)">₹' + parseFloat(i.buying_price||0).toLocaleString('en-IN', {minimumFractionDigits:2}) + '</td>' +
       '<td class="num">₹' + excl.toLocaleString('en-IN', {minimumFractionDigits:2}) + '</td>' +
       '<td style="text-align:center;color:var(--text2)">' + gst + '%</td>' +
       '<td class="num" style="color:var(--accent);font-weight:900">₹' + incl.toLocaleString('en-IN', {minimumFractionDigits:2}) + '</td>' +
@@ -345,6 +351,7 @@ function openModal(id){
   document.getElementById('m-cat').value    = item ? item.category     : 'GPS Device';
   document.getElementById('m-server').value = item ? (item.server_name || '') : 'BharatGPS Server';
   document.getElementById('m-desc').value   = item ? (item.description || '') : '';
+  document.getElementById('m-buying').value = item ? (item.buying_price || '') : '';
   document.getElementById('m-price').value  = item ? item.price_excl_gst : '';
   document.getElementById('m-gst').value    = item ? String(item.gst_percent) : '18';
   document.getElementById('m-sort').value   = item ? item.sort_order : '0';
@@ -378,6 +385,7 @@ function saveItem(){
     category:       document.getElementById('m-cat').value,
     server_name:    document.getElementById('m-server').value.trim(),
     description:    document.getElementById('m-desc').value.trim(),
+    buying_price:   parseFloat(document.getElementById('m-buying').value) || 0,
     price_excl_gst: parseFloat(document.getElementById('m-price').value) || 0,
     gst_percent:    parseFloat(document.getElementById('m-gst').value) || 18,
     sort_order:     parseInt(document.getElementById('m-sort').value) || 0,
