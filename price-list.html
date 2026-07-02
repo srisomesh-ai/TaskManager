@@ -117,11 +117,6 @@ tr:hover td{background:var(--surface2)}
     <input class="search-input" id="pl-search" placeholder="🔍 Search product, server…" oninput="render()">
     <select class="search-input" id="pl-cat" onchange="render()" style="min-width:auto">
       <option value="">All Categories</option>
-      <option>GPS Device</option>
-      <option>VLTD</option>
-      <option>Renewal</option>
-      <option>Accessory</option>
-      <option>Service</option>
     </select>
     <select class="search-input" id="pl-status" onchange="render()" style="min-width:auto">
       <option value="">All Status</option>
@@ -168,7 +163,9 @@ tr:hover td{background:var(--surface2)}
       <div class="form-grid form-grid-2">
         <div class="form-group full">
           <label class="form-label">Product / Service Name <span style="color:var(--red)">*</span></label>
-          <input class="form-input" id="m-name" placeholder="e.g. Basic/Normal GPS">
+          <select class="form-input" id="m-name" onchange="onPlNameChange()">
+            <option value="">Select from Item Master…</option>
+          </select>
         </div>
         <div class="form-group">
           <label class="form-label">Category <span style="color:var(--red)">*</span></label>
@@ -270,7 +267,73 @@ var _items = [];
 var _editId = null;
 
 // ── INIT ──────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', function(){ load(); });
+var _masterItems = [];
+
+document.addEventListener('DOMContentLoaded', function(){
+  loadMasterItems().then(function(){ load(); });
+});
+
+function loadMasterItems(){
+  return plApi('stock_items_list').then(function(d){
+    _masterItems = d.items || [];
+    // Populate product name select
+    var nameSel = document.getElementById('m-name');
+    if(nameSel){
+      nameSel.innerHTML = '<option value="">Select from Item Master…</option>';
+      _masterItems.forEach(function(item){
+        var o = document.createElement('option');
+        o.value = item.name;
+        o.dataset.cat = item.category || 'GPS Device';
+        o.textContent = item.name + (item.model ? ' — '+item.model : '');
+        nameSel.appendChild(o);
+      });
+      // Add fixed service options not in inventory
+      var services = [
+        {name:'Annual Renewal', cat:'Renewal'},
+        {name:'VLTD Annual Renewal', cat:'Renewal'},
+        {name:'Troubleshoot Visit', cat:'Service'},
+        {name:'Re-Adding Service', cat:'Service'},
+      ];
+      services.forEach(function(s){
+        var o = document.createElement('option');
+        o.value = s.name; o.dataset.cat = s.cat;
+        o.textContent = s.name;
+        nameSel.appendChild(o);
+      });
+    }
+    // Populate category filter from unique categories
+    var cats = [...new Set(_masterItems.map(function(i){ return i.category||'GPS Device'; }))];
+    cats = cats.concat(['Renewal','Accessory','Service']).filter(function(c,i,a){ return a.indexOf(c)===i; });
+    var catFilter = document.getElementById('pl-cat');
+    if(catFilter){
+      catFilter.innerHTML = '<option value="">All Categories</option>';
+      cats.forEach(function(c){
+        var o = document.createElement('option');
+        o.value = c; o.textContent = c;
+        catFilter.appendChild(o);
+      });
+    }
+    // Also populate m-cat select
+    var mcat = document.getElementById('m-cat');
+    if(mcat){
+      mcat.innerHTML = '';
+      cats.forEach(function(c){
+        var o = document.createElement('option');
+        o.value = c; o.textContent = c;
+        mcat.appendChild(o);
+      });
+    }
+  }).catch(function(){ console.warn('Could not load master items'); });
+}
+
+function onPlNameChange(){
+  var sel = document.getElementById('m-name');
+  var opt = sel ? sel.options[sel.selectedIndex] : null;
+  if(opt && opt.dataset.cat){
+    var mcat = document.getElementById('m-cat');
+    if(mcat) mcat.value = opt.dataset.cat;
+  }
+}
 
 function load(){
   document.getElementById('pl-tbody').innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--text3)">⏳ Loading…</td></tr>';
@@ -348,7 +411,7 @@ function openModal(id){
   var item = id ? _items.find(function(i){ return i.id == id; }) : null;
   document.getElementById('modal-title').textContent = item ? '✏️ Edit Price Item' : '➕ Add Price Item';
   document.getElementById('m-name').value   = item ? item.product_name : '';
-  document.getElementById('m-cat').value    = item ? item.category     : 'GPS Device';
+  document.getElementById('m-cat').value    = item ? item.category     : (_masterItems[0]?.category || 'GPS Device');
   document.getElementById('m-server').value = item ? (item.server_name || '') : 'BharatGPS Server';
   document.getElementById('m-desc').value   = item ? (item.description || '') : '';
   document.getElementById('m-buying').value = item ? (item.buying_price || '') : '';
@@ -374,8 +437,8 @@ function calcGst(){
 }
 
 function saveItem(){
-  var name = document.getElementById('m-name').value.trim();
-  if(!name){ showToast('⚠️ Product name required'); return; }
+  var name = document.getElementById('m-name').value;
+  if(!name){ showToast('⚠️ Select a product from Item Master'); return; }
   var btn = document.getElementById('m-save-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
   var wasEdit = !!_editId;
