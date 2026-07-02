@@ -632,18 +632,16 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
                   <label>Job Type</label>
                   <select id="fm-job" onchange="setModalJobPrice(this.value);checkTaskFormReady();toggleFreeService(this.value);checkInventory()">
                     <option value="">Select Job Type</option>
-                    <option value="Basic/Normal">Basic/Normal GPS</option>
-                    <option value="Engine Status">Engine Status GPS</option>
-                    <option value="Engine Cut">Engine Cut GPS</option>
-                    <option value="Micro GPS">Micro GPS</option>
-                    <option value="Magnet GPS">Magnet GPS</option>
-                    <option value="MIC/SOS GPS">MIC/SOS GPS</option>
-                    <option value="VLTD">VLTD</option>
-                    <option value="Troubleshoot/Offline">Troubleshoot / Offline</option>
-                    <option value="Vehicle to Vehicle Change">Vehicle to Vehicle Change</option>
-                    <option value="Re-Adding">Re-Adding</option>
-                    <option value="Only Remove">Only Remove</option>
-                    <option value="Demonstration">Demonstration</option>
+                    <optgroup label="GPS Devices" id="fm-job-gps-group">
+                      <option value="" disabled>⏳ Loading from Item Master…</option>
+                    </optgroup>
+                    <optgroup label="Services">
+                      <option value="Troubleshoot/Offline">Troubleshoot / Offline</option>
+                      <option value="Vehicle to Vehicle Change">Vehicle to Vehicle Change</option>
+                      <option value="Re-Adding">Re-Adding</option>
+                      <option value="Only Remove">Only Remove</option>
+                      <option value="Demonstration">Demonstration</option>
+                    </optgroup>
                   </select>
                 </div>
                 <div class="form-group" id="fm-qty-group"><label>Device Qty</label><input type="number" id="fm-qty" value="1" min="1" oninput="updateModalGST();checkInventory()"></div>
@@ -1790,6 +1788,9 @@ function startApp(){
 
   // Start real-time polling
   startPolling();
+  // Load GPS device job types from Item Master
+  loadJobTypeItems();
+  loadPricesFromPriceList();
 }
 
 // ── Logout ────────────────────────────────────────────────────────────────
@@ -2541,20 +2542,25 @@ function exportTasksCSV(){
 // ════════════════════════════════════════════════════════
 
 // Job type base prices (₹) — BGPT no GST, SBGT adds 18% on top
-const JOB_PRICES = {
-  'Basic/Normal':              3499,
-  'Engine Status':             3499,
-  'Engine Cut':                4499,
-  'Micro GPS':                 3499,
-  'Magnet GPS':                5999,
-  'MIC/SOS GPS':               4499,
-  'VLTD':                      9499,
+// JOB_PRICES — populated from price list DB on load (keyed by product_name)
+// Non-device fallbacks kept hardcoded since they have no inventory item
+var JOB_PRICES = {
   'Troubleshoot/Offline':       300,
   'Vehicle to Vehicle Change':  600,
   'Re-Adding':                 1700,
   'Only Remove':                  0,
   'Demonstration':                0,
 };
+
+async function loadPricesFromPriceList(){
+  try {
+    const d = await api('pl_get_public').catch(()=>({}));
+    (d.items||[]).forEach(function(item){
+      // Match price list product_name to job type name
+      JOB_PRICES[item.product_name] = parseFloat(item.price_excl_gst||0);
+    });
+  } catch(e){}
+}
 
 let _pendingPayMode = null;
 
@@ -2961,6 +2967,8 @@ function updateModalGST(){
 }
 
 function openCreateModal(){
+  loadJobTypeItems(); // refresh GPS device list from Item Master
+  loadPricesFromPriceList(); // refresh prices from price list
   editingTaskId=null;
   document.getElementById('task-modal-title').textContent='New Task';
   document.getElementById('task-save-btn').textContent='✅ Create Task';
@@ -4190,6 +4198,17 @@ async function submitTechAttend(){
 var _convertDemoTaskId = null;
 
 function openConvertDemoModal(taskId){
+  // Populate job types from Item Master
+  const cdSel = document.getElementById('cd-job-type');
+  if(cdSel && cdSel.options.length <= 1){
+    api('stock_items_list').then(function(d){
+      (d.items||[]).forEach(function(item){
+        var o = document.createElement('option');
+        o.value = item.name; o.textContent = item.name;
+        cdSel.appendChild(o);
+      });
+    }).catch(function(){});
+  }
   _convertDemoTaskId = taskId;
   document.getElementById('convert-demo-overlay').style.display = 'block';
   document.getElementById('convert-demo-modal').style.display  = 'block';
@@ -5553,6 +5572,35 @@ async function loadApprovalsPage(){
 
 async function loadApprovals(){ return loadApprovalsPage(); }
 
+// ── Load GPS device options from Item Master (stock_items) ──────────────
+async function loadJobTypeItems(){
+  try {
+    const d = await api('stock_items_list').catch(()=>({}));
+    const items = d.items || [];
+    const grp = document.getElementById('fm-job-gps-group');
+    if(!grp) return;
+    grp.innerHTML = '';
+    if(!items.length){
+      // Fallback to hardcoded if no items in DB yet
+      const fallback = ['Basic/Normal GPS','Engine Status GPS','Engine Cut GPS','Micro GPS','Magnet GPS','MIC/SOS GPS','VLTD'];
+      const vals     = ['Basic/Normal','Engine Status','Engine Cut','Micro GPS','Magnet GPS','MIC/SOS GPS','VLTD'];
+      fallback.forEach(function(label, i){
+        var o = document.createElement('option');
+        o.value = vals[i]; o.textContent = label;
+        grp.appendChild(o);
+      });
+      return;
+    }
+    items.forEach(function(item){
+      var o = document.createElement('option');
+      o.value       = item.name;   // item name IS the job type value
+      o.textContent = item.name + (item.model ? ' ('+item.model+')' : '');
+      grp.appendChild(o);
+    });
+    // Also populate tech.html dropdown if in same page context
+  } catch(e){}
+}
+
 function syncPurAuth(){
   const iframe = document.getElementById('pur-iframe');
   if(!iframe) return;
@@ -6463,11 +6511,7 @@ async function submitJobOutcome(){
     <div class="form-group" style="margin-bottom:12px">
       <label>Job Type</label>
       <select id="cd-job-type" class="form-input">
-        <option value="Basic/Normal">Basic/Normal GPS</option>
-        <option value="Engine Cut">Engine Cut GPS</option>
-        <option value="Engine Status">Engine Status GPS</option>
-        <option value="VLTD">VLTD</option>
-        <option value="Micro GPS">Micro GPS</option>
+        <option value="">Select job type…</option>
       </select>
     </div>
     <div class="form-group" style="margin-bottom:12px">

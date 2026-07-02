@@ -2184,6 +2184,14 @@ case 'pur_delete':
 
 // ── GPS STOCK INVENTORY API (stock_ prefix, no collision with inv_ invoicing) ──
 
+// Any logged-in user can get item list (for task dropdown, etc.)
+case 'stock_items_list':
+    try {
+        $rows = $pdo->query("SELECT id, name, category, model, unit FROM stock_items WHERE category NOT IN ('Accessory','SIM Card','Other') ORDER BY category, name")->fetchAll();
+        echo json_encode(['items'=>$rows]);
+    } catch(Exception $e){ echo json_encode(['items'=>[]]); }
+    break;
+
 case 'stock_get':
     if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     try {
