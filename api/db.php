@@ -199,12 +199,14 @@ function getDB() {
                 gst_percent    DECIMAL(5,2)  NOT NULL DEFAULT 18,
                 price_incl_gst DECIMAL(10,2) NOT NULL DEFAULT 0,
                 is_active   TINYINT(1)   NOT NULL DEFAULT 1,
+                has_stock   TINYINT(1)   NOT NULL DEFAULT 0,
                 sort_order  INT          NOT NULL DEFAULT 0,
                 created_by  VARCHAR(100) DEFAULT NULL,
                 created_at  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
                 updated_at  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
             "ALTER TABLE price_list ADD COLUMN IF NOT EXISTS buying_price DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER description",
+            "ALTER TABLE price_list ADD COLUMN IF NOT EXISTS has_stock TINYINT(1) NOT NULL DEFAULT 0 AFTER is_active",
 
             "CREATE TABLE IF NOT EXISTS stock_items (
                 id          INT AUTO_INCREMENT PRIMARY KEY,

@@ -4201,10 +4201,10 @@ function openConvertDemoModal(taskId){
   // Populate job types from Item Master
   const cdSel = document.getElementById('cd-job-type');
   if(cdSel && cdSel.options.length <= 1){
-    api('stock_items_list').then(function(d){
-      (d.items||[]).forEach(function(item){
+    api('pl_get_public').then(function(d){
+      (d.items||[]).filter(function(i){ return parseInt(i.has_stock)===1; }).forEach(function(item){
         var o = document.createElement('option');
-        o.value = item.name; o.textContent = item.name;
+        o.value = item.product_name; o.textContent = item.product_name;
         cdSel.appendChild(o);
       });
     }).catch(function(){});
@@ -5575,29 +5575,28 @@ async function loadApprovals(){ return loadApprovalsPage(); }
 // ── Load GPS device options from Item Master (stock_items) ──────────────
 async function loadJobTypeItems(){
   try {
-    const d = await api('stock_items_list').catch(()=>({}));
-    const items = d.items || [];
+    // Read from Price List (master) — only items marked has_stock=1 are physical devices
+    const d = await api('pl_get_public').catch(()=>({}));
+    const items = (d.items || []).filter(function(i){ return parseInt(i.has_stock)===1; });
     const grp = document.getElementById('fm-job-gps-group');
     if(!grp) return;
     grp.innerHTML = '';
     if(!items.length){
-      // Fallback to hardcoded if no items in DB yet
+      // Fallback if no items in price list yet
       const fallback = ['Basic/Normal GPS','Engine Status GPS','Engine Cut GPS','Micro GPS','Magnet GPS','MIC/SOS GPS','VLTD'];
-      const vals     = ['Basic/Normal','Engine Status','Engine Cut','Micro GPS','Magnet GPS','MIC/SOS GPS','VLTD'];
-      fallback.forEach(function(label, i){
+      fallback.forEach(function(label){
         var o = document.createElement('option');
-        o.value = vals[i]; o.textContent = label;
+        o.value = label; o.textContent = label;
         grp.appendChild(o);
       });
       return;
     }
     items.forEach(function(item){
       var o = document.createElement('option');
-      o.value       = item.name;   // item name IS the job type value
-      o.textContent = item.name + (item.model ? ' ('+item.model+')' : '');
+      o.value       = item.product_name;
+      o.textContent = item.product_name;
       grp.appendChild(o);
     });
-    // Also populate tech.html dropdown if in same page context
   } catch(e){}
 }
 

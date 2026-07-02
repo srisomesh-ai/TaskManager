@@ -140,11 +140,12 @@ tr:hover td{background:var(--surface2)}
             <th style="text-align:center">GST %</th>
             <th class="num">Price (incl GST) ₹</th>
             <th>Status</th>
+            <th>Inventory</th>
             <th></th>
           </tr>
         </thead>
         <tbody id="pl-tbody">
-          <tr><td colspan="10" style="padding:40px;text-align:center;color:var(--text3)">⏳ Loading…</td></tr>
+          <tr><td colspan="11" style="padding:40px;text-align:center;color:var(--text3)">⏳ Loading…</td></tr>
         </tbody>
       </table>
     </div>
@@ -163,9 +164,7 @@ tr:hover td{background:var(--surface2)}
       <div class="form-grid form-grid-2">
         <div class="form-group full">
           <label class="form-label">Product / Service Name <span style="color:var(--red)">*</span></label>
-          <select class="form-input" id="m-name" onchange="onPlNameChange()">
-            <option value="">Select from Item Master…</option>
-          </select>
+          <input class="form-input" id="m-name" placeholder="e.g. Basic GPS, Annual Renewal, Troubleshoot Visit">
         </div>
         <div class="form-group">
           <label class="form-label">Category <span style="color:var(--red)">*</span></label>
@@ -217,6 +216,15 @@ tr:hover td{background:var(--surface2)}
             <option value="1">✅ Active</option>
             <option value="0">❌ Inactive</option>
           </select>
+        </div>
+        <div class="form-group full">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;background:var(--surface2);border-radius:8px">
+            <input type="checkbox" id="m-has-stock" style="width:18px;height:18px;cursor:pointer">
+            <div>
+              <div style="font-size:13px;font-weight:700;color:var(--text)">📦 Track in Inventory</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:2px">Check this if this item is a physical product you stock, purchase and issue to technicians (GPS devices, wires, SIM cards etc.)</div>
+            </div>
+          </label>
         </div>
       </div>
     </div>
@@ -277,30 +285,7 @@ function loadMasterItems(){
   return plApi('stock_items_list').then(function(d){
     _masterItems = d.items || [];
     // Populate product name select
-    var nameSel = document.getElementById('m-name');
-    if(nameSel){
-      nameSel.innerHTML = '<option value="">Select from Item Master…</option>';
-      _masterItems.forEach(function(item){
-        var o = document.createElement('option');
-        o.value = item.name;
-        o.dataset.cat = item.category || 'GPS Device';
-        o.textContent = item.name + (item.model ? ' — '+item.model : '');
-        nameSel.appendChild(o);
-      });
-      // Add fixed service options not in inventory
-      var services = [
-        {name:'Annual Renewal', cat:'Renewal'},
-        {name:'VLTD Annual Renewal', cat:'Renewal'},
-        {name:'Troubleshoot Visit', cat:'Service'},
-        {name:'Re-Adding Service', cat:'Service'},
-      ];
-      services.forEach(function(s){
-        var o = document.createElement('option');
-        o.value = s.name; o.dataset.cat = s.cat;
-        o.textContent = s.name;
-        nameSel.appendChild(o);
-      });
-    }
+
     // Populate category filter from unique categories
     var cats = [...new Set(_masterItems.map(function(i){ return i.category||'GPS Device'; }))];
     cats = cats.concat(['Renewal','Accessory','Service']).filter(function(c,i,a){ return a.indexOf(c)===i; });
@@ -326,20 +311,12 @@ function loadMasterItems(){
   }).catch(function(){ console.warn('Could not load master items'); });
 }
 
-function onPlNameChange(){
-  var sel = document.getElementById('m-name');
-  var opt = sel ? sel.options[sel.selectedIndex] : null;
-  if(opt && opt.dataset.cat){
-    var mcat = document.getElementById('m-cat');
-    if(mcat) mcat.value = opt.dataset.cat;
-  }
-}
 
 function load(){
-  document.getElementById('pl-tbody').innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--text3)">⏳ Loading…</td></tr>';
+  document.getElementById('pl-tbody').innerHTML = '<tr><td colspan="11" style="padding:40px;text-align:center;color:var(--text3)">⏳ Loading…</td></tr>';
   plApi('pl_get').then(function(d){
     if(d.error){
-      document.getElementById('pl-tbody').innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--red)">❌ ' + d.error + '</td></tr>';
+      document.getElementById('pl-tbody').innerHTML = '<tr><td colspan="11" style="padding:40px;text-align:center;color:var(--red)">❌ ' + d.error + '</td></tr>';
       return;
     }
     _items = d.items || [];
@@ -377,7 +354,7 @@ function render(){
 
   var tbody = document.getElementById('pl-tbody');
   if(!filtered.length){
-    tbody.innerHTML = '<tr><td colspan="10" style="padding:40px;text-align:center;color:var(--text3)">No items found</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" style="padding:40px;text-align:center;color:var(--text3)">No items found</td></tr>';
     return;
   }
 
@@ -397,6 +374,7 @@ function render(){
       '<td style="text-align:center;color:var(--text2)">' + gst + '%</td>' +
       '<td class="num" style="color:var(--accent);font-weight:900">₹' + incl.toLocaleString('en-IN', {minimumFractionDigits:2}) + '</td>' +
       '<td>' + (isAct ? '<span class="badge" style="background:var(--green-bg);color:var(--green)">✅ Active</span>' : '<span class="badge" style="background:var(--surface2);color:var(--text3)">Inactive</span>') + '</td>' +
+      '<td>' + (parseInt(i.has_stock)===1 ? '<span class="badge" style="background:var(--blue-bg);color:var(--blue)">📦 Stock</span>' : '<span style="color:var(--text3);font-size:12px">–</span>') + '</td>' +
       '<td><div style="display:flex;gap:6px">' +
         '<button onclick="openModal(' + i.id + ')" style="background:var(--surface2);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer">✏️</button>' +
         '<button onclick="deleteItem(' + i.id + ')" style="background:var(--red-bg);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;color:var(--red)">🗑️</button>' +
@@ -419,6 +397,7 @@ function openModal(id){
   document.getElementById('m-gst').value    = item ? String(item.gst_percent) : '18';
   document.getElementById('m-sort').value   = item ? item.sort_order : '0';
   document.getElementById('m-active').value = item ? String(item.is_active) : '1';
+  document.getElementById('m-has-stock').checked = item ? (parseInt(item.has_stock)===1) : false;
   calcGst();
   document.getElementById('pl-overlay').classList.add('open');
   document.getElementById('m-name').focus();
@@ -437,8 +416,8 @@ function calcGst(){
 }
 
 function saveItem(){
-  var name = document.getElementById('m-name').value;
-  if(!name){ showToast('⚠️ Select a product from Item Master'); return; }
+  var name = document.getElementById('m-name').value.trim();
+  if(!name){ showToast('⚠️ Product name required'); return; }
   var btn = document.getElementById('m-save-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
   var wasEdit = !!_editId;
@@ -453,6 +432,7 @@ function saveItem(){
     gst_percent:    parseFloat(document.getElementById('m-gst').value) || 18,
     sort_order:     parseInt(document.getElementById('m-sort').value) || 0,
     is_active:      parseInt(document.getElementById('m-active').value),
+    has_stock:      document.getElementById('m-has-stock').checked ? 1 : 0,
   }).then(function(d){
     btn.disabled = false; btn.textContent = 'Save';
     if(d.success){ closeModal(); showToast(wasEdit ? '✅ Item updated' : '✅ Item added'); load(); }

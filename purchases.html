@@ -279,14 +279,15 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 function loadItems(){
-  purApi('stock_get').then(function(d){
-    _items = (d.items||[]);
+  // Read from price_list (master) — only physical items (has_stock=1)
+  purApi('pl_get_public').then(function(d){
+    _items = (d.items||[]).filter(function(i){ return parseInt(i.has_stock)===1; });
     var sel = document.getElementById('m-item');
     sel.innerHTML = '<option value="">Select item…</option>';
     _items.forEach(function(i){
       var o = document.createElement('option');
       o.value = i.id;
-      o.textContent = i.name + ' ('+i.category+')';
+      o.textContent = i.product_name + ' ('+i.category+')';
       sel.appendChild(o);
     });
   }).catch(function(){});
