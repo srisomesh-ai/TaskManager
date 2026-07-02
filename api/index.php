@@ -2187,7 +2187,7 @@ case 'pur_delete':
 // Any logged-in user can get item list (for task dropdown, etc.)
 case 'stock_items_list':
     try {
-        $rows = $pdo->query("SELECT id, name, category, model, unit FROM stock_items WHERE category NOT IN ('Accessory','SIM Card','Other') ORDER BY category, name")->fetchAll();
+        $rows = $pdo->query("SELECT id, name, category, model, unit FROM stock_items ORDER BY category, name")->fetchAll();
         echo json_encode(['items'=>$rows]);
     } catch(Exception $e){ echo json_encode(['items'=>[]]); }
     break;
