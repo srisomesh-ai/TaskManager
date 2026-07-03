@@ -2071,6 +2071,31 @@ case 'pl_save':
                 ->execute([$name,$cat,$srv,$desc,$buying,$excl,$gst,$incl,$sort,$active,$hasStock,$cu['name']]);
             echo json_encode(['success'=>true,'id'=>intval($pdo->lastInsertId()),'price_incl_gst'=>$incl]);
         }
+        // ── Auto-sync to stock_items based on category ──────────────
+        $productCategories = ['GPS Device','VLTD','Accessory','Wire / Cable','SIM Card'];
+        $savedId = $id ?: intval($pdo->lastInsertId());
+        $savedName = $name;
+        if(in_array($cat, $productCategories)){
+            // Product/Accessory → upsert into stock_items
+            $exist = $pdo->prepare("SELECT id FROM stock_items WHERE name=? LIMIT 1");
+            $exist->execute([$savedName]);
+            $existRow = $exist->fetch();
+            if($existRow){
+                $pdo->prepare("UPDATE stock_items SET name=?,category=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")
+                    ->execute([$savedName,$cat,$existRow['id']]);
+            } else {
+                $pdo->prepare("INSERT INTO stock_items (name,category,unit,min_stock,created_by) VALUES (?,?,?,5,?)")
+                    ->execute([$savedName,$cat,'Pcs',$cu['name']]);
+            }
+        } else {
+            // Service/Renewal → remove from stock_items if exists (only if no movements)
+            $hasMovements = $pdo->prepare("SELECT COUNT(*) FROM stock_movements m JOIN stock_items s ON m.item_id=s.id WHERE s.name=?");
+            $hasMovements->execute([$savedName]);
+            if($hasMovements->fetchColumn() == 0){
+                $pdo->prepare("DELETE FROM stock_items WHERE name=? AND (SELECT COUNT(*) FROM purchases WHERE item_id=stock_items.id)=0")
+                    ->execute([$savedName]);
+            }
+        }
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 

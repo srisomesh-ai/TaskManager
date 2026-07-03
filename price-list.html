@@ -217,14 +217,9 @@ tr:hover td{background:var(--surface2)}
             <option value="0">❌ Inactive</option>
           </select>
         </div>
-        <div class="form-group full">
-          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;background:var(--surface2);border-radius:8px">
-            <input type="checkbox" id="m-has-stock" style="width:18px;height:18px;cursor:pointer">
-            <div>
-              <div style="font-size:13px;font-weight:700;color:var(--text)">📦 Track in Inventory</div>
-              <div style="font-size:11px;color:var(--text3);margin-top:2px">Check this if this item is a physical product you stock, purchase and issue to technicians (GPS devices, wires, SIM cards etc.)</div>
-            </div>
-          </label>
+        <div style="background:var(--accent-light);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--accent)">
+          📦 <strong>GPS Device, VLTD, Accessory</strong> categories are automatically tracked in Inventory.<br>
+          🔧 <strong>Service, Renewal</strong> categories are not tracked in Inventory (no physical stock).
         </div>
       </div>
     </div>
@@ -374,7 +369,7 @@ function render(){
       '<td style="text-align:center;color:var(--text2)">' + gst + '%</td>' +
       '<td class="num" style="color:var(--accent);font-weight:900">₹' + incl.toLocaleString('en-IN', {minimumFractionDigits:2}) + '</td>' +
       '<td>' + (isAct ? '<span class="badge" style="background:var(--green-bg);color:var(--green)">✅ Active</span>' : '<span class="badge" style="background:var(--surface2);color:var(--text3)">Inactive</span>') + '</td>' +
-      '<td>' + (parseInt(i.has_stock)===1 ? '<span class="badge" style="background:var(--blue-bg);color:var(--blue)">📦 Stock</span>' : '<span style="color:var(--text3);font-size:12px">–</span>') + '</td>' +
+      '<td>' + (['GPS Device','VLTD','Accessory','Wire / Cable','SIM Card'].includes(i.category) ? '<span class="badge" style="background:var(--blue-bg);color:var(--blue)">📦 Inventory</span>' : '<span style="color:var(--text3);font-size:12px">Service</span>') + '</td>' +
       '<td><div style="display:flex;gap:6px">' +
         '<button onclick="openModal(' + i.id + ')" style="background:var(--surface2);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer">✏️</button>' +
         '<button onclick="deleteItem(' + i.id + ')" style="background:var(--red-bg);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;color:var(--red)">🗑️</button>' +
@@ -397,7 +392,7 @@ function openModal(id){
   document.getElementById('m-gst').value    = item ? String(item.gst_percent) : '18';
   document.getElementById('m-sort').value   = item ? item.sort_order : '0';
   document.getElementById('m-active').value = item ? String(item.is_active) : '1';
-  document.getElementById('m-has-stock').checked = item ? (parseInt(item.has_stock)===1) : false;
+
   calcGst();
   document.getElementById('pl-overlay').classList.add('open');
   document.getElementById('m-name').focus();
@@ -432,7 +427,7 @@ function saveItem(){
     gst_percent:    parseFloat(document.getElementById('m-gst').value) || 18,
     sort_order:     parseInt(document.getElementById('m-sort').value) || 0,
     is_active:      parseInt(document.getElementById('m-active').value),
-    has_stock:      document.getElementById('m-has-stock').checked ? 1 : 0,
+
   }).then(function(d){
     btn.disabled = false; btn.textContent = 'Save';
     if(d.success){ closeModal(); showToast(wasEdit ? '✅ Item updated' : '✅ Item added'); load(); }
