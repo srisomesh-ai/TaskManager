@@ -281,7 +281,7 @@ document.addEventListener('DOMContentLoaded', function(){
 function loadItems(){
   // Read from price_list (master) — only physical items (has_stock=1)
   purApi('pl_get_public').then(function(d){
-    var pCats = ['GPS Device','VLTD','Accessory','Wire / Cable','SIM Card'];
+    var pCats = ['GPS Tracker','VLTD','Accessory','Wire / Cable','SIM Card'];
     _items = (d.items||[]).filter(function(i){ return pCats.includes(i.category); });
     var sel = document.getElementById('m-item');
     sel.innerHTML = '<option value="">Select item…</option>';

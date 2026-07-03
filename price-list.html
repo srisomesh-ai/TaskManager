@@ -169,7 +169,7 @@ tr:hover td{background:var(--surface2)}
         <div class="form-group">
           <label class="form-label">Category <span style="color:var(--red)">*</span></label>
           <select class="form-input" id="m-cat">
-            <option>GPS Device</option>
+            <option>GPS Tracker</option>
             <option>VLTD</option>
             <option>Renewal</option>
             <option>Accessory</option>
@@ -218,7 +218,7 @@ tr:hover td{background:var(--surface2)}
           </select>
         </div>
         <div style="background:var(--accent-light);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--accent)">
-          📦 <strong>GPS Device, VLTD, Accessory</strong> categories are automatically tracked in Inventory.<br>
+          📦 <strong>GPS Tracker, VLTD, Accessory, Wire / Cable, SIM Card</strong> categories are automatically tracked in Inventory.<br>
           🔧 <strong>Service, Renewal</strong> categories are not tracked in Inventory (no physical stock).
         </div>
       </div>
@@ -282,7 +282,7 @@ function loadMasterItems(){
     // Populate product name select
 
     // Populate category filter from unique categories
-    var cats = [...new Set(_masterItems.map(function(i){ return i.category||'GPS Device'; }))];
+    var cats = [...new Set(_masterItems.map(function(i){ return i.category||'GPS Tracker'; }))];
     cats = cats.concat(['Renewal','Accessory','Service']).filter(function(c,i,a){ return a.indexOf(c)===i; });
     var catFilter = document.getElementById('pl-cat');
     if(catFilter){
@@ -321,7 +321,7 @@ function load(){
 
 // ── RENDER ────────────────────────────────────────────────────────────
 var CAT_COLORS = {
-  'GPS Device': 'background:#e8f0fb;color:#1a56a0',
+  'GPS Tracker': 'background:#e8f0fb;color:#1a56a0',
   'VLTD':       'background:#f0eaf8;color:#5b2d8e',
   'Renewal':    'background:#e8f5ec;color:#1a7a3a',
   'Accessory':  'background:#FDF1DE;color:#7a4500',
@@ -369,7 +369,7 @@ function render(){
       '<td style="text-align:center;color:var(--text2)">' + gst + '%</td>' +
       '<td class="num" style="color:var(--accent);font-weight:900">₹' + incl.toLocaleString('en-IN', {minimumFractionDigits:2}) + '</td>' +
       '<td>' + (isAct ? '<span class="badge" style="background:var(--green-bg);color:var(--green)">✅ Active</span>' : '<span class="badge" style="background:var(--surface2);color:var(--text3)">Inactive</span>') + '</td>' +
-      '<td>' + (['GPS Device','VLTD','Accessory','Wire / Cable','SIM Card'].includes(i.category) ? '<span class="badge" style="background:var(--blue-bg);color:var(--blue)">📦 Inventory</span>' : '<span style="color:var(--text3);font-size:12px">Service</span>') + '</td>' +
+      '<td>' + (['GPS Tracker','VLTD','Accessory','Wire / Cable','SIM Card'].includes(i.category) ? '<span class="badge" style="background:var(--blue-bg);color:var(--blue)">📦 Inventory</span>' : '<span style="color:var(--text3);font-size:12px">Service</span>') + '</td>' +
       '<td><div style="display:flex;gap:6px">' +
         '<button onclick="openModal(' + i.id + ')" style="background:var(--surface2);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer">✏️</button>' +
         '<button onclick="deleteItem(' + i.id + ')" style="background:var(--red-bg);border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;color:var(--red)">🗑️</button>' +
@@ -384,7 +384,7 @@ function openModal(id){
   var item = id ? _items.find(function(i){ return i.id == id; }) : null;
   document.getElementById('modal-title').textContent = item ? '✏️ Edit Price Item' : '➕ Add Price Item';
   document.getElementById('m-name').value   = item ? item.product_name : '';
-  document.getElementById('m-cat').value    = item ? item.category     : (_masterItems[0]?.category || 'GPS Device');
+  document.getElementById('m-cat').value    = item ? item.category     : (_masterItems[0]?.category || 'GPS Tracker');
   document.getElementById('m-server').value = item ? (item.server_name || '') : 'BharatGPS Server';
   document.getElementById('m-desc').value   = item ? (item.description || '') : '';
   document.getElementById('m-buying').value = item ? (item.buying_price || '') : '';

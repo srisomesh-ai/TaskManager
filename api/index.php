@@ -2018,14 +2018,14 @@ case 'pl_get':
         $cnt = $pdo->query("SELECT COUNT(*) FROM price_list")->fetchColumn();
         if($cnt == 0){
             $defs = [
-                ['Basic/Normal GPS',     'GPS Device',  'BharatGPS Server',  'Standard GPS tracker installation',              3000, 18],
-                ['Engine Status GPS',    'GPS Device',  'BharatGPS Server',  'GPS with engine on/off monitoring',              3500, 18],
-                ['Engine Cut GPS',       'GPS Device',  'BharatGPS Server',  'GPS with remote engine cut/restore relay',       4500, 18],
-                ['Micro GPS',            'GPS Device',  'BharatGPS Server',  'Compact micro GPS tracker',                      3200, 18],
-                ['Magnet GPS',           'GPS Device',  'BharatGPS Server',  'Magnetic portable GPS tracker (no wiring)',      3000, 18],
-                ['MIC/SOS GPS',          'GPS Device',  'BharatGPS Server',  'GPS with microphone and SOS alert button',       4000, 18],
+                ['Basic/Normal GPS',     'GPS Tracker',  'BharatGPS Server',  'Standard GPS tracker installation',              3000, 18],
+                ['Engine Status GPS',    'GPS Tracker',  'BharatGPS Server',  'GPS with engine on/off monitoring',              3500, 18],
+                ['Engine Cut GPS',       'GPS Tracker',  'BharatGPS Server',  'GPS with remote engine cut/restore relay',       4500, 18],
+                ['Micro GPS',            'GPS Tracker',  'BharatGPS Server',  'Compact micro GPS tracker',                      3200, 18],
+                ['Magnet GPS',           'GPS Tracker',  'BharatGPS Server',  'Magnetic portable GPS tracker (no wiring)',      3000, 18],
+                ['MIC/SOS GPS',          'GPS Tracker',  'BharatGPS Server',  'GPS with microphone and SOS alert button',       4000, 18],
                 ['VLTD',                 'VLTD',        'BharatGPS Server',  'Vehicle Location Tracking Device — AIS 140',    8000, 18],
-                ['OBD GPS',              'GPS Device',  'BharatGPS Server',  'OBD port plug-in GPS tracker',                  2500, 18],
+                ['OBD GPS',              'GPS Tracker',  'BharatGPS Server',  'OBD port plug-in GPS tracker',                  2500, 18],
                 ['Annual Renewal',       'Renewal',     'BharatGPS Server',  'Annual subscription renewal per vehicle',        1200, 18],
                 ['VLTD Annual Renewal',  'Renewal',     'BharatGPS Server',  'AIS 140 VLTD annual subscription renewal',      2000, 18],
                 ['SIM Card',             'Accessory',   '',                  'IoT SIM card for GPS tracker',                    300, 18],
@@ -2035,7 +2035,7 @@ case 'pl_get':
             foreach($defs as $k=>$d){
                 $excl = $d[4]; $gst = $d[5];
                 $incl = round($excl * (1 + $gst/100), 2);
-                $hasStk = ($d[1]==='GPS Device'||$d[1]==='VLTD'||$d[1]==='Accessory') ? 1 : 0;
+                $hasStk = ($d[1]==='GPS Tracker'||$d[1]==='VLTD'||$d[1]==='Accessory'||$d[1]==='Wire / Cable'||$d[1]==='SIM Card') ? 1 : 0;
                 $ins->execute([$d[0],$d[1],$d[2],$d[3],0,$excl,$gst,$incl,$hasStk,'System',$k]);
             }
         }
@@ -2050,7 +2050,9 @@ case 'pl_save':
     try { $pdo->exec("ALTER TABLE price_list ADD COLUMN IF NOT EXISTS buying_price DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER description"); } catch(Exception $e){}
     $id   = intval($body['id']??0);
     $name = trim($body['product_name']??'');
-    $cat  = trim($body['category']??'GPS Device');
+    $cat  = trim($body['category']??'GPS Tracker');
+    // Normalize legacy category name
+    if($cat === 'GPS Device') $cat = 'GPS Tracker';
     if(!$name){ echo json_encode(['error'=>'Product name required']); break; }
     $srv   = trim($body['server_name']??'');
     $desc  = trim($body['description']??'');
@@ -2072,7 +2074,7 @@ case 'pl_save':
             echo json_encode(['success'=>true,'id'=>intval($pdo->lastInsertId()),'price_incl_gst'=>$incl]);
         }
         // ── Auto-sync to stock_items based on category ──────────────
-        $productCategories = ['GPS Device','VLTD','Accessory','Wire / Cable','SIM Card'];
+        $productCategories = ['GPS Tracker','VLTD','Accessory','Wire / Cable','SIM Card'];
         $savedId = $id ?: intval($pdo->lastInsertId());
         $savedName = $name;
         if(in_array($cat, $productCategories)){

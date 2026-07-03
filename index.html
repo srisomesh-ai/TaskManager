@@ -4202,7 +4202,7 @@ function openConvertDemoModal(taskId){
   const cdSel = document.getElementById('cd-job-type');
   if(cdSel && cdSel.options.length <= 1){
     api('pl_get_public').then(function(d){
-      var pCats = ['GPS Device','VLTD','Accessory','Wire / Cable','SIM Card'];
+      var pCats = ['GPS Tracker','VLTD','Accessory','Wire / Cable','SIM Card'];
       (d.items||[]).filter(function(i){ return pCats.includes(i.category); }).forEach(function(item){
         var o = document.createElement('option');
         o.value = item.product_name; o.textContent = item.product_name;
@@ -5578,7 +5578,7 @@ async function loadJobTypeItems(){
   try {
     // Read from Price List (master) — only items marked has_stock=1 are physical devices
     const d = await api('pl_get_public').catch(()=>({}));
-    var productCats = ['GPS Device','VLTD','Accessory','Wire / Cable','SIM Card'];
+    var productCats = ['GPS Tracker','VLTD','Accessory','Wire / Cable','SIM Card'];
     const items = (d.items || []).filter(function(i){ return productCats.includes(i.category); });
     const grp = document.getElementById('fm-job-gps-group');
     if(!grp) return;

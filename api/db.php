@@ -208,6 +208,19 @@ function getDB() {
             "ALTER TABLE price_list ADD COLUMN IF NOT EXISTS buying_price DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER description",
             "ALTER TABLE price_list ADD COLUMN IF NOT EXISTS has_stock TINYINT(1) NOT NULL DEFAULT 0 AFTER is_active",
 
+            // ── Normalize: GPS Device → GPS Tracker in price_list ─────────────
+            "UPDATE price_list SET category='GPS Tracker' WHERE category='GPS Device'",
+
+            // ── Update has_stock flags based on category ───────────────────────
+            "UPDATE price_list SET has_stock=1 WHERE category IN ('GPS Tracker','VLTD','Accessory','Wire / Cable','SIM Card')",
+            "UPDATE price_list SET has_stock=0 WHERE category IN ('Service','Renewal')",
+
+            // ── Sync: push existing stock_items into price_list if missing ─────
+            "INSERT INTO price_list (product_name,category,price_excl_gst,gst_percent,price_incl_gst,has_stock,created_by,sort_order) SELECT s.name,s.category,0,18,0,1,'System',0 FROM stock_items s WHERE NOT EXISTS (SELECT 1 FROM price_list p WHERE p.product_name=s.name)",
+
+            // ── Sync: push existing price_list products into stock_items if missing
+            "INSERT INTO stock_items (name,category,unit,min_stock,created_by) SELECT p.product_name,p.category,'Pcs',5,'System' FROM price_list p WHERE p.has_stock=1 AND NOT EXISTS (SELECT 1 FROM stock_items s WHERE s.name=p.product_name)",
+
             "CREATE TABLE IF NOT EXISTS stock_items (
                 id          INT AUTO_INCREMENT PRIMARY KEY,
                 name        VARCHAR(150) NOT NULL,
