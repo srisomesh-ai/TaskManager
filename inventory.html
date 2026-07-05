@@ -181,8 +181,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
   <div class="nav-item" onclick="showPage('movement')" id="nav-movement">
     <span class="nav-icon">🔄</span> Stock Movement
   </div>
-  <div class="nav-item" onclick="showPage('items')" id="nav-items">
-    <span class="nav-icon">⚙️</span> Item Master
+
+  <div class="nav-sec">Items</div>
+  <div class="nav-item" onclick="window.parent.showPage && window.parent.showPage('price-list') || window.open('index.html','_parent')" style="color:rgba(255,255,255,.5);font-size:12px">
+    <span class="nav-icon">💲</span> Manage in Price List
   </div>
   <div id="inv-admin-section" style="display:none">
     <div class="nav-sec">Admin</div>
@@ -389,37 +391,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     </div>
   </div>
 
-  <!-- ── ITEM MASTER ── -->
-  <div class="page" id="page-items">
-    <div class="pg-header">
-      <div>
-        <div class="pg-title">⚙️ Item Master</div>
-        <div class="pg-sub">Manage GPS types, wire types, accessories</div>
-      </div>
-      <div class="pg-actions">
-        <button class="btn btn-primary" onclick="openItemModal()">+ Add Item</button>
-      </div>
-    </div>
-    <div class="table-card">
-      <table class="tbl">
-        <thead>
-          <tr>
-            <th>Item Name</th>
-            <th>Category</th>
-            <th>Model / Type</th>
-            <th>Unit</th>
-            <th class="num">Min. Stock</th>
-            <th class="num">Opening Bal.</th>
-            <th>Notes</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="items-body">
-          <tr><td colspan="8" class="empty"><div>Loading…</div></td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
 
 </div><!-- /content -->
 </div><!-- /main -->
@@ -427,68 +398,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 <!-- ═══════════════════════════════════════════════════════════════════
      MODALS
 ════════════════════════════════════════════════════════════════════ -->
-
-<!-- Add Item Modal -->
-<div class="modal-overlay" id="item-modal-overlay">
-  <div class="modal">
-    <div class="modal-hd">
-      <div class="modal-hd-title" id="item-modal-title">➕ Add New Item</div>
-      <button class="modal-close" onclick="closeItemModal()">×</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-row form-row-2">
-        <div class="form-group">
-          <label class="form-label">Item Name <span style="color:var(--red)">*</span></label>
-          <input class="form-input" id="im-name" placeholder="e.g. GPSWOX Basic Tracker">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Category <span style="color:var(--red)">*</span></label>
-          <select class="form-input" id="im-category">
-            <option value="">Select…</option>
-            <option>GPS Tracker</option>
-            <option>Wire / Cable</option>
-            <option>Accessory</option>
-            <option>SIM Card</option>
-            <option>Other</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-row form-row-2">
-        <div class="form-group">
-          <label class="form-label">Model / Type</label>
-          <input class="form-input" id="im-model" placeholder="e.g. TK303, 4-Pin Wire">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Unit</label>
-          <select class="form-input" id="im-unit">
-            <option>Pcs</option>
-            <option>Meters</option>
-            <option>Set</option>
-            <option>Roll</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-row form-row-2">
-        <div class="form-group">
-          <label class="form-label">Opening Balance</label>
-          <input class="form-input" id="im-opening" type="number" min="0" value="0" placeholder="0">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Minimum Stock Alert</label>
-          <input class="form-input" id="im-min-stock" type="number" min="0" value="5" placeholder="5">
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Notes</label>
-        <input class="form-input" id="im-notes" placeholder="Any extra details…">
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeItemModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveItem()">Save Item</button>
-    </div>
-  </div>
-</div>
 
 <!-- Stock Movement Modal -->
 <div class="modal-overlay" id="mv-modal-overlay">
@@ -620,7 +529,7 @@ function loadData(){
           qty:parseInt(m.qty||0), techName:m.tech_name||'', date:m.move_date||'', ref:m.ref_note||'', by:m.done_by||'' };
       });
     })
-  ]).then(function(){ refreshAll(); populateMvItemSelect(); })
+  ]).then(function(){ refreshAll(); })
     .catch(function(){ showToast('❌ Could not load inventory data'); });
 }
 
@@ -699,8 +608,6 @@ function refreshAll(){
   renderStockLedger();
   renderMovements();
   renderTechCards();
-  renderItemMaster();
-  populateMvItemSelect();
 }
 
 // ── DASHBOARD ────────────────────────────────────────────────────────
@@ -775,7 +682,7 @@ function renderStockLedger(){
       '<td class="num"><strong style="color:' + (i.closing < i.minStock ? 'var(--red)' : 'var(--accent)') + '">' + i.closing + '</strong></td>' +
       '<td class="num">' + i.minStock + '</td>' +
       '<td>' + stockStatus(i) + '</td>' +
-      '<td><button class="btn btn-ghost btn-sm" onclick="openItemModal(\'' + i.id + '\')">Edit</button></td>' +
+      '<td><span style="font-size:11px;color:var(--text3)">Edit in Price List</span></td>' +
     '</tr>';
   }).join('');
 }
@@ -884,113 +791,7 @@ function renderMovements(){
   }).join('');
 }
 
-// ── ITEM MASTER ───────────────────────────────────────────────────────
-function renderItemMaster(){
-  var body = document.getElementById('items-body');
-  if(!_items.length){
-    body.innerHTML = '<tr><td colspan="8"><div class="empty"><div class="empty-icon">⚙️</div><div class="empty-text">No items yet</div></div></td></tr>';
-    return;
-  }
-  body.innerHTML = _items.map(function(i){
-    return '<tr>' +
-      '<td><strong>' + esc(i.name) + '</strong></td>' +
-      '<td>' + categoryBadge(i.category) + '</td>' +
-      '<td style="color:var(--text3)">' + esc(i.model||'–') + '</td>' +
-      '<td>' + esc(i.unit) + '</td>' +
-      '<td class="num">' + i.minStock + '</td>' +
-      '<td class="num"><strong>' + i.opening + '</strong></td>' +
-      '<td style="color:var(--text3);font-size:12px">' + esc(i.notes||'–') + '</td>' +
-      '<td style="display:flex;gap:6px">' +
-        '<button class="btn btn-ghost btn-sm" onclick="openItemModal(\'' + i.id + '\')">✏️ Edit</button>' +
-        '<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteItem(\'' + i.id + '\')">🗑️</button>' +
-      '</td>' +
-    '</tr>';
-  }).join('');
-}
-
-// ── ITEM MODAL ────────────────────────────────────────────────────────
-function openItemModal(id){
-  _editItemId = id || null;
-  var title = document.getElementById('item-modal-title');
-  if(id){
-    var item = _items.find(function(i){ return i.id === id; });
-    if(!item) return;
-    title.textContent = '✏️ Edit Item';
-    document.getElementById('im-name').value     = item.name;
-    document.getElementById('im-category').value = item.category;
-    document.getElementById('im-model').value    = item.model || '';
-    document.getElementById('im-unit').value     = item.unit;
-    document.getElementById('im-opening').value  = item.opening;
-    document.getElementById('im-min-stock').value= item.minStock;
-    document.getElementById('im-notes').value    = item.notes || '';
-  } else {
-    title.textContent = '➕ Add New Item';
-    ['im-name','im-model','im-notes'].forEach(function(id){ document.getElementById(id).value = ''; });
-    document.getElementById('im-category').value  = '';
-    document.getElementById('im-unit').value      = 'Pcs';
-    document.getElementById('im-opening').value   = '0';
-    document.getElementById('im-min-stock').value = '5';
-  }
-  document.getElementById('item-modal-overlay').classList.add('open');
-}
-
-function closeItemModal(){
-  document.getElementById('item-modal-overlay').classList.remove('open');
-  _editItemId = null;
-}
-
-function saveItem(){
-  var name    = document.getElementById('im-name').value.trim();
-  var cat     = document.getElementById('im-category').value;
-  if(!name || !cat){ showToast('⚠️ Name and Category are required'); return; }
-  var item = {
-    id:       _editItemId || uid(),
-    name:     name,
-    category: cat,
-    model:    document.getElementById('im-model').value.trim(),
-    unit:     document.getElementById('im-unit').value,
-    opening:  parseInt(document.getElementById('im-opening').value) || 0,
-    minStock: parseInt(document.getElementById('im-min-stock').value) || 0,
-    notes:    document.getElementById('im-notes').value.trim(),
-  };
-  var wasEdit = !!_editItemId;
-  invApiCall('stock_save_item', null, 'POST', {
-    id:_editItemId||0, name:item.name, category:item.category,
-    model:item.model, unit:item.unit, opening_bal:item.opening,
-    min_stock:item.minStock, notes:item.notes
-  }).then(function(d){
-    if(d.success){ closeItemModal(); showToast(wasEdit?'✅ Item updated':'✅ Item added'); loadData(); }
-    else showToast('❌ '+(d.error||'Save failed'));
-  }).catch(function(){ showToast('❌ Network error'); });
-}
-
-function deleteItem(id){
-  var item = _items.find(function(i){ return i.id === id; });
-  if(!item) return;
-  var hasMovements = _movements.some(function(m){ return m.itemId === id; });
-  if(hasMovements){ showToast('⚠️ Cannot delete — item has movement history'); return; }
-  if(!confirm('Delete "' + item.name + '"?')) return;
-  invApiCall('stock_delete_item', null, 'POST', {id:id})
-    .then(function(d){
-      if(d.success){ showToast('🗑️ Item deleted'); loadData(); }
-      else showToast('❌ '+(d.error||'Delete failed'));
-    }).catch(function(){ showToast('❌ Network error'); });
-}
-
-// ── MOVEMENT MODAL ────────────────────────────────────────────────────
-function populateMvItemSelect(){
-  var sel = document.getElementById('mv-m-item');
-  if(!sel) return;
-  var cur = sel.value;
-  sel.innerHTML = '<option value="">Select item…</option>';
-  _items.forEach(function(i){
-    var o = document.createElement('option');
-    o.value = i.id;
-    o.textContent = i.name + ' (' + i.category + ')';
-    sel.appendChild(o);
-  });
-  if(cur) sel.value = cur;
-}
+// ── MOVEMENT MODAL ──────────────────────────────────────────────────
 
 function openAddMovement(type){
   document.getElementById('mv-m-type').value = type || 'in';
@@ -1000,11 +801,22 @@ function openAddMovement(type){
   document.getElementById('mv-m-ref').value = '';
   document.getElementById('mv-m-date').value = today();
   onMvTypeChange();
-  populateMvItemSelect();
+  // Populate items from stock_items (linked to price list master)
+  var sel = document.getElementById('mv-m-item');
+  sel.innerHTML = '<option value="">Select item…</option>';
+  invApiCall('stock_get').then(function(d){
+    (d.items||[]).forEach(function(i){
+      var o = document.createElement('option');
+      o.value = String(i.id);
+      o.textContent = i.name + ' ('+i.category+')';
+      sel.appendChild(o);
+    });
+  }).catch(function(){});
   document.getElementById('mv-modal-overlay').classList.add('open');
   var titles = { in: '📥 Stock In — Received', out: '📤 Issue to Technician', return: '🔄 Return from Technician', adjustment: '⚙️ Stock Adjustment' };
   document.getElementById('mv-modal-title').textContent = titles[type] || 'Stock Movement';
 }
+
 
 function onMvTypeChange(){
   var type = document.getElementById('mv-m-type').value;
@@ -1014,9 +826,11 @@ function onMvTypeChange(){
   techGroup.style.display = (type === 'out' || type === 'return') ? '' : 'none';
 }
 
+
 function closeMvModal(){
   document.getElementById('mv-modal-overlay').classList.remove('open');
 }
+
 
 function saveMovement(){
   var type    = document.getElementById('mv-m-type').value;
@@ -1059,6 +873,7 @@ function saveMovement(){
     } else showToast('❌ '+(d.error||'Save failed'));
   }).catch(function(){ btn.disabled=false; btn.textContent='✅ Save Movement'; showToast('❌ Network error'); });
 }
+
 
 // ── NAVIGATION ────────────────────────────────────────────────────────
 function showPage(name){
