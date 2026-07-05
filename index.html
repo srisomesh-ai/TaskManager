@@ -2753,7 +2753,7 @@ function checkInventory(){
 
   // Fetch from DB API (cache for 60s to avoid hitting API on every keystroke)
   var now = Date.now();
-  if(_invStockCache && (now - _invStockCacheTs) < 60000){
+  if(_invStockCache && (now - _invStockCacheTs) < 8000){
     _renderInvCheck(_invStockCache, box, inner, techName, techId, jobLower, qtyNeed);
     return;
   }
@@ -2775,8 +2775,26 @@ function _renderInvCheck(d, box, inner, techName, techId, jobLower, qtyNeed){
 
   // Match job type → inventory item by keyword
   // Covers any item name the user has set — matches on keywords in both job type and item name
+  function _itemHasAnyStock(i){
+    var off = Math.max(0, parseInt(i.office_stock||0));
+    var wt  = Math.max(0, parseInt(i.with_techs||0));
+    return (off + wt) > 0;
+  }
   function matchItem(job){
-    var j = job.toLowerCase();
+    var j = job.toLowerCase().trim();
+    // 0) Exact name match against the selected job (strongest signal)
+    var exact = items.find(function(i){ return (i.name||'').toLowerCase().trim() === j; });
+    if(exact) return exact;
+    // 0b) Job name contained in item name or vice-versa (e.g. "Engine Status GPS")
+    var contains = items.filter(function(i){
+      var n = (i.name||'').toLowerCase().trim();
+      return n && (n === j || n.indexOf(j) !== -1 || j.indexOf(n) !== -1);
+    });
+    if(contains.length){
+      // prefer one that actually has stock
+      var withStock0 = contains.find(_itemHasAnyStock);
+      return withStock0 || contains[0];
+    }
     // Exact keyword priority rules
     var rules = [
       { jobKeys:['vltd'],                          itemKeys:['vltd'] },
@@ -2792,14 +2810,18 @@ function _renderInvCheck(d, box, inner, techName, techId, jobLower, qtyNeed){
       var rule = rules[ri];
       var jobMatches = rule.jobKeys.some(function(k){ return j.includes(k); });
       if(!jobMatches) continue;
-      var found = items.find(function(i){
+      var matches = items.filter(function(i){
         var n = ((i.name||'') + ' ' + (i.model||'')).toLowerCase();
         return rule.itemKeys.some(function(k){ return n.includes(k); });
       });
-      if(found) return found;
+      if(matches.length){
+        var withStock = matches.find(_itemHasAnyStock);
+        return withStock || matches[0];
+      }
     }
-    // Fallback: first GPS Tracker category item
-    return items.find(function(i){ return (i.category||'').toLowerCase().includes('gps'); }) || null;
+    // Fallback: first GPS Tracker category item that has stock, else first GPS item
+    var gpsItems = items.filter(function(i){ return (i.category||'').toLowerCase().includes('gps'); });
+    return gpsItems.find(_itemHasAnyStock) || gpsItems[0] || null;
   }
 
   // ── BUNDLE CHECK (BOM): e.g. Engine Cut = Engine Status GPS + Relay ──
