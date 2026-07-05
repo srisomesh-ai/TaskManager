@@ -2754,7 +2754,7 @@ function checkInventory(){
   // Fetch from DB API (cache for 60s to avoid hitting API on every keystroke)
   var now = Date.now();
   if(_invStockCache && (now - _invStockCacheTs) < 60000){
-    _renderInvCheck(_invStockCache, box, inner, techName, jobLower, qtyNeed);
+    _renderInvCheck(_invStockCache, box, inner, techName, techId, jobLower, qtyNeed);
     return;
   }
   var token = authToken || localStorage.getItem('bgps_token') || '';
@@ -2763,12 +2763,12 @@ function checkInventory(){
     .then(function(d){
       _invStockCache = d;
       _invStockCacheTs = Date.now();
-      _renderInvCheck(d, box, inner, techName, jobLower, qtyNeed);
+      _renderInvCheck(d, box, inner, techName, techId, jobLower, qtyNeed);
     })
     .catch(function(){ box.style.display = 'none'; });
 }
 
-function _renderInvCheck(d, box, inner, techName, jobLower, qtyNeed){
+function _renderInvCheck(d, box, inner, techName, techId, jobLower, qtyNeed){
   var items     = d.items || [];
   var techStock = d.tech_stock || {};
   if(!items.length){ box.style.display = 'none'; return; }
@@ -2811,7 +2811,8 @@ function _renderInvCheck(d, box, inner, techName, jobLower, qtyNeed){
   if(matchedBundle && (matchedBundle.components||[]).length){
     var itemById = {};
     items.forEach(function(i){ itemById[i.id] = i; });
-    var myTech = techStock[techName] || {};
+    var tsById = d.tech_stock_by_id || {};
+    var myTech = (techId && tsById[techId]) ? tsById[techId] : (techStock[techName] || {});
     var rowsHtml = '', worstCanFulfill = true, worstCanOffice = true, anyMissing = false;
     matchedBundle.components.forEach(function(c){
       var it = itemById[c.item_id];
@@ -2864,10 +2865,12 @@ function _renderInvCheck(d, box, inner, techName, jobLower, qtyNeed){
   var item = matchItem(jobLower);
   if(!item){ box.style.display = 'none'; return; }
 
-  // Tech held = from tech_stock map { techName: { itemId: qty } }
+  // Tech held = prefer id-keyed map (robust), fall back to name-keyed
+  var _tsById = d.tech_stock_by_id || {};
+  var _myTech = (techId && _tsById[techId]) ? _tsById[techId] : (techStock[techName] || {});
   var techHeld = 0;
-  if(techStock[techName] && techStock[techName][item.id]){
-    techHeld = Math.max(0, parseInt(techStock[techName][item.id]) || 0);
+  if(_myTech && _myTech[item.id]){
+    techHeld = Math.max(0, parseInt(_myTech[item.id]) || 0);
   }
   var officeStock = Math.max(0, parseInt(item.office_stock || 0));
 
