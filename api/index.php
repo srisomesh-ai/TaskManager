@@ -2271,7 +2271,7 @@ case 'stock_items_list':
     break;
 
 case 'stock_get':
-    if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    if(!in_array($userRole,['admin','assigner','technician'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     try {
         $cnt = $pdo->query("SELECT COUNT(*) FROM stock_items")->fetchColumn();
         if($cnt == 0){
@@ -2307,6 +2307,11 @@ case 'stock_get':
             if(!isset($ts[$n][$iid])) $ts[$n][$iid]=0;
             if($row['move_type']==='out')    $ts[$n][$iid]+=intval($row['qty']);
             if($row['move_type']==='return') $ts[$n][$iid]-=intval($row['qty']);
+        }
+        // Technicians may only see their own held stock
+        if($userRole === 'technician'){
+            $myName = $cu['name'] ?? '';
+            $ts = isset($ts[$myName]) ? [$myName => $ts[$myName]] : [];
         }
         echo json_encode(['items'=>$rows,'tech_stock'=>$ts]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage(),'items'=>[],'tech_stock'=>[]]); }
