@@ -72,6 +72,10 @@ tr:hover td{background:var(--surface2)}
 /* TOAST */
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:#16201F;color:#fff;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;transition:transform .3s;pointer-events:none}
 .toast.show{transform:translateX(-50%) translateY(0)}
+.sortable{cursor:pointer;user-select:none}
+.sortable:hover{background:rgba(14,92,92,.06)}
+.sort-icon{margin-left:4px;opacity:.35;font-size:10px}
+.sort-active .sort-icon{opacity:1;color:var(--accent)}
 
 /* PAGE HEADER */
 .pg-hd{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;padding-top:2px}
@@ -132,13 +136,13 @@ tr:hover td{background:var(--surface2)}
         <thead>
           <tr>
             <th>#</th>
-            <th>Product / Service</th>
-            <th>Category</th>
+            <th class="sortable" onclick="sortBy('product_name')" id="th-product_name">Product / Service <span class="sort-icon">↕</span></th>
+            <th class="sortable" onclick="sortBy('category')" id="th-category">Category <span class="sort-icon">↕</span></th>
             <th>Server</th>
-            <th class="num">Buying Price ₹</th>
-            <th class="num">Selling (excl GST) ₹</th>
+            <th class="num sortable" onclick="sortBy('buying_price')" id="th-buying_price">Buying Price ₹ <span class="sort-icon">↕</span></th>
+            <th class="num sortable" onclick="sortBy('price_excl_gst')" id="th-price_excl_gst">Selling (excl GST) ₹ <span class="sort-icon">↕</span></th>
             <th style="text-align:center">GST %</th>
-            <th class="num">Price (incl GST) ₹</th>
+            <th class="num sortable" onclick="sortBy('price_incl_gst')" id="th-price_incl_gst">Price (incl GST) ₹ <span class="sort-icon">↕</span></th>
             <th>Status</th>
             <th>Inventory</th>
             <th></th>
@@ -168,13 +172,19 @@ tr:hover td{background:var(--surface2)}
         </div>
         <div class="form-group">
           <label class="form-label">Category <span style="color:var(--red)">*</span></label>
-          <select class="form-input" id="m-cat">
-            <option>GPS Tracker</option>
-            <option>VLTD</option>
-            <option>Renewal</option>
-            <option>Accessory</option>
-            <option>Service</option>
-          </select>
+          <div style="display:flex;gap:6px">
+            <input class="form-input" id="m-cat" list="cat-list" placeholder="Select or type custom…" style="flex:1">
+            <datalist id="cat-list">
+              <option>GPS Tracker</option>
+              <option>VLTD</option>
+              <option>Renewal</option>
+              <option>Accessory</option>
+              <option>Wire / Cable</option>
+              <option>SIM Card</option>
+              <option>Service</option>
+            </datalist>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">Pick from list or type a new category name</div>
         </div>
         <div class="form-group">
           <label class="form-label">Server Name</label>
@@ -268,6 +278,20 @@ function plApi(action, method, body){
 // ── DATA ──────────────────────────────────────────────────────────────
 var _items = [];
 var _editId = null;
+var _sortField = '';
+var _sortDir   = 1; // 1=asc, -1=desc
+
+function sortBy(field){
+  if(_sortField === field){ _sortDir *= -1; }
+  else { _sortField = field; _sortDir = 1; }
+  document.querySelectorAll('.sortable').forEach(function(th){
+    th.classList.remove('sort-active');
+    var ico = th.querySelector('.sort-icon'); if(ico) ico.textContent='↕';
+  });
+  var el = document.getElementById('th-'+field);
+  if(el){ el.classList.add('sort-active'); var ico=el.querySelector('.sort-icon'); if(ico) ico.textContent=_sortDir===1?'↑':'↓'; }
+  render();
+}
 
 // ── INIT ──────────────────────────────────────────────────────────────
 var _masterItems = [];
@@ -339,6 +363,20 @@ function render(){
            (status === '' || String(i.is_active) === status);
   });
 
+  // Apply sort
+  if(_sortField){
+    filtered = filtered.slice().sort(function(a, b){
+      var av = a[_sortField] || '';
+      var bv = b[_sortField] || '';
+      // Numeric fields
+      if(['buying_price','price_excl_gst','price_incl_gst','gst_percent','sort_order'].includes(_sortField)){
+        return (parseFloat(av) - parseFloat(bv)) * _sortDir;
+      }
+      // String fields
+      return String(av).toLowerCase().localeCompare(String(bv).toLowerCase()) * _sortDir;
+    });
+  }
+
   // Stats
   var active = _items.filter(function(i){ return parseInt(i.is_active) === 1; });
   var prices = active.map(function(i){ return parseFloat(i.price_excl_gst || 0); });
@@ -384,7 +422,7 @@ function openModal(id){
   var item = id ? _items.find(function(i){ return i.id == id; }) : null;
   document.getElementById('modal-title').textContent = item ? '✏️ Edit Price Item' : '➕ Add Price Item';
   document.getElementById('m-name').value   = item ? item.product_name : '';
-  document.getElementById('m-cat').value    = item ? item.category     : (_masterItems[0]?.category || 'GPS Tracker');
+  document.getElementById('m-cat').value    = item ? item.category : 'GPS Tracker';
   document.getElementById('m-server').value = item ? (item.server_name || '') : 'BharatGPS Server';
   document.getElementById('m-desc').value   = item ? (item.description || '') : '';
   document.getElementById('m-buying').value = item ? (item.buying_price || '') : '';
