@@ -2313,7 +2313,37 @@ case 'stock_get':
             $myName = $cu['name'] ?? '';
             $ts = isset($ts[$myName]) ? [$myName => $ts[$myName]] : [];
         }
-        echo json_encode(['items'=>$rows,'tech_stock'=>$ts]);
+        // ── BUNDLES (BOM): a sellable line = multiple physical components ──
+        // e.g. Engine Cut GPS = 1x Engine Status GPS + 1x Relay
+        $pdo->exec("CREATE TABLE IF NOT EXISTS stock_bundles (id INT AUTO_INCREMENT PRIMARY KEY, match_keyword VARCHAR(100) NOT NULL, label VARCHAR(150) NOT NULL, is_active TINYINT(1) DEFAULT 1, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $pdo->exec("CREATE TABLE IF NOT EXISTS stock_bundle_items (id INT AUTO_INCREMENT PRIMARY KEY, bundle_id INT NOT NULL, component_item_id INT NOT NULL, qty INT NOT NULL DEFAULT 1) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        // Seed Engine Cut bundle once, if no bundles exist yet and the two components can be found
+        $bcnt = $pdo->query("SELECT COUNT(*) FROM stock_bundles")->fetchColumn();
+        if($bcnt == 0){
+            $findItem = function($kw) use ($pdo){
+                $s = $pdo->prepare("SELECT id FROM stock_items WHERE LOWER(CONCAT(name,' ',COALESCE(model,''))) LIKE ? ORDER BY id LIMIT 1");
+                $s->execute(['%'.strtolower($kw).'%']); $v = $s->fetchColumn(); return $v ? intval($v) : 0;
+            };
+            $gpsId   = $findItem('engine status'); if(!$gpsId) $gpsId = $findItem('basic');
+            $relayId = $findItem('relay');
+            if($gpsId && $relayId){
+                $pdo->prepare("INSERT INTO stock_bundles (match_keyword,label) VALUES ('engine cut','Engine Cut GPS')")->execute();
+                $bid = intval($pdo->lastInsertId());
+                $pdo->prepare("INSERT INTO stock_bundle_items (bundle_id,component_item_id,qty) VALUES (?,?,1)")->execute([$bid,$gpsId]);
+                $pdo->prepare("INSERT INTO stock_bundle_items (bundle_id,component_item_id,qty) VALUES (?,?,1)")->execute([$bid,$relayId]);
+            }
+        }
+        // Build bundles payload: [{match_keyword,label,components:[{item_id,qty}]}]
+        $bundles = [];
+        $brows = $pdo->query("SELECT * FROM stock_bundles WHERE is_active=1")->fetchAll();
+        foreach($brows as $b){
+            $ci = $pdo->prepare("SELECT component_item_id as item_id, qty FROM stock_bundle_items WHERE bundle_id=?");
+            $ci->execute([$b['id']]);
+            $comps = $ci->fetchAll();
+            foreach($comps as &$c){ $c['item_id']=intval($c['item_id']); $c['qty']=intval($c['qty']); } unset($c);
+            $bundles[] = ['match_keyword'=>$b['match_keyword'],'label'=>$b['label'],'components'=>$comps];
+        }
+        echo json_encode(['items'=>$rows,'tech_stock'=>$ts,'bundles'=>$bundles]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage(),'items'=>[],'tech_stock'=>[]]); }
     break;
 
