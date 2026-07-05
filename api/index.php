@@ -2313,6 +2313,18 @@ case 'stock_get':
             $myName = $cu['name'] ?? '';
             $ts = isset($ts[$myName]) ? [$myName => $ts[$myName]] : [];
         }
+        // Also key tech stock by user id (robust against name variance).
+        // Build name -> id lookup from users, then remap.
+        $tsById = [];
+        try {
+            $urows = $pdo->query("SELECT id,name FROM users")->fetchAll();
+            $nameToId = [];
+            foreach($urows as $u){ $nameToId[trim(strtolower($u['name']))] = intval($u['id']); }
+            foreach($ts as $nm => $itemsMap){
+                $key = trim(strtolower($nm));
+                if(isset($nameToId[$key])){ $tsById[$nameToId[$key]] = $itemsMap; }
+            }
+        } catch(Exception $e){}
         // ── BUNDLES (BOM): a sellable line = multiple physical components ──
         // e.g. Engine Cut GPS = 1x Engine Status GPS + 1x Relay
         $pdo->exec("CREATE TABLE IF NOT EXISTS stock_bundles (id INT AUTO_INCREMENT PRIMARY KEY, match_keyword VARCHAR(100) NOT NULL, label VARCHAR(150) NOT NULL, is_active TINYINT(1) DEFAULT 1, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
@@ -2343,7 +2355,7 @@ case 'stock_get':
             foreach($comps as &$c){ $c['item_id']=intval($c['item_id']); $c['qty']=intval($c['qty']); } unset($c);
             $bundles[] = ['match_keyword'=>$b['match_keyword'],'label'=>$b['label'],'components'=>$comps];
         }
-        echo json_encode(['items'=>$rows,'tech_stock'=>$ts,'bundles'=>$bundles]);
+        echo json_encode(['items'=>$rows,'tech_stock'=>$ts,'tech_stock_by_id'=>$tsById,'bundles'=>$bundles]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage(),'items'=>[],'tech_stock'=>[]]); }
     break;
 
