@@ -437,10 +437,21 @@ function saveItem(){
 
 function deleteItem(id){
   var item = _items.find(function(i){ return i.id == id; });
-  if(!item || !confirm('Delete "' + item.product_name + '"?')) return;
+  if(!item) return;
+  var msg = 'Delete "' + item.product_name + '" from price list?';
+  if(['GPS Tracker','VLTD','Accessory','Wire / Cable','SIM Card'].includes(item.category)){
+    msg += ' If this item has no stock history it will also be removed from Inventory.';
+  }
+  if(!confirm(msg)) return;
   plApi('pl_delete', 'POST', {id: id}).then(function(d){
-    if(d.success){ showToast('🗑️ Deleted'); load(); }
-    else showToast('❌ ' + (d.error || 'Delete failed'));
+    if(d.success){
+      if(d.note) showToast('✅ Removed from price list. ' + d.note);
+      else if(d.stock_removed) showToast('🗑️ Deleted from price list and inventory');
+      else showToast('🗑️ Deleted from price list');
+      load();
+    } else {
+      showToast('❌ ' + (d.error || 'Delete failed'));
+    }
   }).catch(function(){ showToast('❌ Network error'); });
 }
 

@@ -2104,9 +2104,34 @@ case 'pl_save':
 case 'pl_delete':
     if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Admin only']); break; }
     $id = intval($body['id']??0);
+    if(!$id){ echo json_encode(['error'=>'Invalid ID']); break; }
     try {
+        // Get the item name before deleting so we can sync to stock_items
+        $plRow = $pdo->prepare("SELECT product_name, category FROM price_list WHERE id=?");
+        $plRow->execute([$id]); $plItem = $plRow->fetch();
+        if(!$plItem){ echo json_encode(['error'=>'Item not found']); break; }
+
+        // Delete from price_list
         $pdo->prepare("DELETE FROM price_list WHERE id=?")->execute([$id]);
-        echo json_encode(['success'=>true]);
+
+        // Also delete from stock_items if no stock movements exist for it
+        $stockRow = $pdo->prepare("SELECT id FROM stock_items WHERE name=? LIMIT 1");
+        $stockRow->execute([$plItem['product_name']]); $si = $stockRow->fetch();
+        if($si){
+            $hasMov = $pdo->prepare("SELECT COUNT(*) FROM stock_movements WHERE item_id=?");
+            $hasMov->execute([$si['id']]);
+            $hasPur = $pdo->prepare("SELECT COUNT(*) FROM purchases WHERE item_id=?");
+            $hasPur->execute([$si['id']]);
+            if($hasMov->fetchColumn() == 0 && $hasPur->fetchColumn() == 0){
+                $pdo->prepare("DELETE FROM stock_items WHERE id=?")->execute([$si['id']]);
+                echo json_encode(['success'=>true, 'stock_removed'=>true]);
+            } else {
+                // Has history — keep in stock_items but note it
+                echo json_encode(['success'=>true, 'stock_removed'=>false, 'note'=>'Removed from price list. Kept in inventory as it has stock movement or purchase history.']);
+            }
+        } else {
+            echo json_encode(['success'=>true, 'stock_removed'=>false]);
+        }
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
