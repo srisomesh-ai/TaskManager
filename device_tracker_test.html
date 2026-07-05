@@ -79,10 +79,11 @@
   <div id="results" style="display:none">
     <div class="card">
       <div class="stat">
-        <div><b id="s-total">0</b>Total devices</div>
-        <div><b id="s-pend" style="color:var(--amb)">0</b>Pending (with techs)</div>
+        <div><b id="s-total">0</b>Total on server</div>
+        <div><b id="s-office" style="color:#60a5fa">0</b>Office stock</div>
+        <div><b id="s-pend" style="color:var(--amb)">0</b>With technicians</div>
         <div><b id="s-inst" style="color:var(--grn)">0</b>Installed</div>
-        <div><b id="s-techs">0</b>Technicians holding stock</div>
+        <div><b id="s-techs">0</b>Technicians holding</div>
       </div>
     </div>
 
@@ -137,14 +138,19 @@ function parseDevice(d){
   var devId = d.id || d.device_id || '';
   var online = (d.online === 'online' || d.online === true || d.status === 'online');
   // Pending: ^<digits><separator><techname>. Separator can be - or – (en dash) with optional spaces.
+  // FINAL RULES (fixed):
+  //   number-Name → NOT installed. starts with digits.
+  //        Name == "Office" → office stock ; else → with that technician.
+  //   Name-number → INSTALLED. starts with a letter.
   var m = name.match(/^\s*(\d+)\s*[-–—]\s*(.+)$/);
-  var pending = false, tech = '';
+  var status = 'installed', tech = '';
   if(m){
-    // The FIRST token is digits → this is the pending "number-tech" format.
-    pending = true;
-    tech = m[2].trim();
+    var after = m[2].trim();
+    if(after.toLowerCase() === 'office'){ status = 'office'; }
+    else { status = 'tech'; tech = after; }
   }
-  return { imei:imei, name:name, devId:devId, online:online, pending:pending, tech:tech, raw:d };
+  return { imei:imei, name:name, devId:devId, online:online, status:status,
+           pending:(status!=='installed'), tech:tech, raw:d };
 }
 
 function pull(){
@@ -193,13 +199,15 @@ function pull(){
 
 function render(){
   document.getElementById('results').style.display = '';
-  var pend = PARSED.filter(function(d){ return d.pending; });
-  var inst = PARSED.filter(function(d){ return !d.pending; });
+  var office = PARSED.filter(function(d){ return d.status === 'office'; });
+  var pend   = PARSED.filter(function(d){ return d.status === 'tech'; });   // with technicians only
+  var inst   = PARSED.filter(function(d){ return d.status === 'installed'; });
   document.getElementById('s-total').textContent = PARSED.length;
+  document.getElementById('s-office').textContent = office.length;
   document.getElementById('s-pend').textContent = pend.length;
   document.getElementById('s-inst').textContent = inst.length;
 
-  // Group pending by technician
+  // Group with-tech devices by technician (office excluded)
   var byTech = {};
   pend.forEach(function(d){
     var t = d.tech || '(unknown)';
@@ -239,8 +247,8 @@ function renderAll(){
     return '<tr>' +
       '<td class="imei">' + esc(d.imei) + '</td>' +
       '<td>' + esc(d.name) + '</td>' +
-      '<td>' + (d.pending ? '<span class="pill pill-pend">Pending</span>' : '<span class="pill pill-inst">Installed</span>') + '</td>' +
-      '<td>' + (d.pending ? '<span class="tech">' + esc(d.tech) + '</span>' : '<span style="color:var(--mut)">—</span>') + '</td>' +
+      '<td>' + (d.status==='office' ? '<span class="pill" style="background:rgba(96,165,250,.15);color:#60a5fa">Office</span>' : d.status==='tech' ? '<span class="pill pill-pend">With Tech</span>' : '<span class="pill pill-inst">Installed</span>') + '</td>' +
+      '<td>' + (d.status==='tech' ? '<span class="tech">' + esc(d.tech) + '</span>' : d.status==='office' ? '<span style="color:#60a5fa">Office</span>' : '<span style="color:var(--mut)">—</span>') + '</td>' +
       '<td class="' + (d.online?'on':'off') + '">' + (d.online?'● online':'○ offline') + '</td>' +
       '</tr>';
   }).join('');
