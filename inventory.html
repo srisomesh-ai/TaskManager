@@ -169,11 +169,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 <!-- SIDEBAR -->
 <div class="sidebar">
   <div class="nav-sec">Inventory</div>
-  <div class="nav-item active" onclick="showPage('dashboard')" id="nav-dashboard">
-    <span class="nav-icon">📊</span> Dashboard
-  </div>
-  <div class="nav-item" onclick="showPage('stock')" id="nav-stock">
-    <span class="nav-icon">📦</span> Stock Ledger
+  <div class="nav-item active" onclick="showPage('stock')" id="nav-stock">
+    <span class="nav-icon">📦</span> Stock
   </div>
   <div class="nav-item" onclick="showPage('technicians')" id="nav-technicians">
     <span class="nav-icon">👷</span> By Technician
@@ -200,79 +197,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 <!-- CONTENT -->
 <div class="content">
 
-  <!-- ── DASHBOARD ── -->
-  <div class="page active" id="page-dashboard">
+
+  <!-- ── STOCK ── -->
+  <div class="page active" id="page-stock">
     <div class="pg-header">
       <div>
-        <div class="pg-title">📊 Inventory Dashboard</div>
-        <div class="pg-sub">Live stock overview across office and field</div>
-      </div>
-      <div class="pg-actions">
-        <button class="btn btn-primary" onclick="openAddMovement('in')">+ Stock In</button>
-        <button class="btn btn-ghost" onclick="openAddMovement('out')">↑ Issue to Tech</button>
-      </div>
-    </div>
-
-    <div class="stat-row" id="dash-stats">
-      <div class="stat-card" style="border-bottom-color:var(--accent)" onclick="showPage('stock')">
-        <div class="stat-val" id="st-total-items">–</div>
-        <div class="stat-lbl">Total Item Types</div>
-      </div>
-      <div class="stat-card" style="border-bottom-color:var(--green)" onclick="showPage('stock')">
-        <div class="stat-val" id="st-in-office">–</div>
-        <div class="stat-lbl">In Office Stock</div>
-        <div class="stat-sub">Units available</div>
-      </div>
-      <div class="stat-card" style="border-bottom-color:var(--blue)" onclick="showPage('technicians')">
-        <div class="stat-val" id="st-with-techs">–</div>
-        <div class="stat-lbl">With Technicians</div>
-        <div class="stat-sub">Units issued</div>
-      </div>
-      <div class="stat-card" style="border-bottom-color:var(--amber)" onclick="showPage('stock')">
-        <div class="stat-val" id="st-low-stock">–</div>
-        <div class="stat-lbl">Low Stock Alerts</div>
-        <div class="stat-sub">Below minimum</div>
-      </div>
-    </div>
-
-    <!-- Low stock alerts -->
-    <div id="low-stock-banner"></div>
-
-    <!-- Quick summary table -->
-    <div class="table-card">
-      <div class="table-hd">
-        <div class="table-hd-title">📦 All Items — Current Stock</div>
-        <button class="btn btn-primary btn-sm" onclick="openAddMovement('in')">+ Stock In</button>
-      </div>
-      <div style="overflow-x:auto">
-        <table class="tbl" id="dash-stock-table">
-          <thead>
-            <tr>
-              <th>Item Name</th>
-              <th>Category</th>
-              <th>Opening</th>
-              <th>Total In</th>
-              <th>Total Out</th>
-              <th class="num">Office Stock</th>
-              <th class="num">With Techs</th>
-              <th class="num">Closing</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody id="dash-stock-body">
-            <tr><td colspan="9" class="empty"><div class="empty-icon">⏳</div><div>Loading...</div></td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── STOCK LEDGER ── -->
-  <div class="page" id="page-stock">
-    <div class="pg-header">
-      <div>
-        <div class="pg-title">📦 Stock Ledger</div>
-        <div class="pg-sub">Opening balance, all movements, closing balance per item</div>
+        <div class="pg-title">📦 Inventory Stock</div>
+        <div class="pg-sub">Live stock overview — office and field</div>
       </div>
       <div class="pg-actions">
         <button class="btn btn-primary" onclick="openAddMovement('in')">+ Stock In</button>
@@ -280,6 +211,33 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         <button class="btn btn-ghost" onclick="openAddMovement('return')">↓ Return from Tech</button>
       </div>
     </div>
+
+    <!-- Stat cards -->
+    <div class="stat-row" id="dash-stats">
+      <div class="stat-card" style="border-bottom-color:var(--accent)">
+        <div class="stat-val" id="st-total-items">–</div>
+        <div class="stat-lbl">Total Items</div>
+      </div>
+      <div class="stat-card" style="border-bottom-color:var(--green)">
+        <div class="stat-val" id="st-in-office">–</div>
+        <div class="stat-lbl">In Office</div>
+        <div class="stat-sub">Units available</div>
+      </div>
+      <div class="stat-card" style="border-bottom-color:var(--blue)" onclick="showPage('technicians')" style="cursor:pointer">
+        <div class="stat-val" id="st-with-techs">–</div>
+        <div class="stat-lbl">With Technicians</div>
+        <div class="stat-sub">Units issued</div>
+      </div>
+      <div class="stat-card" style="border-bottom-color:var(--amber)">
+        <div class="stat-val" id="st-low-stock">–</div>
+        <div class="stat-lbl">Low Stock</div>
+        <div class="stat-sub">Below minimum</div>
+      </div>
+    </div>
+
+    <!-- Low stock banner -->
+    <div id="low-stock-banner"></div>
+
     <div class="filter-bar">
       <input class="filter-input" id="sl-search" placeholder="🔍 Search item…" oninput="renderStockLedger()">
       <select class="filter-input" id="sl-category" onchange="renderStockLedger()">
@@ -604,65 +562,42 @@ function techStock(){
 
 // ── REFRESH ALL ───────────────────────────────────────────────────────
 function refreshAll(){
-  renderDashboard();
-  renderStockLedger();
+  renderStockLedger(); // updates stat cards + table
   renderMovements();
   renderTechCards();
-}
-
-// ── DASHBOARD ────────────────────────────────────────────────────────
-function renderDashboard(){
-  var stocks = computeStock();
-  var totalItems = stocks.length;
-  var inOffice = stocks.reduce(function(s,i){ return s + Math.max(0, i.officeStock); }, 0);
-  var withTechs = stocks.reduce(function(s,i){ return s + i.withTechs; }, 0);
-  var lowStock = stocks.filter(function(i){ return i.officeStock < i.minStock; }).length;
-
-  document.getElementById('st-total-items').textContent = totalItems;
-  document.getElementById('st-in-office').textContent = inOffice;
-  document.getElementById('st-with-techs').textContent = withTechs;
-  document.getElementById('st-low-stock').textContent = lowStock;
-
-  // Low stock banner
-  var lowItems = stocks.filter(function(i){ return i.officeStock < i.minStock; });
-  var banner = document.getElementById('low-stock-banner');
-  if(lowItems.length){
-    banner.innerHTML = '<div style="background:var(--amber-bg);border-left:4px solid var(--amber);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#7a4500">' +
-      '⚠️ <strong>' + lowItems.length + ' item(s) below minimum stock:</strong> ' +
-      lowItems.map(function(i){ return i.name + ' (' + i.officeStock + ' left)'; }).join(', ') + '</div>';
-  } else {
-    banner.innerHTML = '';
-  }
-
-  // Dashboard stock table
-  var body = document.getElementById('dash-stock-body');
-  if(!stocks.length){
-    body.innerHTML = '<tr><td colspan="9"><div class="empty"><div class="empty-icon">📦</div><div class="empty-text">No items yet</div><div class="empty-sub">Add items in Item Master</div></div></td></tr>';
-    return;
-  }
-  body.innerHTML = stocks.map(function(i){
-    return '<tr>' +
-      '<td><strong>' + esc(i.name) + '</strong></td>' +
-      '<td>' + categoryBadge(i.category) + '</td>' +
-      '<td class="num">' + i.opening + '</td>' +
-      '<td class="num" style="color:var(--green)">' + i.totalIn + '</td>' +
-      '<td class="num" style="color:var(--red)">' + i.totalOut + '</td>' +
-      '<td class="num"><strong>' + Math.max(0, i.officeStock) + '</strong></td>' +
-      '<td class="num" style="color:var(--blue)">' + i.withTechs + '</td>' +
-      '<td class="num"><strong>' + i.closing + '</strong></td>' +
-      '<td>' + stockStatus(i) + '</td>' +
-    '</tr>';
-  }).join('');
 }
 
 // ── STOCK LEDGER ─────────────────────────────────────────────────────
 function renderStockLedger(){
   var search = (document.getElementById('sl-search')||{value:''}).value.toLowerCase();
   var cat = (document.getElementById('sl-category')||{value:''}).value;
-  var stocks = computeStock().filter(function(i){
+  var allStocks = computeStock();
+  var stocks = allStocks.filter(function(i){
     return (!search || i.name.toLowerCase().includes(search) || (i.model||'').toLowerCase().includes(search)) &&
            (!cat || i.category === cat);
   });
+
+  // Update stat cards
+  var totalItems  = allStocks.length;
+  var inOffice    = allStocks.reduce(function(s,i){ return s+Math.max(0,i.officeStock); }, 0);
+  var withTechs   = allStocks.reduce(function(s,i){ return s+i.withTechs; }, 0);
+  var lowStock    = allStocks.filter(function(i){ return i.officeStock < i.minStock; }).length;
+  var stTotal = document.getElementById('st-total-items'); if(stTotal) stTotal.textContent = totalItems;
+  var stOff   = document.getElementById('st-in-office');   if(stOff)   stOff.textContent   = inOffice;
+  var stTech  = document.getElementById('st-with-techs');  if(stTech)  stTech.textContent  = withTechs;
+  var stLow   = document.getElementById('st-low-stock');   if(stLow)   stLow.textContent   = lowStock;
+
+  // Low stock banner
+  var lowItems = allStocks.filter(function(i){ return i.officeStock < i.minStock; });
+  var banner = document.getElementById('low-stock-banner');
+  if(banner){
+    if(lowItems.length){
+      banner.innerHTML = '<div style="background:var(--amber-bg);border-left:4px solid var(--amber);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#7a4500">⚠️ <strong>'+lowItems.length+' item(s) below minimum stock:</strong> '+lowItems.map(function(i){ return i.name+' ('+i.officeStock+' left)'; }).join(', ')+'</div>';
+    } else {
+      banner.innerHTML = '';
+    }
+  }
+
   var body = document.getElementById('sl-body');
   if(!stocks.length){
     body.innerHTML = '<tr><td colspan="13"><div class="empty"><div class="empty-icon">📦</div><div class="empty-text">No items found</div></div></td></tr>';
@@ -883,7 +818,6 @@ function showPage(name){
   if(p) p.classList.add('active');
   var n = document.getElementById('nav-' + name);
   if(n) n.classList.add('active');
-  if(name === 'dashboard') renderDashboard();
   if(name === 'stock') renderStockLedger();
   if(name === 'technicians') renderTechCards();
   if(name === 'movement') renderMovements();
