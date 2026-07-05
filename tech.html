@@ -379,7 +379,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
         </div>
 
         <!-- TECH STAT CARDS -->
-        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:20px" id="my-stats-grid">
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-bottom:20px" id="my-stats-grid">
           <div class="stat-card" style="border-bottom:3px solid #e07b00" onclick="filterMyTasks('Open')">
             <div class="stat-ghost">🔄</div>
             <div class="stat-val" id="my-s-open">–</div>
@@ -410,6 +410,17 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
             <div class="stat-val" id="my-s-total">–</div>
             <div class="stat-lbl">Total</div>
           </div>
+          <div class="stat-card" style="border-bottom:3px solid #0a7d6b" onclick="toggleMyDevices()">
+            <div class="stat-ghost">📦</div>
+            <div class="stat-val" id="my-s-devices">–</div>
+            <div class="stat-lbl">My Devices</div>
+          </div>
+        </div>
+
+        <!-- MY DEVICES BREAKDOWN (toggled by My Devices card) -->
+        <div id="my-devices-panel" style="display:none;background:var(--surface);border-radius:8px;box-shadow:var(--shadow);padding:14px 16px;margin-bottom:20px">
+          <div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:10px">📦 Devices in my stock</div>
+          <div id="my-devices-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px"></div>
         </div>
 
         <!-- TOOLBAR -->
@@ -2526,6 +2537,53 @@ async function loadMyTasks(){
     navBadge.textContent = urgentTasks.length;
     navBadge.style.display = urgentTasks.length ? '' : 'none';
   }
+
+  // Load device stock held under this technician's name
+  loadMyDevices();
+}
+
+// ── MY DEVICES — inventory items held under this technician ────────────────
+async function loadMyDevices(){
+  const valEl  = document.getElementById('my-s-devices');
+  const listEl = document.getElementById('my-devices-list');
+  const myName = currentUser?.name || '';
+  const d = await api('stock_get').catch(()=>({}));
+  const items = d.items || [];
+  const techStock = d.tech_stock || {};
+  const myStock = techStock[myName] || {};
+
+  // Build id → name lookup
+  const nameById = {};
+  items.forEach(function(i){ nameById[i.id] = (i.name||'Item') + (i.model ? ' ('+i.model+')' : ''); });
+
+  let total = 0, rows = [];
+  Object.keys(myStock).forEach(function(id){
+    const qty = Math.max(0, parseInt(myStock[id]) || 0);
+    if(qty <= 0) return;
+    total += qty;
+    rows.push({ name: nameById[id] || ('Item #'+id), qty: qty });
+  });
+  rows.sort(function(a,b){ return b.qty - a.qty; });
+
+  if(valEl) valEl.textContent = total;
+
+  if(listEl){
+    if(!rows.length){
+      listEl.innerHTML = '<div style="font-size:12px;color:var(--text3)">No devices currently in your stock.</div>';
+    } else {
+      listEl.innerHTML = rows.map(function(r){
+        return '<div style="background:rgba(10,125,107,.08);border:1px solid rgba(10,125,107,.2);border-radius:6px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px">' +
+          '<span style="font-size:12px;font-weight:600;color:var(--text)">' + r.name + '</span>' +
+          '<span style="font-size:14px;font-weight:900;color:#0a7d6b">' + r.qty + '</span>' +
+        '</div>';
+      }).join('');
+    }
+  }
+}
+
+function toggleMyDevices(){
+  const panel = document.getElementById('my-devices-panel');
+  if(panel) panel.style.display = (panel.style.display === 'none' || !panel.style.display) ? 'block' : 'none';
 }
 
 function filterMyTasks(status){
