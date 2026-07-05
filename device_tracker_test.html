@@ -87,11 +87,24 @@
     </div>
 
     <div class="tabs">
-      <div class="tab active" data-tab="bytech" onclick="switchTab('bytech')">📋 By Technician</div>
+      <div class="tab active" data-tab="assign" onclick="switchTab('assign')">🔍 Assign to Technician</div>
+      <div class="tab" data-tab="bytech" onclick="switchTab('bytech')">📋 By Technician</div>
       <div class="tab" data-tab="all" onclick="switchTab('all')">🗂️ All Devices</div>
     </div>
 
-    <div class="card" id="tab-bytech">
+    <div class="card" id="tab-assign">
+      <div style="font-size:13px;color:var(--mut);margin-bottom:10px">Type a technician name keyword (e.g. <code>ganapati</code>). Only that technician's pending devices are shown, with IMEI — ready to assign.</div>
+      <input class="search" id="techsearch" placeholder="🔍 Enter technician name keyword…" oninput="renderAssign()" style="margin-bottom:12px">
+      <div id="assign-count" style="font-size:12px;color:var(--amb);margin-bottom:8px"></div>
+      <div class="scroll">
+        <table>
+          <thead><tr><th style="width:36px"></th><th>Device Name</th><th>IMEI</th><th>Device ID</th><th>Online</th></tr></thead>
+          <tbody id="assign-tbody"><tr><td colspan="5" style="color:var(--mut);text-align:center;padding:20px">Type a technician name above to search.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" id="tab-bytech" style="display:none">
       <div style="font-size:13px;color:var(--mut);margin-bottom:10px">Pending devices grouped by technician (parsed from <code>number-TechnicianName</code>)</div>
       <div id="techlist"></div>
     </div>
@@ -117,7 +130,11 @@ var PARSED = [];   // {imei, name, online, pending, tech}
 // Anything else = installed (e.g. name "Ramesh-1233"). IMEI is read separately from the imei field.
 function parseDevice(d){
   var name = (d.name || d.device_name || '').trim();
-  var imei = d.imei || d.device_imei || d.uniqueid || '';
+  var imei = d.imei || d.device_imei || d.uniqueid || d.unique_id || '';
+  // GPSWOX sometimes nests imei
+  if(!imei && d.device_data){ imei = d.device_data.imei || d.device_data.uniqueid || ''; }
+  if(!imei && d.traccar){ imei = d.traccar.uniqueId || d.traccar.uniqueid || ''; }
+  var devId = d.id || d.device_id || '';
   var online = (d.online === 'online' || d.online === true || d.status === 'online');
   // Pending: ^<digits><separator><techname>. Separator can be - or – (en dash) with optional spaces.
   var m = name.match(/^\s*(\d+)\s*[-–—]\s*(.+)$/);
@@ -127,7 +144,7 @@ function parseDevice(d){
     pending = true;
     tech = m[2].trim();
   }
-  return { imei:imei, name:name, online:online, pending:pending, tech:tech, raw:d };
+  return { imei:imei, name:name, devId:devId, online:online, pending:pending, tech:tech, raw:d };
 }
 
 function pull(){
@@ -208,6 +225,7 @@ function render(){
     });
   }
   document.getElementById('techlist').innerHTML = html;
+  var ts = document.getElementById('techsearch'); if(ts){ ts.value=''; renderAssign(); }
   renderAll();
 }
 
@@ -231,8 +249,37 @@ function renderAll(){
 
 function switchTab(t){
   document.querySelectorAll('.tab').forEach(function(el){ el.classList.toggle('active', el.dataset.tab === t); });
+  document.getElementById('tab-assign').style.display = (t==='assign')?'':'none';
   document.getElementById('tab-bytech').style.display = (t==='bytech')?'':'none';
   document.getElementById('tab-all').style.display = (t==='all')?'':'none';
+}
+
+// Admin searches a technician name keyword → show only that tech's pending devices with IMEI
+function renderAssign(){
+  var q = (document.getElementById('techsearch').value || '').toLowerCase().trim();
+  var tb = document.getElementById('assign-tbody');
+  var cnt = document.getElementById('assign-count');
+  if(!q){
+    tb.innerHTML = '<tr><td colspan="5" style="color:var(--mut);text-align:center;padding:20px">Type a technician name above to search.</td></tr>';
+    cnt.textContent = '';
+    return;
+  }
+  // Only pending devices, whose parsed technician name matches the keyword
+  var rows = PARSED.filter(function(d){ return d.pending && d.tech.toLowerCase().indexOf(q) !== -1; });
+  cnt.textContent = rows.length + ' device(s) found for "' + q + '"';
+  if(!rows.length){
+    tb.innerHTML = '<tr><td colspan="5" style="color:var(--mut);text-align:center;padding:20px">No pending devices found for that technician keyword.</td></tr>';
+    return;
+  }
+  tb.innerHTML = rows.map(function(d){
+    return '<tr>' +
+      '<td><input type="checkbox" class="asg-chk" data-imei="' + esc(d.imei) + '" data-name="' + esc(d.name) + '"></td>' +
+      '<td>' + esc(d.name) + '</td>' +
+      '<td class="imei">' + (d.imei ? esc(d.imei) : '<span style="color:var(--red)">— no imei —</span>') + '</td>' +
+      '<td style="color:var(--mut)">' + esc(d.devId) + '</td>' +
+      '<td class="' + (d.online?'on':'off') + '">' + (d.online?'● online':'○ offline') + '</td>' +
+      '</tr>';
+  }).join('');
 }
 
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
