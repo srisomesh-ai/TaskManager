@@ -2247,6 +2247,18 @@ case 'pur_delete':
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
+// ── SET OPENING BALANCE ──────────────────────────────────────────────
+case 'stock_set_opening':
+    if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    $itemId  = intval($body['item_id']??0);
+    $opening = intval($body['opening_bal']??0);
+    if(!$itemId){ echo json_encode(['error'=>'Item ID required']); break; }
+    try {
+        $pdo->prepare("UPDATE stock_items SET opening_bal=? WHERE id=?")->execute([$opening, $itemId]);
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 // ── GPS STOCK INVENTORY API (stock_ prefix, no collision with inv_ invoicing) ──
 
 // Any logged-in user can get item list (for task dropdown, etc.)

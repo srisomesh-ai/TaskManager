@@ -255,21 +255,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
           <tr>
             <th>Item</th>
             <th>Category</th>
-            <th>Model / Type</th>
-            <th class="num">Opening</th>
-            <th class="num">In</th>
-            <th class="num">Out (Issued)</th>
+            <th class="num">Opening Bal.</th>
+            <th class="num">Stock In</th>
+            <th class="num">Issued</th>
             <th class="num">Returns</th>
             <th class="num">Office Stock</th>
             <th class="num">With Techs</th>
             <th class="num">Closing</th>
             <th>Min. Stock</th>
             <th>Status</th>
-            <th></th>
           </tr>
         </thead>
         <tbody id="sl-body">
-          <tr><td colspan="13" class="empty"><div>Loading…</div></td></tr>
+          <tr><td colspan="11" class="empty"><div>Loading…</div></td></tr>
         </tbody>
       </table>
     </div>
@@ -600,15 +598,14 @@ function renderStockLedger(){
 
   var body = document.getElementById('sl-body');
   if(!stocks.length){
-    body.innerHTML = '<tr><td colspan="13"><div class="empty"><div class="empty-icon">📦</div><div class="empty-text">No items found</div></div></td></tr>';
+    body.innerHTML = '<tr><td colspan="11"><div class="empty"><div class="empty-icon">📦</div><div class="empty-text">No items found</div></div></td></tr>';
     return;
   }
   body.innerHTML = stocks.map(function(i){
     return '<tr>' +
-      '<td><strong>' + esc(i.name) + '</strong><br><span style="font-size:11px;color:var(--text3)">' + esc(i.model||'') + '</span></td>' +
+      '<td><strong>' + esc(i.name) + '</strong></td>' +
       '<td>' + categoryBadge(i.category) + '</td>' +
-      '<td style="color:var(--text3);font-size:12px">' + esc(i.model||'–') + '</td>' +
-      '<td class="num">' + i.opening + '</td>' +
+      '<td class="num"><input type="number" min="0" value="' + i.opening + '" style="width:60px;padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-weight:700;text-align:right;background:var(--surface)" onchange="setOpening(\'' + i.id + '\',this)" title="Click to set opening balance"></td>' +
       '<td class="num" style="color:var(--green);font-weight:700">' + i.totalIn + '</td>' +
       '<td class="num" style="color:var(--red);font-weight:700">' + i.totalOut + '</td>' +
       '<td class="num" style="color:var(--blue)">' + i.returns + '</td>' +
@@ -897,6 +894,26 @@ function confirmStockReset(){
       }
     }).catch(function(){
       btn.disabled = false; btn.textContent = 'Yes, Reset';
+      showToast('❌ Network error');
+    });
+}
+
+// ── SET OPENING BALANCE ───────────────────────────────────────────────
+function setOpening(itemId, input){
+  var val = parseInt(input.value) || 0;
+  input.style.borderColor = 'var(--amber)';
+  invApiCall('stock_set_opening', null, 'POST', { item_id: itemId, opening_bal: val })
+    .then(function(d){
+      if(d.success){
+        input.style.borderColor = 'var(--green)';
+        setTimeout(function(){ input.style.borderColor = 'var(--border)'; loadData(); }, 1000);
+        showToast('✅ Opening balance set to ' + val);
+      } else {
+        input.style.borderColor = 'var(--red)';
+        showToast('❌ ' + (d.error || 'Failed'));
+      }
+    }).catch(function(){
+      input.style.borderColor = 'var(--red)';
       showToast('❌ Network error');
     });
 }
