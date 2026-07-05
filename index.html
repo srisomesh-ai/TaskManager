@@ -2802,6 +2802,65 @@ function _renderInvCheck(d, box, inner, techName, jobLower, qtyNeed){
     return items.find(function(i){ return (i.category||'').toLowerCase().includes('gps'); }) || null;
   }
 
+  // ── BUNDLE CHECK (BOM): e.g. Engine Cut = Engine Status GPS + Relay ──
+  var bundles = d.bundles || [];
+  var matchedBundle = null;
+  for(var bi=0; bi<bundles.length; bi++){
+    if(jobLower.includes((bundles[bi].match_keyword||'').toLowerCase())){ matchedBundle = bundles[bi]; break; }
+  }
+  if(matchedBundle && (matchedBundle.components||[]).length){
+    var itemById = {};
+    items.forEach(function(i){ itemById[i.id] = i; });
+    var myTech = techStock[techName] || {};
+    var rowsHtml = '', worstCanFulfill = true, worstCanOffice = true, anyMissing = false;
+    matchedBundle.components.forEach(function(c){
+      var it = itemById[c.item_id];
+      var perUnit = Math.max(1, parseInt(c.qty)||1);
+      var needComp = perUnit * qtyNeed;
+      var nm = it ? ((it.name||'Item') + (it.model?(' ('+it.model+')'):'')) : ('Item #'+c.item_id);
+      var held = it && myTech[c.item_id] ? Math.max(0, parseInt(myTech[c.item_id])||0) : 0;
+      var off  = it ? Math.max(0, parseInt(it.office_stock||0)) : 0;
+      var okTech = held >= needComp;
+      var okOff  = off  >= needComp;
+      if(!okTech) worstCanFulfill = false;
+      if(!okOff)  worstCanOffice = false;
+      if(!it) anyMissing = true;
+      var stColor = okTech ? 'var(--green)' : (okOff ? 'var(--amber)' : 'var(--red)');
+      rowsHtml += '<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:6px;align-items:center;padding:5px 0;border-bottom:1px solid rgba(0,0,0,.05)">' +
+        '<div style="font-size:12px;font-weight:600;color:var(--text)">' + nm + '</div>' +
+        '<div style="text-align:center;font-size:12px;color:' + stColor + ';font-weight:800">' + held + '<div style="font-size:9px;color:var(--text3);font-weight:600">with tech</div></div>' +
+        '<div style="text-align:center;font-size:12px;color:var(--text);font-weight:800">' + off + '<div style="font-size:9px;color:var(--text3);font-weight:600">office</div></div>' +
+        '<div style="text-align:center;font-size:12px;color:var(--text);font-weight:800">' + needComp + '<div style="font-size:9px;color:var(--text3);font-weight:600">needed</div></div>' +
+      '</div>';
+    });
+    var bg2, border2, head2, headColor2, note2 = '';
+    if(anyMissing){
+      bg2='var(--red-bg)'; border2='var(--red)'; headColor2='var(--red)';
+      head2='🚨 ' + matchedBundle.label + ' — component item not found in inventory';
+      note2='Define the component items (Engine Status GPS, Relay) in Inventory so this bundle can be tracked.';
+    } else if(worstCanFulfill){
+      bg2='var(--green-bg)'; border2='var(--green)'; headColor2='var(--green)';
+      head2='✅ ' + techName + ' has all parts for ' + matchedBundle.label;
+    } else if(worstCanOffice){
+      bg2='var(--amber-bg)'; border2='var(--amber)'; headColor2='#7a4500';
+      head2='⚠️ ' + techName + ' needs to collect parts from office';
+      note2='📦 Issue the short component(s) from office before dispatch.';
+    } else {
+      bg2='var(--red-bg)'; border2='var(--red)'; headColor2='var(--red)';
+      head2='🚨 Insufficient stock for ' + matchedBundle.label + ' — reorder needed';
+      note2='One or more components are short in both tech and office stock.';
+    }
+    var bhtml = '<div style="padding:10px 14px;background:' + bg2 + ';border-left:4px solid ' + border2 + '">';
+    bhtml += '<div style="font-size:12px;font-weight:800;color:' + headColor2 + ';margin-bottom:8px">' + head2 + '</div>';
+    bhtml += '<div style="font-size:10px;color:var(--text3);font-weight:700;margin-bottom:4px">' + matchedBundle.label + ' = ' + matchedBundle.components.map(function(c){ var it=itemById[c.item_id]; return (Math.max(1,parseInt(c.qty)||1)) + '× ' + (it?(it.name||'Item'):('#'+c.item_id)); }).join(' + ') + '</div>';
+    bhtml += rowsHtml;
+    if(note2) bhtml += '<div style="margin-top:8px;font-size:11px;color:' + headColor2 + ';background:rgba(0,0,0,.04);border-radius:5px;padding:6px 10px">' + note2 + '</div>';
+    bhtml += '</div>';
+    inner.innerHTML = bhtml;
+    box.style.display = '';
+    return;
+  }
+
   var item = matchItem(jobLower);
   if(!item){ box.style.display = 'none'; return; }
 
