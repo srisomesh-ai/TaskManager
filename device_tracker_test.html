@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BharatGPS — Device Tracker (TEST)</title>
+<style>
+  :root { --bg:#0f1117; --card:#1a1d27; --line:#2a2f3d; --txt:#e6e8ee; --mut:#8b93a7; --acc:#d97757; --grn:#4ade80; --red:#f87171; --amb:#fbbf24; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--txt); padding:20px; }
+  .wrap { max-width:1150px; margin:0 auto; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:var(--mut); font-size:13px; margin-bottom:18px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
+  label { display:block; font-size:12px; color:var(--mut); margin-bottom:6px; }
+  input,select { width:100%; padding:10px 12px; background:#0f1117; border:1px solid var(--line); border-radius:8px; color:var(--txt); font-size:13px; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:end; }
+  .row > div { flex:1; min-width:180px; }
+  button { background:var(--acc); color:#fff; border:none; padding:11px 20px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; white-space:nowrap; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .stat { display:flex; gap:22px; flex-wrap:wrap; margin:12px 0 4px; }
+  .stat div { font-size:13px; color:var(--mut); }
+  .stat b { color:var(--txt); font-size:20px; display:block; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--mut); font-weight:600; position:sticky; top:0; background:var(--card); }
+  .imei { font-family:monospace; color:var(--acc); }
+  .on { color:var(--grn); } .off { color:var(--red); }
+  .scroll { max-height:58vh; overflow:auto; }
+  .err { color:var(--red); font-size:13px; white-space:pre-wrap; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600; }
+  .pill-pend { background:rgba(251,191,36,.15); color:var(--amb); }
+  .pill-inst { background:rgba(74,222,128,.15); color:var(--grn); }
+  .tech { color:var(--txt); font-weight:600; }
+  .techgrp { margin:6px 0; padding:10px 14px; background:#0f1117; border:1px solid var(--line); border-radius:8px; display:flex; justify-content:space-between; align-items:center; }
+  .techgrp b { color:var(--amb); font-size:16px; }
+  .tabs { display:flex; gap:8px; margin-bottom:12px; }
+  .tab { padding:8px 16px; background:#0f1117; border:1px solid var(--line); border-radius:8px; cursor:pointer; font-size:13px; }
+  .tab.active { background:var(--acc); border-color:var(--acc); color:#fff; }
+  code { background:#0f1117; padding:1px 5px; border-radius:4px; font-size:12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>BharatGPS — Device Tracker <span style="color:var(--amb);font-size:13px">(TEST PAGE)</span></h1>
+  <div class="sub">Pulls all devices from the GPS server and groups <b>pending</b> devices by technician. The device <b>NAME</b> field holds the pattern <code>number-TechnicianName</code> (the number is part of the name text, not the IMEI). Nothing here touches your live software.</div>
+
+  <div class="card">
+    <div class="row">
+      <div style="flex:2">
+        <label>API Base URL</label>
+        <input id="base" value="https://bharatgps.in">
+      </div>
+      <div style="flex:3">
+        <label>User API Hash</label>
+        <input id="hash" value="$2y$10$UKnvIlyfSm371OAaz9SGzOtFYXJ0zRgOGL8wGmOuSLLZ6JBAfmrBG">
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div style="flex:2">
+        <label>Fetch mode</label>
+        <select id="mode">
+          <option value="direct">Direct (file:// or hosted)</option>
+          <option value="proxy">Via PHP proxy (if CORS blocked)</option>
+        </select>
+      </div>
+      <div style="flex:3">
+        <label>Proxy URL (only if mode = proxy)</label>
+        <input id="proxy" value="device_proxy.php" placeholder="device_proxy.php">
+      </div>
+      <div style="flex:0">
+        <label>&nbsp;</label>
+        <button id="go" onclick="pull()">Pull Devices</button>
+      </div>
+    </div>
+    <div id="err" class="err" style="margin-top:10px"></div>
+  </div>
+
+  <div id="results" style="display:none">
+    <div class="card">
+      <div class="stat">
+        <div><b id="s-total">0</b>Total devices</div>
+        <div><b id="s-pend" style="color:var(--amb)">0</b>Pending (with techs)</div>
+        <div><b id="s-inst" style="color:var(--grn)">0</b>Installed</div>
+        <div><b id="s-techs">0</b>Technicians holding stock</div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" data-tab="bytech" onclick="switchTab('bytech')">📋 By Technician</div>
+      <div class="tab" data-tab="all" onclick="switchTab('all')">🗂️ All Devices</div>
+    </div>
+
+    <div class="card" id="tab-bytech">
+      <div style="font-size:13px;color:var(--mut);margin-bottom:10px">Pending devices grouped by technician (parsed from <code>number-TechnicianName</code>)</div>
+      <div id="techlist"></div>
+    </div>
+
+    <div class="card" id="tab-all" style="display:none">
+      <input class="search" id="search" placeholder="🔍 Filter by IMEI, name or technician…" oninput="renderAll()" style="margin-bottom:10px">
+      <div class="scroll">
+        <table>
+          <thead><tr><th>IMEI</th><th>Server Name</th><th>Status</th><th>Technician</th><th>Online</th></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var ALL = [];      // raw devices
+var PARSED = [];   // {imei, name, online, pending, tech}
+
+// Parse the device NAME field. Pending pattern: name starts with digits, then '-', then technician name.
+// e.g. name "1234-Ganapathi", "11234-Kiran". The leading number is part of the NAME, not the IMEI.
+// Anything else = installed (e.g. name "Ramesh-1233"). IMEI is read separately from the imei field.
+function parseDevice(d){
+  var name = (d.name || d.device_name || '').trim();
+  var imei = d.imei || d.device_imei || d.uniqueid || '';
+  var online = (d.online === 'online' || d.online === true || d.status === 'online');
+  // Pending: ^<digits><separator><techname>. Separator can be - or – (en dash) with optional spaces.
+  var m = name.match(/^\s*(\d+)\s*[-–—]\s*(.+)$/);
+  var pending = false, tech = '';
+  if(m){
+    // The FIRST token is digits → this is the pending "number-tech" format.
+    pending = true;
+    tech = m[2].trim();
+  }
+  return { imei:imei, name:name, online:online, pending:pending, tech:tech, raw:d };
+}
+
+function pull(){
+  var base = document.getElementById('base').value.trim().replace(/\/+$/,'');
+  var hash = document.getElementById('hash').value.trim();
+  var mode = document.getElementById('mode').value;
+  var proxy = document.getElementById('proxy').value.trim();
+  var errEl = document.getElementById('err');
+  var btn = document.getElementById('go');
+  errEl.textContent = '';
+  if(!base || !hash){ errEl.textContent = 'Base URL and hash are required.'; return; }
+
+  var url;
+  if(mode === 'proxy'){
+    url = proxy + '?base=' + encodeURIComponent(base) + '&hash=' + encodeURIComponent(hash);
+  } else {
+    url = base + '/api/get_devices?user_api_hash=' + encodeURIComponent(hash);
+  }
+
+  btn.disabled = true; btn.textContent = 'Pulling…';
+  fetch(url, { cache:'no-store' })
+    .then(function(r){ return r.text(); })
+    .then(function(txt){
+      var data;
+      try { data = JSON.parse(txt); }
+      catch(e){ throw new Error('Response was not JSON. First 300 chars:\n' + txt.slice(0,300)); }
+      // GPSWOX get_devices returns groups: [{ id, title, items:[devices] }] OR a flat array.
+      var devices = [];
+      if(Array.isArray(data)){
+        data.forEach(function(g){
+          if(g && g.items && Array.isArray(g.items)) devices = devices.concat(g.items);
+          else if(g && (g.imei || g.name)) devices.push(g);
+        });
+      } else if(data && data.items){ devices = data.items; }
+      else if(data && data.data){ devices = data.data; }
+      if(!devices.length) throw new Error('No devices found in response. First 300 chars:\n' + txt.slice(0,300));
+      ALL = devices;
+      PARSED = devices.map(parseDevice);
+      render();
+    })
+    .catch(function(e){
+      errEl.textContent = e.message + '\n\nIf this is a CORS error, switch "Fetch mode" to "Via PHP proxy" and upload device_proxy.php next to this page.';
+    })
+    .finally(function(){ btn.disabled = false; btn.textContent = 'Pull Devices'; });
+}
+
+function render(){
+  document.getElementById('results').style.display = '';
+  var pend = PARSED.filter(function(d){ return d.pending; });
+  var inst = PARSED.filter(function(d){ return !d.pending; });
+  document.getElementById('s-total').textContent = PARSED.length;
+  document.getElementById('s-pend').textContent = pend.length;
+  document.getElementById('s-inst').textContent = inst.length;
+
+  // Group pending by technician
+  var byTech = {};
+  pend.forEach(function(d){
+    var t = d.tech || '(unknown)';
+    (byTech[t] = byTech[t] || []).push(d);
+  });
+  var techNames = Object.keys(byTech).sort(function(a,b){ return byTech[b].length - byTech[a].length; });
+  document.getElementById('s-techs').textContent = techNames.length;
+
+  var html = '';
+  if(!techNames.length){
+    html = '<div style="color:var(--mut);font-size:13px">No pending devices matched the <code>number-technician</code> pattern.</div>';
+  } else {
+    techNames.forEach(function(t){
+      var list = byTech[t];
+      html += '<div class="techgrp"><div><span class="tech">' + esc(t) + '</span> ' +
+        '<span style="color:var(--mut);font-size:12px">holds ' + list.length + ' device(s)</span></div>' +
+        '<b>' + list.length + '</b></div>';
+      html += '<div class="scroll" style="max-height:none;margin:0 0 10px 8px">';
+      list.forEach(function(d){
+        html += '<div style="font-size:12px;padding:3px 0;color:var(--mut)"><span class="imei">' + esc(d.imei) + '</span> — ' + esc(d.name) + '</div>';
+      });
+      html += '</div>';
+    });
+  }
+  document.getElementById('techlist').innerHTML = html;
+  renderAll();
+}
+
+function renderAll(){
+  var q = (document.getElementById('search').value || '').toLowerCase();
+  var rows = PARSED.filter(function(d){
+    if(!q) return true;
+    return (d.imei + ' ' + d.name + ' ' + d.tech).toLowerCase().indexOf(q) !== -1;
+  });
+  var html = rows.map(function(d){
+    return '<tr>' +
+      '<td class="imei">' + esc(d.imei) + '</td>' +
+      '<td>' + esc(d.name) + '</td>' +
+      '<td>' + (d.pending ? '<span class="pill pill-pend">Pending</span>' : '<span class="pill pill-inst">Installed</span>') + '</td>' +
+      '<td>' + (d.pending ? '<span class="tech">' + esc(d.tech) + '</span>' : '<span style="color:var(--mut)">—</span>') + '</td>' +
+      '<td class="' + (d.online?'on':'off') + '">' + (d.online?'● online':'○ offline') + '</td>' +
+      '</tr>';
+  }).join('');
+  document.getElementById('tbody').innerHTML = html || '<tr><td colspan="5" style="color:var(--mut);text-align:center;padding:20px">No matches</td></tr>';
+}
+
+function switchTab(t){
+  document.querySelectorAll('.tab').forEach(function(el){ el.classList.toggle('active', el.dataset.tab === t); });
+  document.getElementById('tab-bytech').style.display = (t==='bytech')?'':'none';
+  document.getElementById('tab-all').style.display = (t==='all')?'':'none';
+}
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+</script>
+</body>
+</html>
