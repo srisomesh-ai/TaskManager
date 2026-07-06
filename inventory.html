@@ -1090,6 +1090,7 @@ function dsPullAndSave(){
   });
 }
 
+var DS_BYTECH = {};   // techName -> [devices]
 function dsRenderSummary(merged){
   document.getElementById('ds-summary').style.display='';
   var office=merged.filter(function(d){return d.status==='office';});
@@ -1097,11 +1098,55 @@ function dsRenderSummary(merged){
   document.getElementById('ds-office').textContent=office.length;
   document.getElementById('ds-tech').textContent=tech.length;
   document.getElementById('ds-total').textContent=merged.length;
-  var byTech={}; tech.forEach(function(d){ var t=d.technician||'(unknown)'; byTech[t]=(byTech[t]||0)+1; });
-  var names=Object.keys(byTech).sort(function(a,b){return byTech[b]-byTech[a];});
-  document.getElementById('ds-techgroups').innerHTML = names.length ? names.map(function(t){
-    return '<div style="display:flex;justify-content:space-between;padding:8px 12px;margin:4px 0;background:var(--surface2);border-radius:8px"><span style="font-weight:600">'+esc(t)+'</span><b style="color:#c8860a">'+byTech[t]+'</b></div>';
-  }).join('') : '<div style="color:var(--text3)">No devices with technicians.</div>';
+
+  DS_BYTECH = {};
+  tech.forEach(function(d){ var t=d.technician||'(unknown)'; (DS_BYTECH[t]=DS_BYTECH[t]||[]).push(d); });
+  var names=Object.keys(DS_BYTECH).sort(function(a,b){return DS_BYTECH[b].length-DS_BYTECH[a].length;});
+
+  if(!names.length){ document.getElementById('ds-techgroups').innerHTML='<div style="color:var(--text3)">No devices with technicians.</div>'; return; }
+
+  document.getElementById('ds-techgroups').innerHTML = names.map(function(t, gi){
+    var list = DS_BYTECH[t];
+    // try to match server tech-name to a CRM technician
+    var matched = _techs.find(function(u){ return (u.name||'').trim().toLowerCase() === t.trim().toLowerCase(); });
+    var matchNote = matched ? '' : ' <span style="color:#c0392b;font-size:11px">(no CRM match — will save by name)</span>';
+    var rows = list.map(function(d, i){
+      return '<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-bottom:1px solid var(--border);font-size:12px;cursor:pointer">' +
+        '<input type="checkbox" class="ds-chk-'+gi+'" data-imei="'+esc(d.imei)+'" data-name="'+esc(d.device_name)+'" data-server="'+esc(d.server)+'" checked>' +
+        '<span style="flex:1">'+esc(d.device_name)+'</span>' +
+        '<span style="font-family:monospace;color:var(--accent)">'+(d.imei?esc(d.imei):'<span style="color:#c0392b">no imei</span>')+'</span>' +
+        '<span style="color:var(--text3);font-size:10px">'+esc((d.server||'').replace('bharatgps.',''))+'</span>' +
+      '</label>';
+    }).join('');
+    return '<div style="border:1px solid var(--border);border-radius:10px;margin:8px 0;overflow:hidden">' +
+      '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2)">' +
+        '<b style="flex:1">'+esc(t)+matchNote+'</b>' +
+        '<span style="color:#c8860a;font-weight:800">'+list.length+' devices</span>' +
+        '<button class="btn btn-primary" style="padding:6px 12px;font-size:12px" onclick="dsAssign('+gi+',\''+esc(t).replace(/'/g,"\\'")+'\','+(matched?matched.id:'null')+')">Assign selected →</button>' +
+      '</div>' +
+      '<div style="padding:4px 6px">' +
+        '<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;font-size:11px;color:var(--text3);cursor:pointer"><input type="checkbox" checked onchange="dsToggleAll('+gi+',this.checked)"> Select all</label>' +
+        rows +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function dsToggleAll(gi, on){
+  document.querySelectorAll('.ds-chk-'+gi).forEach(function(c){ c.checked = on; });
+}
+
+function dsAssign(gi, techName, techId){
+  var chks = Array.prototype.slice.call(document.querySelectorAll('.ds-chk-'+gi));
+  var picked = chks.filter(function(c){ return c.checked; }).map(function(c){
+    return { imei:c.getAttribute('data-imei'), device_name:c.getAttribute('data-name'), server:c.getAttribute('data-server') };
+  }).filter(function(d){ return d.imei; });
+  if(!picked.length){ showToast('❌ No devices selected (or selected ones have no IMEI)'); return; }
+  if(!confirm('Assign '+picked.length+' device(s) to '+techName+'?')) return;
+  invApiCall('dev_assign', null, 'POST', { devices:picked, technician:techName, technician_id:techId }).then(function(res){
+    if(res.error){ showToast('❌ '+res.error); return; }
+    showToast('✅ Assigned '+res.assigned+' device(s) to '+techName);
+  });
 }
 
 function dsLoadImeiFile(){
