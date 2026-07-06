@@ -1181,31 +1181,54 @@ function dsRenderSummary(merged){
   if(!names.length){ document.getElementById('ds-techgroups').innerHTML='<div style="color:var(--text3)">No devices with technicians.</div>'; return; }
 
   document.getElementById('ds-techgroups').innerHTML = names.map(function(t, gi){
-    var list = DS_BYTECH[t];
+    var list = DS_BYTECH[t].slice();
+    // sort state per group
+    var sortKey = DS_SORT[gi] ? DS_SORT[gi].key : 'device_name';
+    var sortDir = DS_SORT[gi] ? DS_SORT[gi].dir : 1;
+    list.sort(function(a,b){
+      var va=(a[sortKey]||'').toString().toLowerCase(), vb=(b[sortKey]||'').toString().toLowerCase();
+      if(sortKey==='imei'){ va=(a.imei||'').replace(/\D/g,''); vb=(b.imei||'').replace(/\D/g,''); return (va.length-vb.length || va.localeCompare(vb))*sortDir; }
+      return va.localeCompare(vb)*sortDir;
+    });
     // try to match server tech-name to a CRM technician
     var matched = _techs.find(function(u){ return (u.name||'').trim().toLowerCase() === t.trim().toLowerCase(); });
-    var matchNote = matched ? '' : ' <span style="color:#c0392b;font-size:11px">(no CRM match — will save by name)</span>';
     var assignedCount = 0, availCount = 0;
-    var rows = list.map(function(d, i){
+    var bodyRows = list.map(function(d){
       var isAssigned = !!DS_ASSIGNED[String(d.imei).replace(/\D/g,'')];
       if(isAssigned){ assignedCount++;
-        return '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-bottom:1px solid var(--border);font-size:12px;opacity:.55;background:rgba(0,0,0,.02)">' +
-          '<span style="width:16px;text-align:center">✓</span>' +
-          '<span style="flex:1">'+esc(d.device_name)+'</span>' +
-          '<span style="min-width:60px;font-size:11px;font-weight:700;color:#137272">'+esc(d.model||'—')+'</span>' +
-          '<span style="font-family:monospace;color:var(--text3)">'+esc(d.imei)+'</span>' +
-          '<span style="font-size:10px;color:#0E7C4A;font-weight:700;min-width:90px;text-align:right">already assigned</span>' +
-        '</div>';
+        return '<tr style="opacity:.5;background:rgba(0,0,0,.02)">' +
+          '<td style="text-align:center;width:32px">✓</td>' +
+          '<td>'+esc(d.device_name)+'</td>' +
+          '<td style="font-weight:700;color:#137272">'+esc(d.model||'—')+'</td>' +
+          '<td style="font-family:monospace;color:var(--text3)">'+esc(d.imei)+'</td>' +
+          '<td style="color:var(--text3);font-size:11px">'+esc((d.server||'').replace('bharatgps.',''))+'</td>' +
+          '<td style="text-align:right;font-size:10px;color:#0E7C4A;font-weight:700">assigned</td>' +
+        '</tr>';
       }
       availCount++;
-      return '<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-bottom:1px solid var(--border);font-size:12px;cursor:pointer">' +
-        '<input type="checkbox" class="ds-chk-'+gi+'" data-imei="'+esc(d.imei)+'" data-name="'+esc(d.device_name)+'" data-server="'+esc(d.server)+'" data-model="'+esc(d.model||'')+'">' +
-        '<span style="flex:1">'+esc(d.device_name)+'</span>' +
-        '<span style="min-width:60px;font-size:11px;font-weight:700;color:#137272">'+esc(d.model||'—')+'</span>' +
-        '<span style="font-family:monospace;color:var(--accent)">'+(d.imei?esc(d.imei):'<span style="color:#c0392b">no imei</span>')+'</span>' +
-        '<span style="color:var(--text3);font-size:10px">'+esc((d.server||'').replace('bharatgps.',''))+'</span>' +
-      '</label>';
+      return '<tr>' +
+        '<td style="text-align:center;width:32px"><input type="checkbox" class="ds-chk-'+gi+'" data-imei="'+esc(d.imei)+'" data-name="'+esc(d.device_name)+'" data-server="'+esc(d.server)+'" data-model="'+esc(d.model||'')+'"></td>' +
+        '<td>'+esc(d.device_name)+'</td>' +
+        '<td style="font-weight:700;color:#137272">'+esc(d.model||'—')+'</td>' +
+        '<td style="font-family:monospace;color:var(--accent)">'+(d.imei?esc(d.imei):'<span style="color:#c0392b">no imei</span>')+'</td>' +
+        '<td style="color:var(--text3);font-size:11px">'+esc((d.server||'').replace('bharatgps.',''))+'</td>' +
+        '<td></td>' +
+      '</tr>';
     }).join('');
+    function sortArrow(k){ return (DS_SORT[gi] && DS_SORT[gi].key===k) ? (DS_SORT[gi].dir===1?' ▲':' ▼') : ''; }
+    var thStyle = 'style="text-align:left;padding:6px 8px;font-size:11px;color:var(--text3);cursor:pointer;user-select:none;border-bottom:2px solid var(--border);background:var(--surface2)"';
+    var rows =
+      '<table class="tbl" style="width:100%;border-collapse:collapse;font-size:12px">' +
+        '<thead><tr>' +
+          '<th style="width:32px;border-bottom:2px solid var(--border);background:var(--surface2)"></th>' +
+          '<th '+thStyle+' onclick="dsSortGroup('+gi+',\'device_name\')">Device Name'+sortArrow('device_name')+'</th>' +
+          '<th '+thStyle+' onclick="dsSortGroup('+gi+',\'model\')">Model'+sortArrow('model')+'</th>' +
+          '<th '+thStyle+' onclick="dsSortGroup('+gi+',\'imei\')">IMEI'+sortArrow('imei')+'</th>' +
+          '<th '+thStyle+' onclick="dsSortGroup('+gi+',\'server\')">Server'+sortArrow('server')+'</th>' +
+          '<th style="border-bottom:2px solid var(--border);background:var(--surface2)"></th>' +
+        '</tr></thead>' +
+        '<tbody>'+bodyRows+'</tbody>' +
+      '</table>';
     var headCount = availCount + ' available' + (assignedCount ? ' · '+assignedCount+' assigned' : '');
     // technician picker — admin chooses the real CRM technician (server spelling may differ)
     var opts = '<option value="">— choose technician —</option>' + _techs.map(function(u){
@@ -1213,10 +1236,12 @@ function dsRenderSummary(merged){
       return '<option value="'+u.id+'"'+sel+'>'+esc(u.name)+'</option>';
     }).join('');
     var picker = '<select id="ds-tech-sel-'+gi+'" class="form-input" style="padding:6px 8px;font-size:12px;max-width:180px">'+opts+'</select>';
+    var bodyOpen = DS_OPEN[gi] ? 'block' : 'none';
+    var arrowChar = DS_OPEN[gi] ? '▾' : '▸';
     return '<div style="border:1px solid var(--border);border-radius:10px;margin:8px 0;overflow:hidden">' +
       '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2);flex-wrap:wrap">' +
         '<div onclick="dsToggleGroup('+gi+')" style="display:flex;align-items:center;gap:8px;flex:1;min-width:140px;cursor:pointer">' +
-          '<span id="ds-arrow-'+gi+'" style="font-size:12px;color:var(--text3);transition:transform .15s">▸</span>' +
+          '<span id="ds-arrow-'+gi+'" style="font-size:12px;color:var(--text3)">'+arrowChar+'</span>' +
           '<b>'+esc(t)+' <span style="color:var(--text3);font-weight:600;font-size:11px">(server)</span></b>' +
           '<span style="color:#c8860a;font-weight:800;font-size:12px;margin-left:6px">'+headCount+'</span>' +
         '</div>' +
@@ -1224,12 +1249,22 @@ function dsRenderSummary(merged){
         picker +
         '<button class="btn btn-primary" style="padding:6px 12px;font-size:12px" onclick="dsAssign('+gi+')">Assign selected →</button>' +
       '</div>' +
-      '<div id="ds-body-'+gi+'" style="padding:4px 6px;display:none">' +
-        '<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;font-size:11px;color:var(--text3);cursor:pointer"><input type="checkbox" onchange="dsToggleAll('+gi+',this.checked)"> Select all available</label>' +
+      '<div id="ds-body-'+gi+'" style="padding:6px;display:'+bodyOpen+'">' +
+        '<label style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:11px;color:var(--text3);cursor:pointer"><input type="checkbox" onchange="dsToggleAll('+gi+',this.checked)"> Select all available</label>' +
         rows +
       '</div>' +
     '</div>';
   }).join('');
+}
+
+var DS_SORT = {};   // gi -> {key,dir}
+var DS_OPEN = {};   // gi -> bool (keep open state across re-renders)
+function dsSortGroup(gi, key){
+  var cur = DS_SORT[gi];
+  if(cur && cur.key===key){ DS_SORT[gi] = {key:key, dir: -cur.dir}; }
+  else { DS_SORT[gi] = {key:key, dir:1}; }
+  DS_OPEN[gi] = true;   // keep it open while sorting
+  dsRenderSummary(DS_MERGED);
 }
 
 function dsToggleGroup(gi){
@@ -1238,6 +1273,7 @@ function dsToggleGroup(gi){
   if(!body) return;
   var open = body.style.display !== 'none';
   body.style.display = open ? 'none' : 'block';
+  DS_OPEN[gi] = !open;
   if(arrow) arrow.textContent = open ? '▸' : '▾';
 }
 
