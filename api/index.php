@@ -2253,11 +2253,29 @@ case 'pur_mark_received':
     $id          = intval($body['id']??0);
     $recDate     = trim($body['received_date']??date('Y-m-d'));
     $recQty      = intval($body['received_qty']??0);
+    $imeis       = $body['imeis'] ?? [];
     if(!$id||$recQty<1){ echo json_encode(['error'=>'ID and received qty required']); break; }
+    if(!is_array($imeis) || count($imeis) < 1){ echo json_encode(['error'=>'IMEI list is required']); break; }
+    // normalize + dedupe IMEIs (digits only)
+    $normImeis = [];
+    foreach($imeis as $raw){ $x = preg_replace('/\D/','',(string)$raw); if($x!==''){ $normImeis[$x]=1; } }
+    $normImeis = array_keys($normImeis);
+    if(count($normImeis) !== $recQty){
+        echo json_encode(['error'=>'IMEI count ('.count($normImeis).') must match received qty ('.$recQty.')']); break;
+    }
     try {
         $pur = $pdo->prepare("SELECT * FROM purchases WHERE id=?"); $pur->execute([$id]); $p = $pur->fetch();
         if(!$p){ echo json_encode(['error'=>'Purchase not found']); break; }
         if($p['stock_added']){ echo json_encode(['error'=>'Stock already added for this purchase']); break; }
+        // Save received IMEIs (master list), tagged with purchase + item
+        _devEnsureTables($pdo);
+        // add columns to received_devices if missing (purchase link)
+        try { $pdo->exec("ALTER TABLE received_devices ADD COLUMN purchase_id INT DEFAULT NULL"); } catch(Exception $e){}
+        try { $pdo->exec("ALTER TABLE received_devices ADD COLUMN item_id INT DEFAULT NULL"); } catch(Exception $e){}
+        $insImei = $pdo->prepare("INSERT INTO received_devices (imei,purchase_id,item_id,note) VALUES (?,?,?,?)
+                                  ON DUPLICATE KEY UPDATE purchase_id=VALUES(purchase_id),item_id=VALUES(item_id)");
+        $noteTxt = 'PO#'.$id.' '.$p['dealer_name'];
+        foreach($normImeis as $im){ $insImei->execute([$im,$id,$p['item_id'],substr($noteTxt,0,190)]); }
         // Add stock movement
         $ref = 'Purchase received: '.$p['dealer_name'].($p['invoice_no']?' INV#'.$p['invoice_no']:'');
         $pdo->prepare("INSERT INTO stock_movements (item_id,move_type,qty,ref_note,move_date,done_by) VALUES (?,?,?,?,?,?)")
@@ -2265,7 +2283,7 @@ case 'pur_mark_received':
         // Mark purchase as received
         $pdo->prepare("UPDATE purchases SET stock_added=1, received_date=?, received_qty=?, received_by=? WHERE id=?")
             ->execute([$recDate,$recQty,$cu['name'],$id]);
-        echo json_encode(['success'=>true]);
+        echo json_encode(['success'=>true,'imeis_saved'=>count($normImeis)]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
@@ -2558,6 +2576,25 @@ case 'dev_match_report':
             'with_tech'=>$withTech,
             'by_tech'=>$byTech
         ]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'dev_received_list':
+    if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        _devEnsureTables($pdo);
+        try { $pdo->exec("ALTER TABLE received_devices ADD COLUMN purchase_id INT DEFAULT NULL"); } catch(Exception $e){}
+        try { $pdo->exec("ALTER TABLE received_devices ADD COLUMN item_id INT DEFAULT NULL"); } catch(Exception $e){}
+        $recv = $pdo->query("SELECT r.imei, r.received_at, r.note, r.purchase_id FROM received_devices r ORDER BY r.received_at DESC, r.id DESC")->fetchAll(PDO::FETCH_ASSOC);
+        // status maps
+        $onServer = []; foreach($pdo->query("SELECT imei FROM server_devices")->fetchAll(PDO::FETCH_COLUMN) as $i){ $onServer[$i]=1; }
+        $assigned = []; foreach($pdo->query("SELECT imei,technician FROM device_assignments WHERE status='with_tech'")->fetchAll(PDO::FETCH_ASSOC) as $a){ $assigned[$a['imei']]=$a['technician']; }
+        foreach($recv as &$r){
+            if(isset($assigned[$r['imei']])){ $r['status']='assigned'; $r['technician']=$assigned[$r['imei']]; }
+            elseif(isset($onServer[$r['imei']])){ $r['status']='on_server'; }
+            else { $r['status']='not_uploaded'; }
+        } unset($r);
+        echo json_encode(['success'=>true,'received'=>$recv,'total'=>count($recv)]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
