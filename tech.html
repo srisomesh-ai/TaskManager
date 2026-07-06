@@ -1802,7 +1802,7 @@ function renderActivityLog(activities){
   authToken = token;
 
   // Try to restore from localStorage immediately while verifying
-  const savedUser = localStorage.getItem('bgps_user');
+  const savedUser = localStorage.getItem('bgps_tech_user');
   if(savedUser){
     try{
       currentUser = JSON.parse(savedUser);
@@ -1816,13 +1816,13 @@ function renderActivityLog(activities){
     const res = await api('verify_token');
     if(res && res.valid){
       currentUser = res.user;
-      localStorage.setItem('bgps_user', JSON.stringify(currentUser));
+      localStorage.setItem('bgps_tech_user', JSON.stringify(currentUser));
       // If app wasn't shown yet (no savedUser), show now
       if(!savedUser) startApp();
     } else if(res && res.error){
       // Server explicitly rejected — logout
-      localStorage.removeItem('bgps_token');
-      localStorage.removeItem('bgps_user');
+      localStorage.removeItem('bgps_tech_token');
+      localStorage.removeItem('bgps_tech_user');
       authToken = ''; currentUser = null;
       document.getElementById('app').classList.remove('show');
       document.getElementById('login-screen').style.display='flex';
