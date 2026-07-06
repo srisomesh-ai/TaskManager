@@ -46,22 +46,14 @@
   <div class="sub">Pulls all devices from the GPS server and groups <b>pending</b> devices by technician. The device <b>NAME</b> field holds the pattern <code>number-TechnicianName</code> (the number is part of the name text, not the IMEI). Nothing here touches your live software.</div>
 
   <div class="card">
-    <div class="row">
-      <div style="flex:2">
-        <label>API Base URL</label>
-        <input id="base" value="https://bharatgps.in">
-      </div>
-      <div style="flex:3">
-        <label>User API Hash</label>
-        <input id="hash" value="$2y$10$OjQHmpMaK9V8X2.hX5lUcOs7Bzou3.Raa42wovvnN9i8m4ZebR71u">
-      </div>
-    </div>
+    <div style="font-size:13px;font-weight:700;margin-bottom:10px">Servers (3) — edit any hash if a server shows "Wrong credentials"</div>
+    <div id="srv-rows"></div>
     <div class="row" style="margin-top:12px">
       <div style="flex:2">
         <label>Fetch mode</label>
         <select id="mode">
+          <option value="proxy">Via PHP proxy (recommended)</option>
           <option value="direct">Direct (file:// or hosted)</option>
-          <option value="proxy">Via PHP proxy (if CORS blocked)</option>
         </select>
       </div>
       <div style="flex:3">
@@ -70,9 +62,10 @@
       </div>
       <div style="flex:0">
         <label>&nbsp;</label>
-        <button id="go" onclick="pull()">Pull Devices</button>
+        <button id="go" onclick="pull()">Pull All Servers</button>
       </div>
     </div>
+    <div id="srv-status" style="margin-top:12px"></div>
     <div id="err" class="err" style="margin-top:10px"></div>
   </div>
 
@@ -113,7 +106,7 @@
       <input class="search" id="search" placeholder="🔍 Filter by IMEI, name or technician…" oninput="renderAll()" style="margin-bottom:10px">
       <div class="scroll">
         <table>
-          <thead><tr><th>IMEI</th><th>Server Name</th><th>Status</th><th>Technician</th><th>Online</th></tr></thead>
+          <thead><tr><th>IMEI</th><th>Server Name</th><th>Server</th><th>Status</th><th>Technician</th></tr></thead>
           <tbody id="tbody"></tbody>
         </table>
       </div>
@@ -152,50 +145,82 @@ function parseDevice(d){
            pending:(status!=='installed'), tech:tech, raw:d };
 }
 
+// ── 3 SERVERS (S4 bharatgps.org is closed) ──
+var SERVERS = [
+  { id:1, name:'S1 bharatgps.com',   base:'https://bharatgps.com',    hash:'$2y$10$lU3Q1IfV061BfD40Tgdw5.4iRSkz6KimWDczT7gPR1WJhtLFCk61u' },
+  { id:2, name:'S2 bharatgps.in',    base:'https://bharatgps.in',     hash:'$2y$10$OjQHmpMaK9V8X2.hX5lUcOs7Bzou3.Raa42wovvnN9i8m4ZebR71u' },
+  { id:3, name:'S3 bharatgps.school',base:'https://bharatgps.school', hash:'$2y$10$E8LGPOjRiR3sgSvyLD/.CuYyoWOB4lM1oUdVDiP860FodckxIrV7O' },
+];
+
+function renderSrvRows(){
+  var html = SERVERS.map(function(s,i){
+    return '<div class="row" style="margin-bottom:8px">' +
+      '<div style="flex:1"><label>' + s.name + '</label><input value="' + s.base + '" disabled style="opacity:.6"></div>' +
+      '<div style="flex:3"><label>API Hash</label><input id="hash-' + s.id + '" value="' + esc(s.hash) + '"></div>' +
+      '</div>';
+  }).join('');
+  document.getElementById('srv-rows').innerHTML = html;
+}
+
 function pull(){
-  var base = document.getElementById('base').value.trim().replace(/\/+$/,'');
-  var hash = document.getElementById('hash').value.trim();
   var mode = document.getElementById('mode').value;
   var proxy = document.getElementById('proxy').value.trim();
   var errEl = document.getElementById('err');
   var btn = document.getElementById('go');
+  var statusEl = document.getElementById('srv-status');
   errEl.textContent = '';
-  if(!base || !hash){ errEl.textContent = 'Base URL and hash are required.'; return; }
-
-  var url;
-  if(mode === 'proxy'){
-    url = proxy + '?base=' + encodeURIComponent(base) + '&hash=' + encodeURIComponent(hash);
-  } else {
-    url = base + '/api/get_devices?user_api_hash=' + encodeURIComponent(hash);
-  }
-
   btn.disabled = true; btn.textContent = 'Pulling…';
-  fetch(url, { cache:'no-store' })
-    .then(function(r){ return r.text(); })
-    .then(function(txt){
-      var data;
-      try { data = JSON.parse(txt); }
-      catch(e){ throw new Error('Response was not JSON. First 300 chars:\n' + txt.slice(0,300)); }
-      // GPSWOX get_devices returns groups: [{ id, title, items:[devices] }] OR a flat array.
-      var devices = [];
-      if(Array.isArray(data)){
-        data.forEach(function(g){
-          if(g && g.items && Array.isArray(g.items)) devices = devices.concat(g.items);
-          else if(g && (g.imei || g.name)) devices.push(g);
-        });
-      } else if(data && data.items){ devices = data.items; }
-      else if(data && data.data){ devices = data.data; }
-      if(!devices.length) throw new Error('No devices found in response. First 300 chars:\n' + txt.slice(0,300));
-      ALL = devices;
-      // Only keep pending devices (number-Name / number-Office).
-      // Installed devices (Name-number) are done — we never pull/keep them.
-      PARSED = devices.map(parseDevice).filter(function(d){ return d.status !== 'installed'; });
-      render();
-    })
-    .catch(function(e){
-      errEl.textContent = e.message + '\n\nIf this is a CORS error, switch "Fetch mode" to "Via PHP proxy" and upload device_proxy.php next to this page.';
-    })
-    .finally(function(){ btn.disabled = false; btn.textContent = 'Pull Devices'; });
+  statusEl.innerHTML = '';
+
+  // read latest hashes from inputs
+  SERVERS.forEach(function(s){ var el=document.getElementById('hash-'+s.id); if(el) s.hash = el.value.trim(); });
+
+  var jobs = SERVERS.map(function(s){
+    var url = (mode==='proxy')
+      ? proxy + '?base=' + encodeURIComponent(s.base) + '&hash=' + encodeURIComponent(s.hash)
+      : s.base + '/api/get_devices?user_api_hash=' + encodeURIComponent(s.hash);
+    return fetch(url, { cache:'no-store' })
+      .then(function(r){ return r.text(); })
+      .then(function(txt){
+        var data;
+        try { data = JSON.parse(txt); }
+        catch(e){ return { srv:s, ok:false, msg:'Not JSON: ' + txt.slice(0,80), devices:[] }; }
+        // auth failure shape: {status:0, message:"Wrong credentials."}
+        if(data && data.status === 0){ return { srv:s, ok:false, msg:(data.message||'error'), devices:[] }; }
+        var devices = [];
+        if(Array.isArray(data)){
+          data.forEach(function(g){
+            if(g && g.items && Array.isArray(g.items)) devices = devices.concat(g.items);
+            else if(g && (g.imei || g.name)) devices.push(g);
+          });
+        } else if(data && data.items){ devices = data.items; }
+        else if(data && data.data){ devices = data.data; }
+        return { srv:s, ok:true, msg:devices.length + ' devices', devices:devices };
+      })
+      .catch(function(e){ return { srv:s, ok:false, msg:e.message.slice(0,80), devices:[] }; });
+  });
+
+  Promise.all(jobs).then(function(results){
+    var merged = [];
+    var statusHtml = results.map(function(r){
+      r.devices.forEach(function(dev){
+        var p = parseDevice(dev);
+        p.server = r.srv.name;
+        p.serverId = r.srv.id;
+        if(p.status !== 'installed') merged.push(p);   // drop installed
+      });
+      var color = r.ok ? 'var(--grn)' : 'var(--red)';
+      var icon = r.ok ? '✓' : '✗';
+      return '<div style="font-size:12px;padding:4px 0;color:' + color + '">' + icon + ' <b>' + esc(r.srv.name) + '</b> — ' + esc(r.msg) + '</div>';
+    }).join('');
+    statusEl.innerHTML = statusHtml;
+
+    PARSED = merged;
+    if(!PARSED.length){
+      errEl.textContent = 'No pending devices pulled. Check server auth status above.';
+    }
+    render();
+  }).finally(function(){ btn.disabled = false; btn.textContent = 'Pull All Servers'; });
 }
 
 function render(){
@@ -246,9 +271,9 @@ function renderAll(){
     return '<tr>' +
       '<td class="imei">' + esc(d.imei) + '</td>' +
       '<td>' + esc(d.name) + '</td>' +
-      '<td>' + (d.status==='office' ? '<span class="pill" style="background:rgba(96,165,250,.15);color:#60a5fa">Office</span>' : d.status==='tech' ? '<span class="pill pill-pend">With Tech</span>' : '<span class="pill pill-inst">Installed</span>') + '</td>' +
-      '<td>' + (d.status==='tech' ? '<span class="tech">' + esc(d.tech) + '</span>' : d.status==='office' ? '<span style="color:#60a5fa">Office</span>' : '<span style="color:var(--mut)">—</span>') + '</td>' +
-      '<td class="' + (d.online?'on':'off') + '">' + (d.online?'● online':'○ offline') + '</td>' +
+      '<td style="color:var(--mut);font-size:11px">' + esc(d.server||'') + '</td>' +
+      '<td>' + (d.status==='office' ? '<span class="pill" style="background:rgba(96,165,250,.15);color:#60a5fa">Office</span>' : '<span class="pill pill-pend">With Tech</span>') + '</td>' +
+      '<td>' + (d.status==='tech' ? '<span class="tech">' + esc(d.tech) + '</span>' : '<span style="color:#60a5fa">Office</span>') + '</td>' +
       '</tr>';
   }).join('');
   document.getElementById('tbody').innerHTML = html || '<tr><td colspan="5" style="color:var(--mut);text-align:center;padding:20px">No matches</td></tr>';
@@ -290,6 +315,8 @@ function renderAssign(){
 }
 
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+renderSrvRows();
 </script>
 </body>
 </html>
