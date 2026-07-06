@@ -181,6 +181,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
   <div class="nav-item" onclick="showPage('devicesync')" id="nav-devicesync">
     <span class="nav-icon">🛰️</span> Device Sync
   </div>
+  <div class="nav-item" onclick="showPage('receivedimeis')" id="nav-receivedimeis">
+    <span class="nav-icon">📋</span> Received IMEIs
+  </div>
 
   <div class="nav-sec">Items</div>
   <div class="nav-item" onclick="window.parent.showPage && window.parent.showPage('price-list') || window.open('index.html','_parent')" style="color:rgba(255,255,255,.5);font-size:12px">
@@ -389,16 +392,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
       </div>
     </div>
 
-    <!-- received IMEIs -->
-    <div class="table-card" style="padding:16px;margin-bottom:14px">
-      <div style="font-size:14px;font-weight:700;margin-bottom:10px">📥 Upload received IMEIs (master list)</div>
-      <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Paste IMEIs (one per line) or upload a single-column .csv / .txt / .xlsx</div>
-      <textarea id="ds-imeiText" class="form-input" style="min-height:90px;width:100%;font-family:monospace" placeholder="864000000000001&#10;864000000000002"></textarea>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;align-items:center">
-        <input type="file" id="ds-imeiFile" accept=".csv,.txt,.xlsx,.xls" onchange="dsLoadImeiFile()" style="max-width:260px">
-        <button class="btn btn-primary" onclick="dsUploadReceived()">Save Received IMEIs</button>
-        <span id="ds-recv-msg" style="font-size:13px"></span>
-      </div>
+    <!-- received IMEIs now come from Purchases → Receive -->
+    <div class="table-card" style="padding:14px 16px;margin-bottom:14px;background:var(--surface2)">
+      <div style="font-size:13px;color:var(--text3)">📥 Received IMEIs are now uploaded in <b>Purchases → Receive</b> (IMEI count must match received qty). View them in the <b>Received IMEIs</b> tab.</div>
+    </div>
+    <div style="display:none">
+      <textarea id="ds-imeiText"></textarea>
+      <input type="file" id="ds-imeiFile" accept=".csv,.txt,.xlsx,.xls" onchange="dsLoadImeiFile()">
+      <button onclick="dsUploadReceived()">Save Received IMEIs</button>
+      <span id="ds-recv-msg"></span>
     </div>
 
     <!-- match report -->
@@ -419,6 +421,32 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         <button class="btn" style="background:#c0392b;color:#fff" onclick="dsWipe('received')">Delete Received IMEIs</button>
         <button class="btn" style="background:#c0392b;color:#fff" onclick="dsWipe('all')">Delete Everything</button>
         <span id="ds-del-msg" style="font-size:13px"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── RECEIVED IMEIs ── -->
+  <div class="page" id="page-receivedimeis">
+    <div class="pg-header">
+      <div>
+        <div class="pg-title">📋 Received IMEIs</div>
+        <div class="pg-sub">Master list of IMEIs received via purchases. Status shows whether each is on a server or assigned to a technician.</div>
+      </div>
+      <div class="pg-actions">
+        <button class="btn btn-primary" onclick="loadReceivedImeis()">🔄 Refresh</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px">
+      <div class="stat-card"><div style="font-size:24px;font-weight:900;color:var(--accent)" id="ri-total">0</div><div style="font-size:12px;color:var(--text3)">Total received</div></div>
+      <div class="stat-card"><div style="font-size:24px;font-weight:900;color:var(--blue)" id="ri-server">0</div><div style="font-size:12px;color:var(--text3)">On server</div></div>
+      <div class="stat-card"><div style="font-size:24px;font-weight:900;color:#c8860a" id="ri-assigned">0</div><div style="font-size:12px;color:var(--text3)">Assigned to tech</div></div>
+      <div class="stat-card"><div style="font-size:24px;font-weight:900;color:#c0392b" id="ri-pending">0</div><div style="font-size:12px;color:var(--text3)">Not on server</div></div>
+    </div>
+    <div class="table-card" style="padding:12px 14px">
+      <input class="finput" id="ri-search" placeholder="🔍 Search IMEI…" oninput="renderReceivedImeis()" style="margin-bottom:10px;max-width:280px">
+      <div style="max-height:55vh;overflow:auto">
+        <table class="tbl"><thead><tr><th>IMEI</th><th>Status</th><th>Technician</th><th>Source</th><th>Received</th></tr></thead>
+        <tbody id="ri-body"><tr><td colspan="5" style="text-align:center;color:var(--text3);padding:20px">Click Refresh to load.</td></tr></tbody></table>
       </div>
     </div>
   </div>
@@ -916,6 +944,7 @@ function showPage(name){
   if(name === 'movement') renderMovements();
   if(name === 'items') renderItemMaster();
   if(name === 'devicesync') dsInit();
+  if(name === 'receivedimeis') loadReceivedImeis();
 }
 
 // ── HELPERS ───────────────────────────────────────────────────────────
@@ -1276,6 +1305,42 @@ function dsWipe(which){
     if(which==='server'||which==='all'){ document.getElementById('ds-summary').style.display='none'; }
     document.getElementById('ds-report').innerHTML='Run the report to compare received IMEIs against servers.';
   });
+}
+
+// ── RECEIVED IMEIs LIST ──
+var RI_DATA = [];
+function loadReceivedImeis(){
+  var body=document.getElementById('ri-body');
+  if(body) body.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:20px">Loading…</td></tr>';
+  invApiCall('dev_received_list', null, 'POST', {}).then(function(res){
+    if(res.error){ if(body) body.innerHTML='<tr><td colspan="5" style="color:#c0392b;padding:16px">'+esc(res.error)+'</td></tr>'; return; }
+    RI_DATA = res.received||[];
+    var srv=0, asg=0, pend=0;
+    RI_DATA.forEach(function(r){ if(r.status==='assigned') asg++; else if(r.status==='on_server') srv++; else pend++; });
+    document.getElementById('ri-total').textContent=RI_DATA.length;
+    document.getElementById('ri-server').textContent=srv+asg; // on server includes assigned
+    document.getElementById('ri-assigned').textContent=asg;
+    document.getElementById('ri-pending').textContent=pend;
+    renderReceivedImeis();
+  });
+}
+function renderReceivedImeis(){
+  var q=(document.getElementById('ri-search').value||'').replace(/\D/g,'');
+  var rows=RI_DATA.filter(function(r){ return !q || String(r.imei).indexOf(q)!==-1; });
+  var body=document.getElementById('ri-body');
+  if(!rows.length){ body.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:20px">No IMEIs.</td></tr>'; return; }
+  body.innerHTML = rows.map(function(r){
+    var badge = r.status==='assigned' ? '<span style="background:rgba(200,134,10,.15);color:#c8860a;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">Assigned</span>'
+      : r.status==='on_server' ? '<span style="background:rgba(46,134,222,.15);color:var(--blue);padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">On server</span>'
+      : '<span style="background:rgba(192,57,43,.12);color:#c0392b;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">Not on server</span>';
+    return '<tr>' +
+      '<td style="font-family:monospace">'+esc(r.imei)+'</td>' +
+      '<td>'+badge+'</td>' +
+      '<td>'+esc(r.technician||'—')+'</td>' +
+      '<td style="font-size:11px;color:var(--text3)">'+esc(r.note||'')+'</td>' +
+      '<td style="font-size:11px;color:var(--text3)">'+esc((r.received_at||'').slice(0,10))+'</td>' +
+    '</tr>';
+  }).join('');
 }
 </script>
 <!-- STOCK RESET CONFIRM MODAL -->
