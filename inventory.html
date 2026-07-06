@@ -1158,11 +1158,19 @@ function dsRenderSummary(merged){
       '</label>';
     }).join('');
     var headCount = availCount + ' available' + (assignedCount ? ' · '+assignedCount+' assigned' : '');
+    // technician picker — admin chooses the real CRM technician (server spelling may differ)
+    var opts = '<option value="">— choose technician —</option>' + _techs.map(function(u){
+      var sel = (matched && matched.id===u.id) ? ' selected' : '';
+      return '<option value="'+u.id+'"'+sel+'>'+esc(u.name)+'</option>';
+    }).join('');
+    var picker = '<select id="ds-tech-sel-'+gi+'" class="form-input" style="padding:6px 8px;font-size:12px;max-width:180px">'+opts+'</select>';
     return '<div style="border:1px solid var(--border);border-radius:10px;margin:8px 0;overflow:hidden">' +
-      '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2)">' +
-        '<b style="flex:1">'+esc(t)+matchNote+'</b>' +
+      '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2);flex-wrap:wrap">' +
+        '<b style="flex:1;min-width:140px">'+esc(t)+' <span style="color:var(--text3);font-weight:600;font-size:11px">(server name)</span></b>' +
         '<span style="color:#c8860a;font-weight:800;font-size:12px">'+headCount+'</span>' +
-        '<button class="btn btn-primary" style="padding:6px 12px;font-size:12px" onclick="dsAssign('+gi+',\''+esc(t).replace(/'/g,"\\'")+'\','+(matched?matched.id:'null')+')">Assign selected → '+esc(t)+'</button>' +
+        '<span style="font-size:11px;color:var(--text3)">Assign to:</span>' +
+        picker +
+        '<button class="btn btn-primary" style="padding:6px 12px;font-size:12px" onclick="dsAssign('+gi+')">Assign selected →</button>' +
       '</div>' +
       '<div style="padding:4px 6px">' +
         '<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;font-size:11px;color:var(--text3);cursor:pointer"><input type="checkbox" onchange="dsToggleAll('+gi+',this.checked)"> Select all available</label>' +
@@ -1176,17 +1184,20 @@ function dsToggleAll(gi, on){
   document.querySelectorAll('.ds-chk-'+gi).forEach(function(c){ c.checked = on; });
 }
 
-function dsAssign(gi, techName, techId){
+function dsAssign(gi){
+  var sel = document.getElementById('ds-tech-sel-'+gi);
+  var techId = sel ? sel.value : '';
+  var techName = sel && sel.selectedIndex>=0 ? sel.options[sel.selectedIndex].text : '';
+  if(!techId){ showToast('❌ Choose a technician from the dropdown first'); return; }
   var chks = Array.prototype.slice.call(document.querySelectorAll('.ds-chk-'+gi));
   var picked = chks.filter(function(c){ return c.checked; }).map(function(c){
     return { imei:c.getAttribute('data-imei'), device_name:c.getAttribute('data-name'), server:c.getAttribute('data-server'), model:c.getAttribute('data-model')||'' };
   }).filter(function(d){ return d.imei; });
   if(!picked.length){ showToast('❌ No devices selected (or selected ones have no IMEI)'); return; }
   if(!confirm('Assign '+picked.length+' device(s) to '+techName+'?')) return;
-  invApiCall('dev_assign', null, 'POST', { devices:picked, technician:techName, technician_id:techId }).then(function(res){
+  invApiCall('dev_assign', null, 'POST', { devices:picked, technician:techName, technician_id:parseInt(techId) }).then(function(res){
     if(res.error){ showToast('❌ '+res.error); return; }
     showToast('✅ Assigned '+res.assigned+' device(s) to '+res.technician);
-    // refresh assigned map so they show as "already assigned" and re-render
     dsLoadAssigned(function(){ if(DS_MERGED.length) dsRenderSummary(DS_MERGED); });
   });
 }
