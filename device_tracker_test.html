@@ -79,10 +79,9 @@
   <div id="results" style="display:none">
     <div class="card">
       <div class="stat">
-        <div><b id="s-total">0</b>Total on server</div>
+        <div><b id="s-total">0</b>Pending on server</div>
         <div><b id="s-office" style="color:#60a5fa">0</b>Office stock</div>
         <div><b id="s-pend" style="color:var(--amb)">0</b>With technicians</div>
-        <div><b id="s-inst" style="color:var(--grn)">0</b>Installed</div>
         <div><b id="s-techs">0</b>Technicians holding</div>
       </div>
     </div>
@@ -188,7 +187,9 @@ function pull(){
       else if(data && data.data){ devices = data.data; }
       if(!devices.length) throw new Error('No devices found in response. First 300 chars:\n' + txt.slice(0,300));
       ALL = devices;
-      PARSED = devices.map(parseDevice);
+      // Only keep pending devices (number-Name / number-Office).
+      // Installed devices (Name-number) are done — we never pull/keep them.
+      PARSED = devices.map(parseDevice).filter(function(d){ return d.status !== 'installed'; });
       render();
     })
     .catch(function(e){
@@ -201,11 +202,9 @@ function render(){
   document.getElementById('results').style.display = '';
   var office = PARSED.filter(function(d){ return d.status === 'office'; });
   var pend   = PARSED.filter(function(d){ return d.status === 'tech'; });   // with technicians only
-  var inst   = PARSED.filter(function(d){ return d.status === 'installed'; });
   document.getElementById('s-total').textContent = PARSED.length;
   document.getElementById('s-office').textContent = office.length;
   document.getElementById('s-pend').textContent = pend.length;
-  document.getElementById('s-inst').textContent = inst.length;
 
   // Group with-tech devices by technician (office excluded)
   var byTech = {};
