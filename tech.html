@@ -3375,6 +3375,9 @@ function openTechAttend(taskId){
   _attendTaskQty = parseInt(_detailTask?.device_qty||1);
   _attendSavedDevices = {};
 
+  // Load this technician's assigned devices for the IMEI dropdown
+  loadMyAssignedForAttend();
+
   const amtEl = document.getElementById('attend-amount');
 
   // Task summary
@@ -4043,9 +4046,13 @@ function buildAttendDeviceCard(idx, saved, done){
     </div>
     <div class="dev-card-body">
       <div id="adev-step-search-${idx}">
-        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--accent2);margin-bottom:8px">① Enter IMEI Number</div>
+        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--accent2);margin-bottom:8px">① Select or Enter IMEI</div>
+        <select id="adev-assigned-sel-${idx}" onchange="pickAssignedDevice(${idx})"
+          style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;margin-bottom:8px;outline:none">
+          <option value="">— Select from my devices —</option>
+        </select>
         <div style="display:flex;gap:8px;margin-bottom:8px">
-          <input type="text" id="adev-imei-input-${idx}" placeholder="Enter 15-digit IMEI..."
+          <input type="text" id="adev-imei-input-${idx}" placeholder="…or type 15-digit IMEI"
             style="flex:1;padding:10px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:14px;outline:none;font-family:monospace"
             onkeydown="if(event.key==='Enter') searchIMEI(${idx})">
           <button class="ts-btn ts-btn-primary" onclick="searchIMEI(${idx})" id="adev-search-btn-${idx}">🔍 Search</button>
@@ -4138,15 +4145,60 @@ function resetIMEISearch(idx){
   document.getElementById('adev-search-result-'+idx).innerHTML='';
 }
 
-async function searchIMEI(idx){
+var _myAssignedDevices = [];
+async function loadMyAssignedForAttend(){
+  try {
+    const res = await api('dev_assignments_get');
+    _myAssignedDevices = (res && res.assignments) ? res.assignments : [];
+  } catch(e){ _myAssignedDevices = []; }
+  populateAssignedDropdowns();
+}
+function populateAssignedDropdowns(){
+  // fill every device card's dropdown (skip already-picked IMEIs)
+  const usedImeis = Object.keys(_attendSavedDevices).map(function(k){ return (_attendSavedDevices[k]||{}).imei; }).filter(Boolean);
+  for(let i=1; i<=_attendTaskQty; i++){
+    const sel = document.getElementById('adev-assigned-sel-'+i);
+    if(!sel) continue;
+    const cur = sel.value;
+    let opts = '<option value="">— Select from my devices —</option>';
+    _myAssignedDevices.forEach(function(d){
+      const im = (d.imei||'').replace(/\D/g,'');
+      if(!im) return;
+      if(usedImeis.indexOf(im) !== -1) return; // hide devices already used in this task
+      const label = (d.device_name||'Device') + ' — ' + im + (d.server?(' ('+d.server.replace('bharatgps.','')+')'):'');
+      opts += '<option value="'+im+'" data-server="'+escHtml(d.server||'')+'"'+(cur===im?' selected':'')+'>'+escHtml(label)+'</option>';
+    });
+    sel.innerHTML = opts;
+  }
+}
+function pickAssignedDevice(idx){
+  const sel = document.getElementById('adev-assigned-sel-'+idx);
+  if(!sel || !sel.value) return;
+  const imei = sel.value;
+  const server = sel.options[sel.selectedIndex]?.getAttribute('data-server') || '';
+  const inp = document.getElementById('adev-imei-input-'+idx);
+  if(inp) inp.value = imei;
+  // search directly on that device's own server
+  searchIMEI(idx, server);
+}
+
+async function searchIMEI(idx, onlyServer){
   const imei = document.getElementById('adev-imei-input-'+idx)?.value.trim();
   if(!imei){ alert('Please enter an IMEI number.'); return; }
   const btn=document.getElementById('adev-search-btn-'+idx);
   const res =document.getElementById('adev-search-result-'+idx);
   if(btn){ btn.textContent='Searching…'; btn.disabled=true; }
-  res.innerHTML='<div style="font-size:12px;color:var(--text3);padding:6px 0">🔍 Searching all 4 servers...</div>';
+  // map server base (e.g. https://bharatgps.in) to a server id the proxy understands
+  var serverParam = '';
+  if(onlyServer){
+    var host = onlyServer.replace(/^https?:\/\//,'').replace(/\/.*$/,'');
+    serverParam = '&server=' + encodeURIComponent(host);
+    res.innerHTML='<div style="font-size:12px;color:var(--text3);padding:6px 0">🔍 Searching '+escHtml(host)+'…</div>';
+  } else {
+    res.innerHTML='<div style="font-size:12px;color:var(--text3);padding:6px 0">🔍 Searching servers…</div>';
+  }
   try {
-    const r = await fetch(GPS_PROXY+'?action=find&keyword='+encodeURIComponent(imei),{headers:{'X-Auth-Token':authToken}});
+    const r = await fetch(GPS_PROXY+'?action=find&keyword='+encodeURIComponent(imei)+serverParam,{headers:{'X-Auth-Token':authToken}});
     const data = await r.json();
     if(btn){ btn.textContent='🔍 Search'; btn.disabled=false; }
     if(!data.success){ res.innerHTML=`<div style="color:var(--red);font-size:12px">❌ ${data.error||'Search failed'}</div>`; return; }
