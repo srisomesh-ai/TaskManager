@@ -82,6 +82,18 @@ function _devEnsureTables($pdo){
         note VARCHAR(190) DEFAULT '',
         UNIQUE KEY uq_rimei (imei)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS device_assignments (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        imei VARCHAR(40) NOT NULL,
+        device_name VARCHAR(190) DEFAULT '',
+        server VARCHAR(60) DEFAULT '',
+        technician VARCHAR(120) DEFAULT '',
+        technician_id INT DEFAULT NULL,
+        status VARCHAR(20) DEFAULT 'with_tech',
+        assigned_by VARCHAR(120) DEFAULT '',
+        assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_aimei (imei)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 }
 function _devNorm($imei){ return preg_replace('/\D/', '', (string)$imei); } // digits only
 
@@ -2565,7 +2577,68 @@ case 'dev_delete_all':
         $which = $body['which'] ?? 'all';
         if($which === 'server' || $which === 'all') $pdo->exec("DELETE FROM server_devices");
         if($which === 'received' || $which === 'all') $pdo->exec("DELETE FROM received_devices");
+        if($which === 'assignments' || $which === 'all') $pdo->exec("DELETE FROM device_assignments");
         echo json_encode(['success'=>true,'cleared'=>$which]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'dev_assign':
+    if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    // body.devices = [{imei,device_name,server}], body.technician, body.technician_id
+    try {
+        _devEnsureTables($pdo);
+        $devices = $body['devices'] ?? [];
+        $tech    = trim($body['technician'] ?? '');
+        $techId  = isset($body['technician_id']) ? intval($body['technician_id']) : null;
+        if(!is_array($devices) || !count($devices)){ echo json_encode(['error'=>'No devices provided']); break; }
+        if($tech === ''){ echo json_encode(['error'=>'Technician required']); break; }
+        $ins = $pdo->prepare("INSERT INTO device_assignments (imei,device_name,server,technician,technician_id,status,assigned_by)
+                              VALUES (?,?,?,?,?, 'with_tech', ?)
+                              ON DUPLICATE KEY UPDATE device_name=VALUES(device_name),server=VALUES(server),technician=VALUES(technician),technician_id=VALUES(technician_id),status='with_tech',assigned_by=VALUES(assigned_by),assigned_at=NOW()");
+        $n = 0;
+        foreach($devices as $d){
+            $imei = _devNorm($d['imei'] ?? '');
+            if($imei === '') continue;
+            $ins->execute([
+                $imei,
+                substr($d['device_name'] ?? '', 0, 190),
+                substr($d['server'] ?? '', 0, 60),
+                substr($tech, 0, 120),
+                $techId,
+                substr($cu['name'] ?? '', 0, 120)
+            ]);
+            $n++;
+        }
+        echo json_encode(['success'=>true,'assigned'=>$n,'technician'=>$tech]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'dev_assignments_get':
+    if(!in_array($userRole,['admin','assigner','technician'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        _devEnsureTables($pdo);
+        $tech = trim($params['technician'] ?? ($body['technician'] ?? ''));
+        // Technicians only ever see their own
+        if($userRole === 'technician'){ $tech = $cu['name'] ?? ''; }
+        if($tech !== ''){
+            $s = $pdo->prepare("SELECT imei,device_name,server,technician,technician_id,status,assigned_at FROM device_assignments WHERE technician=? AND status='with_tech' ORDER BY device_name");
+            $s->execute([$tech]);
+        } else {
+            $s = $pdo->query("SELECT imei,device_name,server,technician,technician_id,status,assigned_at FROM device_assignments WHERE status='with_tech' ORDER BY technician,device_name");
+        }
+        echo json_encode(['success'=>true,'assignments'=>$s->fetchAll(PDO::FETCH_ASSOC)]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'dev_unassign':
+    if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        _devEnsureTables($pdo);
+        $imeis = $body['imeis'] ?? [];
+        if(!is_array($imeis) || !count($imeis)){ echo json_encode(['error'=>'No imeis']); break; }
+        $del = $pdo->prepare("DELETE FROM device_assignments WHERE imei=?");
+        $n=0; foreach($imeis as $raw){ $imei=_devNorm($raw); if($imei===''){continue;} $del->execute([$imei]); $n+=$del->rowCount(); }
+        echo json_encode(['success'=>true,'removed'=>$n]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
