@@ -645,15 +645,6 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
               <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);margin-bottom:5px">🏠 Visit Updates</div>
               <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:12px">
 
-                <div class="tu-card" data-resp="Visited — customer present"
-                  data-prefill="I visited the customer location. The customer was present and we discussed the installation details."
-                  data-next="Proceed with installation" data-remind="0"
-                  onclick="selectTuCard(this)" style="border-color:#0E5C5C">
-                  <div class="tu-card-icon">🏠</div>
-                  <div class="tu-card-title">Customer Present</div>
-                  <div class="tu-card-sub">Visited, customer there</div>
-                </div>
-
                 <div class="tu-card" data-resp="Visited — not available"
                   data-prefill="I visited the customer location but the customer was not available at the address provided."
                   data-next="Call customer to reschedule" data-remind="24"
@@ -670,15 +661,6 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
                   <div class="tu-card-icon">🚗</div>
                   <div class="tu-card-title">Vehicle Not Ready</div>
                   <div class="tu-card-sub">Visited, vehicle missing</div>
-                </div>
-
-                <div class="tu-card" data-resp="Visited — work done"
-                  data-prefill="I visited the customer location and the work has been completed successfully."
-                  data-next="Task complete" data-remind="0"
-                  onclick="selectTuCard(this)" style="border-color:#27AE60">
-                  <div class="tu-card-icon">✅</div>
-                  <div class="tu-card-title">Work Done</div>
-                  <div class="tu-card-sub">Visited, issue resolved</div>
                 </div>
 
                 <div class="tu-card" data-resp="Other"
