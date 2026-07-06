@@ -434,6 +434,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
       </div>
       <div class="pg-actions">
         <button class="btn btn-primary" onclick="loadReceivedImeis()">🔄 Refresh</button>
+        <button class="btn" style="background:#c0392b;color:#fff" onclick="deleteReceivedImeis()">🗑️ Delete All (temp)</button>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px">
@@ -1322,6 +1323,15 @@ function loadReceivedImeis(){
     document.getElementById('ri-assigned').textContent=asg;
     document.getElementById('ri-pending').textContent=pend;
     renderReceivedImeis();
+  });
+}
+function deleteReceivedImeis(){
+  var pass = prompt('Enter passcode to DELETE ALL received IMEIs:');
+  if(pass===null) return;
+  invApiCall('dev_received_delete', null, 'POST', { which:'all', passcode:pass }).then(function(res){
+    if(res.error){ showToast('❌ '+res.error); return; }
+    showToast('✅ Cleared all received IMEIs');
+    loadReceivedImeis();
   });
 }
 function renderReceivedImeis(){
