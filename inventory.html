@@ -178,6 +178,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
   <div class="nav-item" onclick="showPage('movement')" id="nav-movement">
     <span class="nav-icon">🔄</span> Stock Movement
   </div>
+  <div class="nav-item" onclick="showPage('devicesync')" id="nav-devicesync">
+    <span class="nav-icon">🛰️</span> Device Sync
+  </div>
 
   <div class="nav-sec">Items</div>
   <div class="nav-item" onclick="window.parent.showPage && window.parent.showPage('price-list') || window.open('index.html','_parent')" style="color:rgba(255,255,255,.5);font-size:12px">
@@ -344,6 +347,79 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
           <tr><td colspan="7" class="empty"><div>Loading…</div></td></tr>
         </tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- ── DEVICE SYNC ── -->
+  <div class="page" id="page-devicesync">
+    <div class="pg-header">
+      <div>
+        <div class="pg-title">🛰️ Device Sync</div>
+        <div class="pg-sub">Pull devices from all 3 GPS servers → available stock. Match received IMEIs to find un-uploaded devices.</div>
+      </div>
+      <div class="pg-actions">
+        <button class="btn btn-primary" id="ds-pullBtn" onclick="dsPullAndSave()">🔄 Pull All Servers &amp; Save</button>
+      </div>
+    </div>
+
+    <!-- server status -->
+    <div class="table-card" style="padding:14px 16px;margin-bottom:14px">
+      <div id="ds-srv-status" style="font-size:13px;color:var(--text3)">Click "Pull All Servers" to sync device data.</div>
+    </div>
+
+    <!-- stock summary -->
+    <div id="ds-summary" style="display:none">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px">
+        <div class="stat-card" style="border-bottom-color:var(--blue)">
+          <div style="font-size:26px;font-weight:900;color:var(--blue)" id="ds-office">0</div>
+          <div style="font-size:12px;color:var(--text3)">Office stock</div>
+        </div>
+        <div class="stat-card" style="border-bottom-color:#c8860a">
+          <div style="font-size:26px;font-weight:900;color:#c8860a" id="ds-tech">0</div>
+          <div style="font-size:12px;color:var(--text3)">With technicians</div>
+        </div>
+        <div class="stat-card">
+          <div style="font-size:26px;font-weight:900;color:var(--accent)" id="ds-total">0</div>
+          <div style="font-size:12px;color:var(--text3)">Total pending</div>
+        </div>
+      </div>
+      <div class="table-card" style="padding:14px 16px;margin-bottom:14px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:10px">Devices grouped by technician</div>
+        <div id="ds-techgroups"></div>
+      </div>
+    </div>
+
+    <!-- received IMEIs -->
+    <div class="table-card" style="padding:16px;margin-bottom:14px">
+      <div style="font-size:14px;font-weight:700;margin-bottom:10px">📥 Upload received IMEIs (master list)</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Paste IMEIs (one per line) or upload a single-column .csv / .txt / .xlsx</div>
+      <textarea id="ds-imeiText" class="form-input" style="min-height:90px;width:100%;font-family:monospace" placeholder="864000000000001&#10;864000000000002"></textarea>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;align-items:center">
+        <input type="file" id="ds-imeiFile" accept=".csv,.txt,.xlsx,.xls" onchange="dsLoadImeiFile()" style="max-width:260px">
+        <button class="btn btn-primary" onclick="dsUploadReceived()">Save Received IMEIs</button>
+        <span id="ds-recv-msg" style="font-size:13px"></span>
+      </div>
+    </div>
+
+    <!-- match report -->
+    <div class="table-card" style="padding:16px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:14px;font-weight:700">📊 Match report</div>
+        <button class="btn btn-primary" onclick="dsLoadReport()">Run Match Report</button>
+      </div>
+      <div id="ds-report" style="font-size:13px;color:var(--text3)">Run the report to compare received IMEIs against what's on the servers.</div>
+    </div>
+
+    <!-- delete (temporary) -->
+    <div class="table-card" style="padding:16px;border:1px solid #e2a0a0">
+      <div style="font-size:14px;font-weight:700;color:#c0392b;margin-bottom:6px">⚠️ Delete test data (temporary)</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Wipes synced data / received IMEIs. Passcode required. Removed once you go live.</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <button class="btn" style="background:#c0392b;color:#fff" onclick="dsWipe('server')">Delete Server Data</button>
+        <button class="btn" style="background:#c0392b;color:#fff" onclick="dsWipe('received')">Delete Received IMEIs</button>
+        <button class="btn" style="background:#c0392b;color:#fff" onclick="dsWipe('all')">Delete Everything</button>
+        <span id="ds-del-msg" style="font-size:13px"></span>
+      </div>
     </div>
   </div>
 
@@ -839,6 +915,7 @@ function showPage(name){
   if(name === 'technicians') renderTechCards();
   if(name === 'movement') renderMovements();
   if(name === 'items') renderItemMaster();
+  if(name === 'devicesync') dsInit();
 }
 
 // ── HELPERS ───────────────────────────────────────────────────────────
@@ -952,6 +1029,155 @@ function saveOpeningBalance(){
       btn.disabled = false; btn.textContent = '✅ Save';
       showToast('❌ Network error');
     });
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// ── DEVICE SYNC ───────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════
+var DS_PROXY = 'device_proxy.php';
+var DS_SERVERS = [
+  { id:1, name:'S1 bharatgps.com',   base:'https://bharatgps.com',    hash:'$2y$10$uzZ7lm.VASP20YWWb/NYVeopHdhaxZdOc213OktkPhUhImnySiir.' },
+  { id:2, name:'S2 bharatgps.in',    base:'https://bharatgps.in',     hash:'$2y$10$OjQHmpMaK9V8X2.hX5lUcOs7Bzou3.Raa42wovvnN9i8m4ZebR71u' },
+  { id:3, name:'S3 bharatgps.school',base:'https://bharatgps.school', hash:'$2y$10$oPTMk8NIUXu3Y10e4Fu80ulKKpwvT73l0Cu7L8lP9VPcogI40qlHi' },
+];
+var DS_INITED = false;
+function dsInit(){ if(DS_INITED) return; DS_INITED = true; /* lazy: nothing to load until pull */ }
+
+function dsParseDevice(d){
+  var name = (d.name || d.device_name || '').trim();
+  var imei = d.imei || d.device_imei || d.uniqueid || d.unique_id || '';
+  if(!imei && d.device_data){ imei = d.device_data.imei || d.device_data.uniqueid || ''; }
+  if(!imei && d.traccar){ imei = d.traccar.uniqueId || d.traccar.uniqueid || ''; }
+  var devId = d.id || d.device_id || '';
+  var m = name.match(/^\s*(\d+)\s*[-–—]\s*(.+)$/);
+  var status='installed', tech='';
+  if(m){ var a=m[2].trim(); if(a.toLowerCase()==='office'){status='office';} else {status='tech'; tech=a;} }
+  return { imei:String(imei), device_name:name, device_id:String(devId), status:status, technician:tech };
+}
+
+function dsPullAndSave(){
+  var btn=document.getElementById('ds-pullBtn'), st=document.getElementById('ds-srv-status');
+  btn.disabled=true; btn.textContent='Pulling…'; st.textContent='Contacting servers…';
+  var jobs = DS_SERVERS.map(function(s){
+    var url = DS_PROXY + '?base=' + encodeURIComponent(s.base) + '&hash=' + encodeURIComponent(s.hash);
+    return fetch(url,{cache:'no-store'}).then(function(r){return r.text();}).then(function(txt){
+      var data; try{ data=JSON.parse(txt); }catch(e){
+        var m504=/504|Gateway Time-out|502|Bad Gateway/i.test(txt);
+        return {srv:s,ok:false,msg:(m504?'timeout (504) — click again':'Not JSON'),devices:[]};
+      }
+      if(data && data.status===0){ return {srv:s,ok:false,msg:(data.message||'error'),devices:[]}; }
+      var devs=[];
+      if(Array.isArray(data)){ data.forEach(function(g){ if(g&&g.items&&Array.isArray(g.items)) devs=devs.concat(g.items); else if(g&&(g.imei||g.name)) devs.push(g); }); }
+      else if(data&&data.items){ devs=data.items; } else if(data&&data.data){ devs=data.data; }
+      return {srv:s,ok:true,msg:devs.length+' devices',devices:devs};
+    }).catch(function(e){ return {srv:s,ok:false,msg:String(e.message).slice(0,50),devices:[]}; });
+  });
+  Promise.all(jobs).then(function(results){
+    var merged=[];
+    var html = results.map(function(r){
+      r.devices.forEach(function(dev){ var p=dsParseDevice(dev); p.server=r.srv.name; if(p.status!=='installed') merged.push(p); });
+      var c=r.ok?'#0E7C4A':'#c0392b'; var ic=r.ok?'✓':'✗';
+      return '<div style="padding:3px 0;color:'+c+';font-weight:600">'+ic+' '+esc(r.srv.name)+' — '+esc(r.msg)+'</div>';
+    }).join('');
+    st.innerHTML = html;
+    btn.disabled=false; btn.textContent='🔄 Pull All Servers & Save';
+    if(!merged.length){ showToast('❌ No devices pulled — check server status'); return; }
+    invApiCall('dev_save_pull', null, 'POST', { devices: merged }).then(function(res){
+      if(res.error){ showToast('❌ Save failed: '+res.error); return; }
+      showToast('✅ Saved '+res.saved+' devices as available stock');
+      dsRenderSummary(merged);
+    });
+  });
+}
+
+function dsRenderSummary(merged){
+  document.getElementById('ds-summary').style.display='';
+  var office=merged.filter(function(d){return d.status==='office';});
+  var tech=merged.filter(function(d){return d.status==='tech';});
+  document.getElementById('ds-office').textContent=office.length;
+  document.getElementById('ds-tech').textContent=tech.length;
+  document.getElementById('ds-total').textContent=merged.length;
+  var byTech={}; tech.forEach(function(d){ var t=d.technician||'(unknown)'; byTech[t]=(byTech[t]||0)+1; });
+  var names=Object.keys(byTech).sort(function(a,b){return byTech[b]-byTech[a];});
+  document.getElementById('ds-techgroups').innerHTML = names.length ? names.map(function(t){
+    return '<div style="display:flex;justify-content:space-between;padding:8px 12px;margin:4px 0;background:var(--surface2);border-radius:8px"><span style="font-weight:600">'+esc(t)+'</span><b style="color:#c8860a">'+byTech[t]+'</b></div>';
+  }).join('') : '<div style="color:var(--text3)">No devices with technicians.</div>';
+}
+
+function dsLoadImeiFile(){
+  var f=document.getElementById('ds-imeiFile').files[0]; if(!f) return;
+  var nm=f.name.toLowerCase();
+  if(nm.endsWith('.xlsx')||nm.endsWith('.xls')){
+    if(window.XLSX){ dsReadXlsx(f); }
+    else { var sc=document.createElement('script'); sc.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; sc.onload=function(){dsReadXlsx(f);}; document.head.appendChild(sc); }
+  } else { var rd=new FileReader(); rd.onload=function(e){ dsAppendImeis(e.target.result); }; rd.readAsText(f); }
+}
+function dsReadXlsx(f){
+  var rd=new FileReader();
+  rd.onload=function(e){
+    var wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+    var ws=wb.Sheets[wb.SheetNames[0]];
+    var rows=XLSX.utils.sheet_to_json(ws,{header:1});
+    var lines=rows.map(function(r){ return (r&&r[0]!=null)?String(r[0]):''; }).filter(Boolean);
+    dsAppendImeis(lines.join('\n'));
+  };
+  rd.readAsArrayBuffer(f);
+}
+function dsAppendImeis(text){ var ta=document.getElementById('ds-imeiText'); ta.value=(ta.value?ta.value+'\n':'')+text; }
+
+function dsUploadReceived(){
+  var msg=document.getElementById('ds-recv-msg');
+  var raw=document.getElementById('ds-imeiText').value||'';
+  var imeis=raw.split(/[\s,;]+/).map(function(x){return x.replace(/\D/g,'');}).filter(Boolean);
+  if(!imeis.length){ msg.style.color='#c0392b'; msg.textContent='No IMEIs found.'; return; }
+  msg.style.color='var(--text3)'; msg.textContent='Saving…';
+  invApiCall('dev_upload_received', null, 'POST', { imeis: imeis }).then(function(res){
+    if(res.error){ msg.style.color='#c0392b'; msg.textContent=res.error; return; }
+    msg.style.color='#0E7C4A';
+    msg.textContent='Added '+res.added+' new, skipped '+res.skipped+'. Total: '+res.total_received;
+  });
+}
+
+function dsLoadReport(){
+  var el=document.getElementById('ds-report');
+  el.innerHTML='Loading…';
+  invApiCall('dev_match_report', null, 'POST', {}).then(function(r){
+    if(r.error){ el.innerHTML='<span style="color:#c0392b">'+esc(r.error)+'</span>'; return; }
+    var html='<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px">'+
+      dsStat(r.received_total,'Received','var(--accent)')+
+      dsStat(r.matched,'Matched','#0E7C4A')+
+      dsStat(r.missing_count,'Not uploaded','#c0392b')+
+      dsStat(r.office_stock,'Office','var(--blue)')+
+      dsStat(r.with_tech,'With techs','#c8860a')+
+      '</div>';
+    if(r.missing_count>0){
+      html+='<div style="font-weight:700;color:#c0392b;margin:6px 0">Received but NOT on server ('+r.missing_count+') — still to upload:</div>';
+      html+='<div style="max-height:30vh;overflow:auto;border:1px solid var(--border);border-radius:8px"><table class="tbl"><thead><tr><th>IMEI</th></tr></thead><tbody>'+
+        r.missing_imeis.map(function(i){return '<tr><td style="font-family:monospace">'+esc(i)+'</td></tr>';}).join('')+'</tbody></table></div>';
+    } else {
+      html+='<div style="color:#0E7C4A;font-weight:600">✓ All received IMEIs are present on the server.</div>';
+    }
+    if(r.extra_count>0){
+      html+='<div style="font-weight:700;color:#c8860a;margin:14px 0 6px">On server but NOT in received list ('+r.extra_count+'):</div>';
+      html+='<div style="max-height:24vh;overflow:auto;border:1px solid var(--border);border-radius:8px"><table class="tbl"><thead><tr><th>IMEI</th><th>Name</th><th>Server</th></tr></thead><tbody>'+
+        r.extra.map(function(e){return '<tr><td style="font-family:monospace">'+esc(e.imei)+'</td><td>'+esc(e.device_name)+'</td><td>'+esc(e.server)+'</td></tr>';}).join('')+'</tbody></table></div>';
+    }
+    el.innerHTML=html;
+  });
+}
+function dsStat(v,l,c){ return '<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:22px;font-weight:900;color:'+c+'">'+v+'</div><div style="font-size:11px;color:var(--text3)">'+l+'</div></div>'; }
+
+function dsWipe(which){
+  var pass=prompt('Enter passcode to delete '+which+' data:');
+  if(pass===null) return;
+  var msg=document.getElementById('ds-del-msg');
+  msg.style.color='var(--text3)'; msg.textContent='Deleting…';
+  invApiCall('dev_delete_all', null, 'POST', { which:which, passcode:pass }).then(function(res){
+    if(res.error){ msg.style.color='#c0392b'; msg.textContent=res.error; return; }
+    msg.style.color='#0E7C4A'; msg.textContent='Cleared: '+res.cleared;
+    if(which==='server'||which==='all'){ document.getElementById('ds-summary').style.display='none'; }
+    document.getElementById('ds-report').innerHTML='Run the report to compare received IMEIs against servers.';
+  });
 }
 </script>
 <!-- STOCK RESET CONFIRM MODAL -->
