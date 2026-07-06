@@ -2364,6 +2364,46 @@ case 'stock_get':
             if($row['move_type']==='out')    $ts[$n][$iid]+=intval($row['qty']);
             if($row['move_type']==='return') $ts[$n][$iid]-=intval($row['qty']);
         }
+        // ── Fold ASSIGNED SERVER DEVICES into tech stock (device_assignments) ──
+        // Map each device's model code → an inventory item, add to that tech's held count.
+        try {
+            _devEnsureTables($pdo);
+            // model code → item keyword groups
+            $modelGroups = [
+                'engine status' => ['ev02','g-17','g17','g19','gt06','gt-17','bt-50','c-32','x-3','x-03','x-1','m-01'],
+                'vltd'          => ['vltd'],
+                'magnet'        => ['mt'],
+                'micro'         => ['micro'],
+                'mic'           => ['mic','sos'],
+            ];
+            // resolve each keyword group to an item id
+            $itemIdFor = [];
+            $findItem2 = function($kw) use ($pdo){
+                $s = $pdo->prepare("SELECT id FROM stock_items WHERE LOWER(CONCAT(name,' ',COALESCE(model,''))) LIKE ? ORDER BY id LIMIT 1");
+                $s->execute(['%'.strtolower($kw).'%']); $v=$s->fetchColumn(); return $v?intval($v):0;
+            };
+            $itemIdFor['engine status'] = $findItem2('engine status') ?: $findItem2('basic');
+            $itemIdFor['vltd']          = $findItem2('vltd');
+            $itemIdFor['magnet']        = $findItem2('magnet');
+            $itemIdFor['micro']         = $findItem2('micro');
+            $itemIdFor['mic']           = $findItem2('mic') ?: $findItem2('sos');
+
+            $asg = $pdo->query("SELECT technician,model FROM device_assignments WHERE status='with_tech'")->fetchAll(PDO::FETCH_ASSOC);
+            foreach($asg as $a){
+                $tname = $a['technician']; if($tname==='') continue;
+                $mdl = strtolower(trim($a['model'] ?? ''));
+                // find which group this model belongs to
+                $grp = 'engine status'; // default GPS
+                foreach($modelGroups as $g => $codes){
+                    foreach($codes as $code){ if($mdl !== '' && strpos($mdl, $code) !== false){ $grp = $g; break 2; } }
+                }
+                $iid = $itemIdFor[$grp] ?? 0;
+                if(!$iid) continue;
+                if(!isset($ts[$tname])) $ts[$tname]=[];
+                if(!isset($ts[$tname][$iid])) $ts[$tname][$iid]=0;
+                $ts[$tname][$iid] += 1;
+            }
+        } catch(Exception $e){}
         // Technicians may only see their own held stock
         if($userRole === 'technician'){
             $myName = $cu['name'] ?? '';
