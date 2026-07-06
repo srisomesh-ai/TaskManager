@@ -2579,6 +2579,24 @@ case 'dev_match_report':
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
+case 'dev_received_delete':
+    if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Admin only']); break; }
+    // TEMPORARY. Passcode required. which='all' clears all, or imeis=[...] to delete specific.
+    if(($body['passcode'] ?? '') !== '532842'){ echo json_encode(['error'=>'Wrong passcode']); break; }
+    try {
+        _devEnsureTables($pdo);
+        $imeis = $body['imeis'] ?? [];
+        if(($body['which'] ?? '') === 'all'){
+            $pdo->exec("DELETE FROM received_devices");
+            echo json_encode(['success'=>true,'cleared'=>'all']);
+        } else if(is_array($imeis) && count($imeis)){
+            $del=$pdo->prepare("DELETE FROM received_devices WHERE imei=?");
+            $n=0; foreach($imeis as $raw){ $im=preg_replace('/\D/','',(string)$raw); if($im===''){continue;} $del->execute([$im]); $n+=$del->rowCount(); }
+            echo json_encode(['success'=>true,'removed'=>$n]);
+        } else { echo json_encode(['error'=>'Provide which=all or imeis[]']); }
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'dev_received_list':
     if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     try {
