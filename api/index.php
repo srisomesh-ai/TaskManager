@@ -86,6 +86,7 @@ function _devEnsureTables($pdo){
         id INT AUTO_INCREMENT PRIMARY KEY,
         imei VARCHAR(40) NOT NULL,
         device_name VARCHAR(190) DEFAULT '',
+        model VARCHAR(60) DEFAULT '',
         server VARCHAR(60) DEFAULT '',
         technician VARCHAR(120) DEFAULT '',
         technician_id INT DEFAULT NULL,
@@ -94,6 +95,8 @@ function _devEnsureTables($pdo){
         assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY uq_aimei (imei)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    // add model column if table pre-existed without it
+    try { $pdo->exec("ALTER TABLE device_assignments ADD COLUMN model VARCHAR(60) DEFAULT '' AFTER device_name"); } catch(Exception $e){}
 }
 function _devNorm($imei){ return preg_replace('/\D/', '', (string)$imei); } // digits only
 
@@ -2592,9 +2595,18 @@ case 'dev_assign':
         $techId  = isset($body['technician_id']) ? intval($body['technician_id']) : null;
         if(!is_array($devices) || !count($devices)){ echo json_encode(['error'=>'No devices provided']); break; }
         if($tech === ''){ echo json_encode(['error'=>'Technician required']); break; }
-        $ins = $pdo->prepare("INSERT INTO device_assignments (imei,device_name,server,technician,technician_id,status,assigned_by)
-                              VALUES (?,?,?,?,?, 'with_tech', ?)
-                              ON DUPLICATE KEY UPDATE device_name=VALUES(device_name),server=VALUES(server),technician=VALUES(technician),technician_id=VALUES(technician_id),status='with_tech',assigned_by=VALUES(assigned_by),assigned_at=NOW()");
+        // Resolve technician_id and canonical name from users table (so tech panel can find it).
+        // If techId given, use that user's name. Else match by name (case-insensitive).
+        if($techId){
+            $u = $pdo->prepare("SELECT id,name FROM users WHERE id=?"); $u->execute([$techId]); $urow=$u->fetch();
+            if($urow){ $tech = $urow['name']; }
+        } else {
+            $u = $pdo->prepare("SELECT id,name FROM users WHERE LOWER(TRIM(name))=LOWER(TRIM(?)) LIMIT 1"); $u->execute([$tech]); $urow=$u->fetch();
+            if($urow){ $techId = intval($urow['id']); $tech = $urow['name']; }
+        }
+        $ins = $pdo->prepare("INSERT INTO device_assignments (imei,device_name,model,server,technician,technician_id,status,assigned_by)
+                              VALUES (?,?,?,?,?,?, 'with_tech', ?)
+                              ON DUPLICATE KEY UPDATE device_name=VALUES(device_name),model=VALUES(model),server=VALUES(server),technician=VALUES(technician),technician_id=VALUES(technician_id),status='with_tech',assigned_by=VALUES(assigned_by),assigned_at=NOW()");
         $n = 0;
         foreach($devices as $d){
             $imei = _devNorm($d['imei'] ?? '');
@@ -2602,6 +2614,7 @@ case 'dev_assign':
             $ins->execute([
                 $imei,
                 substr($d['device_name'] ?? '', 0, 190),
+                substr($d['model'] ?? '', 0, 60),
                 substr($d['server'] ?? '', 0, 60),
                 substr($tech, 0, 120),
                 $techId,
@@ -2618,15 +2631,28 @@ case 'dev_assignments_get':
     try {
         _devEnsureTables($pdo);
         $tech = trim($params['technician'] ?? ($body['technician'] ?? ''));
-        // Technicians only ever see their own
-        if($userRole === 'technician'){ $tech = $cu['name'] ?? ''; }
-        if($tech !== ''){
-            $s = $pdo->prepare("SELECT imei,device_name,server,technician,technician_id,status,assigned_at FROM device_assignments WHERE technician=? AND status='with_tech' ORDER BY device_name");
+        // Technicians only ever see their own — match by id OR name
+        if($userRole === 'technician'){
+            $s = $pdo->prepare("SELECT imei,device_name,model,server,technician,technician_id,status,assigned_at FROM device_assignments WHERE status='with_tech' AND (technician_id=? OR LOWER(TRIM(technician))=LOWER(TRIM(?))) ORDER BY device_name");
+            $s->execute([$userId, ($cu['name'] ?? '')]);
+        } else if($tech !== ''){
+            $s = $pdo->prepare("SELECT imei,device_name,model,server,technician,technician_id,status,assigned_at FROM device_assignments WHERE status='with_tech' AND LOWER(TRIM(technician))=LOWER(TRIM(?)) ORDER BY device_name");
             $s->execute([$tech]);
         } else {
-            $s = $pdo->query("SELECT imei,device_name,server,technician,technician_id,status,assigned_at FROM device_assignments WHERE status='with_tech' ORDER BY technician,device_name");
+            $s = $pdo->query("SELECT imei,device_name,model,server,technician,technician_id,status,assigned_at FROM device_assignments WHERE status='with_tech' ORDER BY technician,device_name");
         }
         echo json_encode(['success'=>true,'assignments'=>$s->fetchAll(PDO::FETCH_ASSOC)]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'dev_assigned_imeis':
+    if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        _devEnsureTables($pdo);
+        $rows = $pdo->query("SELECT imei,technician FROM device_assignments WHERE status='with_tech'")->fetchAll(PDO::FETCH_ASSOC);
+        $map = [];
+        foreach($rows as $r){ $map[$r['imei']] = $r['technician']; }
+        echo json_encode(['success'=>true,'assigned'=>$map]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
