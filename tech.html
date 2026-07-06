@@ -3590,18 +3590,33 @@ async function submitTechAttend(){
 
   body.remark = parts.join(' | ');
 
-  const res = await api('update_task',{},'POST',body).catch(()=>({}));
+  let _attendOk = false, _attendErr = '';
+  try {
+    const res = await api('update_task',{},'POST',body);
+    if(res && res.success){ _attendOk = true; }
+    else { _attendErr = (res && res.error) || 'Submit failed. Please try again.'; }
+  } catch(e){ _attendErr = 'Connection error. Please try again.'; }
 
-  const labels = {completed:'✅ Submit — Request Approval', postponed:'⏸️ Submit — Mark Postponed', cancelled:'❌ Submit — Cancel Task'};
-  if(btn){ btn.disabled=false; btn.textContent=labels[status]||'Submit'; }
-
-  if(res.success){
-    closeTechAttend();
-    await viewTask(taskId);
-    if(typeof renderMyTasks==='function') renderMyTasks();
-  } else {
-    alert(res.error || 'Submit failed. Please try again.');
+  if(!_attendOk){
+    const labels = {completed:'✅ Submit — Request Approval', postponed:'⏸️ Submit — Mark Postponed', cancelled:'❌ Submit — Cancel Task'};
+    if(btn){ btn.disabled=false; btn.textContent=labels[status]||'Submit'; }
+    alert(_attendErr);
+    return;
   }
+
+  // Success — show a brief "sending consent email" waiting state, then auto-close to dashboard
+  if(btn){
+    btn.disabled = true;
+    btn.textContent = (status === 'completed') ? '📧 Sending consent email to customer…' : '✅ Saved — finishing up…';
+    btn.style.background = 'var(--saffron)';
+  }
+  setTimeout(function(){
+    try { closeTechAttend(); } catch(e){}
+    try { if(typeof closeTaskDetail === 'function') closeTaskDetail(); } catch(e){}
+    try { showToast(status === 'completed' ? '✅ Submitted — consent email sent to customer' : '✅ Submitted'); } catch(e){}
+    try { showPage('my-tasks'); } catch(e){}
+    try { if(typeof loadMyTasks === 'function') loadMyTasks(); else if(typeof renderMyTasks === 'function') renderMyTasks(); } catch(e){}
+  }, 2500);
 }
 
 // ── ADMIN ACTIONS ─────────────────────────────────────────────────────────
