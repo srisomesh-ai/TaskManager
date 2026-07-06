@@ -53,9 +53,20 @@ if($action === 'find'){
     if(!$keyword){ echo json_encode(['success'=>false,'error'=>'Enter an IMEI number']); exit; }
     $q = strtolower($keyword);
 
+    // Optional: restrict to a single server by host (e.g. server=bharatgps.in)
+    $onlyHost = strtolower(trim($_GET['server'] ?? ''));
+    $searchServers = $servers;
+    if($onlyHost !== ''){
+        $filtered = [];
+        foreach($servers as $sid => $srv){
+            if(strpos(strtolower($srv['base']), $onlyHost) !== false){ $filtered[$sid] = $srv; }
+        }
+        if(!empty($filtered)) $searchServers = $filtered;
+    }
+
     $multi = curl_multi_init();
     $handles = [];
-    foreach($servers as $sid => $srv){
+    foreach($searchServers as $sid => $srv){
         $url = $srv['base'].'/get_devices?lang=en&user_api_hash='.rawurlencode($srv['hash']);
         $ch  = curl_init();
         curl_setopt($ch, CURLOPT_URL,            $url);
