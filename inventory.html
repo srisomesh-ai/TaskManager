@@ -1049,10 +1049,14 @@ function dsParseDevice(d){
   if(!imei && d.device_data){ imei = d.device_data.imei || d.device_data.uniqueid || ''; }
   if(!imei && d.traccar){ imei = d.traccar.uniqueId || d.traccar.uniqueid || ''; }
   var devId = d.id || d.device_id || '';
+  // model field — GPSWOX may return it under several names
+  var model = d.device_model || d.model || d.device_type || d.deviceModel || '';
+  if(!model && d.device_data){ model = d.device_data.model || d.device_data.device_model || ''; }
+  model = String(model||'').trim();
   var m = name.match(/^\s*(\d+)\s*[-–—]\s*(.+)$/);
   var status='installed', tech='';
   if(m){ var a=m[2].trim(); if(a.toLowerCase()==='office'){status='office';} else {status='tech'; tech=a;} }
-  return { imei:String(imei), device_name:name, device_id:String(devId), status:status, technician:tech };
+  return { imei:String(imei), device_name:name, device_id:String(devId), model:model, status:status, technician:tech };
 }
 
 function dsPullAndSave(){
@@ -1112,8 +1116,9 @@ function dsRenderSummary(merged){
     var matchNote = matched ? '' : ' <span style="color:#c0392b;font-size:11px">(no CRM match — will save by name)</span>';
     var rows = list.map(function(d, i){
       return '<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-bottom:1px solid var(--border);font-size:12px;cursor:pointer">' +
-        '<input type="checkbox" class="ds-chk-'+gi+'" data-imei="'+esc(d.imei)+'" data-name="'+esc(d.device_name)+'" data-server="'+esc(d.server)+'">' +
+        '<input type="checkbox" class="ds-chk-'+gi+'" data-imei="'+esc(d.imei)+'" data-name="'+esc(d.device_name)+'" data-server="'+esc(d.server)+'" data-model="'+esc(d.model||'')+'">' +
         '<span style="flex:1">'+esc(d.device_name)+'</span>' +
+        '<span style="min-width:60px;font-size:11px;font-weight:700;color:#137272">'+esc(d.model||'—')+'</span>' +
         '<span style="font-family:monospace;color:var(--accent)">'+(d.imei?esc(d.imei):'<span style="color:#c0392b">no imei</span>')+'</span>' +
         '<span style="color:var(--text3);font-size:10px">'+esc((d.server||'').replace('bharatgps.',''))+'</span>' +
       '</label>';
@@ -1139,7 +1144,7 @@ function dsToggleAll(gi, on){
 function dsAssign(gi, techName, techId){
   var chks = Array.prototype.slice.call(document.querySelectorAll('.ds-chk-'+gi));
   var picked = chks.filter(function(c){ return c.checked; }).map(function(c){
-    return { imei:c.getAttribute('data-imei'), device_name:c.getAttribute('data-name'), server:c.getAttribute('data-server') };
+    return { imei:c.getAttribute('data-imei'), device_name:c.getAttribute('data-name'), server:c.getAttribute('data-server'), model:c.getAttribute('data-model')||'' };
   }).filter(function(d){ return d.imei; });
   if(!picked.length){ showToast('❌ No devices selected (or selected ones have no IMEI)'); return; }
   if(!confirm('Assign '+picked.length+' device(s) to '+techName+'?')) return;
