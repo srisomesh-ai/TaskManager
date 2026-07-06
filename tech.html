@@ -3350,16 +3350,11 @@ async function submitTechUpdate(){
   const btn = document.getElementById('tu-save-btn');
   if(btn){ btn.textContent='Saving…'; btn.disabled=true; }
 
+  let _saveOk = false;
   try {
     const res = await api('update_task', {}, 'POST', body);
     if(res && res.success){
-      closeTechUpdate();
-      // Close the task detail view and return to the dashboard (my-tasks list)
-      if(typeof closeTaskDetail === 'function') closeTaskDetail();
-      showToast(consentWasActive ? '✅ Update saved — Attend button reset for fresh consent' : '✅ Update saved');
-      showPage('my-tasks');
-      if(typeof loadMyTasks === 'function') loadMyTasks();
-      else if(typeof renderMyTasks === 'function') renderMyTasks();
+      _saveOk = true;
     } else {
       alert(res.error || 'Update failed. Please try again.');
     }
@@ -3368,6 +3363,15 @@ async function submitTechUpdate(){
   } finally {
     _tuSubmitting = false;
     if(btn){ btn.textContent='💾 Save Update'; btn.disabled=false; }
+  }
+
+  // Navigate AFTER the try/catch so any UI hiccup can't look like a connection error
+  if(_saveOk){
+    try { closeTechUpdate(); } catch(e){}
+    try { if(typeof closeTaskDetail === 'function') closeTaskDetail(); } catch(e){}
+    try { showToast(consentWasActive ? '✅ Update saved — Attend button reset for fresh consent' : '✅ Update saved'); } catch(e){}
+    try { showPage('my-tasks'); } catch(e){}
+    try { if(typeof loadMyTasks === 'function') loadMyTasks(); else if(typeof renderMyTasks === 'function') renderMyTasks(); } catch(e){}
   }
 }
 
