@@ -226,8 +226,13 @@ tr:hover td{background:var(--surface2)}
       </div>
       <div class="fg">
         <label class="fl">Quantity Received <span style="color:var(--red)">*</span></label>
-        <input class="finput" id="rec-qty" type="number" min="1">
+        <input class="finput" id="rec-qty" type="number" min="1" oninput="recCheckCount()">
         <div style="font-size:11px;color:var(--text3);margin-top:4px" id="rec-qty-hint"></div>
+      </div>
+      <div class="fg">
+        <label class="fl">Upload IMEI list (single column) <span style="color:var(--red)">*</span></label>
+        <input class="finput" id="rec-imei-file" type="file" accept=".csv,.txt,.xlsx,.xls" onchange="recLoadImeiFile()">
+        <div id="rec-imei-status" style="font-size:12px;margin-top:6px;color:var(--text3)">No IMEIs loaded yet.</div>
       </div>
       <div style="background:var(--green-bg);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--green)">
         ✅ Once you confirm, the quantity will be added to inventory stock.
@@ -470,6 +475,10 @@ function openReceiveModal(id){
   document.getElementById('rec-date').value = new Date().toISOString().slice(0,10);
   document.getElementById('rec-qty').value  = p.qty;
   document.getElementById('rec-qty-hint').textContent = 'Ordered: '+p.qty+' units';
+  _recImeis = [];
+  var f=document.getElementById('rec-imei-file'); if(f) f.value='';
+  document.getElementById('rec-imei-status').textContent = 'No IMEIs loaded yet.';
+  document.getElementById('rec-imei-status').style.color = 'var(--text3)';
   document.getElementById('rec-overlay').classList.add('open');
 }
 
@@ -478,22 +487,65 @@ function closeReceiveModal(){
   _recPurId = null;
 }
 
+var _recImeis = [];
+
+function recLoadImeiFile(){
+  var f=document.getElementById('rec-imei-file').files[0]; if(!f) return;
+  var nm=f.name.toLowerCase();
+  if(nm.endsWith('.xlsx')||nm.endsWith('.xls')){
+    if(window.XLSX){ recReadXlsx(f); }
+    else { var sc=document.createElement('script'); sc.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; sc.onload=function(){recReadXlsx(f);}; document.head.appendChild(sc); }
+  } else {
+    var rd=new FileReader(); rd.onload=function(e){ recSetImeis(e.target.result); }; rd.readAsText(f);
+  }
+}
+function recReadXlsx(f){
+  var rd=new FileReader();
+  rd.onload=function(e){
+    var wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+    var ws=wb.Sheets[wb.SheetNames[0]];
+    var rows=XLSX.utils.sheet_to_json(ws,{header:1});
+    var lines=rows.map(function(r){ return (r&&r[0]!=null)?String(r[0]):''; }).filter(Boolean);
+    recSetImeis(lines.join('\n'));
+  };
+  rd.readAsArrayBuffer(f);
+}
+function recSetImeis(text){
+  // digits-only, dedupe, drop blanks
+  var raw = text.split(/[\s,;]+/).map(function(x){return x.replace(/\D/g,'');}).filter(Boolean);
+  var seen={}, out=[];
+  raw.forEach(function(i){ if(!seen[i]){ seen[i]=1; out.push(i); } });
+  _recImeis = out;
+  recCheckCount();
+}
+function recCheckCount(){
+  var st=document.getElementById('rec-imei-status');
+  var qty=parseInt(document.getElementById('rec-qty').value)||0;
+  var n=_recImeis.length;
+  if(n===0){ st.textContent='No IMEIs loaded yet.'; st.style.color='var(--text3)'; return; }
+  if(n===qty){ st.textContent='✓ '+n+' IMEIs loaded — matches received qty.'; st.style.color='var(--green)'; }
+  else { st.textContent='⚠️ '+n+' IMEIs loaded but received qty is '+qty+'. They must match.'; st.style.color='var(--red)'; }
+}
+
 function confirmReceived(){
   var date = document.getElementById('rec-date').value;
   var qty  = parseInt(document.getElementById('rec-qty').value)||0;
   if(!date){ showToast('⚠️ Enter received date'); return; }
   if(qty<1){ showToast('⚠️ Enter received quantity'); return; }
+  if(!_recImeis.length){ showToast('⚠️ Upload the IMEI list first'); return; }
+  if(_recImeis.length !== qty){ showToast('❌ IMEI count ('+_recImeis.length+') must match received qty ('+qty+')'); return; }
   var btn = document.getElementById('rec-save-btn');
   btn.disabled=true; btn.textContent='Saving…';
   purApi('pur_mark_received','POST',{
     id: _recPurId,
     received_date: date,
     received_qty: qty,
+    imeis: _recImeis,
   }).then(function(d){
     btn.disabled=false; btn.textContent='📦 Confirm Received';
     if(d.success){
       closeReceiveModal();
-      showToast('✅ Stock received — inventory updated');
+      showToast('✅ Stock received + '+_recImeis.length+' IMEIs saved');
       load();
     } else showToast('❌ '+(d.error||'Failed'));
   }).catch(function(){ btn.disabled=false; btn.textContent='📦 Confirm Received'; showToast('❌ Network error'); });
