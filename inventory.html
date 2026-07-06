@@ -1041,7 +1041,27 @@ var DS_SERVERS = [
   { id:3, name:'S3 bharatgps.school',base:'https://bharatgps.school', hash:'$2y$10$oPTMk8NIUXu3Y10e4Fu80ulKKpwvT73l0Cu7L8lP9VPcogI40qlHi' },
 ];
 var DS_INITED = false;
-function dsInit(){ if(DS_INITED) return; DS_INITED = true; /* lazy: nothing to load until pull */ }
+var DS_MERGED = [];         // last pulled devices
+var DS_ASSIGNED = {};       // imei -> technician (already assigned)
+function dsInit(){
+  if(DS_INITED) return; DS_INITED = true;
+  // restore last pull from localStorage so we don't re-hit servers on refresh
+  try {
+    var saved = localStorage.getItem('bgps_ds_merged');
+    if(saved){ DS_MERGED = JSON.parse(saved)||[]; }
+  } catch(e){ DS_MERGED = []; }
+  // load assigned imeis, then render whatever we have
+  dsLoadAssigned(function(){
+    if(DS_MERGED.length){ dsRenderSummary(DS_MERGED); }
+  });
+}
+
+function dsLoadAssigned(cb){
+  invApiCall('dev_assigned_imeis', null, 'POST', {}).then(function(res){
+    DS_ASSIGNED = (res && res.assigned) ? res.assigned : {};
+    if(cb) cb();
+  }).catch(function(){ DS_ASSIGNED = {}; if(cb) cb(); });
+}
 
 function dsParseDevice(d){
   var name = (d.name || d.device_name || '').trim();
@@ -1086,10 +1106,12 @@ function dsPullAndSave(){
     st.innerHTML = html;
     btn.disabled=false; btn.textContent='🔄 Pull All Servers & Save';
     if(!merged.length){ showToast('❌ No devices pulled — check server status'); return; }
+    DS_MERGED = merged;
+    try { localStorage.setItem('bgps_ds_merged', JSON.stringify(merged)); } catch(e){}
     invApiCall('dev_save_pull', null, 'POST', { devices: merged }).then(function(res){
       if(res.error){ showToast('❌ Save failed: '+res.error); return; }
       showToast('✅ Saved '+res.saved+' devices as available stock');
-      dsRenderSummary(merged);
+      dsLoadAssigned(function(){ dsRenderSummary(merged); });
     });
   });
 }
@@ -1114,7 +1136,19 @@ function dsRenderSummary(merged){
     // try to match server tech-name to a CRM technician
     var matched = _techs.find(function(u){ return (u.name||'').trim().toLowerCase() === t.trim().toLowerCase(); });
     var matchNote = matched ? '' : ' <span style="color:#c0392b;font-size:11px">(no CRM match — will save by name)</span>';
+    var assignedCount = 0, availCount = 0;
     var rows = list.map(function(d, i){
+      var isAssigned = !!DS_ASSIGNED[String(d.imei).replace(/\D/g,'')];
+      if(isAssigned){ assignedCount++;
+        return '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-bottom:1px solid var(--border);font-size:12px;opacity:.55;background:rgba(0,0,0,.02)">' +
+          '<span style="width:16px;text-align:center">✓</span>' +
+          '<span style="flex:1">'+esc(d.device_name)+'</span>' +
+          '<span style="min-width:60px;font-size:11px;font-weight:700;color:#137272">'+esc(d.model||'—')+'</span>' +
+          '<span style="font-family:monospace;color:var(--text3)">'+esc(d.imei)+'</span>' +
+          '<span style="font-size:10px;color:#0E7C4A;font-weight:700;min-width:90px;text-align:right">already assigned</span>' +
+        '</div>';
+      }
+      availCount++;
       return '<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-bottom:1px solid var(--border);font-size:12px;cursor:pointer">' +
         '<input type="checkbox" class="ds-chk-'+gi+'" data-imei="'+esc(d.imei)+'" data-name="'+esc(d.device_name)+'" data-server="'+esc(d.server)+'" data-model="'+esc(d.model||'')+'">' +
         '<span style="flex:1">'+esc(d.device_name)+'</span>' +
@@ -1123,14 +1157,15 @@ function dsRenderSummary(merged){
         '<span style="color:var(--text3);font-size:10px">'+esc((d.server||'').replace('bharatgps.',''))+'</span>' +
       '</label>';
     }).join('');
+    var headCount = availCount + ' available' + (assignedCount ? ' · '+assignedCount+' assigned' : '');
     return '<div style="border:1px solid var(--border);border-radius:10px;margin:8px 0;overflow:hidden">' +
       '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2)">' +
         '<b style="flex:1">'+esc(t)+matchNote+'</b>' +
-        '<span style="color:#c8860a;font-weight:800">'+list.length+' devices</span>' +
-        '<button class="btn btn-primary" style="padding:6px 12px;font-size:12px" onclick="dsAssign('+gi+',\''+esc(t).replace(/'/g,"\\'")+'\','+(matched?matched.id:'null')+')">Assign selected →</button>' +
+        '<span style="color:#c8860a;font-weight:800;font-size:12px">'+headCount+'</span>' +
+        '<button class="btn btn-primary" style="padding:6px 12px;font-size:12px" onclick="dsAssign('+gi+',\''+esc(t).replace(/'/g,"\\'")+'\','+(matched?matched.id:'null')+')">Assign selected → '+esc(t)+'</button>' +
       '</div>' +
       '<div style="padding:4px 6px">' +
-        '<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;font-size:11px;color:var(--text3);cursor:pointer"><input type="checkbox" onchange="dsToggleAll('+gi+',this.checked)"> Select all</label>' +
+        '<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;font-size:11px;color:var(--text3);cursor:pointer"><input type="checkbox" onchange="dsToggleAll('+gi+',this.checked)"> Select all available</label>' +
         rows +
       '</div>' +
     '</div>';
@@ -1150,7 +1185,9 @@ function dsAssign(gi, techName, techId){
   if(!confirm('Assign '+picked.length+' device(s) to '+techName+'?')) return;
   invApiCall('dev_assign', null, 'POST', { devices:picked, technician:techName, technician_id:techId }).then(function(res){
     if(res.error){ showToast('❌ '+res.error); return; }
-    showToast('✅ Assigned '+res.assigned+' device(s) to '+techName);
+    showToast('✅ Assigned '+res.assigned+' device(s) to '+res.technician);
+    // refresh assigned map so they show as "already assigned" and re-render
+    dsLoadAssigned(function(){ if(DS_MERGED.length) dsRenderSummary(DS_MERGED); });
   });
 }
 
