@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BharatGPS — Device Sync</title>
+<style>
+  :root { --bg:#0f1117; --card:#1a1d27; --line:#2a2f3d; --txt:#e6e8ee; --mut:#8b93a7; --acc:#d97757; --grn:#4ade80; --red:#f87171; --amb:#fbbf24; --blu:#60a5fa; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--txt); padding:18px; }
+  .wrap { max-width:1150px; margin:0 auto; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:var(--mut); font-size:13px; margin-bottom:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
+  .card h2 { font-size:14px; margin:0 0 12px; }
+  label { display:block; font-size:12px; color:var(--mut); margin-bottom:6px; }
+  input,select,textarea { width:100%; padding:10px 12px; background:#0f1117; border:1px solid var(--line); border-radius:8px; color:var(--txt); font-size:13px; font-family:inherit; }
+  textarea { min-height:90px; resize:vertical; }
+  button { background:var(--acc); color:#fff; border:none; padding:11px 18px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; }
+  button.sec { background:#2a2f3d; }
+  button.danger { background:var(--red); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .btns { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
+  .stat { display:flex; gap:22px; flex-wrap:wrap; }
+  .stat div { font-size:13px; color:var(--mut); }
+  .stat b { color:var(--txt); font-size:22px; display:block; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); }
+  th { color:var(--mut); position:sticky; top:0; background:var(--card); }
+  .imei { font-family:monospace; color:var(--acc); }
+  .scroll { max-height:50vh; overflow:auto; }
+  .err { color:var(--red); font-size:13px; white-space:pre-wrap; margin-top:8px; }
+  .ok { color:var(--grn); font-size:13px; margin-top:8px; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600; }
+  .p-off { background:rgba(96,165,250,.15); color:var(--blu); }
+  .p-tech { background:rgba(251,191,36,.15); color:var(--amb); }
+  .p-miss { background:rgba(248,113,113,.15); color:var(--red); }
+  .srv { font-size:12px; padding:4px 0; }
+  .grpline { margin:5px 0; padding:9px 13px; background:#0f1117; border:1px solid var(--line); border-radius:8px; display:flex; justify-content:space-between; }
+  code { background:#0f1117; padding:1px 5px; border-radius:4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>BharatGPS — Device Sync</h1>
+  <div class="sub">Pull devices from all 3 GPS servers → save as available stock. Upload received IMEIs → match against server to find un-uploaded devices.</div>
+
+  <!-- STEP 1: PULL -->
+  <div class="card">
+    <h2>1 · Pull devices from servers</h2>
+    <div class="btns">
+      <button id="pullBtn" onclick="pullAndSave()">Pull All Servers &amp; Save</button>
+      <span id="srv-status"></span>
+    </div>
+    <div id="pull-err" class="err"></div>
+  </div>
+
+  <!-- STEP 2: RECEIVED IMEIs -->
+  <div class="card">
+    <h2>2 · Upload received IMEIs (master list)</h2>
+    <label>Paste IMEI numbers — one per line (or upload a .csv / .txt / .xlsx single column)</label>
+    <textarea id="imeiText" placeholder="864000000000001&#10;864000000000002&#10;..."></textarea>
+    <div class="btns">
+      <input type="file" id="imeiFile" accept=".csv,.txt,.xlsx,.xls" style="max-width:260px" onchange="loadImeiFile()">
+      <button onclick="uploadReceived()">Save Received IMEIs</button>
+    </div>
+    <div id="recv-msg"></div>
+  </div>
+
+  <!-- STEP 3: MATCH REPORT -->
+  <div class="card">
+    <h2>3 · Match report</h2>
+    <div class="btns" style="margin-top:0">
+      <button class="sec" onclick="loadReport()">Run Match Report</button>
+    </div>
+    <div id="report" style="margin-top:14px"></div>
+  </div>
+
+  <!-- Stock summary -->
+  <div class="card" id="summaryCard" style="display:none">
+    <h2>Available stock (from server)</h2>
+    <div class="stat" style="margin-bottom:12px">
+      <div><b id="s-total">0</b>Total pending</div>
+      <div><b id="s-office" style="color:var(--blu)">0</b>Office stock</div>
+      <div><b id="s-tech" style="color:var(--amb)">0</b>With technicians</div>
+    </div>
+    <div id="techGroups"></div>
+  </div>
+
+  <!-- DELETE (temporary) -->
+  <div class="card" style="border-color:var(--red)">
+    <h2 style="color:var(--red)">⚠️ Delete test data (temporary)</h2>
+    <div class="sub" style="margin:0 0 10px">Wipes synced server data and/or received IMEIs. Requires passcode. Will be removed once you go live.</div>
+    <div class="btns" style="margin-top:0">
+      <button class="danger" onclick="wipe('server')">Delete Server Data</button>
+      <button class="danger" onclick="wipe('received')">Delete Received IMEIs</button>
+      <button class="danger" onclick="wipe('all')">Delete Everything</button>
+    </div>
+    <div id="del-msg"></div>
+  </div>
+</div>
+
+<script>
+var API = '/api/index.php';
+var PROXY = 'device_proxy.php';
+var TOKEN = localStorage.getItem('bgps_token') || '';
+
+var SERVERS = [
+  { id:1, name:'S1 bharatgps.com',   base:'https://bharatgps.com',    hash:'$2y$10$uzZ7lm.VASP20YWWb/NYVeopHdhaxZdOc213OktkPhUhImnySiir.' },
+  { id:2, name:'S2 bharatgps.in',    base:'https://bharatgps.in',     hash:'$2y$10$OjQHmpMaK9V8X2.hX5lUcOs7Bzou3.Raa42wovvnN9i8m4ZebR71u' },
+  { id:3, name:'S3 bharatgps.school',base:'https://bharatgps.school', hash:'$2y$10$oPTMk8NIUXu3Y10e4Fu80ulKKpwvT73l0Cu7L8lP9VPcogI40qlHi' },
+];
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+async function apiCall(action, body){
+  var opts = { method:'POST', headers:{ 'Content-Type':'application/json', 'X-Auth-Token':TOKEN } };
+  opts.body = JSON.stringify(body||{});
+  var r = await fetch(API + '?action=' + action, opts);
+  return r.json();
+}
+
+// Parse device name → status/technician. number-Name=tech, number-Office=office, Name-number=installed(dropped)
+function parseDevice(d){
+  var name = (d.name || d.device_name || '').trim();
+  var imei = d.imei || d.device_imei || d.uniqueid || d.unique_id || '';
+  if(!imei && d.device_data){ imei = d.device_data.imei || d.device_data.uniqueid || ''; }
+  if(!imei && d.traccar){ imei = d.traccar.uniqueId || d.traccar.uniqueid || ''; }
+  var devId = d.id || d.device_id || '';
+  var m = name.match(/^\s*(\d+)\s*[-–—]\s*(.+)$/);
+  var status='installed', tech='';
+  if(m){ var after=m[2].trim(); if(after.toLowerCase()==='office'){status='office';} else {status='tech'; tech=after;} }
+  return { imei:String(imei), device_name:name, device_id:String(devId), status:status, technician:tech };
+}
+
+async function pullAndSave(){
+  var btn=document.getElementById('pullBtn'), st=document.getElementById('srv-status'), err=document.getElementById('pull-err');
+  err.textContent=''; st.innerHTML=''; btn.disabled=true; btn.textContent='Pulling…';
+  var jobs = SERVERS.map(function(s){
+    var url = PROXY + '?base=' + encodeURIComponent(s.base) + '&hash=' + encodeURIComponent(s.hash);
+    return fetch(url,{cache:'no-store'}).then(function(r){return r.text();}).then(function(txt){
+      var data; try{ data=JSON.parse(txt); }catch(e){ return {srv:s,ok:false,msg:'Not JSON',devices:[]}; }
+      if(data && data.status===0){ return {srv:s,ok:false,msg:(data.message||'error'),devices:[]}; }
+      var devs=[];
+      if(Array.isArray(data)){ data.forEach(function(g){ if(g&&g.items&&Array.isArray(g.items)) devs=devs.concat(g.items); else if(g&&(g.imei||g.name)) devs.push(g); }); }
+      else if(data&&data.items){ devs=data.items; } else if(data&&data.data){ devs=data.data; }
+      return {srv:s,ok:true,msg:devs.length+' devices',devices:devs};
+    }).catch(function(e){ return {srv:s,ok:false,msg:String(e.message).slice(0,60),devices:[]}; });
+  });
+  var results = await Promise.all(jobs);
+  var merged=[];
+  var html = results.map(function(r){
+    r.devices.forEach(function(dev){ var p=parseDevice(dev); p.server=r.srv.name; if(p.status!=='installed') merged.push(p); });
+    var c=r.ok?'var(--grn)':'var(--red)'; var ic=r.ok?'✓':'✗';
+    return '<span class="srv" style="color:'+c+';margin-right:14px">'+ic+' '+esc(r.srv.name)+' — '+esc(r.msg)+'</span>';
+  }).join('');
+  st.innerHTML = html;
+  btn.disabled=false; btn.textContent='Pull All Servers & Save';
+
+  if(!merged.length){ err.textContent='No pending devices pulled — check server status above.'; return; }
+  // Save to backend
+  var res = await apiCall('dev_save_pull', { devices: merged });
+  if(res.error){ err.textContent='Save failed: '+res.error; return; }
+  err.style.color='var(--grn)'; err.textContent='Saved '+res.saved+' devices as available stock.';
+  renderSummary(merged);
+}
+
+function renderSummary(merged){
+  document.getElementById('summaryCard').style.display='';
+  var office=merged.filter(function(d){return d.status==='office';});
+  var tech=merged.filter(function(d){return d.status==='tech';});
+  document.getElementById('s-total').textContent=merged.length;
+  document.getElementById('s-office').textContent=office.length;
+  document.getElementById('s-tech').textContent=tech.length;
+  var byTech={}; tech.forEach(function(d){ var t=d.technician||'(unknown)'; byTech[t]=(byTech[t]||0)+1; });
+  var names=Object.keys(byTech).sort(function(a,b){return byTech[b]-byTech[a];});
+  document.getElementById('techGroups').innerHTML = names.length ? names.map(function(t){
+    return '<div class="grpline"><span>'+esc(t)+'</span><b style="color:var(--amb)">'+byTech[t]+'</b></div>';
+  }).join('') : '<div style="color:var(--mut);font-size:13px">No devices with technicians.</div>';
+}
+
+function loadImeiFile(){
+  var f=document.getElementById('imeiFile').files[0]; if(!f) return;
+  var name=f.name.toLowerCase();
+  if(name.endsWith('.xlsx')||name.endsWith('.xls')){
+    // load SheetJS on demand
+    if(window.XLSX){ readXlsx(f); }
+    else { var sc=document.createElement('script'); sc.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; sc.onload=function(){readXlsx(f);}; document.head.appendChild(sc); }
+  } else {
+    var rd=new FileReader(); rd.onload=function(e){ appendImeis(e.target.result); }; rd.readAsText(f);
+  }
+}
+function readXlsx(f){
+  var rd=new FileReader();
+  rd.onload=function(e){
+    var wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+    var ws=wb.Sheets[wb.SheetNames[0]];
+    var rows=XLSX.utils.sheet_to_json(ws,{header:1});
+    var lines=rows.map(function(r){ return (r&&r[0]!=null)?String(r[0]):''; }).filter(Boolean);
+    appendImeis(lines.join('\n'));
+  };
+  rd.readAsArrayBuffer(f);
+}
+function appendImeis(text){
+  var ta=document.getElementById('imeiText');
+  ta.value = (ta.value?ta.value+'\n':'') + text;
+}
+
+async function uploadReceived(){
+  var msg=document.getElementById('recv-msg');
+  var raw=document.getElementById('imeiText').value || '';
+  var imeis = raw.split(/[\s,;]+/).map(function(x){return x.replace(/\D/g,'');}).filter(Boolean);
+  if(!imeis.length){ msg.className='err'; msg.textContent='No IMEIs found.'; return; }
+  msg.className=''; msg.textContent='Saving…';
+  var res = await apiCall('dev_upload_received', { imeis: imeis });
+  if(res.error){ msg.className='err'; msg.textContent=res.error; return; }
+  msg.className='ok';
+  msg.textContent='Added '+res.added+' new, skipped '+res.skipped+' (duplicates/blank). Total received: '+res.total_received;
+}
+
+async function loadReport(){
+  var el=document.getElementById('report');
+  el.innerHTML='<span style="color:var(--mut)">Loading…</span>';
+  var r = await apiCall('dev_match_report', {});
+  if(r.error){ el.innerHTML='<span class="err">'+esc(r.error)+'</span>'; return; }
+  var html = '<div class="stat" style="margin-bottom:14px">' +
+    '<div><b>'+r.received_total+'</b>Received (master)</div>' +
+    '<div><b style="color:var(--grn)">'+r.matched+'</b>Matched on server</div>' +
+    '<div><b style="color:var(--red)">'+r.missing_count+'</b>Not yet uploaded</div>' +
+    '<div><b style="color:var(--blu)">'+r.office_stock+'</b>Office stock</div>' +
+    '<div><b style="color:var(--amb)">'+r.with_tech+'</b>With techs</div>' +
+    '</div>';
+  if(r.missing_count>0){
+    html += '<div style="font-size:13px;font-weight:700;color:var(--red);margin:6px 0">Received but NOT on server ('+r.missing_count+') — still to upload:</div>';
+    html += '<div class="scroll" style="max-height:30vh"><table><thead><tr><th>IMEI</th></tr></thead><tbody>' +
+      r.missing_imeis.map(function(i){return '<tr><td class="imei">'+esc(i)+'</td></tr>';}).join('') +
+      '</tbody></table></div>';
+  } else {
+    html += '<div class="ok">✓ All received IMEIs are present on the server.</div>';
+  }
+  if(r.extra_count>0){
+    html += '<div style="font-size:13px;font-weight:700;color:var(--amb);margin:14px 0 6px">On server but NOT in received list ('+r.extra_count+') — check these:</div>';
+    html += '<div class="scroll" style="max-height:24vh"><table><thead><tr><th>IMEI</th><th>Name</th><th>Server</th></tr></thead><tbody>' +
+      r.extra.map(function(e){return '<tr><td class="imei">'+esc(e.imei)+'</td><td>'+esc(e.device_name)+'</td><td style="color:var(--mut)">'+esc(e.server)+'</td></tr>';}).join('') +
+      '</tbody></table></div>';
+  }
+  el.innerHTML = html;
+}
+
+async function wipe(which){
+  var pass = prompt('Enter passcode to delete '+which+' data:');
+  if(pass===null) return;
+  var msg=document.getElementById('del-msg');
+  msg.textContent='Deleting…'; msg.className='';
+  var res = await apiCall('dev_delete_all', { which: which, passcode: pass });
+  if(res.error){ msg.className='err'; msg.textContent=res.error; return; }
+  msg.className='ok'; msg.textContent='Cleared: '+res.cleared;
+  if(which==='server'||which==='all'){ document.getElementById('summaryCard').style.display='none'; }
+  document.getElementById('report').innerHTML='';
+}
+
+if(!TOKEN){
+  document.querySelector('.wrap').insertAdjacentHTML('afterbegin',
+    '<div class="card" style="border-color:var(--red)"><span class="err">Not logged in. Open TaskManager and log in as admin first, then reload this page.</span></div>');
+}
+</script>
+</body>
+</html>
