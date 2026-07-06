@@ -26,21 +26,31 @@ if (!$ok) {
     exit;
 }
 
-$url = $base . '/api/get_devices?user_api_hash=' . urlencode($hash);
+$url = $base . '/api/get_devices?lang=en&user_api_hash=' . urlencode($hash);
 
-$ch = curl_init($url);
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_TIMEOUT        => 60,
-    CURLOPT_SSL_VERIFYPEER => false,
-    CURLOPT_SSL_VERIFYHOST => false,
-    CURLOPT_FOLLOWLOCATION => true,
-    CURLOPT_HTTPHEADER     => ['Accept: application/json'],
-]);
-$resp = curl_exec($ch);
-$code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$cerr = curl_error($ch);
-curl_close($ch);
+$attempts = 0;
+$resp = false;
+$cerr = '';
+$code = 0;
+while ($attempts < 2 && $resp === false) {
+    $attempts++;
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 180,   // big servers (bharatgps.com) can be slow
+        CURLOPT_CONNECTTIMEOUT => 20,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => false,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_ENCODING       => '',    // accept gzip → smaller/faster transfer
+        CURLOPT_HTTPHEADER     => ['Accept: application/json'],
+    ]);
+    $resp = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $cerr = curl_error($ch);
+    curl_close($ch);
+    if ($resp === false && $attempts < 2) { sleep(2); } // brief pause then retry once
+}
 
 if ($resp === false) {
     http_response_code(502);
