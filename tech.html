@@ -419,7 +419,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
 
         <!-- MY DEVICES BREAKDOWN (toggled by My Devices card) -->
         <div id="my-devices-panel" style="display:none;background:var(--surface);border-radius:8px;box-shadow:var(--shadow);padding:14px 16px;margin-bottom:20px">
-          <div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:10px">📦 Devices in my stock</div>
+          <div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:10px">📦 Devices assigned to me (IMEI)</div>
           <div id="my-devices-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px"></div>
         </div>
 
@@ -2546,35 +2546,24 @@ async function loadMyTasks(){
 async function loadMyDevices(){
   const valEl  = document.getElementById('my-s-devices');
   const listEl = document.getElementById('my-devices-list');
-  const myName = currentUser?.name || '';
-  const d = await api('stock_get').catch(()=>({}));
-  const items = d.items || [];
-  const techStock = d.tech_stock || {};
-  const myStock = techStock[myName] || {};
+  // Assigned server devices for this technician (from device_assignments)
+  const d = await api('dev_assignments_get').catch(()=>({}));
+  const rows = (d && d.assignments) ? d.assignments : [];
 
-  // Build id → name lookup
-  const nameById = {};
-  items.forEach(function(i){ nameById[i.id] = (i.name||'Item') + (i.model ? ' ('+i.model+')' : ''); });
-
-  let total = 0, rows = [];
-  Object.keys(myStock).forEach(function(id){
-    const qty = Math.max(0, parseInt(myStock[id]) || 0);
-    if(qty <= 0) return;
-    total += qty;
-    rows.push({ name: nameById[id] || ('Item #'+id), qty: qty });
-  });
-  rows.sort(function(a,b){ return b.qty - a.qty; });
-
-  if(valEl) valEl.textContent = total;
+  if(valEl) valEl.textContent = rows.length;
 
   if(listEl){
     if(!rows.length){
-      listEl.innerHTML = '<div style="font-size:12px;color:var(--text3)">No devices currently in your stock.</div>';
+      listEl.innerHTML = '<div style="font-size:12px;color:var(--text3)">No devices assigned to you yet.</div>';
     } else {
       listEl.innerHTML = rows.map(function(r){
-        return '<div style="background:rgba(10,125,107,.08);border:1px solid rgba(10,125,107,.2);border-radius:6px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px">' +
-          '<span style="font-size:12px;font-weight:600;color:var(--text)">' + r.name + '</span>' +
-          '<span style="font-size:14px;font-weight:900;color:#0a7d6b">' + r.qty + '</span>' +
+        var srv = (r.server||'').replace('bharatgps.','');
+        return '<div style="background:rgba(10,125,107,.08);border:1px solid rgba(10,125,107,.2);border-radius:8px;padding:9px 11px">' +
+          '<div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:3px">' + (r.device_name||'Device') + '</div>' +
+          '<div style="display:flex;justify-content:space-between;gap:8px">' +
+            '<span style="font-size:11px;font-family:monospace;color:#0a7d6b">' + (r.imei||'') + '</span>' +
+            '<span style="font-size:10px;color:var(--text3)">' + srv + '</span>' +
+          '</div>' +
         '</div>';
       }).join('');
     }
