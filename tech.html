@@ -3354,11 +3354,12 @@ async function submitTechUpdate(){
     const res = await api('update_task', {}, 'POST', body);
     if(res && res.success){
       closeTechUpdate();
-      await viewTask(taskId);
-      if(typeof renderMyTasks === 'function') renderMyTasks();
-      if(consentWasActive){
-        showToast('✅ Update saved — Attend button reset for fresh consent');
-      }
+      // Close the task detail view and return to the dashboard (my-tasks list)
+      if(typeof closeTaskDetail === 'function') closeTaskDetail();
+      showToast(consentWasActive ? '✅ Update saved — Attend button reset for fresh consent' : '✅ Update saved');
+      showPage('my-tasks');
+      if(typeof loadMyTasks === 'function') loadMyTasks();
+      else if(typeof renderMyTasks === 'function') renderMyTasks();
     } else {
       alert(res.error || 'Update failed. Please try again.');
     }
