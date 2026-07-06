@@ -62,6 +62,29 @@ if (!in_array($action, $skipAuth)) {
     $userRole = $cu['role'];
 }
 
+// ── Device sync helpers ──
+function _devEnsureTables($pdo){
+    $pdo->exec("CREATE TABLE IF NOT EXISTS server_devices (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        imei VARCHAR(40) NOT NULL,
+        device_name VARCHAR(190) DEFAULT '',
+        status VARCHAR(20) DEFAULT '',
+        technician VARCHAR(120) DEFAULT '',
+        server VARCHAR(60) DEFAULT '',
+        device_id VARCHAR(40) DEFAULT '',
+        synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_imei (imei)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS received_devices (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        imei VARCHAR(40) NOT NULL,
+        received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        note VARCHAR(190) DEFAULT '',
+        UNIQUE KEY uq_rimei (imei)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+}
+function _devNorm($imei){ return preg_replace('/\D/', '', (string)$imei); } // digits only
+
 switch ($action) {
 
 // ---- PING ----
@@ -2426,6 +2449,123 @@ case 'stock_save_movement':
         $pdo->prepare("INSERT INTO stock_movements (item_id,move_type,qty,tech_name,ref_note,move_date,done_by) VALUES (?,?,?,?,?,?,?)")
             ->execute([$itemId,$type,$qty,$tech?:null,$ref?:null,$date,$cu['name']]);
         echo json_encode(['success'=>true,'id'=>intval($pdo->lastInsertId())]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// ══════════════════════════════════════════════════════════════════════
+// ── DEVICE SYNC (server pull + received IMEI match) ───────────────────
+// server_devices  = latest pull from GPS servers (office / with-tech only)
+// received_devices = master list of IMEIs physically received (Excel upload)
+// ══════════════════════════════════════════════════════════════════════
+
+case 'dev_save_pull':
+    if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    // body.devices = [{imei,device_name,status,technician,server,device_id}]
+    try {
+        _devEnsureTables($pdo);
+        $devices = $body['devices'] ?? [];
+        if(!is_array($devices)){ echo json_encode(['error'=>'devices must be array']); break; }
+        // Replace whole snapshot: clear then insert current pull
+        $pdo->exec("DELETE FROM server_devices");
+        $ins = $pdo->prepare("INSERT INTO server_devices (imei,device_name,status,technician,server,device_id) VALUES (?,?,?,?,?,?)
+                              ON DUPLICATE KEY UPDATE device_name=VALUES(device_name),status=VALUES(status),technician=VALUES(technician),server=VALUES(server),device_id=VALUES(device_id),synced_at=NOW()");
+        $n = 0;
+        foreach($devices as $d){
+            $imei = _devNorm($d['imei'] ?? '');
+            if($imei === '') continue;
+            $ins->execute([
+                $imei,
+                substr($d['device_name'] ?? '', 0, 190),
+                substr($d['status'] ?? '', 0, 20),
+                substr($d['technician'] ?? '', 0, 120),
+                substr($d['server'] ?? '', 0, 60),
+                substr((string)($d['device_id'] ?? ''), 0, 40)
+            ]);
+            $n++;
+        }
+        echo json_encode(['success'=>true,'saved'=>$n]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'dev_upload_received':
+    if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    // body.imeis = ["imei1","imei2",...]  (append to master, dedupe)
+    try {
+        _devEnsureTables($pdo);
+        $imeis = $body['imeis'] ?? [];
+        if(!is_array($imeis)){ echo json_encode(['error'=>'imeis must be array']); break; }
+        $ins = $pdo->prepare("INSERT IGNORE INTO received_devices (imei) VALUES (?)");
+        $added = 0; $skipped = 0;
+        foreach($imeis as $raw){
+            $imei = _devNorm($raw);
+            if($imei === ''){ $skipped++; continue; }
+            $ins->execute([$imei]);
+            if($ins->rowCount() > 0) $added++; else $skipped++;
+        }
+        $total = $pdo->query("SELECT COUNT(*) FROM received_devices")->fetchColumn();
+        echo json_encode(['success'=>true,'added'=>$added,'skipped'=>$skipped,'total_received'=>intval($total)]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'dev_match_report':
+    if(!in_array($userRole,['admin','assigner','technician'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        _devEnsureTables($pdo);
+        $received = $pdo->query("SELECT imei FROM received_devices")->fetchAll(PDO::FETCH_COLUMN);
+        $server   = $pdo->query("SELECT imei,device_name,status,technician,server FROM server_devices")->fetchAll(PDO::FETCH_ASSOC);
+        $serverByImei = [];
+        foreach($server as $s){ $serverByImei[$s['imei']] = $s; }
+        $matched = []; $missing = [];
+        foreach($received as $imei){
+            if(isset($serverByImei[$imei])) $matched[] = $serverByImei[$imei];
+            else $missing[] = $imei;   // received but NOT on server = not yet uploaded
+        }
+        // On server but NOT in received list (data-entry / wrong upload)
+        $receivedSet = array_flip($received);
+        $extra = [];
+        foreach($server as $s){ if(!isset($receivedSet[$s['imei']])) $extra[] = $s; }
+        // Counts by status among server devices
+        $office = 0; $withTech = 0; $byTech = [];
+        foreach($server as $s){
+            if($s['status']==='office') $office++;
+            elseif($s['status']==='tech'){ $withTech++; $t=$s['technician']?:'(unknown)'; $byTech[$t]=($byTech[$t]??0)+1; }
+        }
+        echo json_encode([
+            'success'=>true,
+            'received_total'=>count($received),
+            'server_total'=>count($server),
+            'matched'=>count($matched),
+            'missing_count'=>count($missing),
+            'missing_imeis'=>$missing,
+            'extra_count'=>count($extra),
+            'extra'=>$extra,
+            'office_stock'=>$office,
+            'with_tech'=>$withTech,
+            'by_tech'=>$byTech
+        ]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'dev_get':
+    if(!in_array($userRole,['admin','assigner','technician'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        _devEnsureTables($pdo);
+        $server = $pdo->query("SELECT imei,device_name,status,technician,server,device_id FROM server_devices ORDER BY status,technician")->fetchAll(PDO::FETCH_ASSOC);
+        $recv = intval($pdo->query("SELECT COUNT(*) FROM received_devices")->fetchColumn());
+        echo json_encode(['success'=>true,'server_devices'=>$server,'received_total'=>$recv]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'dev_delete_all':
+    if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Admin only']); break; }
+    // TEMPORARY test button. Requires passcode. Wipes both device tables.
+    if(($body['passcode'] ?? '') !== '532842'){ echo json_encode(['error'=>'Wrong passcode']); break; }
+    try {
+        _devEnsureTables($pdo);
+        $which = $body['which'] ?? 'all';
+        if($which === 'server' || $which === 'all') $pdo->exec("DELETE FROM server_devices");
+        if($which === 'received' || $which === 'all') $pdo->exec("DELETE FROM received_devices");
+        echo json_encode(['success'=>true,'cleared'=>$which]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
