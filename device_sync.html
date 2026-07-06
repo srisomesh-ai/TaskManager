@@ -139,7 +139,10 @@ async function pullAndSave(){
   var jobs = SERVERS.map(function(s){
     var url = PROXY + '?base=' + encodeURIComponent(s.base) + '&hash=' + encodeURIComponent(s.hash);
     return fetch(url,{cache:'no-store'}).then(function(r){return r.text();}).then(function(txt){
-      var data; try{ data=JSON.parse(txt); }catch(e){ return {srv:s,ok:false,msg:'Not JSON',devices:[]}; }
+      var data; try{ data=JSON.parse(txt); }catch(e){
+        var m504 = /504|Gateway Time-out|Bad Gateway|502/i.test(txt);
+        return {srv:s,ok:false,msg:(m504?'server timeout (504) — try again':'Not JSON'),devices:[]};
+      }
       if(data && data.status===0){ return {srv:s,ok:false,msg:(data.message||'error'),devices:[]}; }
       var devs=[];
       if(Array.isArray(data)){ data.forEach(function(g){ if(g&&g.items&&Array.isArray(g.items)) devs=devs.concat(g.items); else if(g&&(g.imei||g.name)) devs.push(g); }); }
