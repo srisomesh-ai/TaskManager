@@ -2249,7 +2249,7 @@ case 'pur_save':
     break;
 
 case 'pur_mark_received':
-    if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Admin only']); break; }
+    if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     $id          = intval($body['id']??0);
     $recDate     = trim($body['received_date']??date('Y-m-d'));
     $recQty      = intval($body['received_qty']??0);
