@@ -1215,18 +1215,30 @@ function dsRenderSummary(merged){
     var picker = '<select id="ds-tech-sel-'+gi+'" class="form-input" style="padding:6px 8px;font-size:12px;max-width:180px">'+opts+'</select>';
     return '<div style="border:1px solid var(--border);border-radius:10px;margin:8px 0;overflow:hidden">' +
       '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2);flex-wrap:wrap">' +
-        '<b style="flex:1;min-width:140px">'+esc(t)+' <span style="color:var(--text3);font-weight:600;font-size:11px">(server name)</span></b>' +
-        '<span style="color:#c8860a;font-weight:800;font-size:12px">'+headCount+'</span>' +
+        '<div onclick="dsToggleGroup('+gi+')" style="display:flex;align-items:center;gap:8px;flex:1;min-width:140px;cursor:pointer">' +
+          '<span id="ds-arrow-'+gi+'" style="font-size:12px;color:var(--text3);transition:transform .15s">▸</span>' +
+          '<b>'+esc(t)+' <span style="color:var(--text3);font-weight:600;font-size:11px">(server)</span></b>' +
+          '<span style="color:#c8860a;font-weight:800;font-size:12px;margin-left:6px">'+headCount+'</span>' +
+        '</div>' +
         '<span style="font-size:11px;color:var(--text3)">Assign to:</span>' +
         picker +
         '<button class="btn btn-primary" style="padding:6px 12px;font-size:12px" onclick="dsAssign('+gi+')">Assign selected →</button>' +
       '</div>' +
-      '<div style="padding:4px 6px">' +
+      '<div id="ds-body-'+gi+'" style="padding:4px 6px;display:none">' +
         '<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;font-size:11px;color:var(--text3);cursor:pointer"><input type="checkbox" onchange="dsToggleAll('+gi+',this.checked)"> Select all available</label>' +
         rows +
       '</div>' +
     '</div>';
   }).join('');
+}
+
+function dsToggleGroup(gi){
+  var body=document.getElementById('ds-body-'+gi);
+  var arrow=document.getElementById('ds-arrow-'+gi);
+  if(!body) return;
+  var open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  if(arrow) arrow.textContent = open ? '▸' : '▾';
 }
 
 function dsToggleAll(gi, on){
