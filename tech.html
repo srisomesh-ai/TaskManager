@@ -1169,6 +1169,31 @@ function cdMethod(el, method){
   document.getElementById('cd-ref-box').style.display    = (method !== 'Cash Handed Over') ? '' : 'none';
 }
 
+function showTechAppreciation(){
+  const msgs = [
+    { t:'Great job! 🎉', s:'Task completed successfully. Thank you for your effort — keep going, and stay safe!' },
+    { t:'Well done! 👏', s:'Another one done right. Your hard work matters. On to the next — and finish on time!' },
+    { t:'Awesome work! 🌟', s:'Task closed successfully. Keep up the great effort and stay safe out there!' },
+    { t:'You did it! 🚀', s:'Thanks for the solid work. Move on to the next task — you have got this!' },
+    { t:'Superb! 💪', s:'Job completed. We appreciate your dedication. Keep going and complete the next one on time!' },
+  ];
+  const m = msgs[Math.floor(Math.random()*msgs.length)];
+  const old = document.getElementById('tech-appr-overlay'); if(old) old.remove();
+  const ov = document.createElement('div');
+  ov.id = 'tech-appr-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:3000;display:flex;align-items:center;justify-content:center;padding:24px';
+  ov.innerHTML =
+    '<div style="background:#fff;border-radius:16px;max-width:340px;width:100%;padding:26px 22px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.25)">'
+    + '<div style="font-size:44px;margin-bottom:8px">✅</div>'
+    + '<div style="font-size:19px;font-weight:800;color:var(--green,#1a9d5a);margin-bottom:8px">'+m.t+'</div>'
+    + '<div style="font-size:13px;color:var(--text2,#555);line-height:1.6;margin-bottom:18px">'+m.s+'</div>'
+    + '<button onclick="var e=document.getElementById(\'tech-appr-overlay\'); if(e) e.remove();" style="width:100%;padding:12px;background:var(--green,#1a9d5a);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer">Next Task →</button>'
+    + '</div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
+  setTimeout(function(){ const el=document.getElementById('tech-appr-overlay'); if(el) el.remove(); }, 6000);
+}
+
 async function cdSubmit(){
   var errEl = document.getElementById('cd-err');
   errEl.style.display = 'none';
@@ -1197,15 +1222,11 @@ async function cdSubmit(){
   btn.textContent = '✅ Confirm Deposit & Submit for Approval';
   if(res && res.success){
     cdClose();
-    showToast('✅ Cash deposit submitted — admin will verify');
-    // Refresh task detail so button updates to new state
+    // Close the task fully and return to the list
     const tid = _cdTaskId;
     closeTaskDetail();
-    loadMyTasks().then(function(){
-      viewTask(tid);
-    }).catch(function(){
-      viewTask(tid);
-    });
+    loadMyTasks().catch(function(){});
+    showTechAppreciation();
   } else {
     errEl.textContent = '❌ ' + (res.error || 'Failed — please try again');
     errEl.style.display = '';
