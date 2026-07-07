@@ -3948,17 +3948,19 @@ async function handleAttendClick(taskId){
 function _techGetPos(){
   return new Promise(function(res, rej){
     if(!('geolocation' in navigator) || !window.isSecureContext){ rej(new Error('Location needs a secure (https) page and GPS enabled.')); return; }
-    navigator.geolocation.getCurrentPosition(
-      function(p){ res({lat:+p.coords.latitude.toFixed(6), lng:+p.coords.longitude.toFixed(6)}); },
-      function(e){
-        var m = 'Could not get your location.';
-        if(e && e.code===1) m='Location permission denied. Allow location and retry.';
-        else if(e && e.code===2) m='Turn on GPS / location services and retry.';
-        else if(e && e.code===3) m='Timed out getting location. Move to open sky and retry.';
-        rej(new Error(m));
-      },
-      {enableHighAccuracy:true, timeout:15000, maximumAge:0}
-    );
+    function ok(p){ res({lat:+p.coords.latitude.toFixed(6), lng:+p.coords.longitude.toFixed(6)}); }
+    function fail(e){
+      var m = 'Could not get your location. Make sure GPS/Location is ON and retry.';
+      if(e && e.code===1) m='Location permission denied. Allow location and retry.';
+      else if(e && e.code===2) m='Turn on GPS / location services and retry.';
+      rej(new Error(m));
+    }
+    // quick low-accuracy first, then high-accuracy, then cached
+    navigator.geolocation.getCurrentPosition(ok, function(){
+      navigator.geolocation.getCurrentPosition(ok, function(){
+        navigator.geolocation.getCurrentPosition(ok, fail, {enableHighAccuracy:false, timeout:30000, maximumAge:300000});
+      }, {enableHighAccuracy:true, timeout:20000, maximumAge:0});
+    }, {enableHighAccuracy:false, timeout:8000, maximumAge:60000});
   });
 }
 
