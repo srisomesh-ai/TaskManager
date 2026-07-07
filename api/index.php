@@ -161,8 +161,10 @@ case 'make_req_link':
     $rtype = trim($body['type'] ?? $_GET['type'] ?? '');
     $allowed = ['troubleshoot','vehicle-change','gps-remove'];
     if(!in_array($rtype, $allowed)){ echo json_encode(['error'=>'Invalid type']); break; }
-    $tok = reqMakeToken($rtype, 6);
-    echo json_encode(['success'=>true,'token'=>$tok,'type'=>$rtype,'expires_hours'=>6]);
+    $rprice = isset($body['price']) ? floatval($body['price']) : 0;
+    $rgst   = !empty($body['gst']) ? 1 : 0;
+    $tok = reqMakeToken($rtype, 6, $rprice, $rgst);
+    echo json_encode(['success'=>true,'token'=>$tok,'type'=>$rtype,'price'=>$rprice,'gst'=>$rgst,'expires_hours'=>6]);
     break;
 
 case 'login':
