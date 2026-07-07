@@ -3945,6 +3945,78 @@ async function handleAttendClick(taskId){
 // Poll timer cleared in closeTaskDetail above
 
 // ── Check consent and update Attend button state on task open ─────────────
+function _techGetPos(){
+  return new Promise(function(res, rej){
+    if(!('geolocation' in navigator) || !window.isSecureContext){ rej(new Error('Location needs a secure (https) page and GPS enabled.')); return; }
+    navigator.geolocation.getCurrentPosition(
+      function(p){ res({lat:+p.coords.latitude.toFixed(6), lng:+p.coords.longitude.toFixed(6)}); },
+      function(e){
+        var m = 'Could not get your location.';
+        if(e && e.code===1) m='Location permission denied. Allow location and retry.';
+        else if(e && e.code===2) m='Turn on GPS / location services and retry.';
+        else if(e && e.code===3) m='Timed out getting location. Move to open sky and retry.';
+        rej(new Error(m));
+      },
+      {enableHighAccuracy:true, timeout:15000, maximumAge:0}
+    );
+  });
+}
+
+async function techAskLocation(taskId){
+  const r = await api('send_location_request', {}, 'POST', {id: taskId}).catch(()=>({}));
+  if(r && r.success){
+    const phone = (r.phone||'').replace(/\D/g,'');
+    const msg = encodeURIComponent('Hello! Our BharatGPS technician is on the way. Please tap this link and share your location so we can reach you quickly:\n\n' + r.link);
+    if(phone){ window.open('https://wa.me/91' + phone + '?text=' + msg, '_blank'); }
+    else { window.open('https://wa.me/?text=' + msg, '_blank'); }
+    showToast('📍 Location link sent. It will update once the customer shares.');
+    // poll a few times for the customer to share
+    _pollCustomerLocation(taskId, 0);
+  } else {
+    alert('Could not create location link. Please try again.');
+  }
+}
+
+function _pollCustomerLocation(taskId, n){
+  if(n > 40) return; // ~2 min
+  setTimeout(async function(){
+    const s = await api('check_customer_location', {id: taskId}).catch(()=>({}));
+    if(s && s.has_location){
+      if(_detailTask && _detailTask.id == taskId) checkAndUpdateAttendBtn(taskId, _detailTask);
+      showToast('✅ Customer shared their location!');
+    } else {
+      _pollCustomerLocation(taskId, n+1);
+    }
+  }, 3000);
+}
+
+async function techStartNavigation(taskId, lat, lng){
+  try {
+    showToast('📍 Capturing your start point…');
+    const pos = await _techGetPos();
+    await api('save_trip_start', {}, 'POST', {id: taskId, lat: pos.lat, lng: pos.lng}).catch(()=>({}));
+    // open maps navigation to customer
+    window.open('https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng, '_blank');
+    if(_detailTask && _detailTask.id == taskId) checkAndUpdateAttendBtn(taskId, _detailTask);
+  } catch(e){
+    alert(e.message || 'Could not capture start point.');
+  }
+}
+
+async function techReachedLocation(taskId){
+  try {
+    showToast('📍 Capturing your arrival…');
+    const pos = await _techGetPos();
+    const r = await api('save_trip_reached', {}, 'POST', {id: taskId, lat: pos.lat, lng: pos.lng}).catch(()=>({}));
+    if(r && r.success){
+      showToast('✅ Arrival recorded · ' + (r.trip_km||0) + ' km, ' + (r.trip_minutes||0) + ' min');
+    }
+    if(_detailTask && _detailTask.id == taskId) checkAndUpdateAttendBtn(taskId, _detailTask);
+  } catch(e){
+    alert(e.message || 'Could not record arrival.');
+  }
+}
+
 async function checkAndUpdateAttendBtn(taskId, taskObj){
   const btn    = document.getElementById('td-attend-btn-'  + taskId);
   const icon   = document.getElementById('td-attend-icon-' + taskId);
@@ -4098,14 +4170,62 @@ async function checkAndUpdateAttendBtn(taskId, taskObj){
     return;
   }
 
-  // STATE 1: No consent sent yet — show Attend button
+  // STATE 1: No consent sent yet — but FIRST gate on customer location + trip (get location → navigate → reached)
+  const locState = await api('check_customer_location', {id: taskId}).catch(()=>({}));
+  if(!locState.reached){
+    // Location/trip flow not complete — show the evolving location button, block Attend
+    if(!locState.has_location){
+      // Step A: get customer location
+      btn.style.background = 'var(--accent2,#1f5fd6)';
+      btn.style.display    = '';
+      btn.setAttribute('onclick', 'techAskLocation(' + taskId + ')');
+      if(icon)  icon.textContent  = '📍';
+      if(label) label.textContent = 'Get Customer Location';
+      if(sub)   sub.textContent   = 'Send location link to customer';
+      if(status) status.innerHTML = `
+        <div style="background:#eef4ff;border:1.5px solid var(--accent2,#1f5fd6);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--accent2,#1f5fd6);line-height:1.6">
+          📍 First, send the customer a link to share their exact location. Tap to send via WhatsApp.
+        </div>`;
+    } else if(!locState.started){
+      // Step B: start navigation
+      btn.style.background = 'var(--green)';
+      btn.style.display    = '';
+      btn.setAttribute('onclick', 'techStartNavigation(' + taskId + ',' + locState.lat + ',' + locState.lng + ')');
+      if(icon)  icon.textContent  = '🧭';
+      if(label) label.textContent = 'Navigate to Customer';
+      if(sub)   sub.textContent   = 'Start navigation to customer';
+      if(status) status.innerHTML = `
+        <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--green);line-height:1.6">
+          ✅ Customer shared their location. Tap to start navigation — your start point &amp; time will be recorded.
+        </div>`;
+    } else {
+      // Step C: reached (mandatory)
+      btn.style.background = 'var(--saffron,#d93a3a)';
+      btn.style.display    = '';
+      btn.setAttribute('onclick', 'techReachedLocation(' + taskId + ')');
+      if(icon)  icon.textContent  = '📍';
+      if(label) label.textContent = 'Reached Location';
+      if(sub)   sub.textContent   = 'Confirm arrival to continue';
+      if(status) status.innerHTML = `
+        <div style="background:var(--amber-bg);border:1.5px solid var(--amber);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--saffron);line-height:1.6">
+          🧭 On the way. Tap <strong>Reached Location</strong> when you arrive — required before consent.
+          <div style="margin-top:6px"><a target="_blank" href="https://www.google.com/maps/dir/?api=1&destination=${locState.lat},${locState.lng}" style="color:var(--accent2,#1f5fd6);font-weight:700">🗺️ Reopen navigation</a></div>
+        </div>`;
+    }
+    return;
+  }
+
+  // Location done & reached → show Attend button (leads to consent)
   btn.style.background = 'var(--accent)';
   btn.style.display    = '';
   btn.setAttribute('onclick', 'handleAttendClick(' + taskId + ')');
   if(icon)  icon.textContent  = '🔧';
   if(label) label.textContent = 'Attend';
   if(sub)   sub.textContent   = t?.device_details||'Start task';
-  if(status) status.innerHTML = '';
+  if(status){
+    const tripLine = (locState.trip_km!=null) ? `<div style="background:var(--surface2);border-radius:8px;padding:8px 12px;font-size:11px;color:var(--text3);margin-bottom:0">🚗 Trip: <strong>${locState.trip_km} km</strong> · <strong>${locState.trip_minutes} min</strong></div>` : '';
+    status.innerHTML = tripLine;
+  }
 }
 
 // ════════════════════════════════════════════════════════
