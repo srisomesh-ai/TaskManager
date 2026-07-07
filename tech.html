@@ -1311,17 +1311,21 @@ async function doLogin(){
       body:JSON.stringify({email, password:pass})
     });
     const d = await r.json();
-    if(d.success && d.token){
-      // In tech.html — do not save to bgps_token to avoid overwriting admin session
-      // localStorage.setItem('bgps_token', d.token);
+    if(d.token){
+      if(d.user && d.user.role && d.user.role!=='technician'){
+        err.textContent='This portal is for technicians only.';
+        btn.textContent='🔐 Sign In'; btn.disabled=false; return;
+      }
       authToken   = d.token;
       currentUser = d.user;
+      localStorage.setItem('bgps_tech_token', authToken);
+      localStorage.setItem('bgps_tech_user', JSON.stringify(currentUser));
       startApp();
     } else {
       err.textContent = d.error || 'Invalid email or password.';
+      btn.textContent='🔐 Sign In'; btn.disabled=false;
     }
-  } catch(e){ err.textContent='Connection error. Try again.'; }
-  btn.textContent='🔐 Sign In'; btn.disabled=false;
+  } catch(e){ err.textContent='Connection error. Try again.'; btn.textContent='🔐 Sign In'; btn.disabled=false; }
 }
 
 // ── Show/hide pages ────────────────────────────────────────────────────────
