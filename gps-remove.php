@@ -27,13 +27,22 @@ try {
     if ($found !== false && $found !== null && floatval($found) > 0) $PRICE = floatval($found);
 } catch(Exception $e) {}
 
+// Assigner-set price + GST from the signed token override everything
+$GST = 0;
+if (!empty($tk) && !empty($tk['valid'])) {
+    if (floatval($tk['price']) > 0) $PRICE = floatval($tk['price']);
+    $GST = !empty($tk['gst']) ? 1 : 0;
+}
+$GST_AMT = $GST ? round($PRICE * 0.18, 2) : 0;
+$TOTAL   = $PRICE + $GST_AMT;
+
 $pref_phone   = trim($_GET['p'] ?? '');
 $pref_vehicle = trim($_GET['v'] ?? '');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
     require_once 'api/mailer.php';
     $postToken = trim($_POST['tok'] ?? $token);
-    if ($postToken !== '') { $tk2 = reqCheckToken($pdo, $postToken, $FORM_TYPE); if (!$tk2['valid']) { $error = $tk2['expired'] ? 'This link has expired.' : ($tk2['used'] ? 'This link has already been used.' : 'Invalid link.'); } $TOKEN_HASH = $tk2['hash']; }
+    if ($postToken !== '') { $tk2 = reqCheckToken($pdo, $postToken, $FORM_TYPE); if (!$tk2['valid']) { $error = $tk2['expired'] ? 'This link has expired.' : ($tk2['used'] ? 'This link has already been used.' : 'Invalid link.'); } else { if (floatval($tk2['price']) > 0) $PRICE = floatval($tk2['price']); $GST = !empty($tk2['gst']) ? 1 : 0; $GST_AMT = $GST ? round($PRICE*0.18,2) : 0; $TOTAL = $PRICE + $GST_AMT; } $TOKEN_HASH = $tk2['hash']; }
     $cust_name = trim($_POST['cust_name'] ?? '');
     $vehicle   = trim($_POST['vehicle']   ?? '');
     $reason    = trim($_POST['reason']    ?? '');
@@ -70,14 +79,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)")
                 ->execute([
                     $taskId, $cust_name, $phone, $email, $location, 'Existing Customer Lead',
-                    $JOB_NAME, 1, $PRICE, '',
+                    $JOB_NAME, 1, $TOTAL, '',
                     'Open', $notes, $cb, $vehicle
                 ]);
             $newId = $pdo->lastInsertId();
 
             $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'system')")
                 ->execute([$newId, $cb,
-                    "🌐 Customer GPS removal request | Customer: $cust_name | Vehicle: $vehicle | Price: Rs.$PRICE"
+                    "🌐 Customer GPS removal request | Customer: $cust_name | Vehicle: $vehicle | Price: Rs.$PRICE".($GST?" + GST Rs.$GST_AMT = Rs.$TOTAL":" (no GST)")
                 ]);
 
             if (function_exists('sendMail')) {
@@ -104,7 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
                       . '<div style="background:#c0392b;color:#fff;padding:18px 20px;border-radius:10px 10px 0 0"><h2 style="margin:0;font-size:18px">Request Received - BharatGPS</h2></div>'
                       . '<div style="background:#fff;border:1px solid #e5e9f0;border-top:none;padding:18px 20px;border-radius:0 0 10px 10px">'
                       . '<p style="color:#2a3548;font-size:14px;margin:0 0 10px">Dear '.htmlspecialchars($cust_name).',</p>'
-                      . '<p style="color:#4a5568;font-size:13.5px;line-height:1.6;margin:0 0 12px">We have received your <b>GPS Removal</b> request for vehicle <b>'.htmlspecialchars($vehicle).'</b>. Reference: <b>'.$taskId.'</b>. Service charge: <b>Rs.'.number_format($PRICE).'</b> (+ GST if applicable). Our technician will contact you shortly.</p>'
+                      . '<p style="color:#4a5568;font-size:13.5px;line-height:1.6;margin:0 0 12px">We have received your <b>GPS Removal</b> request for vehicle <b>'.htmlspecialchars($vehicle).'</b>. Reference: <b>'.$taskId.'</b>. Amount to pay: <b>Rs.'.number_format($TOTAL).'</b>'.($GST?' (incl. 18% GST)':' (no GST)').'. Our technician will contact you shortly.</p>'
                       . '<div style="background:#fff7e6;border:1px solid #e8a33d;border-radius:8px;padding:12px;font-size:12px;color:#6b4e12;line-height:1.6">If you did <b>not</b> request this service, someone may have used your email by mistake. Please contact us at <b>+91 98498 49824</b> to raise a dispute.</div>'
                       . '<p style="color:#99a;font-size:11px;margin-top:14px">BharatGPS - Fleet Tracking Solutions</p>'
                       . '</div></div>';
@@ -182,7 +191,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
     <div class="ic">✅</div>
     <h2>Request Submitted!</h2>
     <p>Your GPS removal request has been received.<br>Reference: <span class="tid"><?= htmlspecialchars($createdTaskId) ?></span></p>
-    <div style="background:#fdeceb;border:1.5px solid #c0392b;border-radius:10px;padding:12px;margin:14px 0;font-size:13px;color:#a02c20;font-weight:700">Amount to pay at service: ₹<?= number_format($PRICE) ?> <span style="font-size:10px;font-weight:400">(+ GST if applicable)</span></div>
+    <div style="background:#fdeceb;border:1.5px solid #c0392b;border-radius:10px;padding:12px;margin:14px 0;font-size:13px;color:#a02c20;font-weight:700">Amount to pay at service: ₹<?= number_format($TOTAL) ?> <span style="font-size:10px;font-weight:400"><?= $GST ? '(incl. 18% GST)' : '(no GST)' ?></span></div>
     <p style="margin-top:14px">Our technician will reach out shortly. Please keep your vehicle available for the visit.</p>
   </div></div>
   <div class="foot">BharatGPS · Fleet Tracking Solutions</div>
@@ -212,7 +221,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
           <p class="confirm-hi">आप अपने वाहन से GPS डिवाइस हटवाने का अनुरोध करने आए हैं। क्या यह सही है?</p>
         </div>
         <?php if ($PRICE > 0): ?>
-        <div class="price-tag"><div class="lbl">Service Charge</div><div class="amt">₹<?= number_format($PRICE) ?></div><div style="font-size:10px;color:#c0392b;margin-top:2px">+ GST may apply</div></div>
+        <div class="price-tag"><div class="lbl">Service Charge</div><div class="amt">₹<?= number_format($TOTAL) ?></div><div style="font-size:10px;color:#c0392b;margin-top:2px"><?= $GST ? ('Base ₹'.number_format($PRICE).' + 18% GST ₹'.number_format($GST_AMT)) : 'No GST' ?></div></div>
         <?php endif; ?>
         <button type="button" class="confirm-yes" onclick="tsConfirmYes()">✅ Yes / అవును / हाँ</button>
         <button type="button" class="confirm-no" onclick="tsConfirmNo()">No / కాదు / नहीं</button>
@@ -259,7 +268,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
         <input type="hidden" name="reason" id="hidden-reason" value="">
 
         <?php if ($PRICE > 0): ?>
-        <div class="price-tag"><div class="lbl">Service Charge</div><div class="amt">₹<?= number_format($PRICE) ?></div><div style="font-size:10px;color:#c0392b;margin-top:2px">+ GST may apply</div></div>
+        <div class="price-tag"><div class="lbl">Service Charge</div><div class="amt">₹<?= number_format($TOTAL) ?></div><div style="font-size:10px;color:#c0392b;margin-top:2px"><?= $GST ? ('Base ₹'.number_format($PRICE).' + 18% GST ₹'.number_format($GST_AMT)) : 'No GST' ?></div></div>
         <?php endif; ?>
 
         <div class="sec-title">Your Details</div>
