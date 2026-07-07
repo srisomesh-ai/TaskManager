@@ -1,15 +1,25 @@
 <?php
 header('Content-Type: text/html; charset=UTF-8');
 require_once 'api/db.php';
+require_once 'api/req_token.php';
 $pdo = getDB();
 
 $SUPPORT_EMAIL = 'sales@bharatgps.com';
 $COMPANY_NAME  = 'Bharat GPS Tracker';
-@require_once 'api/mailer.php';
 
 $error = '';
 $success = false;
 $createdTaskId = '';
+
+$FORM_TYPE = 'vehicle-change';
+$token = trim($_GET['t'] ?? '');
+$LINK_STATE = 'valid';
+if ($token === '') { $LINK_STATE = 'none'; }
+else {
+    $tk = reqCheckToken($pdo, $token, $FORM_TYPE);
+    if ($tk['valid']) $LINK_STATE='valid'; elseif ($tk['expired']) $LINK_STATE='expired'; elseif ($tk['used']) $LINK_STATE='used'; else $LINK_STATE='invalid';
+}
+$TOKEN_HASH = ($token !== '') ? hash('sha256', $token) : '';
 
 $JOB_NAME = 'Vehicle to Vehicle Change';
 // Pull price from price list; fall back to standard default if not listed
@@ -24,6 +34,13 @@ try {
 $pref_phone = trim($_GET['p'] ?? '');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
+    require_once 'api/mailer.php';
+    $postToken = trim($_POST['tok'] ?? $token);
+    if ($postToken !== '') {
+        $tk2 = reqCheckToken($pdo, $postToken, $FORM_TYPE);
+        if (!$tk2['valid']) { $error = $tk2['expired'] ? 'This link has expired.' : ($tk2['used'] ? 'This link has already been used.' : 'Invalid link.'); }
+        $TOKEN_HASH = $tk2['hash'];
+    }
     $cust_name = trim($_POST['cust_name'] ?? '');
     $old_veh   = trim($_POST['old_veh']   ?? '');
     $new_veh   = trim($_POST['new_veh']   ?? '');
@@ -35,7 +52,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
     $geo       = trim($_POST['geo']       ?? '');
     $agree     = isset($_POST['agree']);
 
-    if (!$cust_name || !$old_veh || !$new_veh || !$phone || !$email || !$location) {
+    if ($error) {
+    } elseif (!$cust_name || !$old_veh || !$new_veh || !$phone || !$email || !$location) {
         $error = 'Please fill all required fields.';
     } elseif (!$agree) {
         $error = 'Please accept the service agreement before submitting.';
@@ -92,8 +110,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
                       . '</div></div>';
                     sendMail($SUPPORT_EMAIL, $COMPANY_NAME.' Support',
                         '🔁 V2V Change – '.$taskId.' | '.$new_veh, $body);
+
+                    $cbody = '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto">'
+                      . '<div style="background:#7a3ec8;color:#fff;padding:18px 20px;border-radius:10px 10px 0 0"><h2 style="margin:0;font-size:18px">✅ Request Received — BharatGPS</h2></div>'
+                      . '<div style="background:#fff;border:1px solid #e5e9f0;border-top:none;padding:18px 20px;border-radius:0 0 10px 10px">'
+                      . '<p style="color:#2a3548;font-size:14px;margin:0 0 10px">Dear '.htmlspecialchars($cust_name).',</p>'
+                      . '<p style="color:#4a5568;font-size:13.5px;line-height:1.6;margin:0 0 12px">We have received your <b>Vehicle to Vehicle Change</b> request (old: '.htmlspecialchars($old_veh).' → new: '.htmlspecialchars($new_veh).'). Reference: <b>'.$taskId.'</b>. Service charge: <b>Rs.'.number_format($PRICE).'</b> (+ GST if applicable). Our technician will contact you shortly.</p>'
+                      . '<div style="background:#fff7e6;border:1px solid #e8a33d;border-radius:8px;padding:12px;font-size:12px;color:#6b4e12;line-height:1.6">If you did <b>not</b> request this service, someone may have used your email by mistake. Please contact us at <b>+91 98498 49824</b> to raise a dispute.</div>'
+                      . '<p style="color:#99a;font-size:11px;margin-top:14px">BharatGPS · Fleet Tracking Solutions</p>'
+                      . '</div></div>';
+                    if ($email) sendMail($email, $cust_name, 'BharatGPS — Vehicle Change Request Received ('.$taskId.')', $cbody);
                 } catch(Exception $e) {}
             }
+
+            if (!empty($TOKEN_HASH)) reqMarkUsed($pdo, $TOKEN_HASH);
 
             $success = true;
             $createdTaskId = $taskId;
@@ -160,8 +190,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
     <div class="ic">✅</div>
     <h2>Request Submitted!</h2>
     <p>Your vehicle-to-vehicle change request has been received.<br>Reference: <span class="tid"><?= htmlspecialchars($createdTaskId) ?></span></p>
+    <div style="background:#f3ecfb;border:1.5px solid #9b4dd8;border-radius:10px;padding:12px;margin:14px 0;font-size:13px;color:#5b2a99;font-weight:700">Amount to pay at service: ₹<?= number_format($PRICE) ?> <span style="font-size:10px;font-weight:400">(+ GST if applicable)</span></div>
     <p style="margin-top:14px">Our technician will reach out shortly. Please keep both vehicles available for the visit.</p>
   </div></div>
+  <div class="foot">BharatGPS · Fleet Tracking Solutions</div>
+  <script>if(window.history.replaceState){window.history.replaceState(null,'',location.pathname);}window.addEventListener('pageshow',function(e){if(e.persisted)location.reload();});</script>
+<?php elseif (in_array($LINK_STATE, ['expired','used','invalid'])): ?>
+  <div class="card"><div class="hd"><div class="logo-box"><img src="logo.png" alt="BharatGPS" onerror="this.style.display='none'"></div><h1>🔁 Vehicle to Vehicle Change</h1></div>
+  <div class="body"><div style="text-align:center;padding:30px 10px"><div style="font-size:48px;margin-bottom:12px"><?= $LINK_STATE==='used'?'✅':'⏳' ?></div>
+  <h2 style="font-size:18px;color:#c0392b;margin-bottom:10px"><?= $LINK_STATE==='used'?'Link Already Used':($LINK_STATE==='expired'?'Link Expired':'Invalid Link') ?></h2>
+  <p style="font-size:13.5px;color:#555;line-height:1.6"><?= $LINK_STATE==='used'?'This request has already been submitted.':($LINK_STATE==='expired'?'This link is valid for 6 hours only. Please ask BharatGPS for a fresh link.':'This link is not valid.') ?></p>
+  <p style="margin-top:14px;font-size:13px;color:#7a3ec8;font-weight:700">📞 +91 98498 49824</p></div></div></div>
   <div class="foot">BharatGPS · Fleet Tracking Solutions</div>
 <?php else: ?>
   <div class="card">
@@ -189,9 +228,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
 
       <form method="POST" id="tsForm" style="display:none">
         <input type="hidden" name="form_submitted" value="1">
+        <input type="hidden" name="tok" value="<?= htmlspecialchars($token) ?>">
 
         <?php if ($PRICE > 0): ?>
-        <div class="price-tag"><div class="lbl">Service Charge</div><div class="amt">₹<?= number_format($PRICE) ?></div></div>
+        <div class="price-tag"><div class="lbl">Service Charge</div><div class="amt">₹<?= number_format($PRICE) ?></div><div style="font-size:10px;color:#7a3ec8;margin-top:2px">+ GST may apply</div></div>
         <?php endif; ?>
 
         <div class="sec-title">Vehicle Details</div>
