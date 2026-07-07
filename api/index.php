@@ -2093,6 +2093,23 @@ case 'verify_cash_deposit':
     if($vact === 'approve'){
         $pdo->prepare("UPDATE tasks SET cash_deposit_status='deposited' WHERE id=?")
             ->execute([$id2]);
+        // Mark the task's balance-sheet entry as payment received
+        try {
+            $trow = $pdo->prepare("SELECT bs_entry_id, amount_collected, price_to_collect FROM tasks WHERE id=?");
+            $trow->execute([$id2]); $tr = $trow->fetch();
+            if($tr && !empty($tr['bs_entry_id'])){
+                $recv = floatval($tr['amount_collected'] ?? 0);
+                // fetch the billed total on the entry so pending is computed against installed amount
+                $bse = $pdo->prepare("SELECT total_price FROM balance_sheet_entries WHERE id=?");
+                $bse->execute([intval($tr['bs_entry_id'])]); $bsrow = $bse->fetch();
+                $billed = $bsrow ? floatval($bsrow['total_price']) : $recv;
+                if($recv > $billed) $recv = $billed;
+                $pend = max(0, $billed - $recv);
+                $status = ($recv >= $billed && $billed > 0) ? 'Collected' : 'pending';
+                $pdo->prepare("UPDATE balance_sheet_entries SET payment_received=?, pending_payment=?, payment_status=?, payment_received_on=CURDATE(), updated_at=NOW() WHERE id=?")
+                    ->execute([$recv, $pend, $status, intval($tr['bs_entry_id'])]);
+            }
+        } catch(Exception $e) {}
         $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'remark')")
             ->execute([$id2, $userId, "✅ Cash deposit verified and confirmed by {$currentUser['name']}."]);
         echo json_encode(['success'=>true,'message'=>'Cash deposit verified.']);
