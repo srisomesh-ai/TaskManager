@@ -112,18 +112,42 @@ function shareLoc(){
     return;
   }
   btn.disabled = true; btn.textContent = '⏳ Getting your location…';
-  navigator.geolocation.getCurrentPosition(function(pos){
+  msg.innerHTML = '';
+
+  function submitPos(pos){
     document.getElementById('f-lat').value = pos.coords.latitude.toFixed(6);
     document.getElementById('f-lng').value = pos.coords.longitude.toFixed(6);
     document.getElementById('locForm').submit();
-  }, function(e){
+  }
+  function failed(e){
     btn.disabled = false; btn.textContent = '📍 Share My Current Location';
-    var m = 'Could not get your location.';
-    if(e && e.code === 1) m = 'Permission denied. Tap the lock icon near the address bar and allow Location, then try again.';
-    else if(e && e.code === 2) m = 'Turn on your phone GPS / Location and try again.';
-    else if(e && e.code === 3) m = 'Timed out. Move near a window or step outside, then try again.';
+    var m = 'Could not get your location. Please make sure Location/GPS is ON and try again.';
+    if(e && e.code === 1) m = 'Location permission is blocked. Tap the lock icon near the address bar, allow Location, then tap again.';
+    else if(e && e.code === 2) m = 'Please turn ON your phone Location/GPS, then tap again.';
     msg.innerHTML = '<div class="err">'+m+'</div>';
-  }, {enableHighAccuracy:true, timeout:15000, maximumAge:0});
+  }
+
+  // Try 1: quick low-accuracy (wifi/cell) — fast, works indoors, accepts a recent fix
+  navigator.geolocation.getCurrentPosition(
+    submitPos,
+    function(){
+      // Try 2: high accuracy (GPS), longer wait
+      btn.textContent = '⏳ Pinpointing… hold on';
+      navigator.geolocation.getCurrentPosition(
+        submitPos,
+        function(){
+          // Try 3: last resort — accept any cached position up to 5 min old
+          navigator.geolocation.getCurrentPosition(
+            submitPos,
+            failed,
+            {enableHighAccuracy:false, timeout:30000, maximumAge:300000}
+          );
+        },
+        {enableHighAccuracy:true, timeout:20000, maximumAge:0}
+      );
+    },
+    {enableHighAccuracy:false, timeout:8000, maximumAge:60000}
+  );
 }
 </script>
 </body>
