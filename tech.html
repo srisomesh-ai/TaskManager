@@ -4565,14 +4565,20 @@ function checkAttendAllDevicesSaved(){
   }
 
   // All installed — check every device has customer access before allowing payment
-  let allAccess=true;
-  for(let i=1;i<=_attendTaskQty;i++){ if(!_attendSavedDevices[i]?.access_given){allAccess=false;break;} }
+  let allAccess=true; let _dbgArr=[];
+  for(let i=1;i<=_attendTaskQty;i++){
+    const sv=_attendSavedDevices[i];
+    _dbgArr.push('D'+i+':pushed='+(sv&&sv.pushed?'Y':'N')+',access='+(sv&&sv.access_given?'Y':'N'));
+    if(!sv?.access_given){allAccess=false;}
+  }
+  window._attendGateDbg = 'qty='+_attendTaskQty+' allDone='+allDone+' allAccess='+allAccess+' | '+_dbgArr.join(' | ');
+  if(gate){ gate.setAttribute('title', window._attendGateDbg); }
 
   if(allAccess){
     if(gate)      gate.style.display='none';
     if(cancelBtn) cancelBtn.style.display='none';
     if(closeBtn)  closeBtn.style.display='none';
-    if(paySection) paySection.style.display='';
+    if(paySection){ paySection.style.display=''; paySection.setAttribute('data-dbg', window._attendGateDbg||''); }
     if(submitBtn){ submitBtn.style.display=''; submitBtn.textContent='✅ Submit — Request Approval'; submitBtn.style.background='var(--green)'; }
   } else {
     if(gate)      gate.style.display='';
