@@ -3,6 +3,10 @@ header('Content-Type: text/html; charset=UTF-8');
 require_once 'api/db.php';
 $pdo = getDB();
 
+$SUPPORT_EMAIL = 'sales@bharatgps.com';
+$COMPANY_NAME  = 'Bharat GPS Tracker';
+@require_once 'api/mailer.php';
+
 $error = '';
 $success = false;
 $createdTaskId = '';
@@ -12,6 +16,7 @@ $pref_vehicle = trim($_GET['v'] ?? '');
 $pref_phone   = trim($_GET['p'] ?? '');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
+    $cust_name   = trim($_POST['cust_name']   ?? '');
     $q_regular   = trim($_POST['q_regular']   ?? '');   // Yes / No
     $q_battery   = trim($_POST['q_battery']   ?? '');   // Yes / No
     $offline_since = trim($_POST['offline_since'] ?? ''); // date
@@ -22,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
     $geo         = trim($_POST['geo']         ?? '');
     $agree       = isset($_POST['agree']);
 
-    if (!$q_regular || !$q_battery || !$offline_since || !$vehicle || !$phone || !$email || !$location) {
+    if (!$cust_name || !$q_regular || !$q_battery || !$offline_since || !$vehicle || !$phone || !$email || !$location) {
         $error = 'Please fill all required fields.';
     } elseif (!$agree) {
         $error = 'Please accept the service agreement before submitting.';
@@ -39,6 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
 
             $notes =
                 "🔧 TROUBLESHOOT REQUEST (customer form)\n"
+              . "• Vehicle Number: $vehicle\n"
               . "• Regularly using vehicle: $q_regular\n"
               . "• Recently changed battery: $q_battery\n"
               . "• Device offline since: $offline_since\n"
@@ -51,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
                  task_status,general_notes,created_by,is_urgent,vehicle_number)
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)")
                 ->execute([
-                    $taskId, $vehicle, $phone, $email, $location, 'Troubleshoot',
+                    $taskId, $cust_name, $phone, $email, $location, 'Troubleshoot',
                     'Troubleshoot/Offline', 1, 0, '',
                     'Open', $notes, $cb, $vehicle
                 ]);
@@ -59,8 +65,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
 
             $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'system')")
                 ->execute([$newId, $cb,
-                    "🌐 Customer troubleshoot request | Vehicle: $vehicle | Offline since: $offline_since | Regular use: $q_regular | Battery changed: $q_battery"
+                    "🌐 Customer troubleshoot request | Customer: $cust_name | Vehicle: $vehicle | Offline since: $offline_since | Regular use: $q_regular | Battery changed: $q_battery"
                 ]);
+
+            // Email notification to admin/assigner
+            if (function_exists('sendMail')) {
+                try {
+                    $rows =
+                        '<tr><td style="padding:6px 0;color:#667;font-size:13px">Task ID</td><td style="padding:6px 0;font-weight:700;color:#2E6BE2;text-align:right">'.htmlspecialchars($taskId).'</td></tr>'
+                      . '<tr><td style="padding:6px 0;color:#667;font-size:13px">Customer</td><td style="padding:6px 0;font-weight:700;text-align:right">'.htmlspecialchars($cust_name).'</td></tr>'
+                      . '<tr><td style="padding:6px 0;color:#667;font-size:13px">Vehicle No.</td><td style="padding:6px 0;font-weight:700;text-align:right">'.htmlspecialchars($vehicle).'</td></tr>'
+                      . '<tr><td style="padding:6px 0;color:#667;font-size:13px">Phone</td><td style="padding:6px 0;font-weight:700;text-align:right">'.htmlspecialchars($phone).'</td></tr>'
+                      . '<tr><td style="padding:6px 0;color:#667;font-size:13px">Email</td><td style="padding:6px 0;text-align:right">'.htmlspecialchars($email).'</td></tr>'
+                      . '<tr><td style="padding:6px 0;color:#667;font-size:13px">Offline Since</td><td style="padding:6px 0;text-align:right">'.htmlspecialchars($offline_since).'</td></tr>'
+                      . '<tr><td style="padding:6px 0;color:#667;font-size:13px">Regular Use</td><td style="padding:6px 0;text-align:right">'.htmlspecialchars($q_regular).'</td></tr>'
+                      . '<tr><td style="padding:6px 0;color:#667;font-size:13px">Battery Changed</td><td style="padding:6px 0;text-align:right">'.htmlspecialchars($q_battery).'</td></tr>'
+                      . '<tr><td style="padding:6px 0;color:#667;font-size:13px">Location</td><td style="padding:6px 0;text-align:right">'.htmlspecialchars($location).'</td></tr>';
+                    $body = '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto">'
+                      . '<div style="background:#2E6BE2;color:#fff;padding:18px 20px;border-radius:10px 10px 0 0"><h2 style="margin:0;font-size:18px">🔧 New Troubleshoot Request</h2></div>'
+                      . '<div style="background:#fff;border:1px solid #e5e9f0;border-top:none;padding:18px 20px;border-radius:0 0 10px 10px">'
+                      . '<p style="color:#4a5568;font-size:14px;margin:0 0 12px">A customer submitted a troubleshoot request via the form.</p>'
+                      . '<table style="width:100%;border-collapse:collapse">'.$rows.'</table>'
+                      . '<p style="margin-top:16px;font-size:14px;font-weight:700"><a href="https://salmon-goldfish-110661.hostingersite.com" style="color:#2E6BE2">Open Task Manager →</a></p>'
+                      . '</div></div>';
+                    sendMail($SUPPORT_EMAIL, $COMPANY_NAME.' Support',
+                        '🔧 Troubleshoot Request – '.$taskId.' | '.$vehicle, $body);
+                } catch(Exception $e) {}
+            }
 
             $success = true;
             $createdTaskId = $taskId;
@@ -78,8 +109,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
 <title>GPS Troubleshoot Request — BharatGPS</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f2f5f9; color: #1a2230; padding: 16px; line-height: 1.5; }
-  .wrap { max-width: 460px; margin: 0 auto; }
+  html, body { width: 100%; overflow-x: hidden; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f2f5f9; color: #1a2230; padding: 12px; line-height: 1.5; -webkit-text-size-adjust: 100%; }
+  .wrap { max-width: 440px; margin: 0 auto; width: 100%; }
+  @media (max-width: 480px){
+    body { padding: 8px; }
+    .hd { padding: 18px 16px !important; }
+    .body { padding: 16px !important; }
+  }
   .card { background: #fff; border-radius: 14px; box-shadow: 0 4px 24px rgba(0,0,0,.07); overflow: hidden; }
   .hd { background: linear-gradient(135deg,#1e5bd6,#2E6BE2); color: #fff; padding: 22px 20px; }
   .hd h1 { font-size: 19px; font-weight: 800; }
@@ -160,6 +197,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
 
         <div class="sec-title">Your Details</div>
 
+        <div class="f">
+          <label>Your Name <span class="req">*</span></label>
+          <input type="text" name="cust_name" placeholder="e.g. Ravi Kumar" required value="<?= htmlspecialchars($_POST['cust_name'] ?? '') ?>">
+        </div>
         <div class="f">
           <label>Vehicle Number <span class="req">*</span></label>
           <input type="text" name="vehicle" placeholder="e.g. AP31AB1234" required value="<?= htmlspecialchars($pref_vehicle) ?>">
