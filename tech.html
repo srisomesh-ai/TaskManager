@@ -808,6 +808,11 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
                 <div id="assign-done" style="display:none;padding:8px 10px;background:var(--green-bg);border:1.5px solid var(--green);border-radius:6px;font-size:12px;color:var(--green);font-weight:700">✅ Device assigned to customer account</div>
               </div>
 
+              <!-- Access gate — payment blocked until all devices have customer access -->
+              <div id="attend-access-gate" style="display:none;background:#fff7e6;border:1.5px solid var(--saffron);border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:12px;color:#9a6a00;font-weight:600">
+                ⚠️ Please give customer access to all installed devices above before proceeding to payment.
+              </div>
+
               <!-- Payment collection — shown after devices -->
               <div id="attend-payment-section" style="display:none;background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:14px;margin-bottom:12px;margin-top:4px">
                 <div style="font-size:12px;font-weight:800;color:var(--green);margin-bottom:10px">💰 Payment Collection</div>
@@ -4540,22 +4545,36 @@ function checkAttendAllDevicesSaved(){
   const submitBtn     = document.getElementById('attend-submit-btn');
   const cancelBtn     = document.getElementById('attend-cancel-btn');
   const closeBtn      = document.getElementById('attend-close-btn');
-  if(allDone){
+
+  // old single-assign Step 3 is replaced by per-device access — always keep it hidden
+  if(assignSection) assignSection.style.display='none';
+
+  if(!allDone){
+    if(cancelBtn)  cancelBtn.style.display='';
+    if(closeBtn)   closeBtn.style.display='';
+    if(paySection) paySection.style.display='none';
+    if(submitBtn)  submitBtn.style.display='none';
+    return;
+  }
+
+  // All devices installed. Now require customer access on every device before payment.
+  let allAccess=true;
+  for(let i=1;i<=_attendTaskQty;i++){ if(!_attendSavedDevices[i]?.access_given){allAccess=false;break;} }
+
+  const gate = document.getElementById('attend-access-gate');
+  if(allAccess){
+    if(gate) gate.style.display='none';
     if(cancelBtn) cancelBtn.style.display='none';
     if(closeBtn)  closeBtn.style.display='none';
-    if(assignSection){
-      assignSection.style.display='';
-      const emailEl = document.getElementById('assign-email');
-      if(emailEl && _detailTask?.email) emailEl.value = _detailTask.email;
-    }
-    if(paySection)  paySection.style.display='none';
-    if(submitBtn)   submitBtn.style.display='none';
+    if(paySection) paySection.style.display='';
+    if(submitBtn){ submitBtn.style.display=''; submitBtn.textContent='✅ Submit — Request Approval'; submitBtn.style.background='var(--green)'; }
   } else {
-    if(cancelBtn)     cancelBtn.style.display='';
-    if(closeBtn)      closeBtn.style.display='';
-    if(assignSection) assignSection.style.display='none';
-    if(paySection)    paySection.style.display='none';
-    if(submitBtn)     submitBtn.style.display='none';
+    // block payment until access is given to all devices
+    if(gate) gate.style.display='';
+    if(cancelBtn) cancelBtn.style.display='';
+    if(closeBtn)  closeBtn.style.display='';
+    if(paySection) paySection.style.display='none';
+    if(submitBtn)  submitBtn.style.display='none';
   }
 }
 
@@ -4651,6 +4670,7 @@ async function bulkAccAssign(createPass){
   st.innerHTML='';
   done.style.display='';
   done.innerHTML='✅ Access given to '+ok+' device(s)'+(fail?(' · '+fail+' failed'):'')+'<div style="font-size:11px;font-weight:400;margin-top:6px;color:var(--text2)">'+details.join('<br>')+'</div>';
+  checkAttendAllDevicesSaved();
 }
 
 // ── PER-DEVICE customer access (give access after each device) ──
@@ -4763,6 +4783,7 @@ async function devAccAssign(idx){
     // persist access-given so it is not re-offered on refresh
     if(_attendSavedDevices[idx]){ _attendSavedDevices[idx].access_given=true; _attendSavedDevices[idx].access_email=document.getElementById('devacc-email-'+idx)?.value.trim()||''; }
     api('mark_access_given',{},'POST',{task_id:_attendTaskId, imei:(dev.imei||'').replace(/\D/g,''), device_index:idx, email:_attendSavedDevices[idx]?.access_email||''}).catch(()=>{});
+    checkAttendAllDevicesSaved();
   } else { st.innerHTML='<span style="color:var(--red)">❌ '+escHtml(r.error||'Failed')+'</span>'; }
 }
 
