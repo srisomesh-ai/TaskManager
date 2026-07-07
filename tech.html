@@ -4726,12 +4726,30 @@ async function devAccCreate(idx){
   fd.append('password',pass); fd.append('phone',_detailTask?.contact_number||'');
   const r = await fetch('gps_proxy.php?action=create_user',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd}).then(r=>r.json()).catch(()=>({}));
   if(r.success){ _devAccUserId[idx]=r.user_id; st.innerHTML='<span style="color:var(--green);font-weight:700">✅ Account created</span>'; await devAccAssign(idx); }
-  else { st.innerHTML='<span style="color:var(--red)">❌ '+escHtml(r.error||'Failed')+'</span>'; }
+  else {
+    // create failed (often because the account already exists) — find it and proceed
+    const fr = await fetch('gps_proxy.php?action=find_user&server_id='+dev.server_id+'&email='+encodeURIComponent(email),{headers:{'X-Auth-Token':authToken}}).then(r=>r.json()).catch(()=>({}));
+    if(fr.found && fr.user && fr.user.id){
+      _devAccUserId[idx]=fr.user.id;
+      st.innerHTML='<span style="color:var(--green);font-weight:700">✅ Existing account found</span>';
+      await devAccAssign(idx);
+    } else {
+      st.innerHTML='<span style="color:var(--red)">❌ '+escHtml(r.error||'Failed')+'</span>';
+    }
+  }
 }
 async function devAccAssign(idx){
   const st = document.getElementById('devacc-status-'+idx);
   const dev = _attendSavedDevices[idx];
-  const uid = _devAccUserId[idx];
+  let uid = _devAccUserId[idx];
+  if(!uid){
+    // try to resolve by email before giving up
+    const email = document.getElementById('devacc-email-'+idx)?.value.trim();
+    if(email && dev && dev.server_id){
+      const fr = await fetch('gps_proxy.php?action=find_user&server_id='+dev.server_id+'&email='+encodeURIComponent(email),{headers:{'X-Auth-Token':authToken}}).then(r=>r.json()).catch(()=>({}));
+      if(fr.found && fr.user && fr.user.id){ uid = fr.user.id; _devAccUserId[idx]=uid; }
+    }
+  }
   if(!uid){ st.textContent='⚠️ Check the email first'; return; }
   st.innerHTML='<span style="color:var(--text3)">⏳ Giving access…</span>';
   const fd=new FormData();
