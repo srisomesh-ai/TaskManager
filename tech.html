@@ -809,9 +809,6 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
               </div>
 
               <!-- Payment collection — shown after devices -->
-              <div id="attend-access-gate" style="display:none;background:#fff7e6;border:1.5px solid var(--saffron);border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:12px;color:#9a6a00;font-weight:600">
-                ⚠️ Give customer access to ALL installed devices above before you can proceed to payment.
-              </div>
               <div id="attend-payment-section" style="display:none;background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:14px;margin-bottom:12px;margin-top:4px">
                 <div style="font-size:12px;font-weight:800;color:var(--green);margin-bottom:10px">💰 Payment Collection</div>
                 <div class="form-row">
@@ -3427,8 +3424,11 @@ function openTechAttend(taskId){
     if(amtEl) amtEl.value='';
     const balEl=document.getElementById('attend-balance-line'); if(balEl) balEl.textContent='';
     renderAttendDeviceCards();
-    // Enforce access gate — only shows payment if ALL devices have customer access
-    checkAttendAllDevicesSaved();
+    // Show payment + submit
+    const paySection=document.getElementById('attend-payment-section');
+    const submitBtn=document.getElementById('attend-submit-btn');
+    if(paySection) paySection.style.display='';
+    if(submitBtn){ submitBtn.style.display=''; submitBtn.textContent='✅ Submit — Request Approval'; submitBtn.style.background='var(--green)'; }
 
   } else if(pushedCount > 0){
     // PARTIAL progress — resume the adding flow at the next unsaved device
@@ -4540,49 +4540,26 @@ function checkAttendAllDevicesSaved(){
   const submitBtn     = document.getElementById('attend-submit-btn');
   const cancelBtn     = document.getElementById('attend-cancel-btn');
   const closeBtn      = document.getElementById('attend-close-btn');
-  const gate          = document.getElementById('attend-access-gate');
-
-  // The old single-assign Step 3 is replaced by per-device access — keep it hidden
-  if(assignSection) assignSection.style.display='none';
-
-  if(!allDone){
-    if(cancelBtn)  cancelBtn.style.display='';
-    if(closeBtn)   closeBtn.style.display='';
-    if(gate)       gate.style.display='none';
-    if(paySection) paySection.style.display='none';
-    if(submitBtn)  submitBtn.style.display='none';
-    return;
-  }
-
-  // All devices installed — require customer access on EVERY device before payment
-  let allAccess=true; let _dbg=[];
-  for(let i=1;i<=_attendTaskQty;i++){
-    const ag = _attendSavedDevices[i]?.access_given;
-    _dbg.push('D'+i+':'+(ag?'yes':'NO'));
-    if(!ag){allAccess=false;}
-  }
-  if(gate) gate.setAttribute('data-dbg', _dbg.join(' '));
-
-  if(allAccess){
-    if(gate)       gate.style.display='none';
-    if(cancelBtn)  cancelBtn.style.display='none';
-    if(closeBtn)   closeBtn.style.display='none';
-    if(paySection) paySection.style.display='';
-    if(submitBtn){ submitBtn.style.display=''; submitBtn.textContent='✅ Submit — Request Approval'; submitBtn.style.background='var(--green)'; }
+  if(allDone){
+    if(cancelBtn) cancelBtn.style.display='none';
+    if(closeBtn)  closeBtn.style.display='none';
+    if(assignSection){
+      assignSection.style.display='';
+      const emailEl = document.getElementById('assign-email');
+      if(emailEl && _detailTask?.email) emailEl.value = _detailTask.email;
+    }
+    if(paySection)  paySection.style.display='none';
+    if(submitBtn)   submitBtn.style.display='none';
   } else {
-    // block payment — access still pending for one or more devices
-    if(gate){ gate.style.display=''; gate.innerHTML='⚠️ Give customer access to ALL installed devices above before payment. <span style="font-size:10px;opacity:.7">['+_dbg.join(' ')+']</span>'; }
-    if(cancelBtn)  cancelBtn.style.display='';
-    if(closeBtn)   closeBtn.style.display='';
-    if(paySection) paySection.style.display='none';
-    if(submitBtn)  submitBtn.style.display='none';
+    if(cancelBtn)     cancelBtn.style.display='';
+    if(closeBtn)      closeBtn.style.display='';
+    if(assignSection) assignSection.style.display='none';
+    if(paySection)    paySection.style.display='none';
+    if(submitBtn)     submitBtn.style.display='none';
   }
 }
 
 function showPaymentAfterAssign(){
-  // Respect the access gate — do not show payment unless all devices have access
-  checkAttendAllDevicesSaved();
-  return;
   const paySection  = document.getElementById('attend-payment-section');
   const submitBtn   = document.getElementById('attend-submit-btn');
   const cancelBtn   = document.getElementById('attend-cancel-btn');
@@ -4674,7 +4651,6 @@ async function bulkAccAssign(createPass){
   st.innerHTML='';
   done.style.display='';
   done.innerHTML='✅ Access given to '+ok+' device(s)'+(fail?(' · '+fail+' failed'):'')+'<div style="font-size:11px;font-weight:400;margin-top:6px;color:var(--text2)">'+details.join('<br>')+'</div>';
-  checkAttendAllDevicesSaved();
 }
 
 // ── PER-DEVICE customer access (give access after each device) ──
@@ -4787,7 +4763,6 @@ async function devAccAssign(idx){
     // persist access-given so it is not re-offered on refresh
     if(_attendSavedDevices[idx]){ _attendSavedDevices[idx].access_given=true; _attendSavedDevices[idx].access_email=document.getElementById('devacc-email-'+idx)?.value.trim()||''; }
     api('mark_access_given',{},'POST',{task_id:_attendTaskId, imei:(dev.imei||'').replace(/\D/g,''), device_index:idx, email:_attendSavedDevices[idx]?.access_email||''}).catch(()=>{});
-    checkAttendAllDevicesSaved();
   } else { st.innerHTML='<span style="color:var(--red)">❌ '+escHtml(r.error||'Failed')+'</span>'; }
 }
 
