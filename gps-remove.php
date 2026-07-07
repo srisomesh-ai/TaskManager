@@ -12,11 +12,12 @@ $success = false;
 $createdTaskId = '';
 
 $JOB_NAME = 'Only Remove';
-$PRICE = 0;
+$PRICE = 300;
 try {
     $pr = $pdo->prepare("SELECT price_excl_gst FROM price_list WHERE product_name=? AND is_active=1 LIMIT 1");
     $pr->execute([$JOB_NAME]);
-    $PRICE = floatval($pr->fetchColumn() ?: 0);
+    $found = $pr->fetchColumn();
+    if ($found !== false && $found !== null && floatval($found) > 0) $PRICE = floatval($found);
 } catch(Exception $e) {}
 
 $pref_phone   = trim($_GET['p'] ?? '');
@@ -146,6 +147,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
   .confirm-te, .confirm-hi { font-size: 13.5px; color: #4a5568; margin-bottom: 10px; line-height: 1.6; }
   .confirm-yes { width: 100%; padding: 14px; background: #c0392b; color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 800; cursor: pointer; margin: 14px 0 8px; }
   .confirm-no { width: 100%; padding: 12px; background: #fff; color: #667; border: 1.5px solid #d5dce7; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; }
+  .qz-opt { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1.5px solid #d5dce7; border-radius: 8px; cursor: pointer; font-size: 13.5px; }
+  .qz-opt input { width: 18px; height: 18px; flex-shrink: 0; accent-color: #c0392b; }
+  .qz-opt:has(input:checked) { border-color: #c0392b; background: #fdeceb; font-weight: 700; }
 </style>
 </head>
 <body>
@@ -182,8 +186,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
         </div>
       </div>
 
+      <!-- Removal reason questionnaire (shown after confirm Yes) -->
+      <div id="ts-quiz" style="display:none">
+        <div class="sec-title">Quick Questions</div>
+        <div class="f">
+          <label>What is the reason for removing the GPS? <span class="req">*</span></label>
+          <div id="qz-reason" style="display:flex;flex-direction:column;gap:8px">
+            <label class="qz-opt"><input type="radio" name="qz_reason" value="Remove and install to another vehicle" onchange="qzReasonChange(this.value)"><span>Remove &amp; install to another vehicle</span></label>
+            <label class="qz-opt"><input type="radio" name="qz_reason" value="Sold this vehicle, waiting for new vehicle" onchange="qzReasonChange(this.value)"><span>Sold this vehicle, waiting for new one</span></label>
+            <label class="qz-opt"><input type="radio" name="qz_reason" value="Not happy with BharatGPS" onchange="qzReasonChange(this.value)"><span>Not happy with BharatGPS Tracker</span></label>
+            <label class="qz-opt"><input type="radio" name="qz_reason" value="Other" onchange="qzReasonChange(this.value)"><span>Other reason</span></label>
+          </div>
+        </div>
+
+        <!-- Sub-question: only if "install to another vehicle" -->
+        <div class="f" id="qz-avail-wrap" style="display:none">
+          <label>Are both vehicles available, or only the one with the GPS fitted? <span class="req">*</span></label>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <label class="qz-opt"><input type="radio" name="qz_avail" value="only_one" onchange="qzAvailChange(this.value)"><span>Only one vehicle (GPS-fitted) is available</span></label>
+            <label class="qz-opt"><input type="radio" name="qz_avail" value="both" onchange="qzAvailChange(this.value)"><span>Both vehicles are available</span></label>
+          </div>
+        </div>
+
+        <!-- If both available → suggest V2V -->
+        <div id="qz-v2v-note" style="display:none;background:#f3ecfb;border:1.5px solid #9b4dd8;border-radius:10px;padding:14px;margin-bottom:14px">
+          <div style="font-size:13px;font-weight:700;color:#5b2a99;margin-bottom:6px">💡 Better option for you!</div>
+          <div style="font-size:12.5px;color:#4a3560;line-height:1.6;margin-bottom:12px">Since both vehicles are available, please use the <b>Vehicle to Vehicle Change</b> service instead — we will move your existing GPS directly to the new vehicle. No need for a separate removal.</div>
+          <a href="vehicle-change.php" style="display:block;text-align:center;padding:12px;background:#7a3ec8;color:#fff;border-radius:10px;font-size:14px;font-weight:800;text-decoration:none">🔁 Switch to Vehicle to Vehicle Change →</a>
+        </div>
+
+        <button type="button" id="qz-continue" class="submit" style="display:none" onclick="qzContinue()">Continue →</button>
+      </div>
+
       <form method="POST" id="tsForm" style="display:none">
         <input type="hidden" name="form_submitted" value="1">
+        <input type="hidden" name="reason" id="hidden-reason" value="">
 
         <?php if ($PRICE > 0): ?>
         <div class="price-tag"><div class="lbl">Service Charge</div><div class="amt">₹<?= number_format($PRICE) ?></div></div>
@@ -192,7 +229,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
         <div class="sec-title">Your Details</div>
         <div class="f"><label>Your Name <span class="req">*</span></label><input type="text" name="cust_name" placeholder="e.g. Ravi Kumar" required value="<?= htmlspecialchars($_POST['cust_name']??'') ?>"></div>
         <div class="f"><label>Vehicle Number <span class="req">*</span></label><input type="text" name="vehicle" placeholder="e.g. AP31AB1234" required value="<?= htmlspecialchars($pref_vehicle) ?>"></div>
-        <div class="f"><label>Reason for Removal</label><input type="text" name="reason" placeholder="e.g. Selling vehicle, stopping service"></div>
         <div class="f"><label>Contact Number <span class="req">*</span></label><input type="tel" name="phone" placeholder="9876543210" required value="<?= htmlspecialchars($pref_phone) ?>"></div>
         <div class="f"><label>Email ID <span class="req">*</span></label><input type="email" name="email" placeholder="your@email.com" required value="<?= htmlspecialchars($_POST['email']??'') ?>"></div>
         <div class="f">
@@ -214,8 +250,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
 <?php endif; ?>
 </div>
 <script>
-function tsConfirmYes(){ document.getElementById('ts-confirm').style.display='none'; document.getElementById('tsForm').style.display=''; }
+function tsConfirmYes(){ document.getElementById('ts-confirm').style.display='none'; document.getElementById('ts-quiz').style.display=''; }
 function tsConfirmNo(){ document.getElementById('ts-no-msg').style.display='block'; }
+function qzReasonChange(val){
+  const availWrap = document.getElementById('qz-avail-wrap');
+  const v2vNote   = document.getElementById('qz-v2v-note');
+  const cont      = document.getElementById('qz-continue');
+  v2vNote.style.display='none';
+  if(val === 'Remove and install to another vehicle'){
+    availWrap.style.display='';
+    cont.style.display='none'; // wait for sub-answer
+  } else {
+    availWrap.style.display='none';
+    cont.style.display=''; // can continue
+  }
+}
+function qzAvailChange(val){
+  const v2vNote = document.getElementById('qz-v2v-note');
+  const cont    = document.getElementById('qz-continue');
+  if(val === 'both'){
+    v2vNote.style.display='';   // suggest V2V, block continue
+    cont.style.display='none';
+  } else {
+    v2vNote.style.display='none';
+    cont.style.display='';      // only one vehicle → continue with removal
+  }
+}
+function qzContinue(){
+  // capture reason into hidden field
+  const r = document.querySelector('input[name="qz_reason"]:checked');
+  const a = document.querySelector('input[name="qz_avail"]:checked');
+  let reason = r ? r.value : '';
+  if(a) reason += ' (' + (a.value==='both'?'both vehicles available':'only GPS-fitted vehicle available') + ')';
+  document.getElementById('hidden-reason').value = reason;
+  document.getElementById('ts-quiz').style.display='none';
+  document.getElementById('tsForm').style.display='';
+}
 function captureGeo(){
   const btn = event.target;
   if(!navigator.geolocation){ alert('Geolocation not supported.'); return; }
