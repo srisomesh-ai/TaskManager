@@ -1003,70 +1003,79 @@ case 'save_device_install':
         $tr2 = $pdo->prepare("SELECT t.*,u.name as tech_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?");
         $tr2->execute([$tid]); $t2 = $tr2->fetch();
 
-        if ($t2 && !$t2['bs_entry_id']) {
-            // Check all devices installed
+        if ($t2) {
             $totalQty = intval($t2['device_qty']??1);
+            // Count devices actually installed so far
             $doneCount = $pdo->prepare("SELECT COUNT(*) FROM task_device_installs WHERE task_id=? AND gps_serial_no IS NOT NULL AND gps_serial_no != ''");
             $doneCount->execute([$tid]);
             $installedCount = intval($doneCount->fetchColumn());
 
-            if ($installedCount >= $totalQty) {
-                // All devices installed — create BS entry
-                // Collect all installed names and serials
-                $diRows = $pdo->prepare("SELECT gps_serial_no, name_on_server, server_name FROM task_device_installs WHERE task_id=? ORDER BY device_index ASC");
+            if ($installedCount >= 1) {
+                // Collect installed devices' serials/names for the entry
+                $diRows = $pdo->prepare("SELECT gps_serial_no, name_on_server, server_name FROM task_device_installs WHERE task_id=? AND gps_serial_no IS NOT NULL AND gps_serial_no != '' ORDER BY device_index ASC");
                 $diRows->execute([$tid]);
                 $installs = $diRows->fetchAll();
                 $allSerials = implode(', ', array_filter(array_column($installs, 'gps_serial_no')));
                 $allNames   = implode(', ', array_filter(array_column($installs, 'name_on_server')));
                 $serverName = $installs[0]['server_name'] ?? $t2['server_name'] ?? null;
 
-                $qty2  = floatval($t2['device_qty']??1);
-                $total2= floatval($t2['price_to_collect']??0);
-                $unit2 = $qty2>0 ? $total2/$qty2 : $total2;
-                $profile2 = $t2['profile']??'BGPT';
+                // PER-DEVICE PRICE: only installed devices are billed
+                $fullQty   = $totalQty > 0 ? $totalQty : 1;
+                $fullTotal = floatval($t2['price_to_collect']??0);
+                $unit2     = $fullQty > 0 ? $fullTotal / $fullQty : $fullTotal;
+                $billQty   = $installedCount;                 // only what is installed
+                $billTotal = round($unit2 * $billQty, 2);     // partial amount
+                $profile2  = $t2['profile']??'BGPT';
 
-                // Received = 0 at install time — only management closing confirms receipt
-                $recv2 = 0;
-                $pend2 = $total2;
-                $pStatus = 'pending';
+                // Payment received stays as recorded on the task; pending is only on installed amount
+                $recv2 = floatval($t2['amount_collected']??0);
+                if ($recv2 > $billTotal) $recv2 = $billTotal; // never show received above billed-so-far
+                $pend2 = max(0, $billTotal - $recv2);
+                $pStatus = ($recv2 >= $billTotal && $billTotal > 0) ? 'Collected' : 'pending';
 
-                $pdo->prepare("INSERT INTO balance_sheet_entries
-                    (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,
-                     name_on_server,server_name,device_model,qty,unit_price,gst,total_price,
-                     payment_status,payment_received,pending_payment,payment_mode,
-                     payment_received_on,payment_transaction_details,
-                     discount_given,discount_reason,discount_incharge,payment_reminder_date,
-                     technician_name,location,remarks,created_by_code)
-                    VALUES ('sales',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                    ON DUPLICATE KEY UPDATE
-                     payment_received=VALUES(payment_received),
-                     pending_payment=VALUES(pending_payment),
-                     payment_status=VALUES(payment_status),
-                     updated_at=NOW()"
-                )->execute([
-                    $profile2, $t2['task_id'], $tid,
-                    date('Y-m-d'),
-                    $allSerials ?: null,
-                    $t2['lead_type']??null,
-                    $allNames ?: $t2['name_on_server'] ?: null,
-                    $serverName,
-                    $t2['device_details']??null,
-                    $qty2, $unit2,
-                    floatval($t2['gst_amount']??0), $total2,
-                    $pStatus, $recv2, $pend2,
-                    $t2['payment_mode']??null,
-                    !empty($t2['payment_received_on'])?$t2['payment_received_on']:null,
-                    $t2['payment_transaction_details']??null,
-                    floatval($t2['discount_given']??0),
-                    $t2['discount_reason']??null, $t2['discount_incharge']??null,
-                    !empty($t2['payment_reminder_date'])?$t2['payment_reminder_date']:null,
-                    $t2['tech_name']??null, $t2['location']??null,
-                    $t2['general_notes']??null,
-                    $cu['name']??'system',
-                ]);
-                $newBsId = $pdo->lastInsertId();
-                if ($newBsId) {
-                    $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$newBsId, $tid]);
+                $existingBsId = $t2['bs_entry_id'] ? intval($t2['bs_entry_id']) : 0;
+                if ($existingBsId) {
+                    // UPDATE the same task entry — club installs together, grow qty/amount
+                    $pdo->prepare("UPDATE balance_sheet_entries SET
+                        gps_serial_no=?, name_on_server=?, server_name=?,
+                        qty=?, unit_price=?, total_price=?,
+                        payment_received=?, pending_payment=?, payment_status=?,
+                        updated_at=NOW()
+                        WHERE id=?")
+                        ->execute([
+                            $allSerials ?: null, $allNames ?: null, $serverName,
+                            $billQty, $unit2, $billTotal,
+                            $recv2, $pend2, $pStatus,
+                            $existingBsId
+                        ]);
+                } else {
+                    // CREATE the task entry on first install
+                    $pdo->prepare("INSERT INTO balance_sheet_entries
+                        (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,
+                         name_on_server,server_name,device_model,qty,unit_price,gst,total_price,
+                         payment_status,payment_received,pending_payment,payment_mode,
+                         technician_name,location,remarks,created_by_code)
+                        VALUES ('sales',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+                        ->execute([
+                            $profile2, $t2['task_id'], $tid,
+                            date('Y-m-d'),
+                            $allSerials ?: null,
+                            $t2['lead_type']??null,
+                            $allNames ?: null,
+                            $serverName,
+                            $t2['device_details']??null,
+                            $billQty, $unit2,
+                            floatval($t2['gst_amount']??0), $billTotal,
+                            $pStatus, $recv2, $pend2,
+                            $t2['payment_mode']??null,
+                            $t2['tech_name']??null, $t2['location']??null,
+                            $t2['general_notes']??null,
+                            $cu['name']??'system',
+                        ]);
+                    $newBsId = $pdo->lastInsertId();
+                    if ($newBsId) {
+                        $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$newBsId, $tid]);
+                    }
                 }
             }
         }
