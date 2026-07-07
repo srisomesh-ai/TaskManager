@@ -54,12 +54,17 @@ if($action === 'get_icons'){
     if(!$server_id || !isset($servers[$server_id])){ echo json_encode(['success'=>false,'error'=>'Invalid server']); exit; }
     $srv = $servers[$server_id];
     $base = str_replace('/api','',$srv['base']); // e.g. https://bharatgps.in
-    // GPSWOX endpoint is get_map_icons (NOT get_icons)
-    $r = do_get($srv['base'].'/get_map_icons?lang=en&user_api_hash='.rawurlencode($srv['hash']));
+    // DEVICE icons (assigned per device), not map icons.
+    // GPSWOX endpoint: get_device_images (fallback to get_icons variants)
+    $r = do_get($srv['base'].'/get_device_images?lang=en&user_api_hash='.rawurlencode($srv['hash']));
+    if(!is_array($r['json']) || (isset($r['json']['status']) && $r['json']['status']==0)){
+        $r = do_get($srv['base'].'/get_device_icons?lang=en&user_api_hash='.rawurlencode($srv['hash']));
+    }
     $icons = [];
     $list = [];
     if(is_array($r['json'])){
         if(isset($r['json']['items']) && is_array($r['json']['items']))      $list = $r['json']['items'];
+        elseif(isset($r['json']['data']) && is_array($r['json']['data']))    $list = $r['json']['data'];
         elseif(isset($r['json'][0]))                                         $list = $r['json'];
     }
     foreach($list as $ic){
