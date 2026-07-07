@@ -4111,6 +4111,9 @@ function buildAttendDeviceCard(idx, saved, done){
             style="width:100%;padding:9px;background:var(--accent2);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer">
             📧 Give Customer Access to this Device
           </button>
+          <div style="text-align:center;margin-top:6px">
+            <span onclick="markAccessAlready(${idx})" style="font-size:11px;color:var(--text3);cursor:pointer;text-decoration:underline">Already gave access earlier? Mark as done</span>
+          </div>
           <div id="devacc-panel-${idx}" style="display:none;margin-top:8px;background:var(--blue-bg);border:1.5px solid var(--accent2);border-radius:8px;padding:12px">
             <div style="display:flex;gap:6px;margin-bottom:8px">
               <input type="email" id="devacc-email-${idx}" placeholder="customer@email.com"
@@ -4652,6 +4655,14 @@ async function bulkAccAssign(createPass){
 
 // ── PER-DEVICE customer access (give access after each device) ──
 var _devAccUserId = {};
+async function markAccessAlready(idx){
+  const dev = _attendSavedDevices[idx];
+  if(!confirm('Mark this device as access already given to the customer?')) return;
+  if(dev) dev.access_given = true;
+  await api('mark_access_given',{},'POST',{task_id:_attendTaskId, imei:(dev&&dev.imei?dev.imei:'').replace(/\D/g,''), device_index:idx, email:(dev&&dev.access_email)||''}).catch(()=>{});
+  renderAttendDeviceCards();
+  showToast('✅ Marked as access already given');
+}
 function toggleDeviceAccess(idx){
   const p = document.getElementById('devacc-panel-'+idx);
   if(!p) return;
