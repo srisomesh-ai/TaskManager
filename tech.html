@@ -4038,6 +4038,24 @@ function renderAttendDeviceCards(){
     html += '<div style="font-size:12px;color:var(--text3);margin-bottom:10px">'+savedCount+' of '+_attendTaskQty+' devices added</div>';
   }
 
+  // BULK give-access — when 2+ devices are installed, offer to grant all at once
+  if(savedCount >= 2){
+    html += '<div style="background:#eef4ff;border:1.5px solid var(--accent2);border-radius:10px;padding:12px;margin-bottom:14px">'
+      + '<div style="font-size:12px;font-weight:800;color:var(--accent2);margin-bottom:8px">📧 Give Customer Access to ALL '+savedCount+' installed devices at once</div>'
+      + '<div style="display:flex;gap:6px;margin-bottom:8px">'
+      +   '<input type="email" id="bulkacc-email" placeholder="customer@email.com" value="'+((_detailTask&&_detailTask.email)?_detailTask.email:'')+'" style="flex:1;padding:9px 11px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">'
+      +   '<button onclick="bulkAccCheck()" style="padding:9px 14px;background:var(--accent2);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">🔍 Check</button>'
+      + '</div>'
+      + '<div id="bulkacc-status" style="font-size:12px;margin-bottom:6px"></div>'
+      + '<div id="bulkacc-create" style="display:none;margin-bottom:6px">'
+      +   '<input type="text" id="bulkacc-pass" value="Bgt@1234" placeholder="Password (min 6)" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;margin-bottom:6px">'
+      +   '<button onclick="bulkAccCreate()" style="width:100%;padding:9px;background:var(--accent2);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:800;cursor:pointer">➕ Create Account & Give Access to All</button>'
+      + '</div>'
+      + '<div id="bulkacc-found" style="display:none"><button onclick="bulkAccAssign()" style="width:100%;padding:9px;background:var(--green);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:800;cursor:pointer">🔗 Give Access to All Installed Devices</button></div>'
+      + '<div id="bulkacc-done" style="display:none;padding:8px 10px;background:var(--green-bg);border:1.5px solid var(--green);border-radius:6px;font-size:12px;color:var(--green);font-weight:700"></div>'
+      + '</div>';
+  }
+
   if(savedCount >= _attendTaskQty){
     // all done — show all saved summaries
     for(let i=1;i<=_attendTaskQty;i++){ html += buildAttendDeviceCard(i, _attendSavedDevices[i], true); }
@@ -4543,6 +4561,75 @@ function showPaymentAfterAssign(){
 }
 
 let _gpsFoundUserId = null;
+
+// ── BULK give-access — grant ALL installed devices to one customer ──
+var _bulkUserByServer = {};  // server_id -> user_id
+async function bulkAccCheck(){
+  const email=document.getElementById('bulkacc-email')?.value.trim();
+  const st=document.getElementById('bulkacc-status');
+  const cr=document.getElementById('bulkacc-create');
+  const fo=document.getElementById('bulkacc-found');
+  if(!email){ st.textContent='⚠️ Enter email first'; return; }
+  cr.style.display='none'; fo.style.display='none';
+  st.innerHTML='<span style="color:var(--text3)">🔍 Locating devices…</span>';
+  // resolve server info for all installed devices
+  const idxs = Object.keys(_attendSavedDevices).filter(k=>_attendSavedDevices[k]&&_attendSavedDevices[k].pushed);
+  for(const k of idxs){ await devAccResolveServer(parseInt(k)); }
+  // pick any one server to check if the account exists
+  const anyDev = _attendSavedDevices[parseInt(idxs[0])];
+  if(!anyDev || !anyDev.server_id){ st.innerHTML='<span style="color:var(--saffron)">⚠️ Could not locate devices on server.</span>'; return; }
+  st.innerHTML='<span style="color:var(--text3)">🔍 Checking account…</span>';
+  const r=await fetch('gps_proxy.php?action=find_user&server_id='+anyDev.server_id+'&email='+encodeURIComponent(email),{headers:{'X-Auth-Token':authToken}}).then(r=>r.json()).catch(()=>({}));
+  if(r.found){
+    st.innerHTML='<span style="color:var(--green);font-weight:700">✅ Account found</span>';
+    fo.style.display='';
+  } else {
+    st.innerHTML='<span style="color:var(--saffron);font-weight:700">⚠️ No account — create new</span>';
+    cr.style.display='';
+  }
+}
+async function bulkAccCreate(){
+  const email=document.getElementById('bulkacc-email')?.value.trim();
+  const pass=document.getElementById('bulkacc-pass')?.value.trim();
+  const st=document.getElementById('bulkacc-status');
+  if(!pass||pass.length<6){ alert('Password must be at least 6 characters'); return; }
+  st.innerHTML='<span style="color:var(--text3)">⏳ Creating & assigning…</span>';
+  await bulkAccAssign(pass);
+}
+async function bulkAccAssign(createPass){
+  const email=document.getElementById('bulkacc-email')?.value.trim();
+  const st=document.getElementById('bulkacc-status');
+  const done=document.getElementById('bulkacc-done');
+  st.innerHTML='<span style="color:var(--text3)">⏳ Giving access to all devices…</span>';
+  _bulkUserByServer={};
+  const idxs=Object.keys(_attendSavedDevices).filter(k=>_attendSavedDevices[k]&&_attendSavedDevices[k].pushed);
+  let ok=0, fail=0;
+  for(const k of idxs){
+    const dev=_attendSavedDevices[parseInt(k)];
+    if(!dev||!dev.server_id||!dev.device_id){ fail++; continue; }
+    // ensure a user id on this device's server (find or create)
+    let uid=_bulkUserByServer[dev.server_id];
+    if(!uid){
+      const fr=await fetch('gps_proxy.php?action=find_user&server_id='+dev.server_id+'&email='+encodeURIComponent(email),{headers:{'X-Auth-Token':authToken}}).then(r=>r.json()).catch(()=>({}));
+      if(fr.found){ uid=fr.user?.id; }
+      else if(createPass){
+        const cf=new FormData(); cf.append('server_id',dev.server_id); cf.append('email',email); cf.append('password',createPass); cf.append('phone',_detailTask?.contact_number||'');
+        const cr=await fetch('gps_proxy.php?action=create_user',{method:'POST',headers:{'X-Auth-Token':authToken},body:cf}).then(r=>r.json()).catch(()=>({}));
+        if(cr.success) uid=cr.user_id;
+      }
+      if(uid) _bulkUserByServer[dev.server_id]=uid;
+    }
+    if(!uid){ fail++; continue; }
+    const af=new FormData(); af.append('server_id',dev.server_id); af.append('user_id',uid); af.append('device_id',dev.device_id);
+    const ar=await fetch('gps_proxy.php?action=assign_device',{method:'POST',headers:{'X-Auth-Token':authToken},body:af}).then(r=>r.json()).catch(()=>({}));
+    if(ar.success) ok++; else fail++;
+  }
+  document.getElementById('bulkacc-create').style.display='none';
+  document.getElementById('bulkacc-found').style.display='none';
+  st.innerHTML='';
+  done.style.display='';
+  done.textContent='✅ Access given to '+ok+' device(s)'+(fail?(' · '+fail+' failed'):'');
+}
 
 // ── PER-DEVICE customer access (give access after each device) ──
 var _devAccUserId = {};
