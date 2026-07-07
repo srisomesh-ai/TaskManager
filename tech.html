@@ -3391,20 +3391,21 @@ function openTechAttend(taskId){
     if(amtEl) amtEl.placeholder = `Max: ₹${bal.toLocaleString('en-IN')}`;
   }
 
-  // Check if devices already pushed from a previous session
+  // Restore ANY already-pushed devices from a previous session (partial progress supported)
   const savedInstalls = _detailTask?.device_installs || [];
-  const allPushed = savedInstalls.length >= _attendTaskQty &&
-    savedInstalls.every(d => d.gps_serial_no && d.name_on_server);
-
-  if(allPushed){
-    // Mark all as pushed in memory
-    savedInstalls.forEach(d => {
+  savedInstalls.forEach(d => {
+    if(d && d.gps_serial_no && d.name_on_server && d.device_index){
       _attendSavedDevices[parseInt(d.device_index)] = {
         pushed:true, imei:d.gps_serial_no, device_name:d.name_on_server,
         server_name:d.server_name, plate_number:d.vehicle_number, vehicle_type:d.vehicle_type,
+        installation_date:d.installation_date, expiration_date:d.expiration_date,
       };
-    });
+    }
+  });
+  const pushedCount = Object.keys(_attendSavedDevices).filter(k=>_attendSavedDevices[k] && _attendSavedDevices[k].pushed).length;
+  const allPushed = pushedCount >= _attendTaskQty && _attendTaskQty > 0;
 
+  if(allPushed){
     // Skip status cards — go straight to payment
     document.getElementById('attend-title').textContent    = '➕ Devices Added';
     document.getElementById('attend-subtitle').textContent = 'Complete payment & submit';
@@ -3422,11 +3423,18 @@ function openTechAttend(taskId){
     if(paySection) paySection.style.display='';
     if(submitBtn){ submitBtn.style.display=''; submitBtn.textContent='✅ Submit — Request Approval'; submitBtn.style.background='var(--green)'; }
 
+  } else if(pushedCount > 0){
+    // PARTIAL progress — resume the adding flow at the next unsaved device
+    document.querySelectorAll('.attend-status-card').forEach(c=>{ c.style.display='none'; });
+    document.getElementById('attend-section-completed').style.display='';
+    document.getElementById('attend-section-postponed').style.display='none';
+    document.getElementById('attend-section-cancelled').style.display='none';
+    document.getElementById('attend-install-status').value='completed';
+    document.getElementById('attend-title').textContent    = '➕ Continue Adding';
+    document.getElementById('attend-subtitle').textContent = pushedCount+' of '+_attendTaskQty+' devices already added';
+    renderAttendDeviceCards();
+    if(amtEl) amtEl.value='';
   } else {
-    // Fresh start — show status cards
-    document.querySelectorAll('.attend-status-card').forEach(c=>{
-      c.style.borderColor='var(--border)'; c.style.background='var(--surface)'; c.style.display='';
-    });
     ['attend-section-completed','attend-section-postponed','attend-section-cancelled'].forEach(id=>{
       const el=document.getElementById(id); if(el) el.style.display='none';
     });
