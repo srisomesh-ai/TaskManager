@@ -4553,14 +4553,36 @@ function toggleDeviceAccess(idx){
   const em = document.getElementById('devacc-email-'+idx);
   if(em && !em.value && _detailTask?.email) em.value = _detailTask.email;
 }
+async function devAccResolveServer(idx){
+  // If server_id/device_id are missing (reopened task), find them by IMEI.
+  const dev = _attendSavedDevices[idx];
+  if(!dev) return false;
+  if(dev.server_id && dev.device_id) return true;
+  const imei = (dev.imei||'').replace(/\D/g,'');
+  if(!imei) return false;
+  const st = document.getElementById('devacc-status-'+idx);
+  if(st) st.innerHTML='<span style="color:var(--text3)">🔍 Locating device on server…</span>';
+  try {
+    const r = await fetch(GPS_PROXY+'?action=find&keyword='+encodeURIComponent(imei),{headers:{'X-Auth-Token':authToken}}).then(r=>r.json());
+    if(r.success && r.devices && r.devices.length){
+      const d = r.devices[0];
+      dev.server_id = d._server_id || d.server_id || dev.server_id;
+      dev.device_id = d.id || d.device_id || dev.device_id;
+      return !!(dev.server_id && dev.device_id);
+    }
+  } catch(e){}
+  return false;
+}
+
 async function devAccCheck(idx){
   const email = document.getElementById('devacc-email-'+idx)?.value.trim();
   const st = document.getElementById('devacc-status-'+idx);
   const cr = document.getElementById('devacc-create-'+idx);
   const fo = document.getElementById('devacc-found-'+idx);
   if(!email){ st.textContent='⚠️ Enter email first'; return; }
+  const ok = await devAccResolveServer(idx);
   const dev = _attendSavedDevices[idx];
-  if(!dev || !dev.server_id){ st.innerHTML='<span style="color:var(--saffron)">⚠️ Give access from the same session you added the device (server info needed).</span>'; return; }
+  if(!ok || !dev || !dev.server_id){ st.innerHTML='<span style="color:var(--saffron)">⚠️ Could not locate this device on the server. Try again or use the same session.</span>'; return; }
   st.innerHTML='<span style="color:var(--text3)">🔍 Checking…</span>';
   cr.style.display='none'; fo.style.display='none'; _devAccUserId[idx]=null;
   const r = await fetch('gps_proxy.php?action=find_user&server_id='+dev.server_id+'&email='+encodeURIComponent(email),
