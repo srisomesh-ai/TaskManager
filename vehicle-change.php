@@ -12,12 +12,13 @@ $success = false;
 $createdTaskId = '';
 
 $JOB_NAME = 'Vehicle to Vehicle Change';
-// Pull price from price list
-$PRICE = 0;
+// Pull price from price list; fall back to standard default if not listed
+$PRICE = 600;
 try {
     $pr = $pdo->prepare("SELECT price_excl_gst FROM price_list WHERE product_name=? AND is_active=1 LIMIT 1");
     $pr->execute([$JOB_NAME]);
-    $PRICE = floatval($pr->fetchColumn() ?: 0);
+    $found = $pr->fetchColumn();
+    if ($found !== false && $found !== null && floatval($found) > 0) $PRICE = floatval($found);
 } catch(Exception $e) {}
 
 $pref_phone = trim($_GET['p'] ?? '');
