@@ -4724,13 +4724,14 @@ async function devAccCheck(idx){
   st.innerHTML='<span style="color:var(--text3)">🔍 Checking…</span>';
   cr.style.display='none'; fo.style.display='none'; _devAccUserId[idx]=null;
   const r = await fetch('gps_proxy.php?action=find_user&server_id='+dev.server_id+'&email='+encodeURIComponent(email),
-    {headers:{'X-Auth-Token':authToken}}).then(r=>r.json()).catch(()=>({}));
+    {headers:{'X-Auth-Token':authToken}}).then(r=>r.json()).catch(e=>({_err:String(e)}));
   if(r.found){
     _devAccUserId[idx]=r.user?.id;
     st.innerHTML='<span style="color:var(--green);font-weight:700">✅ Account found</span>';
     fo.style.display='';
   } else {
-    st.innerHTML='<span style="color:var(--saffron);font-weight:700">⚠️ No account — create new</span>';
+    st.innerHTML='<span style="color:var(--saffron);font-weight:700">⚠️ No account — create new</span>'
+      + '<div style="font-size:9px;color:var(--text3);margin-top:4px;word-break:break-all">debug: srv='+dev.server_id+' dev='+dev.device_id+' resp='+escHtml(JSON.stringify(r)).slice(0,200)+'</div>';
     cr.style.display='';
   }
 }
