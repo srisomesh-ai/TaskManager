@@ -4357,8 +4357,15 @@ async function verifyDeposit(taskId, action){
   if(!confirm(msg)) return;
   const res = await api('verify_cash_deposit',{},'POST',{id:taskId, action}).catch(()=>({}));
   if(res.success){
-    showToast(action==='approve' ? '✅ Deposit verified' : '❌ Deposit rejected');
-    viewTask(taskId);
+    if(action==='approve'){
+      showToast('✅ Payment received & verified — balance sheet updated');
+      closeTaskDetail();
+      if(typeof loadTasks==='function') loadTasks();
+      if(typeof loadDashboard==='function') loadDashboard();
+    } else {
+      showToast('❌ Deposit rejected');
+      viewTask(taskId);
+    }
   } else {
     alert(res.error || 'Failed');
   }
