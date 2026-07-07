@@ -4561,7 +4561,6 @@ function checkAttendAllDevicesSaved(){
     _dbg.push('D'+i+':'+(ag?'yes':'NO'));
     if(!ag){allAccess=false;}
   }
-  const gate = document.getElementById('attend-access-gate');
   if(gate) gate.setAttribute('data-dbg', _dbg.join(' '));
 
   if(allAccess){
