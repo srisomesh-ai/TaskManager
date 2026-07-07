@@ -262,7 +262,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
           <p class="confirm-hi">आप अपने वाहन का GPS ऑफ़लाइन दिखने के कारण उसकी जाँच के लिए अनुरोध भेजने आए हैं। क्या यह सही है?</p>
         </div>
         <?php if ($PRICE > 0): ?>
-        <div class="price-tag"><div class="lbl">Service Charge</div><div class="amt">₹<?= number_format($TOTAL) ?></div><div style="font-size:10px;color:#1e5bd6;margin-top:2px"><?= $GST ? ('Base ₹'.number_format($PRICE).' + 18% GST ₹'.number_format($GST_AMT)) : 'No GST' ?></div></div>
+        <div class="price-tag"><div class="lbl">Service Charge</div><div class="amt">₹<?= number_format($TOTAL) ?></div><div style="font-size:10px;color:#1e5bd6;margin-top:2px"><?= $GST ? ('Base ₹'.number_format($PRICE).' + 18% GST ₹'.number_format($GST_AMT).' = ₹'.number_format($TOTAL)) : '' ?></div></div>
         <?php else: ?>
         <div class="price-tag" style="background:#e6f7ee;border-color:#1a9d5a"><div class="lbl" style="color:#1a7a3a">Service Charge</div><div class="amt" style="color:#1a7a3a">FREE</div></div>
         <?php endif; ?>
