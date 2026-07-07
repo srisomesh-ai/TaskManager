@@ -100,6 +100,49 @@ function _devEnsureTables($pdo){
 }
 function _devNorm($imei){ return preg_replace('/\D/', '', (string)$imei); } // digits only
 
+// Ensure every task with installed devices has a balance-sheet entry (billing only installed devices).
+// Safe to run repeatedly — creates missing entries, updates existing ones to match installed count.
+function _bsSyncInstalls($pdo, $cuName){
+    try { $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS bs_entry_id INT NULL"); } catch(Exception $e){}
+    $rows = $pdo->query("SELECT DISTINCT t.id FROM tasks t
+                         JOIN task_device_installs di ON di.task_id=t.id
+                         WHERE di.gps_serial_no IS NOT NULL AND di.gps_serial_no != ''")->fetchAll(PDO::FETCH_COLUMN);
+    $created=0; $updated=0;
+    foreach ($rows as $tid) {
+        $tr = $pdo->prepare("SELECT t.*,u.name as tech_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?");
+        $tr->execute([$tid]); $t2 = $tr->fetch();
+        if (!$t2) continue;
+        $di = $pdo->prepare("SELECT gps_serial_no,name_on_server,server_name FROM task_device_installs WHERE task_id=? AND gps_serial_no IS NOT NULL AND gps_serial_no != '' ORDER BY device_index ASC");
+        $di->execute([$tid]); $installs = $di->fetchAll();
+        $installedCount = count($installs);
+        if ($installedCount < 1) continue;
+        $allSerials = implode(', ', array_filter(array_column($installs,'gps_serial_no')));
+        $allNames   = implode(', ', array_filter(array_column($installs,'name_on_server')));
+        $serverName = $installs[0]['server_name'] ?? $t2['server_name'] ?? null;
+        $fullQty   = intval($t2['device_qty']??1); if($fullQty<1)$fullQty=1;
+        $fullTotal = floatval($t2['price_to_collect']??0);
+        $unit2     = $fullQty>0 ? $fullTotal/$fullQty : $fullTotal;
+        $billQty   = $installedCount;
+        $billTotal = round($unit2*$billQty, 2);
+        $recv2     = floatval($t2['amount_collected']??0); if($recv2>$billTotal)$recv2=$billTotal;
+        $pend2     = max(0, $billTotal-$recv2);
+        $pStatus   = ($recv2>=$billTotal && $billTotal>0) ? 'Collected' : 'pending';
+        $profile2  = !empty($t2['profile']) ? $t2['profile'] : 'BGPT';
+        if (!empty($t2['bs_entry_id'])) {
+            $pdo->prepare("UPDATE balance_sheet_entries SET gps_serial_no=?,name_on_server=?,server_name=?,qty=?,unit_price=?,total_price=?,payment_received=?,pending_payment=?,payment_status=?,updated_at=NOW() WHERE id=?")
+                ->execute([$allSerials?:null,$allNames?:null,$serverName,$billQty,$unit2,$billTotal,$recv2,$pend2,$pStatus,intval($t2['bs_entry_id'])]);
+            $updated++;
+        } else {
+            $pdo->prepare("INSERT INTO balance_sheet_entries (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,name_on_server,server_name,device_model,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_mode,technician_name,location,remarks,created_by_code) VALUES ('sales',?,?,?,CURDATE(),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+                ->execute([$profile2,$t2['task_id'],$tid,$allSerials?:null,$t2['lead_type']??null,$allNames?:null,$serverName,$t2['device_details']??null,$billQty,$unit2,floatval($t2['gst_amount']??0),$billTotal,$pStatus,$recv2,$pend2,$t2['payment_mode']??null,$t2['tech_name']??null,$t2['location']??null,$t2['general_notes']??null,$cuName??'system']);
+            $bsId=$pdo->lastInsertId();
+            if($bsId){ $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$bsId,$tid]); }
+            $created++;
+        }
+    }
+    return ['created'=>$created,'updated'=>$updated,'scanned'=>count($rows)];
+}
+
 switch ($action) {
 
 // ---- PING ----
@@ -1148,7 +1191,8 @@ case 'bs_get_entries':
     if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     // Ensure table exists
     try { $pdo->exec("CREATE TABLE IF NOT EXISTS balance_sheet_entries (id INT AUTO_INCREMENT PRIMARY KEY, type VARCHAR(20) DEFAULT 'sales', profile VARCHAR(10) DEFAULT 'BGPT', task_id VARCHAR(20) NULL, task_db_id INT NULL, date DATE NOT NULL, invoice_no VARCHAR(50), gps_serial_no VARCHAR(100), customer_type VARCHAR(50), name_on_server TEXT, server_name VARCHAR(50), device_model VARCHAR(100), service_type VARCHAR(100), license_plan VARCHAR(100), qty DECIMAL(10,2) DEFAULT 1, unit_price DECIMAL(10,2) DEFAULT 0, gst DECIMAL(10,2) DEFAULT 0, total_price DECIMAL(10,2) DEFAULT 0, payment_status VARCHAR(50), payment_received DECIMAL(10,2) DEFAULT 0, pending_payment DECIMAL(10,2) DEFAULT 0, payment_mode VARCHAR(50), payment_received_on DATE NULL, payment_transaction_details TEXT, pending_reason VARCHAR(100), discount_given DECIMAL(10,2) DEFAULT 0, discount_reason TEXT, discount_incharge VARCHAR(100), payment_reminder_date DATE NULL, technician_name VARCHAR(100), location VARCHAR(200), remarks TEXT, created_by_code VARCHAR(50), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch(Exception $e) {}
-    $where=[]; $params=[];
+    // Self-heal: ensure installed devices have balance entries (safe, idempotent)
+    try { _bsSyncInstalls($pdo, $cu['name']??'system'); } catch(Exception $e) {}
     $profile = $_GET['profile'] ?? 'BGPT';
     $where[] = "profile=?"; $params[] = $profile;
     if (!empty($_GET['type']))     { $where[]="type=?";          $params[]=$_GET['type']; }
