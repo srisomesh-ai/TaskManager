@@ -3063,15 +3063,21 @@ function updateModalGST(){
   }
 }
 
-function shareCustomerLink(type){
+async function shareCustomerLink(type){
   const base = location.origin;
   const map = {
-    'troubleshoot':    { url: base+'/troubleshoot.php',    label: 'GPS Troubleshoot', msg: 'Please fill this form to request a GPS troubleshoot check for your vehicle:' },
-    'vehicle-change':  { url: base+'/vehicle-change.php',  label: 'Vehicle to Vehicle Change', msg: 'Please fill this form to request moving your GPS device to a new vehicle:' },
-    'gps-remove':      { url: base+'/gps-remove.php',      label: 'GPS Removal', msg: 'Please fill this form to request removal of your GPS device:' },
+    'troubleshoot':    { file:'troubleshoot.php',    label: 'GPS Troubleshoot', msg: 'Please fill this form to request a GPS troubleshoot check for your vehicle:' },
+    'vehicle-change':  { file:'vehicle-change.php',  label: 'Vehicle to Vehicle Change', msg: 'Please fill this form to request moving your GPS device to a new vehicle:' },
+    'gps-remove':      { file:'gps-remove.php',      label: 'GPS Removal', msg: 'Please fill this form to request removal of your GPS device:' },
   };
   const cfg = map[type]; if(!cfg) return;
-  const waText = encodeURIComponent(cfg.msg + '\n\n' + cfg.url);
+  // get a 6-hour single-use token
+  let url = base + '/' + cfg.file;
+  try {
+    const r = await api('make_req_link',{},'POST',{type:type});
+    if(r && r.token){ url += '?t=' + encodeURIComponent(r.token); }
+  } catch(e){}
+  const waText = encodeURIComponent(cfg.msg + '\n\n' + url + '\n\n(This link is valid for 6 hours and can be used once.)');
   const old = document.getElementById('clink-pop'); if(old) old.remove();
   const ov = document.createElement('div');
   ov.id = 'clink-pop';
@@ -3079,9 +3085,10 @@ function shareCustomerLink(type){
   ov.innerHTML =
     '<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:20px;box-shadow:0 12px 40px rgba(0,0,0,.25)" onclick="event.stopPropagation()">'
     + '<div style="font-size:16px;font-weight:800;margin-bottom:4px">Send '+cfg.label+' Link</div>'
-    + '<div style="font-size:12px;color:#667;margin-bottom:14px">Share this link with the customer. They fill the form and the task is created automatically.</div>'
+    + '<div style="font-size:12px;color:#667;margin-bottom:6px">Share with the customer. They fill the form and the task is created automatically.</div>'
+    + '<div style="font-size:11px;color:#c0392b;font-weight:700;margin-bottom:12px">⏳ Valid for 6 hours · one-time use</div>'
     + '<div style="display:flex;gap:6px;margin-bottom:12px">'
-    +   '<input id="clink-url" readonly value="'+cfg.url+'" style="flex:1;padding:9px 11px;border:1.5px solid #d5dce7;border-radius:8px;font-size:12px">'
+    +   '<input id="clink-url" readonly value="'+url+'" style="flex:1;padding:9px 11px;border:1.5px solid #d5dce7;border-radius:8px;font-size:12px">'
     +   '<button onclick="navigator.clipboard.writeText(document.getElementById(\'clink-url\').value);this.textContent=\'Copied\'" style="padding:9px 12px;background:#eef2f7;border:1.5px solid #d5dce7;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Copy</button>'
     + '</div>'
     + '<a href="https://wa.me/?text='+waText+'" target="_blank" style="display:block;text-align:center;padding:12px;background:#25D366;color:#fff;border-radius:10px;font-size:14px;font-weight:800;text-decoration:none">📱 Share on WhatsApp</a>'
