@@ -3381,6 +3381,7 @@ function openTechAttend(taskId){
   _attendTaskId  = _detailTask?.id || taskId;
   _attendTaskQty = parseInt(_detailTask?.device_qty||1);
   _attendSavedDevices = {};
+  _attendStep = 1;
 
   // Load this technician's assigned devices for the IMEI dropdown
   loadMyAssignedForAttend();
@@ -4028,18 +4029,30 @@ async function checkAndUpdateAttendBtn(taskId, taskObj){
 // ════════════════════════════════════════════════════════
 var _attendSavedDevices = {};
 var _attendTaskQty = 1;
+var _attendStep = 1;
 var _attendTaskId  = null;
+
+function skipToNextDevice(idx){
+  // advance the stepper to the next device without giving access
+  _attendStep = idx + 1;
+  renderAttendDeviceCards();
+}
 
 function renderAttendDeviceCards(){
   const container = document.getElementById('attend-device-cards');
   if(!container) return;
-  // STEPPER: show only the current device (first unsaved), plus a progress header.
-  let currentIdx = 1;
+  // STEPPER: current step is tracked explicitly; advances only when tech skips or finishes a device.
+  let firstUnsaved = 1;
   for(let i=1; i<=_attendTaskQty; i++){
     const s = _attendSavedDevices[i];
-    if(!(s && s.pushed)){ currentIdx = i; break; }
-    currentIdx = i+1; // all up to i are done
+    if(!(s && s.pushed)){ firstUnsaved = i; break; }
+    firstUnsaved = i+1;
   }
+  // If the tech just pushed the current step device, keep showing it (for give-access) until they advance.
+  if(typeof _attendStep !== 'number' || _attendStep < 1) _attendStep = firstUnsaved;
+  // don't let the step run past a still-unsaved earlier device
+  if(_attendStep > firstUnsaved) _attendStep = firstUnsaved;
+  let currentIdx = _attendStep;
   const savedCount = Object.keys(_attendSavedDevices).filter(k=>_attendSavedDevices[k] && _attendSavedDevices[k].pushed).length;
 
   let html = '';
@@ -4080,12 +4093,7 @@ function renderAttendDeviceCards(){
     // all done — show all saved summaries
     for(let i=1;i<=_attendTaskQty;i++){ html += buildAttendDeviceCard(i, _attendSavedDevices[i], true); }
   } else {
-    // Show already-completed device cards first (so their Give-Access buttons stay available),
-    // then the current device being worked on.
-    for(let i=1;i<currentIdx;i++){
-      const sd = _attendSavedDevices[i];
-      if(sd && sd.pushed) html += buildAttendDeviceCard(i, sd, true);
-    }
+    // ONE device per page — show only the current device
     const saved = _attendSavedDevices[currentIdx];
     html += buildAttendDeviceCard(currentIdx, saved, !!(saved&&saved.pushed));
   }
@@ -4124,9 +4132,7 @@ function buildAttendDeviceCard(idx, saved, done){
             style="width:100%;padding:9px;background:var(--accent2);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer">
             📧 Give Customer Access to this Device
           </button>
-          <div style="text-align:center;margin-top:6px">
-            <span onclick="markAccessAlready(${idx})" style="font-size:11px;color:var(--text3);cursor:pointer;text-decoration:underline">Already gave access earlier? Mark as done</span>
-          </div>
+          ${(idx < _attendTaskQty) ? `<button onclick="skipToNextDevice(${idx})" style="width:100%;margin-top:6px;padding:9px;background:transparent;color:var(--text3);border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">Skip access for now → Add Device ${idx+1}</button>` : ''}
           <div id="devacc-panel-${idx}" style="display:none;margin-top:8px;background:var(--blue-bg);border:1.5px solid var(--accent2);border-radius:8px;padding:12px">
             <div style="display:flex;gap:6px;margin-bottom:8px">
               <input type="email" id="devacc-email-${idx}" placeholder="customer@email.com"
