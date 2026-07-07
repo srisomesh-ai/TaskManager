@@ -3098,7 +3098,17 @@ function getWorkflowBadge(t){
     'payment_pending':         '<span class="wf-badge wf-payment-pending">PAYMENT PENDING</span>',
     'approve_now':             '<span class="wf-badge wf-approve-now">APPROVE NOW</span>',
   };
-  return badges[s]||'';
+  const base = badges[s]||'';
+  // Multi-device install progress badge (shown for tasks with more than 1 device)
+  const qty = parseInt(t.device_qty||1);
+  if(qty > 1){
+    const installs = (t.device_installs||[]).filter(function(d){return d.gps_serial_no && d.name_on_server;}).length;
+    if(installs < qty){
+      const prog = '<span class="wf-badge" style="background:#eef4ff;color:#2E6BE2">📍 '+installs+' of '+qty+' installed</span>';
+      return prog + base;
+    }
+  }
+  return base;
 }
 
 function getRowClass(t){
