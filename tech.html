@@ -3400,6 +3400,8 @@ function openTechAttend(taskId){
         server_name:d.server_name, plate_number:d.vehicle_number, vehicle_type:d.vehicle_type,
         installation_date:d.installation_date, expiration_date:d.expiration_date,
         server_id:d.server_id, device_id:d.device_id,
+        access_given: (String(d.access_given)==='1'||d.access_given===1||d.access_given===true),
+        access_email: d.access_email||'',
       };
     }
   });
@@ -4038,10 +4040,11 @@ function renderAttendDeviceCards(){
     html += '<div style="font-size:12px;color:var(--text3);margin-bottom:10px">'+savedCount+' of '+_attendTaskQty+' devices added</div>';
   }
 
-  // BULK give-access — when 2+ devices are installed, offer to grant all at once
-  if(savedCount >= 2){
+  // BULK give-access — when 2+ installed devices still need access, offer to grant all at once
+  const needAccess = Object.keys(_attendSavedDevices).filter(k=>_attendSavedDevices[k]&&_attendSavedDevices[k].pushed&&!_attendSavedDevices[k].access_given).length;
+  if(needAccess >= 2){
     html += '<div style="background:#eef4ff;border:1.5px solid var(--accent2);border-radius:10px;padding:12px;margin-bottom:14px">'
-      + '<div style="font-size:12px;font-weight:800;color:var(--accent2);margin-bottom:8px">📧 Give Customer Access to ALL '+savedCount+' installed devices at once</div>'
+      + '<div style="font-size:12px;font-weight:800;color:var(--accent2);margin-bottom:8px">📧 Give Customer Access to '+needAccess+' installed device(s) at once</div>'
       + '<div style="display:flex;gap:6px;margin-bottom:8px">'
       +   '<input type="email" id="bulkacc-email" placeholder="customer@email.com" value="'+((_detailTask&&_detailTask.email)?_detailTask.email:'')+'" style="flex:1;padding:9px 11px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">'
       +   '<button onclick="bulkAccCheck()" style="padding:9px 14px;background:var(--accent2);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">🔍 Check</button>'
@@ -4096,6 +4099,10 @@ function buildAttendDeviceCard(idx, saved, done){
           🔒 Device successfully added to GPS server. This cannot be edited.
         </div>
         <div style="margin-top:10px">
+          ${(saved && saved.access_given) ? `
+          <div style="padding:10px;background:var(--green-bg);border:1.5px solid var(--green);border-radius:7px;font-size:12px;color:var(--green);font-weight:700;text-align:center">
+            ✅ Customer access already given${saved.access_email?(' to '+saved.access_email):''}
+          </div>` : `
           <button onclick="toggleDeviceAccess(${idx})" id="devacc-toggle-${idx}"
             style="width:100%;padding:9px;background:var(--accent2);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer">
             📧 Give Customer Access to this Device
@@ -4116,7 +4123,7 @@ function buildAttendDeviceCard(idx, saved, done){
               <button onclick="devAccAssign(${idx})" style="width:100%;padding:9px;background:var(--green);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:800;cursor:pointer">🔗 Give Access to This Account</button>
             </div>
             <div id="devacc-done-${idx}" style="display:none;padding:8px 10px;background:var(--green-bg);border:1.5px solid var(--green);border-radius:6px;font-size:12px;color:var(--green);font-weight:700">✅ Access given to customer</div>
-          </div>
+          </div>`}
         </div>
       </div>
     </div>`;
@@ -4573,7 +4580,7 @@ async function bulkAccCheck(){
   cr.style.display='none'; fo.style.display='none';
   st.innerHTML='<span style="color:var(--text3)">🔍 Locating devices…</span>';
   // resolve server info for all installed devices
-  const idxs = Object.keys(_attendSavedDevices).filter(k=>_attendSavedDevices[k]&&_attendSavedDevices[k].pushed);
+  const idxs = Object.keys(_attendSavedDevices).filter(k=>_attendSavedDevices[k]&&_attendSavedDevices[k].pushed&&!_attendSavedDevices[k].access_given);
   for(const k of idxs){ await devAccResolveServer(parseInt(k)); }
   // pick any one server to check if the account exists
   const anyDev = _attendSavedDevices[parseInt(idxs[0])];
@@ -4602,7 +4609,7 @@ async function bulkAccAssign(createPass){
   const done=document.getElementById('bulkacc-done');
   st.innerHTML='<span style="color:var(--text3)">⏳ Giving access to all devices…</span>';
   _bulkUserByServer={};
-  const idxs=Object.keys(_attendSavedDevices).filter(k=>_attendSavedDevices[k]&&_attendSavedDevices[k].pushed);
+  const idxs=Object.keys(_attendSavedDevices).filter(k=>_attendSavedDevices[k]&&_attendSavedDevices[k].pushed&&!_attendSavedDevices[k].access_given);
   let ok=0, fail=0; const details=[];
   for(const k of idxs){
     const dev=_attendSavedDevices[parseInt(k)];
@@ -4627,7 +4634,10 @@ async function bulkAccAssign(createPass){
     if(!uid){ fail++; details.push('❌ '+label+' — no account'); continue; }
     const af=new FormData(); af.append('server_id',dev.server_id); af.append('user_id',uid); af.append('device_id',dev.device_id);
     const ar=await fetch('gps_proxy.php?action=assign_device',{method:'POST',headers:{'X-Auth-Token':authToken},body:af}).then(r=>r.json()).catch(()=>({}));
-    if(ar.success){ ok++; details.push('✅ '+label); } else { fail++; details.push('❌ '+label+' — '+((ar&&ar.error)||'failed')); }
+    if(ar.success){ ok++; details.push('✅ '+label);
+      if(_attendSavedDevices[parseInt(k)]){ _attendSavedDevices[parseInt(k)].access_given=true; _attendSavedDevices[parseInt(k)].access_email=email; }
+      api('mark_access_given',{},'POST',{task_id:_attendTaskId, imei:(dev.imei||'').replace(/\D/g,''), device_index:parseInt(k), email:email}).catch(()=>{});
+    } else { fail++; details.push('❌ '+label+' — '+((ar&&ar.error)||'failed')); }
   }
   document.getElementById('bulkacc-create').style.display='none';
   document.getElementById('bulkacc-found').style.display='none';
@@ -4717,6 +4727,9 @@ async function devAccAssign(idx){
     document.getElementById('devacc-create-'+idx).style.display='none';
     document.getElementById('devacc-done-'+idx).style.display='';
     st.innerHTML='';
+    // persist access-given so it is not re-offered on refresh
+    if(_attendSavedDevices[idx]){ _attendSavedDevices[idx].access_given=true; _attendSavedDevices[idx].access_email=document.getElementById('devacc-email-'+idx)?.value.trim()||''; }
+    api('mark_access_given',{},'POST',{task_id:_attendTaskId, imei:(dev.imei||'').replace(/\D/g,''), device_index:idx, email:_attendSavedDevices[idx]?.access_email||''}).catch(()=>{});
   } else { st.innerHTML='<span style="color:var(--red)">❌ '+escHtml(r.error||'Failed')+'</span>'; }
 }
 
