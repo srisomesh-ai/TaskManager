@@ -3926,6 +3926,22 @@ async function checkAndUpdateAttendBtn(taskId, taskObj){
   }
 
   if(addingDone && !paid){
+    // NEW STATE: installed but not all devices assigned to customer → must assign first
+    const allAccessGiven = installs.length > 0 && installs.every(d => String(d.access_given)==='1' || d.access_given===1 || d.access_given===true);
+    if(!allAccessGiven){
+      btn.style.background = 'var(--accent2)';
+      btn.style.border     = 'none';
+      btn.setAttribute('onclick', 'openTechAttend(' + taskId + ')');
+      if(icon)  icon.textContent  = '📧';
+      if(label) label.textContent = 'Assign Device to Customer';
+      if(sub)   sub.textContent   = 'Give customer access before payment';
+      if(status) status.innerHTML = `
+      <div style="background:#eef4ff;border:1.5px solid var(--accent2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--accent2);line-height:1.6">
+        📧 Devices installed. <strong>Customer access pending.</strong><br>
+        <span style="font-size:10px;color:var(--text3)">Assign the installed device(s) to the customer account, then collect payment</span>
+      </div>`;
+      return;
+    }
     btn.style.background = 'var(--saffron)';
     btn.style.border     = 'none';
     btn.setAttribute('onclick', 'openPaymentModal(' + taskId + ')');
@@ -4643,9 +4659,8 @@ function checkAttendAllDevicesSaved(){
   }
 
   // All installed — check every installed device has customer access
-  let allAccess=true; let _dbg='qty='+_attendTaskQty;
-  for(let i=1;i<=_attendTaskQty;i++){ const d=_attendSavedDevices[i]; _dbg+=' | D'+i+' pushed='+(d&&d.pushed?'Y':'N')+' access='+(d&&d.access_given?'Y':'N'); if(!d?.access_given){allAccess=false;} }
-  if(!window._gateAlerted){ window._gateAlerted=true; alert('GATE CHECK → allDone='+allDone+' allAccess='+allAccess+' :: '+_dbg); }
+  let allAccess=true;
+  for(let i=1;i<=_attendTaskQty;i++){ if(!_attendSavedDevices[i]?.access_given){allAccess=false;break;} }
 
   if(allAccess){
     // all assigned during install → skip assign step, go to payment
