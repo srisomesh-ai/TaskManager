@@ -4318,15 +4318,7 @@ async function loadDeviceIcons(idx, serverId, currentIconId){
     const r = await fetch(GPS_PROXY+'?action=get_icons&server_id='+encodeURIComponent(serverId),{headers:{'X-Auth-Token':authToken}});
     const data = await r.json();
     let icons = (data && data.icons) ? data.icons : [];
-    if(!icons.length){ grid.innerHTML='<div style="font-size:12px;color:var(--text3)">No icons available on this server.</div>'; return; }
-    // Prefer ROTATING / directional vehicle icons (used on the live map)
-    const rotating = icons.filter(function(ic){
-      const p = (ic.path||ic.img||'').toLowerCase();
-      const t = (ic.type||'').toLowerCase();
-      return p.indexOf('rotate')!==-1 || p.indexOf('rotating')!==-1 || p.indexOf('arrow')!==-1 ||
-             p.indexOf('direction')!==-1 || t.indexOf('rotate')!==-1 || t==='2' || t==='rotating';
-    });
-    if(rotating.length) icons = rotating;
+    if(!icons.length){ grid.innerHTML='<div style="font-size:12px;color:var(--text3)">No device icons available on this server.</div>'; return; }
     grid.innerHTML = icons.map(function(ic){
       const sel = (String(currentIconId)===String(ic.id));
       return '<div onclick="pickVehicleIcon('+idx+','+ic.id+',this)" title="icon '+ic.id+'" '+
