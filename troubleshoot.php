@@ -27,6 +27,12 @@ if ($token === '') {
 }
 $TOKEN_HASH = ($token !== '') ? hash('sha256', $token) : '';
 
+// Assigner-set price + GST from signed token (0 = free)
+$PRICE = 0; $GST = 0;
+if (!empty($tk) && !empty($tk['valid'])) { $PRICE = floatval($tk['price']); $GST = !empty($tk['gst']) ? 1 : 0; }
+$GST_AMT = $GST ? round($PRICE * 0.18, 2) : 0;
+$TOTAL   = $PRICE + $GST_AMT;
+
 // Optional prefill from link
 $pref_vehicle = trim($_GET['v'] ?? '');
 $pref_phone   = trim($_GET['p'] ?? '');
@@ -37,6 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
     $postToken = trim($_POST['tok'] ?? $token);
     if ($postToken !== '') {
         $tk2 = reqCheckToken($pdo, $postToken, $FORM_TYPE);
+        if ($tk2['valid']) { $PRICE = floatval($tk2['price']); $GST = !empty($tk2['gst']) ? 1 : 0; $GST_AMT = $GST ? round($PRICE*0.18,2) : 0; $TOTAL = $PRICE + $GST_AMT; }
         if (!$tk2['valid']) {
             $error = $tk2['expired'] ? 'This link has expired.' : ($tk2['used'] ? 'This link has already been used.' : 'Invalid link.');
         }
@@ -86,7 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)")
                 ->execute([
                     $taskId, $cust_name, $phone, $email, $location, 'Troubleshoot',
-                    'Troubleshoot/Offline', 1, 0, '',
+                    'Troubleshoot/Offline', 1, $TOTAL, '',
                     'Open', $notes, $cb, $vehicle
                 ]);
             $newId = $pdo->lastInsertId();
@@ -195,6 +202,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
   .confirm-ic { font-size: 40px; margin-bottom: 12px; }
   .confirm-en { font-size: 15px; font-weight: 700; color: #1a2230; margin-bottom: 12px; line-height: 1.55; }
   .confirm-te, .confirm-hi { font-size: 13.5px; color: #4a5568; margin-bottom: 10px; line-height: 1.6; }
+  .price-tag { background: #e8f2ff; border: 1.5px solid #2E6BE2; border-radius: 10px; padding: 12px 14px; text-align: center; margin-bottom: 16px; }
+  .price-tag .lbl { font-size: 11px; color: #1e5bd6; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
+  .price-tag .amt { font-size: 24px; font-weight: 800; color: #1a3a6b; }
   .confirm-yes { width: 100%; padding: 14px; background: #1a9d5a; color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 800; cursor: pointer; margin: 14px 0 8px; }
   .confirm-no { width: 100%; padding: 12px; background: #fff; color: #667; border: 1.5px solid #d5dce7; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; }
 </style>
@@ -251,6 +261,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
           <p class="confirm-te">మీ వాహనం GPS ఆఫ్‌లైన్‌లో ఉన్నందున దాన్ని తనిఖీ చేయడానికి అభ్యర్థన సమర్పించడానికి మీరు ఇక్కడ ఉన్నారు. ఇది సరైనదేనా?</p>
           <p class="confirm-hi">आप अपने वाहन का GPS ऑफ़लाइन दिखने के कारण उसकी जाँच के लिए अनुरोध भेजने आए हैं। क्या यह सही है?</p>
         </div>
+        <?php if ($PRICE > 0): ?>
+        <div class="price-tag"><div class="lbl">Service Charge</div><div class="amt">₹<?= number_format($TOTAL) ?></div><div style="font-size:10px;color:#1e5bd6;margin-top:2px"><?= $GST ? ('Base ₹'.number_format($PRICE).' + 18% GST ₹'.number_format($GST_AMT)) : 'No GST' ?></div></div>
+        <?php else: ?>
+        <div class="price-tag" style="background:#e6f7ee;border-color:#1a9d5a"><div class="lbl" style="color:#1a7a3a">Service Charge</div><div class="amt" style="color:#1a7a3a">FREE</div></div>
+        <?php endif; ?>
         <button type="button" class="confirm-yes" onclick="tsConfirmYes()">✅ Yes / అవును / हाँ</button>
         <button type="button" class="confirm-no" onclick="tsConfirmNo()">No / కాదు / नहीं</button>
         <div id="ts-no-msg" style="display:none;margin-top:14px;background:#fdecec;color:#c0392b;padding:12px 14px;border-radius:8px;font-size:12.5px;line-height:1.6">
