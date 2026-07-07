@@ -69,10 +69,12 @@ if($action === 'get_icons'){
         $p = $ic['path'] ?? '';
         $img = ($p && strpos($p,'http')===0) ? $p : ($base.'/'.ltrim($p,'/'));
         $icons[] = [
-            'id'  => intval($id),
-            'img' => $img,
-            'w'   => intval($ic['width']  ?? 32),
-            'h'   => intval($ic['height'] ?? 37),
+            'id'   => intval($id),
+            'img'  => $img,
+            'path' => $p,
+            'type' => $ic['type'] ?? '',
+            'w'    => intval($ic['width']  ?? 32),
+            'h'    => intval($ic['height'] ?? 37),
         ];
     }
     $out = ['success'=>true,'icons'=>$icons];
