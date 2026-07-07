@@ -6036,21 +6036,27 @@ function copyQtLink(e){
 // ── DEMO LEAD TYPE ────────────────────────────────────────────────────────
 function onLeadTypeChange(leadType){
   const isDemo = (leadType === 'Demo');
+  const isTrouble = (leadType === 'Troubleshoot');
 
-  // Company profile — hide for Demo
+  // Company profile — hide for Demo and Troubleshoot
   const pg = document.getElementById('fm-profile-group');
-  if(pg) pg.style.display = isDemo ? 'none' : '';
+  if(pg) pg.style.display = (isDemo || isTrouble) ? 'none' : '';
 
-  // Job type — auto Demonstration, lock it
+  // Job type — auto-select and lock for Demo (Demonstration) and Troubleshoot (Troubleshoot/Offline)
   const job = document.getElementById('fm-job');
   if(job){
     if(isDemo){
       job.value = 'Demonstration';
       job.disabled = true;
       setModalJobPrice('Demonstration');
+    } else if(isTrouble){
+      job.value = 'Troubleshoot/Offline';
+      job.disabled = true;
+      setModalJobPrice('Troubleshoot/Offline');
+      if(typeof toggleFreeService === 'function') toggleFreeService('Troubleshoot/Offline');
     } else {
       job.disabled = false;
-      if(job.value === 'Demonstration'){ job.value = ''; setModalJobPrice(''); }
+      if(job.value === 'Demonstration' || job.value === 'Troubleshoot/Offline'){ job.value = ''; setModalJobPrice(''); }
     }
   }
 
