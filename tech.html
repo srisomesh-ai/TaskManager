@@ -4555,8 +4555,14 @@ function checkAttendAllDevicesSaved(){
   }
 
   // All devices installed — require customer access on EVERY device before payment
-  let allAccess=true;
-  for(let i=1;i<=_attendTaskQty;i++){ if(!_attendSavedDevices[i]?.access_given){allAccess=false;break;} }
+  let allAccess=true; let _dbg=[];
+  for(let i=1;i<=_attendTaskQty;i++){
+    const ag = _attendSavedDevices[i]?.access_given;
+    _dbg.push('D'+i+':'+(ag?'yes':'NO'));
+    if(!ag){allAccess=false;}
+  }
+  const gate = document.getElementById('attend-access-gate');
+  if(gate) gate.setAttribute('data-dbg', _dbg.join(' '));
 
   if(allAccess){
     if(gate)       gate.style.display='none';
@@ -4566,7 +4572,7 @@ function checkAttendAllDevicesSaved(){
     if(submitBtn){ submitBtn.style.display=''; submitBtn.textContent='✅ Submit — Request Approval'; submitBtn.style.background='var(--green)'; }
   } else {
     // block payment — access still pending for one or more devices
-    if(gate)       gate.style.display='';
+    if(gate){ gate.style.display=''; gate.innerHTML='⚠️ Give customer access to ALL installed devices above before payment. <span style="font-size:10px;opacity:.7">['+_dbg.join(' ')+']</span>'; }
     if(cancelBtn)  cancelBtn.style.display='';
     if(closeBtn)   closeBtn.style.display='';
     if(paySection) paySection.style.display='none';
