@@ -54,27 +54,26 @@ if($action === 'get_icons'){
     if(!$server_id || !isset($servers[$server_id])){ echo json_encode(['success'=>false,'error'=>'Invalid server']); exit; }
     $srv = $servers[$server_id];
     $base = str_replace('/api','',$srv['base']); // e.g. https://bharatgps.in
-    $r = do_get($srv['base'].'/get_icons?lang=en&user_api_hash='.rawurlencode($srv['hash']));
+    // GPSWOX endpoint is get_map_icons (NOT get_icons)
+    $r = do_get($srv['base'].'/get_map_icons?lang=en&user_api_hash='.rawurlencode($srv['hash']));
     $icons = [];
     $list = [];
     if(is_array($r['json'])){
         if(isset($r['json']['items']) && is_array($r['json']['items']))      $list = $r['json']['items'];
-        elseif(isset($r['json']['data']) && is_array($r['json']['data']))    $list = $r['json']['data'];
-        elseif(isset($r['json']['icons']) && is_array($r['json']['icons']))  $list = $r['json']['icons'];
-        else $list = $r['json']; // flat array
+        elseif(isset($r['json'][0]))                                         $list = $r['json'];
     }
     foreach($list as $ic){
         if(!is_array($ic)) continue;
-        $id = $ic['id'] ?? ($ic['icon_id'] ?? null);
+        $id = $ic['id'] ?? null;
         if($id === null) continue;
-        // GPSWOX stores the image under 'path' (relative), sometimes 'url'/'image'
-        $p = $ic['path'] ?? ($ic['url'] ?? ($ic['image'] ?? ''));
-        if($p){
-            $img = (strpos($p,'http')===0) ? $p : ($base.'/'.ltrim($p,'/'));
-        } else {
-            $img = $base.'/images/markers/'.$id.'.svg';
-        }
-        $icons[] = ['id'=>intval($id), 'type'=>($ic['type']??''), 'img'=>$img];
+        $p = $ic['path'] ?? '';
+        $img = ($p && strpos($p,'http')===0) ? $p : ($base.'/'.ltrim($p,'/'));
+        $icons[] = [
+            'id'  => intval($id),
+            'img' => $img,
+            'w'   => intval($ic['width']  ?? 32),
+            'h'   => intval($ic['height'] ?? 37),
+        ];
     }
     $out = ['success'=>true,'icons'=>$icons];
     if(empty($icons)){ $out['debug_raw'] = substr($r['raw'] ?? '', 0, 400); }
