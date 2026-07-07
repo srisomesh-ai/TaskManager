@@ -493,10 +493,11 @@ case 'create_task':
     try { $pdo->exec("ALTER TABLE tasks ADD COLUMN discount_given DECIMAL(10,2) DEFAULT 0"); } catch(Exception $e){}
     try { $pdo->exec("ALTER TABLE tasks ADD COLUMN discount_reason VARCHAR(200) DEFAULT NULL"); } catch(Exception $e){}
     try { $pdo->exec("ALTER TABLE tasks ADD COLUMN discount_incharge VARCHAR(100) DEFAULT NULL"); } catch(Exception $e){}
+    try { $pdo->exec("ALTER TABLE tasks ADD COLUMN vehicle_number VARCHAR(50) DEFAULT NULL"); } catch(Exception $e){}
 
     try {
-    $pdo->prepare("INSERT INTO tasks (task_id,customer_name,contact_number,email,location,lead_type,device_qty,price_to_collect,payment_mode,assigned_to,task_status,is_outstation,customer_requested_delay,is_urgent,general_notes,reminder_date,device_details,created_by,payment_reminder_date,profile,outstation_location,outstation_travel_paid_by,outstation_customer_travel_amount,outstation_claim_cap,discount_given,discount_reason,discount_incharge,feedback_token)
-        VALUES (?,?,?,?,?,?,?,?,?,?,'Open',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    $pdo->prepare("INSERT INTO tasks (task_id,customer_name,contact_number,email,location,lead_type,device_qty,price_to_collect,payment_mode,assigned_to,task_status,is_outstation,customer_requested_delay,is_urgent,general_notes,reminder_date,device_details,created_by,payment_reminder_date,profile,outstation_location,outstation_travel_paid_by,outstation_customer_travel_amount,outstation_claim_cap,discount_given,discount_reason,discount_incharge,feedback_token,vehicle_number)
+        VALUES (?,?,?,?,?,?,?,?,?,?,'Open',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
         ->execute([
             $taskId,
             trim($body['customer_name']??''), trim($body['contact_number']??''),
@@ -515,6 +516,7 @@ case 'create_task':
             trim($body['discount_reason']??''),
             trim($body['discount_incharge']??''),
             $fbToken,
+            trim($body['vehicle_number']??''),
         ]);
     } catch(Exception $insertEx){
         echo json_encode(['error'=>'Database error: '.$insertEx->getMessage()]);
@@ -602,7 +604,7 @@ case 'update_task':
                'cash_deposit_status',
                // Consent reset (when vehicle unavailable after consent)
                'consent_token','customer_consent_at','customer_consent_name','customer_consent_mobile'];
-    if (in_array($userRole,['admin','assigner'])) $fields=array_merge($fields,['customer_name','contact_number','email','location','lead_type','device_qty','price_to_collect','assigned_to']);
+    if (in_array($userRole,['admin','assigner'])) $fields=array_merge($fields,['customer_name','contact_number','email','location','lead_type','device_qty','price_to_collect','assigned_to','vehicle_number']);
     $sets=[]; $vals=[];
     foreach ($fields as $f) {
         if (array_key_exists($f,$body)) {
