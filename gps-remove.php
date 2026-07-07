@@ -250,7 +250,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
         <button type="button" id="qz-continue" class="submit" style="display:none" onclick="qzContinue()">Continue →</button>
       </div>
 
-      <form method="POST" id="tsForm" style="display:none">
+      <form method="POST" id="tsForm" style="display:none" onsubmit="return tsSubmitting()">
         <input type="hidden" name="form_submitted" value="1">
         <input type="hidden" name="tok" value="<?= htmlspecialchars($token) ?>">
         <input type="hidden" name="reason" id="hidden-reason" value="">
@@ -318,6 +318,11 @@ function qzContinue(){
   document.getElementById('hidden-reason').value = reason;
   document.getElementById('ts-quiz').style.display='none';
   document.getElementById('tsForm').style.display='';
+}
+function tsSubmitting(){
+  var b = document.getElementById('sbtn');
+  if(b){ b.disabled = true; b.textContent = '⏳ Submitting… please wait'; b.style.opacity='0.75'; }
+  return true;
 }
 function captureGeo(){
   const btn = event.target;
