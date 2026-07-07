@@ -4632,8 +4632,19 @@ async function asgStepAssign(doCreate){
     else fail++;
   }
   st.innerHTML='<span style="color:'+(fail?'var(--saffron)':'var(--green)')+';font-weight:700">✅ Assigned '+ok+(fail?(' · '+fail+' failed'):'')+'</span>';
-  // re-evaluate gate — if all now assigned, payment appears
-  checkAttendAllDevicesSaved();
+  if(fail===0){
+    // All assigned — close this window and go back to the main task screen
+    st.innerHTML='<span style="color:var(--green);font-weight:700">✅ Assigned to customer. Returning…</span>';
+    setTimeout(function(){
+      closeTechAttend();
+      // re-open the task detail so the main button re-evaluates to Update Payment
+      if(typeof viewTask === 'function') viewTask(_attendTaskId);
+      else if(typeof loadTasks === 'function') loadTasks();
+    }, 700);
+  } else {
+    // some failed — keep window open so the tech can retry
+    checkAttendAllDevicesSaved();
+  }
 }
 
 function checkAttendAllDevicesSaved(){
