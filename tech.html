@@ -808,12 +808,10 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
                 <div id="assign-done" style="display:none;padding:8px 10px;background:var(--green-bg);border:1.5px solid var(--green);border-radius:6px;font-size:12px;color:var(--green);font-weight:700">✅ Device assigned to customer account</div>
               </div>
 
-              <!-- Access gate — payment blocked until all devices have customer access -->
-              <div id="attend-access-gate" style="display:none;background:#fff7e6;border:1.5px solid var(--saffron);border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:12px;color:#9a6a00;font-weight:600">
-                ⚠️ Please give customer access to all installed devices above before proceeding to payment.
-              </div>
-
               <!-- Payment collection — shown after devices -->
+              <div id="attend-access-gate" style="display:none;background:#fff7e6;border:1.5px solid var(--saffron);border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:12px;color:#9a6a00;font-weight:600">
+                ⚠️ Give customer access to ALL installed devices above before you can proceed to payment.
+              </div>
               <div id="attend-payment-section" style="display:none;background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:14px;margin-bottom:12px;margin-top:4px">
                 <div style="font-size:12px;font-weight:800;color:var(--green);margin-bottom:10px">💰 Payment Collection</div>
                 <div class="form-row">
@@ -4545,34 +4543,35 @@ function checkAttendAllDevicesSaved(){
   const submitBtn     = document.getElementById('attend-submit-btn');
   const cancelBtn     = document.getElementById('attend-cancel-btn');
   const closeBtn      = document.getElementById('attend-close-btn');
+  const gate          = document.getElementById('attend-access-gate');
 
-  // old single-assign Step 3 is replaced by per-device access — always keep it hidden
+  // The old single-assign Step 3 is replaced by per-device access — keep it hidden
   if(assignSection) assignSection.style.display='none';
 
   if(!allDone){
     if(cancelBtn)  cancelBtn.style.display='';
     if(closeBtn)   closeBtn.style.display='';
+    if(gate)       gate.style.display='none';
     if(paySection) paySection.style.display='none';
     if(submitBtn)  submitBtn.style.display='none';
     return;
   }
 
-  // All devices installed. Now require customer access on every device before payment.
+  // All devices installed — require customer access on EVERY device before payment
   let allAccess=true;
   for(let i=1;i<=_attendTaskQty;i++){ if(!_attendSavedDevices[i]?.access_given){allAccess=false;break;} }
 
-  const gate = document.getElementById('attend-access-gate');
   if(allAccess){
-    if(gate) gate.style.display='none';
-    if(cancelBtn) cancelBtn.style.display='none';
-    if(closeBtn)  closeBtn.style.display='none';
+    if(gate)       gate.style.display='none';
+    if(cancelBtn)  cancelBtn.style.display='none';
+    if(closeBtn)   closeBtn.style.display='none';
     if(paySection) paySection.style.display='';
     if(submitBtn){ submitBtn.style.display=''; submitBtn.textContent='✅ Submit — Request Approval'; submitBtn.style.background='var(--green)'; }
   } else {
-    // block payment until access is given to all devices
-    if(gate) gate.style.display='';
-    if(cancelBtn) cancelBtn.style.display='';
-    if(closeBtn)  closeBtn.style.display='';
+    // block payment — access still pending for one or more devices
+    if(gate)       gate.style.display='';
+    if(cancelBtn)  cancelBtn.style.display='';
+    if(closeBtn)   closeBtn.style.display='';
     if(paySection) paySection.style.display='none';
     if(submitBtn)  submitBtn.style.display='none';
   }
@@ -4724,14 +4723,13 @@ async function devAccCheck(idx){
   st.innerHTML='<span style="color:var(--text3)">🔍 Checking…</span>';
   cr.style.display='none'; fo.style.display='none'; _devAccUserId[idx]=null;
   const r = await fetch('gps_proxy.php?action=find_user&server_id='+dev.server_id+'&email='+encodeURIComponent(email),
-    {headers:{'X-Auth-Token':authToken}}).then(r=>r.json()).catch(e=>({_err:String(e)}));
+    {headers:{'X-Auth-Token':authToken}}).then(r=>r.json()).catch(()=>({}));
   if(r.found){
     _devAccUserId[idx]=r.user?.id;
     st.innerHTML='<span style="color:var(--green);font-weight:700">✅ Account found</span>';
     fo.style.display='';
   } else {
-    st.innerHTML='<span style="color:var(--saffron);font-weight:700">⚠️ No account — create new</span>'
-      + '<div style="font-size:9px;color:var(--text3);margin-top:4px;word-break:break-all">debug: srv='+dev.server_id+' dev='+dev.device_id+' resp='+escHtml(JSON.stringify(r)).slice(0,200)+'</div>';
+    st.innerHTML='<span style="color:var(--saffron);font-weight:700">⚠️ No account — create new</span>';
     cr.style.display='';
   }
 }
