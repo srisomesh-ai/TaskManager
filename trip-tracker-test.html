@@ -151,6 +151,7 @@
     <div class="card">
       <div id="cust-body">
         <p class="muted">Vehicle <b>AP31AB1234</b> · BharatGPS troubleshoot</p>
+        <div id="geo-diag" style="font-size:11px;margin-top:8px"></div>
         <button class="btn btn-brand" style="margin-top:14px" onclick="custShare()">📍 Share my current location</button>
         <div id="cust-status"></div>
       </div>
@@ -175,6 +176,21 @@ function showRole(r){
   document.getElementById('screen-tech').classList.toggle('on', r==='tech');
   document.getElementById('screen-cust').classList.toggle('on', r==='cust');
   if(r==='tech') refreshTech();
+  if(r==='cust') showGeoDiag();
+}
+
+async function showGeoDiag(){
+  const el = document.getElementById('geo-diag'); if(!el) return;
+  const secure = window.isSecureContext;
+  let perm = 'unknown';
+  try { if(navigator.permissions){ const p = await navigator.permissions.query({name:'geolocation'}); perm = p.state; } } catch(e){}
+  const secTxt = secure ? '<span style="color:var(--go)">secure ✓</span>' : '<span style="color:var(--stop)">NOT secure ✗ (needs https)</span>';
+  const permTxt = perm==='granted' ? '<span style="color:var(--go)">allowed ✓</span>'
+                : perm==='denied' ? '<span style="color:var(--stop)">blocked ✗</span>'
+                : '<span style="color:var(--amber)">will ask</span>';
+  el.innerHTML = '<span class="k" style="color:var(--mut)">Page: '+secTxt+' · Location permission: '+permTxt+'</span>'
+    + (perm==='denied' ? '<div class="lock" style="margin-top:6px">Location is blocked for this site. Tap the 🔒/ⓘ icon left of the address bar → Permissions → allow Location → reload.</div>' : '')
+    + (!secure ? '<div class="lock" style="margin-top:6px">Open the page via its https:// link (not a downloaded/local file), or the browser will never ask for location.</div>' : '');
 }
 
 // haversine km
@@ -187,12 +203,26 @@ function distKm(a, b){
 function fmtTime(ts){ return new Date(ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
 function getPos(){
   return new Promise((res,rej)=>{
-    if(!navigator.geolocation) return rej(new Error('Geolocation not supported on this device'));
-    navigator.geolocation.getCurrentPosition(
-      p=>res({lat:+p.coords.latitude.toFixed(6), lng:+p.coords.longitude.toFixed(6), acc:Math.round(p.coords.accuracy||0), at:Date.now()}),
-      e=>rej(new Error(e.message||'Location blocked')),
-      {enableHighAccuracy:true, timeout:12000, maximumAge:0}
-    );
+    if(!('geolocation' in navigator)) return rej(new Error('Geolocation not supported on this device'));
+    if(!window.isSecureContext){
+      return rej(new Error('Location needs a secure (https) page. Open this page with https:// — not a downloaded file.'));
+    }
+    let done = false;
+    const ok = p => { if(done) return; done=true; res({lat:+p.coords.latitude.toFixed(6), lng:+p.coords.longitude.toFixed(6), acc:Math.round(p.coords.accuracy||0), at:Date.now()}); };
+    const fail = e => {
+      if(done) return; done=true;
+      let msg = e && e.message ? e.message : 'Location error';
+      if(e && e.code === 1) msg = 'Permission denied. Tap the lock/ⓘ icon in the address bar → allow Location, then retry.';
+      else if(e && e.code === 2) msg = 'Position unavailable. Turn on your phone GPS / Location services and retry.';
+      else if(e && e.code === 3) msg = 'Timed out getting a fix. Move near a window or step outside, then retry.';
+      rej(new Error(msg));
+    };
+    // First try high accuracy; if it times out, retry with low accuracy (works indoors via wifi/cell)
+    navigator.geolocation.getCurrentPosition(ok, function(e){
+      if(e && e.code === 3){
+        navigator.geolocation.getCurrentPosition(ok, fail, {enableHighAccuracy:false, timeout:20000, maximumAge:0});
+      } else { fail(e); }
+    }, {enableHighAccuracy:true, timeout:15000, maximumAge:0});
   });
 }
 
