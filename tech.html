@@ -4132,6 +4132,13 @@ function buildAttendDeviceCard(idx, saved, done){
           <input type="text" id="adev-reg-${idx}" placeholder="Registration or asset number">
         </div>
         <div class="form-group" style="margin-bottom:12px">
+          <label>Vehicle Icon * <span style="font-weight:400;color:var(--text3)">(select type to push)</span></label>
+          <input type="hidden" id="adev-icon-id-${idx}">
+          <div id="adev-icon-grid-${idx}" style="display:flex;flex-wrap:wrap;gap:6px;max-height:150px;overflow:auto;border:1.5px solid var(--border);border-radius:8px;padding:8px;background:var(--surface2)">
+            <div style="font-size:12px;color:var(--text3)">Loading icons…</div>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:12px">
           <label>Additional Notes</label>
           <textarea id="adev-notes-${idx}" rows="2" placeholder="Installation notes..."></textarea>
         </div>
@@ -4294,9 +4301,40 @@ function loadAttendDevice(idx, device){
   sf('adev-notes-'+idx,   dd.additional_notes);
   const today = new Date().toISOString().slice(0,10);
   sf('adev-inst-date-'+idx, (dd.installation_date&&dd.installation_date!=='0000-00-00') ? dd.installation_date : today);
+  document.getElementById('adev-inst-date-'+idx).value && autoAttendExpiry(idx);
   autoAttendExpiry(idx);
+  // Load vehicle icons for this device's server (pre-select existing icon if any)
+  loadDeviceIcons(idx, device._server_id||'', dd.icon_id||'');
   document.getElementById('adev-step-search-'+idx).style.display='none';
   document.getElementById('adev-step-form-'+idx).style.display='';
+}
+
+async function loadDeviceIcons(idx, serverId, currentIconId){
+  const grid = document.getElementById('adev-icon-grid-'+idx);
+  if(!grid) return;
+  if(!serverId){ grid.innerHTML='<div style="font-size:12px;color:var(--text3)">No server.</div>'; return; }
+  grid.innerHTML='<div style="font-size:12px;color:var(--text3)">Loading icons…</div>';
+  try {
+    const r = await fetch(GPS_PROXY+'?action=get_icons&server_id='+encodeURIComponent(serverId),{headers:{'X-Auth-Token':authToken}});
+    const data = await r.json();
+    const icons = (data && data.icons) ? data.icons : [];
+    if(!icons.length){ grid.innerHTML='<div style="font-size:12px;color:var(--text3)">No icons available on this server.</div>'; return; }
+    grid.innerHTML = icons.map(function(ic){
+      const sel = (String(currentIconId)===String(ic.id));
+      return '<div onclick="pickVehicleIcon('+idx+','+ic.id+',this)" title="icon '+ic.id+'" '+
+        'style="width:46px;height:46px;border:2px solid '+(sel?'var(--green)':'var(--border)')+';border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:#fff;padding:3px" class="adev-icon-opt-'+idx+'">'+
+        '<img src="'+escHtml(ic.img)+'" style="max-width:100%;max-height:100%" onerror="this.style.display=\'none\'">'+
+      '</div>';
+    }).join('');
+    if(currentIconId){ document.getElementById('adev-icon-id-'+idx).value = currentIconId; }
+  } catch(e){
+    grid.innerHTML='<div style="font-size:12px;color:var(--red)">Failed to load icons.</div>';
+  }
+}
+function pickVehicleIcon(idx, iconId, el){
+  document.getElementById('adev-icon-id-'+idx).value = iconId;
+  document.querySelectorAll('.adev-icon-opt-'+idx).forEach(function(d){ d.style.borderColor='var(--border)'; });
+  if(el) el.style.borderColor='var(--green)';
 }
 
 function showPushConfirm(idx){
@@ -4364,9 +4402,11 @@ async function pushDeviceToServer(idx){
   const instDate = document.getElementById('adev-inst-date-'+idx)?.value;
   const expDate  = document.getElementById('adev-exp-date-'+idx)?.value;
   const notes    = document.getElementById('adev-notes-'+idx)?.value.trim();
+  const iconId   = document.getElementById('adev-icon-id-'+idx)?.value;
   if(!plate){  alert('Vehicle number / plate is required.'); return; }
   if(!name){   alert('Name on server is required.'); return; }
   if(!instDate){alert('Installation date is required.'); return; }
+  if(!iconId){ alert('Please select a vehicle icon before pushing.'); return; }
   const btn=document.getElementById('adev-push-btn-'+idx);
   if(btn){ btn.textContent='Pushing…'; btn.disabled=true; }
   try {
@@ -4379,6 +4419,7 @@ async function pushDeviceToServer(idx){
     fd.append('object_owner',        owner);
     fd.append('installation_date',   instDate);
     fd.append('expiration_date',     expDate);
+    fd.append('icon_id',             iconId);
     fd.append('additional_notes',    notes+(vtype?' | Vehicle Type: '+vtype:''));
     fd.append('comment',             'Installed via BharatGPS TaskManager — Task '+(_detailTask?.task_id||''));
     const r = await fetch(GPS_PROXY+'?action=update',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd});
