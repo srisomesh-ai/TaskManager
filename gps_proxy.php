@@ -53,25 +53,32 @@ if($action === 'get_icons'){
     $server_id = intval($_GET['server_id'] ?? 0);
     if(!$server_id || !isset($servers[$server_id])){ echo json_encode(['success'=>false,'error'=>'Invalid server']); exit; }
     $srv = $servers[$server_id];
+    $base = str_replace('/api','',$srv['base']); // e.g. https://bharatgps.in
     $r = do_get($srv['base'].'/get_icons?lang=en&user_api_hash='.rawurlencode($srv['hash']));
     $icons = [];
+    $list = [];
     if(is_array($r['json'])){
-        // GPSWOX returns { items:[...] } or a flat array
-        $list = isset($r['json']['items']) ? $r['json']['items'] : $r['json'];
-        if(is_array($list)){
-            foreach($list as $ic){
-                if(!is_array($ic)) continue;
-                $id  = $ic['id'] ?? null;
-                if($id === null) continue;
-                // build absolute image url
-                $img = $ic['url'] ?? ($ic['image'] ?? ($ic['path'] ?? ''));
-                if($img && strpos($img,'http')!==0){ $img = rtrim(str_replace('/api','',$srv['base']),'/').'/'.ltrim($img,'/'); }
-                if(!$img){ $img = rtrim(str_replace('/api','',$srv['base']),'/').'/images/markers/'.$id.'.svg'; }
-                $icons[] = ['id'=>intval($id), 'type'=>($ic['type']??''), 'img'=>$img];
-            }
-        }
+        if(isset($r['json']['items']) && is_array($r['json']['items']))      $list = $r['json']['items'];
+        elseif(isset($r['json']['data']) && is_array($r['json']['data']))    $list = $r['json']['data'];
+        elseif(isset($r['json']['icons']) && is_array($r['json']['icons']))  $list = $r['json']['icons'];
+        else $list = $r['json']; // flat array
     }
-    echo json_encode(['success'=>true,'icons'=>$icons]);
+    foreach($list as $ic){
+        if(!is_array($ic)) continue;
+        $id = $ic['id'] ?? ($ic['icon_id'] ?? null);
+        if($id === null) continue;
+        // GPSWOX stores the image under 'path' (relative), sometimes 'url'/'image'
+        $p = $ic['path'] ?? ($ic['url'] ?? ($ic['image'] ?? ''));
+        if($p){
+            $img = (strpos($p,'http')===0) ? $p : ($base.'/'.ltrim($p,'/'));
+        } else {
+            $img = $base.'/images/markers/'.$id.'.svg';
+        }
+        $icons[] = ['id'=>intval($id), 'type'=>($ic['type']??''), 'img'=>$img];
+    }
+    $out = ['success'=>true,'icons'=>$icons];
+    if(empty($icons)){ $out['debug_raw'] = substr($r['raw'] ?? '', 0, 400); }
+    echo json_encode($out);
     exit;
 }
 
