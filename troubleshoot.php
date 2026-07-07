@@ -118,7 +118,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
     .card { border-radius: 14px; box-shadow: 0 4px 24px rgba(0,0,0,.07); }
   }
   .card { background: #fff; overflow: hidden; flex: 1; display: flex; flex-direction: column; }
-  .hd { background: linear-gradient(135deg,#1e5bd6,#2E6BE2); color: #fff; padding: 22px 20px; }
+  .hd { background: linear-gradient(135deg,#1e5bd6,#2E6BE2); color: #fff; padding: 22px 20px; text-align: center; }
+  .logo-box { display: inline-flex; align-items: center; justify-content: center; background: #fff; border-radius: 12px; padding: 8px 14px; margin-bottom: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.12); }
+  .logo-box img { height: 40px; max-width: 180px; object-fit: contain; display: block; }
   .hd h1 { font-size: 19px; font-weight: 800; }
   .hd p { font-size: 12px; opacity: .9; margin-top: 4px; }
   .body { padding: 20px; }
@@ -164,6 +166,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
 <?php else: ?>
   <div class="card">
     <div class="hd">
+      <div class="logo-box"><img src="logo.png" alt="BharatGPS" onerror="this.style.display='none'"></div>
       <h1>🔧 GPS Troubleshoot Request</h1>
       <p>Fill this form so our technician can help fix your device.</p>
     </div>
