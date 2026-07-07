@@ -145,6 +145,75 @@ if($action === 'find'){
     exit;
 }
 
+// ── FIND BY PLATE — search all servers by plate/vehicle number, return status ──
+if($action === 'find_by_plate'){
+    $keyword = strtolower(trim($_GET['plate'] ?? $_GET['keyword'] ?? ''));
+    if($keyword === ''){ echo json_encode(['success'=>false,'error'=>'Enter a vehicle number']); exit; }
+    // normalize: strip spaces/hyphens for loose match
+    $normKw = preg_replace('/[^a-z0-9]/', '', $keyword);
+
+    $multi = curl_multi_init();
+    $handles = [];
+    foreach($servers as $sid => $srv){
+        if($sid == 4) continue; // server 4 closed
+        $url = $srv['base'].'/get_devices?lang=en&user_api_hash='.rawurlencode($srv['hash']);
+        $ch  = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0');
+        curl_multi_add_handle($multi, $ch);
+        $handles[$sid] = $ch;
+    }
+    $running = null;
+    do { curl_multi_exec($multi, $running); curl_multi_select($multi); } while($running > 0);
+
+    $matches = [];
+    foreach($handles as $sid => $ch){
+        $body = curl_multi_getcontent($ch);
+        curl_multi_remove_handle($multi, $ch);
+        curl_close($ch);
+        if(!$body) continue;
+        $data = json_decode($body, true);
+        if(!is_array($data)) continue;
+        foreach($data as $group){
+            if(!isset($group['items'])) continue;
+            foreach($group['items'] as $device){
+                $dd = $device['device_data'] ?? [];
+                $plate = strtolower($dd['plate_number'] ?? '');
+                $name  = strtolower($device['name'] ?? $dd['name'] ?? '');
+                $normPlate = preg_replace('/[^a-z0-9]/', '', $plate);
+                $normName  = preg_replace('/[^a-z0-9]/', '', $name);
+                // match if keyword appears in plate or device name (normalized)
+                if(($normPlate && strpos($normPlate, $normKw) !== false) ||
+                   ($normName && strpos($normName, $normKw) !== false)){
+                    // online status: GPSWOX uses device['online'] = online|ack|offline
+                    $onlineRaw = strtolower($device['online'] ?? '');
+                    $isOnline = in_array($onlineRaw, ['online','ack']);
+                    // last update time
+                    $lastTime = $device['time'] ?? ($dd['time'] ?? ($device['timestamp'] ?? ''));
+                    $matches[] = [
+                        'server_id'     => $sid,
+                        'server_name'   => $servers[$sid]['name'],
+                        'device_id'     => $device['id'] ?? ($dd['id'] ?? null),
+                        'imei'          => $dd['imei'] ?? '',
+                        'plate_number'  => $dd['plate_number'] ?? '',
+                        'device_name'   => $device['name'] ?? ($dd['name'] ?? ''),
+                        'online'        => $isOnline ? 'online' : 'offline',
+                        'online_raw'    => $onlineRaw,
+                        'last_time'     => $lastTime,
+                    ];
+                }
+            }
+        }
+    }
+    curl_multi_close($multi);
+    echo json_encode(['success'=>true, 'matches'=>$matches, 'count'=>count($matches)]);
+    exit;
+}
+
 // ── UPDATE — push device data to GPS server ───────────────────────────────
 if($action === 'update'){
     $server_id = intval($_POST['server_id'] ?? 0);
