@@ -110,15 +110,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { width: 100%; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f2f5f9; color: #1a2230; line-height: 1.5; -webkit-text-size-adjust: 100%;
-    min-height: 100vh; display: flex; justify-content: center; align-items: flex-start; padding: 20px 12px; overflow-x: hidden; }
-  .wrap { max-width: 440px; width: 100%; margin: 0 auto; }
-  @media (max-width: 480px){
-    body { padding: 10px 8px; }
-    .hd { padding: 18px 16px !important; }
-    .body { padding: 16px !important; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #fff; color: #1a2230; line-height: 1.5; -webkit-text-size-adjust: 100%; overflow-x: hidden; }
+  .wrap { width: 100%; max-width: 520px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
+  @media (min-width: 560px){
+    body { background: #f2f5f9; padding: 20px 12px; }
+    .wrap { min-height: auto; }
+    .card { border-radius: 14px; box-shadow: 0 4px 24px rgba(0,0,0,.07); }
   }
-  .card { background: #fff; border-radius: 14px; box-shadow: 0 4px 24px rgba(0,0,0,.07); overflow: hidden; }
+  .card { background: #fff; overflow: hidden; flex: 1; display: flex; flex-direction: column; }
   .hd { background: linear-gradient(135deg,#1e5bd6,#2E6BE2); color: #fff; padding: 22px 20px; }
   .hd h1 { font-size: 19px; font-weight: 800; }
   .hd p { font-size: 12px; opacity: .9; margin-top: 4px; }
@@ -147,7 +146,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
   .ok-wrap h2 { font-size: 20px; color: #1a9d5a; margin-bottom: 8px; }
   .ok-wrap p { font-size: 13.5px; color: #555; }
   .ok-wrap .tid { font-weight: 800; color: #1a2230; }
-  .foot { text-align: center; font-size: 11px; color: #99a; margin-top: 14px; }
+  .foot { text-align: center; font-size: 11px; color: #99a; padding: 14px 0 20px; background: #fff; }
 </style>
 </head>
 <body>
