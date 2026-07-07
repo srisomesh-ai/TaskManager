@@ -149,6 +149,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
   .ok-wrap p { font-size: 13.5px; color: #555; }
   .ok-wrap .tid { font-weight: 800; color: #1a2230; }
   .foot { text-align: center; font-size: 11px; color: #99a; padding: 14px 0 20px; background: #fff; }
+  .confirm-box { text-align: center; padding: 8px 4px 6px; }
+  .confirm-ic { font-size: 40px; margin-bottom: 12px; }
+  .confirm-en { font-size: 15px; font-weight: 700; color: #1a2230; margin-bottom: 12px; line-height: 1.55; }
+  .confirm-te, .confirm-hi { font-size: 13.5px; color: #4a5568; margin-bottom: 10px; line-height: 1.6; }
+  .confirm-yes { width: 100%; padding: 14px; background: #1a9d5a; color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 800; cursor: pointer; margin: 14px 0 8px; }
+  .confirm-no { width: 100%; padding: 12px; background: #fff; color: #667; border: 1.5px solid #d5dce7; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -172,7 +178,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
     </div>
     <div class="body">
       <?php if ($error): ?><div class="err"><?= htmlspecialchars($error) ?></div><?php endif; ?>
-      <form method="POST" id="tsForm">
+
+      <!-- Confirmation gate — shown first -->
+      <div id="ts-confirm" <?= $error ? 'style="display:none"' : '' ?>>
+        <div class="confirm-box">
+          <div class="confirm-ic">🚗📡</div>
+          <p class="confirm-en">You are here to submit a request to check your vehicle's GPS because it is showing offline. Is that correct?</p>
+          <p class="confirm-te">మీ వాహనం GPS ఆఫ్‌లైన్‌లో ఉన్నందున దాన్ని తనిఖీ చేయడానికి అభ్యర్థన సమర్పించడానికి మీరు ఇక్కడ ఉన్నారు. ఇది సరైనదేనా?</p>
+          <p class="confirm-hi">आप अपने वाहन का GPS ऑफ़लाइन दिखने के कारण उसकी जाँच के लिए अनुरोध भेजने आए हैं। क्या यह सही है?</p>
+        </div>
+        <button type="button" class="confirm-yes" onclick="tsConfirmYes()">✅ Yes / అవును / हाँ</button>
+        <button type="button" class="confirm-no" onclick="tsConfirmNo()">No / కాదు / नहीं</button>
+        <div id="ts-no-msg" style="display:none;margin-top:14px;background:#fdecec;color:#c0392b;padding:12px 14px;border-radius:8px;font-size:12.5px;line-height:1.6">
+          No problem. For any other help, please contact BharatGPS support on <b>+91 98498 49824</b> (call or WhatsApp).
+        </div>
+      </div>
+
+      <form method="POST" id="tsForm" style="display:none">
         <input type="hidden" name="form_submitted" value="1">
 
         <div class="sec-title">A few quick questions</div>
@@ -236,6 +258,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
 <?php endif; ?>
 </div>
 <script>
+function tsConfirmYes(){
+  document.getElementById('ts-confirm').style.display = 'none';
+  document.getElementById('tsForm').style.display = '';
+}
+function tsConfirmNo(){
+  document.getElementById('ts-no-msg').style.display = 'block';
+}
 function captureGeo(){
   const btn = event.target;
   if(!navigator.geolocation){ alert('Geolocation not supported on this device.'); return; }
