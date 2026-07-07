@@ -119,6 +119,11 @@ function _bsSyncInstalls($pdo, $cuName){
         $allSerials = implode(', ', array_filter(array_column($installs,'gps_serial_no')));
         $allNames   = implode(', ', array_filter(array_column($installs,'name_on_server')));
         $serverName = $installs[0]['server_name'] ?? $t2['server_name'] ?? null;
+        // Mark each installed device's assignment as installed (leaves with-tech stock)
+        foreach ($installs as $ins) {
+            $im = preg_replace('/\D/','',(string)($ins['gps_serial_no']??''));
+            if ($im!=='') { try { $pdo->prepare("UPDATE device_assignments SET status='installed' WHERE imei=? AND status='with_tech'")->execute([$im]); } catch(Exception $e){} }
+        }
         $fullQty   = intval($t2['device_qty']??1); if($fullQty<1)$fullQty=1;
         $fullTotal = floatval($t2['price_to_collect']??0);
         $unit2     = $fullQty>0 ? $fullTotal/$fullQty : $fullTotal;
@@ -1034,6 +1039,15 @@ case 'save_device_install':
     if ($idx===1) {
         $pdo->prepare("UPDATE tasks SET gps_serial_no=?,name_on_server=?,server_name=? WHERE id=?")->execute([trim($body['gps_serial_no']??''),trim($body['name_on_server']??''),trim($body['server_name']??''),$tid]);
     }
+
+    // ── Mark this device's assignment as INSTALLED (so it leaves "with technician" stock) ──
+    try {
+        $instImei = preg_replace('/\D/','',(string)($body['gps_serial_no']??''));
+        if ($instImei !== '') {
+            _devEnsureTables($pdo);
+            $pdo->prepare("UPDATE device_assignments SET status='installed', assigned_at=assigned_at WHERE imei=? AND status='with_tech'")->execute([$instImei]);
+        }
+    } catch(Exception $e) {}
 
     // ── AUTO-CREATE BALANCE SHEET ENTRY ─────────────────────────────
     // Once ALL devices are installed → create BS entry if not already exists
