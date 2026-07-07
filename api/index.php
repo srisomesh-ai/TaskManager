@@ -1027,6 +1027,27 @@ case 'upload_document':
 
 // ---- BALANCE SHEET ----
 // ---- SAVE DEVICE INSTALL ----
+case 'mark_access_given':
+    $tid = intval($body['task_id']??0);
+    $email = trim($body['email']??'');
+    $devIdx = isset($body['device_index']) ? intval($body['device_index']) : 0;
+    $imei = preg_replace('/\D/','',(string)($body['imei']??''));
+    if(!$tid){ echo json_encode(['error'=>'Missing task_id']); break; }
+    try {
+        try { $pdo->exec("ALTER TABLE task_device_installs ADD COLUMN access_given TINYINT DEFAULT 0"); } catch(Exception $e){}
+        try { $pdo->exec("ALTER TABLE task_device_installs ADD COLUMN access_email VARCHAR(190) NULL"); } catch(Exception $e){}
+        if($imei !== ''){
+            $pdo->prepare("UPDATE task_device_installs SET access_given=1, access_email=? WHERE task_id=? AND gps_serial_no=?")->execute([$email?:null,$tid,$imei]);
+        } elseif($devIdx){
+            $pdo->prepare("UPDATE task_device_installs SET access_given=1, access_email=? WHERE task_id=? AND device_index=?")->execute([$email?:null,$tid,$devIdx]);
+        } else {
+            // mark all installed devices of this task
+            $pdo->prepare("UPDATE task_device_installs SET access_given=1, access_email=? WHERE task_id=? AND gps_serial_no IS NOT NULL AND gps_serial_no != ''")->execute([$email?:null,$tid]);
+        }
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'save_device_install':
     $tid = intval($body['task_id']??0);
     $idx = intval($body['device_index']??1);
