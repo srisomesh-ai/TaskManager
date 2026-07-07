@@ -4643,8 +4643,9 @@ function checkAttendAllDevicesSaved(){
   }
 
   // All installed — check every installed device has customer access
-  let allAccess=true;
-  for(let i=1;i<=_attendTaskQty;i++){ if(!_attendSavedDevices[i]?.access_given){allAccess=false;break;} }
+  let allAccess=true; let _dbg='qty='+_attendTaskQty;
+  for(let i=1;i<=_attendTaskQty;i++){ const d=_attendSavedDevices[i]; _dbg+=' | D'+i+' pushed='+(d&&d.pushed?'Y':'N')+' access='+(d&&d.access_given?'Y':'N'); if(!d?.access_given){allAccess=false;} }
+  if(!window._gateAlerted){ window._gateAlerted=true; alert('GATE CHECK → allDone='+allDone+' allAccess='+allAccess+' :: '+_dbg); }
 
   if(allAccess){
     // all assigned during install → skip assign step, go to payment
