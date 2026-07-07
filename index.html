@@ -1168,6 +1168,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
           <div style="padding:16px 20px;border-bottom:1px solid var(--border);background:var(--surface)">
             <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--accent2);margin-bottom:12px">📋 Task Information</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px" id="td-info-grid"></div>
+            <div id="td-vehicle-status" style="margin-top:10px"></div>
           </div>
 
           <!-- PAYMENT INFO -->
@@ -3384,9 +3385,62 @@ function renderMyTasks(){
 // ════════════════════════════════════════════════════════
 let _detailTask = null;
 
-function openTaskDetail(id){ viewTask(id); }
+function renderVehicleStatusPanel(t){
+  const box = document.getElementById('td-vehicle-status');
+  if(!box) return;
+  const veh = (t.vehicle_number || '').trim();
+  // Only show for service tasks that have a vehicle number
+  const svcTypes = ['Troubleshoot/Offline','Vehicle to Vehicle Change','Only Remove','Re-Adding'];
+  if(!veh){ box.innerHTML=''; return; }
+  box.innerHTML =
+    '<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:12px 14px">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">'
+    +   '<div><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px">🚗 Vehicle (Plate No.)</div>'
+    +   '<div style="font-size:15px;font-weight:800;color:var(--text)">'+veh+'</div></div>'
+    +   '<button onclick="pullVehicleStatus()" id="veh-pull-btn" style="padding:8px 14px;background:var(--accent2);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">📡 Pull Status</button>'
+    + '</div>'
+    + '<div id="veh-status-result" style="font-size:12px;color:var(--text3)"></div>'
+    + '</div>';
+}
 
-async function viewTask(id){
+async function pullVehicleStatus(){
+  const t = _detailTask; if(!t) return;
+  const veh = (t.vehicle_number||'').trim();
+  const btn = document.getElementById('veh-pull-btn');
+  const res = document.getElementById('veh-status-result');
+  if(!veh){ return; }
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Checking…'; }
+  if(res){ res.innerHTML='<span style="color:var(--text3)">Searching GPS servers…</span>'; }
+  try {
+    const r = await fetch('gps_proxy.php?action=find_by_plate&plate='+encodeURIComponent(veh), { headers:{'X-Auth-Token':authToken} }).then(x=>x.json());
+    if(!r || !r.success){ throw new Error(r && r.error ? r.error : 'lookup failed'); }
+    if(!r.matches || !r.matches.length){
+      res.innerHTML = '<div style="color:var(--saffron);font-weight:600">⚠️ No device found on servers for this vehicle number.</div>';
+    } else {
+      res.innerHTML = r.matches.map(function(m){
+        const online = m.online === 'online';
+        const badge = online
+          ? '<span style="background:#e6f7ee;color:#1a9d5a;font-weight:800;padding:3px 10px;border-radius:20px;font-size:12px">🟢 ONLINE</span>'
+          : '<span style="background:#fdecec;color:#c0392b;font-weight:800;padding:3px 10px;border-radius:20px;font-size:12px">🔴 OFFLINE</span>';
+        const lastLine = (!online && m.last_time)
+          ? '<div style="font-size:11px;color:var(--text3);margin-top:4px">🕒 Last online: <b>'+m.last_time+'</b></div>'
+          : (m.last_time ? '<div style="font-size:11px;color:var(--text3);margin-top:4px">🕒 Last update: '+m.last_time+'</div>' : '');
+        return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:6px">'
+          + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'
+          +   '<div style="font-weight:700;font-size:13px">'+ (m.device_name||m.plate_number||veh) +'</div>'+badge
+          + '</div>'
+          + '<div style="font-size:11px;color:var(--text3);margin-top:4px">📡 '+m.server_name+(m.plate_number?(' · Plate: '+m.plate_number):'')+'</div>'
+          + lastLine
+          + '</div>';
+      }).join('');
+    }
+  } catch(e){
+    res.innerHTML = '<div style="color:var(--red)">Could not fetch status: '+(e.message||e)+'</div>';
+  }
+  if(btn){ btn.disabled=false; btn.textContent='📡 Pull Status'; }
+}
+
+function openTaskDetail(id){ viewTask(id); }async function viewTask(id){
   // Mark as viewed — clears UPDATED badge for admin/assigner
   if(currentUser?.role === 'admin' || currentUser?.role === 'assigner'){
     api('mark_viewed',{},'POST',{id}).catch(()=>{});
@@ -3535,6 +3589,9 @@ async function viewTask(id){
       <div style="font-size:13px;font-weight:600;color:var(--text)">${val}</div>
     </div>
   `).join('');
+
+  // ── VEHICLE STATUS (plate lookup from GPS servers) ─────
+  renderVehicleStatusPanel(t);
 
   // ── PAYMENT ────────────────────────────────────────────
   const price  = parseFloat(t.price_to_collect||0);
@@ -6070,7 +6127,7 @@ function qtGstToggle(){
   const prev = document.getElementById('qt-price-preview');
   if(prev){
     if(price > 0 && on){ const g = Math.round(price*0.18); prev.textContent = 'Base Rs.'+price+' + GST Rs.'+g+' = Total Rs.'+(price+g); }
-    else if(price > 0){ prev.textContent = 'Total Rs.'+price+' (no GST)'; }
+    else if(price > 0){ prev.textContent = 'Total Rs.'+price; }
     else prev.textContent = '';
   }
 }
