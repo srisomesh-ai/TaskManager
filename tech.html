@@ -3399,6 +3399,7 @@ function openTechAttend(taskId){
         pushed:true, imei:d.gps_serial_no, device_name:d.name_on_server,
         server_name:d.server_name, plate_number:d.vehicle_number, vehicle_type:d.vehicle_type,
         installation_date:d.installation_date, expiration_date:d.expiration_date,
+        server_id:d.server_id, device_id:d.device_id,
       };
     }
   });
@@ -4041,7 +4042,12 @@ function renderAttendDeviceCards(){
     // all done — show all saved summaries
     for(let i=1;i<=_attendTaskQty;i++){ html += buildAttendDeviceCard(i, _attendSavedDevices[i], true); }
   } else {
-    // show the current device card only
+    // Show already-completed device cards first (so their Give-Access buttons stay available),
+    // then the current device being worked on.
+    for(let i=1;i<currentIdx;i++){
+      const sd = _attendSavedDevices[i];
+      if(sd && sd.pushed) html += buildAttendDeviceCard(i, sd, true);
+    }
     const saved = _attendSavedDevices[currentIdx];
     html += buildAttendDeviceCard(currentIdx, saved, !!(saved&&saved.pushed));
   }
@@ -4468,6 +4474,7 @@ async function pushDeviceToServer(idx){
         vehicle_number:plate,vehicle_type:vtype||'',
         gps_serial_no:imei,name_on_server:name,
         server_name:'Server '+serverId,
+        server_id:serverId, device_id:deviceId,
         remarks:notes||'GPS device added to server'
       }).catch(()=>{});
 
