@@ -3427,11 +3427,8 @@ function openTechAttend(taskId){
     if(amtEl) amtEl.value='';
     const balEl=document.getElementById('attend-balance-line'); if(balEl) balEl.textContent='';
     renderAttendDeviceCards();
-    // Show payment + submit
-    const paySection=document.getElementById('attend-payment-section');
-    const submitBtn=document.getElementById('attend-submit-btn');
-    if(paySection) paySection.style.display='';
-    if(submitBtn){ submitBtn.style.display=''; submitBtn.textContent='✅ Submit — Request Approval'; submitBtn.style.background='var(--green)'; }
+    // Enforce access gate — only shows payment if ALL devices have customer access
+    checkAttendAllDevicesSaved();
 
   } else if(pushedCount > 0){
     // PARTIAL progress — resume the adding flow at the next unsaved device
@@ -4578,6 +4575,9 @@ function checkAttendAllDevicesSaved(){
 }
 
 function showPaymentAfterAssign(){
+  // Respect the access gate — do not show payment unless all devices have access
+  checkAttendAllDevicesSaved();
+  return;
   const paySection  = document.getElementById('attend-payment-section');
   const submitBtn   = document.getElementById('attend-submit-btn');
   const cancelBtn   = document.getElementById('attend-cancel-btn');
