@@ -463,9 +463,6 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
               </div>
               <div class="qa-grid">
                 <div class="qa-btn admin-only" onclick="openCreateModal()"><div class="qa-icon">➕</div>New Task</div>
-                <div class="qa-btn admin-only" onclick="shareCustomerLink('troubleshoot')"><div class="qa-icon">🔧</div>Send Troubleshoot</div>
-                <div class="qa-btn admin-only" onclick="shareCustomerLink('vehicle-change')"><div class="qa-icon">🔁</div>Send V2V Change</div>
-                <div class="qa-btn admin-only" onclick="shareCustomerLink('gps-remove')"><div class="qa-icon">🗑️</div>Send GPS Remove</div>
                 <div class="qa-btn" onclick="showPage('tasks')"><div class="qa-icon">📋</div>All Tasks</div>
                 <div class="qa-btn admin-only" onclick="showPage('daily-report')"><div class="qa-icon">📅</div>Daily Report</div>
                 <div class="qa-btn admin-only" onclick="showPage('invoicing')"><div class="qa-icon">🧾</div>Invoicing</div>
@@ -6024,10 +6021,12 @@ function exportDailyCSV(){
 const QT_ENQUIRY_URL = 'https://salmon-goldfish-110661.hostingersite.com/enquiry.php';
 
 function openQuickTask(){
+  var svc = document.getElementById('qt-service'); if(svc) svc.value = 'enquiry';
   document.getElementById('qt-name').value     = '';
   document.getElementById('qt-phone').value    = '';
   document.getElementById('qt-discount').value = '0';
   document.getElementById('qt-link-box').style.display = 'none';
+  if(typeof qtServiceChange === 'function') qtServiceChange();
   document.getElementById('quick-task-overlay').style.display = 'flex';
   setTimeout(()=>document.getElementById('qt-name').focus(), 100);
 }
@@ -6045,30 +6044,53 @@ function getQtLink(){
   return { name, phone, discount, url };
 }
 
-function sendQuickTask(){
-  const { name, phone, discount, url } = getQtLink();
+function qtServiceChange(){
+  const svc = document.getElementById('qt-service').value;
+  const dgEl = document.getElementById('qt-discount');
+  const dg = dgEl ? dgEl.closest('.form-group') : null;
+  if(dg) dg.style.display = (svc==='enquiry') ? '' : 'none';
+  const box = document.getElementById('qt-link-box'); if(box) box.style.display='none';
+}
+
+async function sendQuickTask(){
+  const svc   = document.getElementById('qt-service').value;
+  const name  = document.getElementById('qt-name').value.trim();
+  const phone = document.getElementById('qt-phone').value.trim().replace(/\D/g,'');
   if(!name){ alert('Please enter the customer name.'); document.getElementById('qt-name').focus(); return; }
   if(!phone || phone.length < 10){ alert('Please enter a valid 10-digit mobile number.'); document.getElementById('qt-phone').focus(); return; }
 
+  if(svc === 'enquiry'){
+    const g = getQtLink(); const url = g.url; const discount = g.discount;
+    document.getElementById('qt-link-box').style.display = '';
+    document.getElementById('qt-link-text').textContent  = url;
+    const discountLine = discount > 0 ? ('Special offer: Rs.' + discount + ' OFF per device - applied automatically!\n\n') : '';
+    const msg = encodeURIComponent(
+      'Hello ' + name + '!\n\nThank you for your interest in BharatGPS Tracker.\n\n' + discountLine +
+      'Please fill your details to book your GPS installation:\n\n' + url + '\n\n' +
+      'The form takes 2 minutes. Our team will contact you to schedule.\n\nFor help call: 9849849824'
+    );
+    window.open('https://wa.me/91' + phone + '?text=' + msg, '_blank');
+    closeQuickTask(); showToast('WhatsApp opened - send the message to ' + name);
+    return;
+  }
+
+  const meta = {
+    'troubleshoot':   { file:'troubleshoot.php',   label:'GPS Troubleshoot', line:'to request a GPS troubleshoot check for your vehicle' },
+    'vehicle-change': { file:'vehicle-change.php', label:'Vehicle to Vehicle Change', line:'to move your GPS device to a new vehicle' },
+    'gps-remove':     { file:'gps-remove.php',     label:'GPS Removal', line:'to request removal of your GPS device' },
+  }[svc];
+  let url = location.origin + '/' + meta.file + '?p=' + encodeURIComponent(phone);
+  try { const r = await api('make_req_link',{},'POST',{type:svc}); if(r && r.token){ url += '&t=' + encodeURIComponent(r.token); } } catch(e){}
   document.getElementById('qt-link-box').style.display = '';
   document.getElementById('qt-link-text').textContent  = url;
-
-  const discountLine = discount > 0 ? '🎁 Special offer: ₹' + discount + ' OFF per device — applied automatically!\n\n' : '';
   const msg = encodeURIComponent(
-    'Hello ' + name + '! 👋\n\n' +
-    'Thank you for your interest in BharatGPS Tracker.\n\n' +
-    discountLine +
-    '📋 Please fill your details to book your GPS installation:\n\n' +
-    url + '\n\n' +
-    'The form takes 2 minutes. Our team will contact you to schedule.\n\n' +
-    'For help call: 9849849824\n🌐 bharatgpstracker.com'
+    'Hello ' + name + '!\n\nThis is BharatGPS Tracker.\n\n' +
+    'Please fill this short form ' + meta.line + ':\n\n' + url + '\n\n' +
+    'This link is valid for 6 hours and can be used once.\n\nFor help call: 9849849824'
   );
-
   window.open('https://wa.me/91' + phone + '?text=' + msg, '_blank');
-  closeQuickTask();
-  showToast('📱 WhatsApp opened — send the message to ' + name);
+  closeQuickTask(); showToast('WhatsApp opened - ' + meta.label + ' link sent to ' + name);
 }
-
 function copyQtLink(e){
   e.preventDefault();
   const { name, phone, url } = getQtLink();
@@ -6599,8 +6621,18 @@ async function submitJobOutcome(){
   </div>
   <div class="modal-body" style="padding:20px">
 
+    <div class="form-group" style="margin-bottom:14px">
+      <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:6px">Which link to send?</label>
+      <select id="qt-service" class="form-input" style="width:100%" onchange="qtServiceChange()">
+        <option value="enquiry">🆕 New GPS Installation (enquiry)</option>
+        <option value="troubleshoot">🔧 GPS Troubleshoot</option>
+        <option value="vehicle-change">🔁 Vehicle to Vehicle Change</option>
+        <option value="gps-remove">🗑️ GPS Removal</option>
+      </select>
+    </div>
+
     <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:#1a6b3a;line-height:1.7">
-      📱 Enter customer details → WhatsApp message opens with the enquiry link.<br>
+      📱 Enter customer details → WhatsApp message opens with the selected link.<br>
       Customer fills the form → task is created automatically.
     </div>
 
