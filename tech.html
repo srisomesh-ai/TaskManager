@@ -3428,21 +3428,8 @@ function openTechAttend(taskId){
     if(amtEl) amtEl.value='';
     const balEl=document.getElementById('attend-balance-line'); if(balEl) balEl.textContent='';
     renderAttendDeviceCards();
-    // Only show payment if ALL installed devices have customer access given
-    var _accessOk = true;
-    for(var _ai=1; _ai<=_attendTaskQty; _ai++){ if(!_attendSavedDevices[_ai] || !_attendSavedDevices[_ai].access_given){ _accessOk=false; break; } }
-    const paySection=document.getElementById('attend-payment-section');
-    const submitBtn=document.getElementById('attend-submit-btn');
-    var _gate=document.getElementById('attend-access-gate');
-    if(_accessOk){
-      if(_gate) _gate.style.display='none';
-      if(paySection) paySection.style.display='';
-      if(submitBtn){ submitBtn.style.display=''; submitBtn.textContent='✅ Submit — Request Approval'; submitBtn.style.background='var(--green)'; }
-    } else {
-      if(_gate) _gate.style.display='';
-      if(paySection) paySection.style.display='none';
-      if(submitBtn) submitBtn.style.display='none';
-    }
+    // The gate inside checkAttendAllDevicesSaved (called by render) decides payment vs access
+    checkAttendAllDevicesSaved();
 
   } else if(pushedCount > 0){
     // PARTIAL progress — resume the adding flow at the next unsaved device
@@ -4552,24 +4539,7 @@ async function pushDeviceToServer(idx){
 }
 
 function _revealPaymentIfAccessDone(){
-  // Only relevant when all devices are installed
-  var allPushed=true;
-  for(var i=1;i<=_attendTaskQty;i++){ if(!_attendSavedDevices[i] || !_attendSavedDevices[i].pushed){ allPushed=false; break; } }
-  if(!allPushed) return;
-  var accessOk=true;
-  for(var j=1;j<=_attendTaskQty;j++){ if(!_attendSavedDevices[j] || !_attendSavedDevices[j].access_given){ accessOk=false; break; } }
-  var paySection=document.getElementById('attend-payment-section');
-  var submitBtn=document.getElementById('attend-submit-btn');
-  var gate=document.getElementById('attend-access-gate');
-  if(accessOk){
-    if(gate) gate.style.display='none';
-    if(paySection) paySection.style.display='';
-    if(submitBtn){ submitBtn.style.display=''; submitBtn.textContent='✅ Submit — Request Approval'; submitBtn.style.background='var(--green)'; }
-  } else {
-    if(gate) gate.style.display='';
-    if(paySection) paySection.style.display='none';
-    if(submitBtn) submitBtn.style.display='none';
-  }
+  checkAttendAllDevicesSaved();
 }
 
 function checkAttendAllDevicesSaved(){
@@ -4580,38 +4550,42 @@ function checkAttendAllDevicesSaved(){
   const submitBtn     = document.getElementById('attend-submit-btn');
   const cancelBtn     = document.getElementById('attend-cancel-btn');
   const closeBtn      = document.getElementById('attend-close-btn');
-  if(allDone){
+  const gate          = document.getElementById('attend-access-gate');
+
+  // Old single-assign step is retired — always keep hidden
+  if(assignSection) assignSection.style.display='none';
+
+  if(!allDone){
+    if(cancelBtn) cancelBtn.style.display='';
+    if(closeBtn)  closeBtn.style.display='';
+    if(gate)      gate.style.display='none';
+    if(paySection) paySection.style.display='none';
+    if(submitBtn)  submitBtn.style.display='none';
+    return;
+  }
+
+  // All installed — check every device has customer access before allowing payment
+  let allAccess=true;
+  for(let i=1;i<=_attendTaskQty;i++){ if(!_attendSavedDevices[i]?.access_given){allAccess=false;break;} }
+
+  if(allAccess){
+    if(gate)      gate.style.display='none';
     if(cancelBtn) cancelBtn.style.display='none';
     if(closeBtn)  closeBtn.style.display='none';
-    if(assignSection){
-      assignSection.style.display='';
-      const emailEl = document.getElementById('assign-email');
-      if(emailEl && _detailTask?.email) emailEl.value = _detailTask.email;
-    }
-    if(paySection)  paySection.style.display='none';
-    if(submitBtn)   submitBtn.style.display='none';
+    if(paySection) paySection.style.display='';
+    if(submitBtn){ submitBtn.style.display=''; submitBtn.textContent='✅ Submit — Request Approval'; submitBtn.style.background='var(--green)'; }
   } else {
-    if(cancelBtn)     cancelBtn.style.display='';
-    if(closeBtn)      closeBtn.style.display='';
-    if(assignSection) assignSection.style.display='none';
-    if(paySection)    paySection.style.display='none';
-    if(submitBtn)     submitBtn.style.display='none';
+    if(gate)      gate.style.display='';
+    if(cancelBtn) cancelBtn.style.display='';
+    if(closeBtn)  closeBtn.style.display='';
+    if(paySection) paySection.style.display='none';
+    if(submitBtn)  submitBtn.style.display='none';
   }
 }
 
 function showPaymentAfterAssign(){
-  const paySection  = document.getElementById('attend-payment-section');
-  const submitBtn   = document.getElementById('attend-submit-btn');
-  const cancelBtn   = document.getElementById('attend-cancel-btn');
-  const closeBtn    = document.getElementById('attend-close-btn');
-  if(cancelBtn) cancelBtn.style.display='none';
-  if(closeBtn)  closeBtn.style.display='none';
-  if(paySection) paySection.style.display='';
-  if(submitBtn){
-    submitBtn.style.display='';
-    submitBtn.textContent='✅ Submit — Request Approval';
-    submitBtn.style.background='var(--green)';
-  }
+  // Route through the single gate so payment only shows when all devices have access
+  checkAttendAllDevicesSaved();
 }
 
 let _gpsFoundUserId = null;
