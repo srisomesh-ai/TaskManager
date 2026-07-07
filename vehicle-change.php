@@ -219,6 +219,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
           <p class="confirm-te">మీ GPS పరికరాన్ని మీ పాత వాహనం నుండి కొత్త వాహనానికి మార్చమని అభ్యర్థించడానికి మీరు ఇక్కడ ఉన్నారు. ఇది సరైనదేనా?</p>
           <p class="confirm-hi">आप अपना GPS डिवाइस पुराने वाहन से नए वाहन में बदलवाने का अनुरोध करने आए हैं। क्या यह सही है?</p>
         </div>
+        <?php if ($PRICE > 0): ?>
+        <div class="price-tag"><div class="lbl">Service Charge</div><div class="amt">₹<?= number_format($PRICE) ?></div><div style="font-size:10px;color:#7a3ec8;margin-top:2px">+ GST may apply</div></div>
+        <?php endif; ?>
         <button type="button" class="confirm-yes" onclick="tsConfirmYes()">✅ Yes / అవును / हाँ</button>
         <button type="button" class="confirm-no" onclick="tsConfirmNo()">No / కాదు / नहीं</button>
         <div id="ts-no-msg" style="display:none;margin-top:14px;background:#fdecec;color:#c0392b;padding:12px 14px;border-radius:8px;font-size:12.5px;line-height:1.6">
