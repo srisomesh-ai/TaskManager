@@ -308,13 +308,16 @@ case 'get_tasks':
     // Ensure device installs table exists
     try { $pdo->exec("CREATE TABLE IF NOT EXISTS task_device_installs (id INT AUTO_INCREMENT PRIMARY KEY, task_id INT NOT NULL, device_index INT DEFAULT 1, vehicle_number VARCHAR(50), vehicle_type VARCHAR(50), gps_serial_no VARCHAR(100), name_on_server VARCHAR(200), server_name VARCHAR(50), remarks TEXT, saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch(Exception $e){}
 
-    // Bulk fetch: which tasks have device installs done
+    // Bulk fetch: which tasks have device installs done + how many per task
     $addingDoneIds = [];
+    $installCounts = [];
     if(!empty($taskIds)){
         try {
             $in = implode(',', array_map('intval', $taskIds));
             $diRows = $pdo->query("SELECT DISTINCT task_id FROM task_device_installs WHERE task_id IN ($in) AND gps_serial_no IS NOT NULL AND gps_serial_no != ''")->fetchAll(PDO::FETCH_ASSOC);
             $addingDoneIds = array_column($diRows, 'task_id');
+            $cntRows = $pdo->query("SELECT task_id, COUNT(*) AS c FROM task_device_installs WHERE task_id IN ($in) AND gps_serial_no IS NOT NULL AND gps_serial_no != '' GROUP BY task_id")->fetchAll(PDO::FETCH_ASSOC);
+            foreach($cntRows as $cr){ $installCounts[$cr['task_id']] = intval($cr['c']); }
         } catch(Exception $e){ $addingDoneIds = []; }
     }
 
@@ -326,6 +329,7 @@ case 'get_tasks':
         $consentAt    = trim($task['customer_consent_at']??'');
         $consentToken = $task['consent_token']??'';
         $addingDone   = in_array($id, $addingDoneIds);
+        $task['installed_count'] = $installCounts[$id] ?? 0;
         $lastActivity = $task['last_tech_activity']??null;
         $adminViewed  = $task['admin_viewed_at']??null;
         $hasUnseenUpdate = $lastActivity && (!$adminViewed || strcmp($lastActivity, $adminViewed) > 0);
