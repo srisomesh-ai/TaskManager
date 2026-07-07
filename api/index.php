@@ -148,6 +148,29 @@ function _bsSyncInstalls($pdo, $cuName){
     return ['created'=>$created,'updated'=>$updated,'scanned'=>count($rows)];
 }
 
+function _ensureTripColumns($pdo){
+    $cols = [
+        "cust_loc_lat DECIMAL(10,6) DEFAULT NULL",
+        "cust_loc_lng DECIMAL(10,6) DEFAULT NULL",
+        "cust_loc_at DATETIME DEFAULT NULL",
+        "loc_token VARCHAR(64) DEFAULT NULL",
+        "trip_start_lat DECIMAL(10,6) DEFAULT NULL",
+        "trip_start_lng DECIMAL(10,6) DEFAULT NULL",
+        "trip_start_at DATETIME DEFAULT NULL",
+        "trip_reach_lat DECIMAL(10,6) DEFAULT NULL",
+        "trip_reach_lng DECIMAL(10,6) DEFAULT NULL",
+        "trip_reach_at DATETIME DEFAULT NULL",
+        "trip_km DECIMAL(8,2) DEFAULT NULL",
+        "trip_minutes INT DEFAULT NULL",
+    ];
+    foreach($cols as $c){ try { $pdo->exec("ALTER TABLE tasks ADD COLUMN $c"); } catch(Exception $e){} }
+}
+function _haversineKm($la1,$lo1,$la2,$lo2){
+    $R=6371; $dLat=deg2rad($la2-$la1); $dLng=deg2rad($lo2-$lo1);
+    $a=sin($dLat/2)**2 + cos(deg2rad($la1))*cos(deg2rad($la2))*sin($dLng/2)**2;
+    return round($R*2*atan2(sqrt($a),sqrt(1-$a)),2);
+}
+
 switch ($action) {
 
 // ---- PING ----
@@ -1876,6 +1899,86 @@ case 'inv_get_settings':
 
 // ============================================================
 // SEND CONSENT REQUEST — technician clicks Attend
+// ============================================================
+// CUSTOMER LOCATION + TRIP TRACKING
+// ============================================================
+case 'send_location_request':
+    $id = intval($body['id'] ?? 0);
+    if(!$id){ echo json_encode(['error'=>'Task ID required']); break; }
+    _ensureTripColumns($pdo);
+    $ts = $pdo->prepare("SELECT t.*, u.name as tech_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?");
+    $ts->execute([$id]); $tr = $ts->fetch();
+    if(!$tr){ echo json_encode(['error'=>'Task not found']); break; }
+    $locTok = bin2hex(random_bytes(20));
+    $pdo->prepare("UPDATE tasks SET loc_token=?, cust_loc_at=NULL, cust_loc_lat=NULL, cust_loc_lng=NULL WHERE id=?")->execute([$locTok, $id]);
+    // email (optional) + return link for WhatsApp
+    $link = 'https://salmon-goldfish-110661.hostingersite.com/loc.php?t='.$locTok;
+    $sent = false;
+    try {
+        require_once __DIR__.'/mailer.php';
+        if(!empty($tr['email']) && function_exists('sendMail')){
+            $b = '<div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto">'
+               . '<div style="background:#1f5fd6;color:#fff;padding:16px 20px;border-radius:10px 10px 0 0"><h2 style="margin:0;font-size:17px">📍 Share your location</h2></div>'
+               . '<div style="background:#fff;border:1px solid #e5e9f0;border-top:none;padding:18px 20px;border-radius:0 0 10px 10px">'
+               . '<p style="font-size:14px;color:#333">Dear '.htmlspecialchars($tr['customer_name']).',</p>'
+               . '<p style="font-size:13.5px;color:#555;line-height:1.6">Our technician is on the way for your GPS service. Please tap below to share your exact location so they can reach you quickly.</p>'
+               . '<p style="text-align:center;margin:18px 0"><a href="'.$link.'" style="background:#1f5fd6;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px">📍 Share My Location</a></p>'
+               . '<p style="font-size:11px;color:#999">Valid for 6 hours.</p></div></div>';
+            sendMail($tr['email'], $tr['customer_name'], 'BharatGPS — Please share your location', $b);
+            $sent = true;
+        }
+    } catch(Exception $e){}
+    $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'system')")
+        ->execute([$id, $userId, "📍 Location request sent to customer".($sent?" via email":"")]);
+    echo json_encode(['success'=>true, 'link'=>$link, 'email_sent'=>$sent, 'phone'=>$tr['contact_number']]);
+    break;
+
+case 'check_customer_location':
+    $id = intval($body['id'] ?? $_GET['id'] ?? 0);
+    if(!$id){ echo json_encode(['error'=>'Task ID required']); break; }
+    $cs = $pdo->prepare("SELECT cust_loc_lat, cust_loc_lng, cust_loc_at, trip_start_at, trip_reach_at, trip_km, trip_minutes FROM tasks WHERE id=?");
+    $cs->execute([$id]); $c = $cs->fetch();
+    echo json_encode([
+        'has_location' => !empty($c['cust_loc_at']),
+        'lat' => $c['cust_loc_lat'], 'lng' => $c['cust_loc_lng'],
+        'started' => !empty($c['trip_start_at']),
+        'reached' => !empty($c['trip_reach_at']),
+        'trip_km' => $c['trip_km'], 'trip_minutes' => $c['trip_minutes'],
+    ]);
+    break;
+
+case 'save_trip_start':
+    $id = intval($body['id'] ?? 0);
+    $la = floatval($body['lat'] ?? 0); $lo = floatval($body['lng'] ?? 0);
+    if(!$id || !$la){ echo json_encode(['error'=>'Missing data']); break; }
+    _ensureTripColumns($pdo);
+    $pdo->prepare("UPDATE tasks SET trip_start_lat=?, trip_start_lng=?, trip_start_at=NOW() WHERE id=?")->execute([$la,$lo,$id]);
+    $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'system')")
+        ->execute([$id, $userId, "🧭 Technician started navigation to customer"]);
+    echo json_encode(['success'=>true]);
+    break;
+
+case 'save_trip_reached':
+    $id = intval($body['id'] ?? 0);
+    $la = floatval($body['lat'] ?? 0); $lo = floatval($body['lng'] ?? 0);
+    if(!$id || !$la){ echo json_encode(['error'=>'Missing data']); break; }
+    _ensureTripColumns($pdo);
+    $r = $pdo->prepare("SELECT trip_start_lat, trip_start_lng, trip_start_at FROM tasks WHERE id=?");
+    $r->execute([$id]); $rr = $r->fetch();
+    $km = 0; $mins = 0;
+    if($rr && $rr['trip_start_lat']){
+        $km = _haversineKm(floatval($rr['trip_start_lat']),floatval($rr['trip_start_lng']),$la,$lo);
+        if($rr['trip_start_at']){ $mins = max(0, round((time() - strtotime($rr['trip_start_at']))/60)); }
+    }
+    $pdo->prepare("UPDATE tasks SET trip_reach_lat=?, trip_reach_lng=?, trip_reach_at=NOW(), trip_km=?, trip_minutes=? WHERE id=?")
+        ->execute([$la,$lo,$km,$mins,$id]);
+    $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'system')")
+        ->execute([$id, $userId, "📍 Technician reached customer location · Trip: {$km} km, {$mins} min"]);
+    echo json_encode(['success'=>true, 'trip_km'=>$km, 'trip_minutes'=>$mins]);
+    break;
+
+// ============================================================
+// SEND CONSENT REQUEST
 // Generates consent_token, sends email to customer
 // ============================================================
 case 'send_consent':
