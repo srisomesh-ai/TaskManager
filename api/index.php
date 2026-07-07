@@ -1034,8 +1034,10 @@ case 'save_device_install':
     try {
         $pdo->exec("CREATE TABLE IF NOT EXISTS task_device_installs (id INT AUTO_INCREMENT PRIMARY KEY, task_id INT NOT NULL, device_index INT NOT NULL DEFAULT 1, vehicle_number VARCHAR(50), vehicle_type VARCHAR(50), gps_serial_no VARCHAR(100), name_on_server VARCHAR(200), server_name VARCHAR(50), rc_photo VARCHAR(200), selfie_photo VARCHAR(200), remarks TEXT, saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, UNIQUE KEY unique_device (task_id, device_index)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     } catch(Exception $e) {}
-    $pdo->prepare("INSERT INTO task_device_installs (task_id,device_index,vehicle_number,vehicle_type,gps_serial_no,name_on_server,server_name,remarks) VALUES (?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE vehicle_number=VALUES(vehicle_number),vehicle_type=VALUES(vehicle_type),gps_serial_no=VALUES(gps_serial_no),name_on_server=VALUES(name_on_server),server_name=VALUES(server_name),remarks=VALUES(remarks),saved_at=NOW()")
-        ->execute([$tid,$idx,trim($body['vehicle_number']??''),trim($body['vehicle_type']??''),trim($body['gps_serial_no']??''),trim($body['name_on_server']??''),trim($body['server_name']??''),trim($body['remarks']??'')]);
+    try { $pdo->exec("ALTER TABLE task_device_installs ADD COLUMN server_id INT NULL"); } catch(Exception $e){}
+    try { $pdo->exec("ALTER TABLE task_device_installs ADD COLUMN device_id VARCHAR(50) NULL"); } catch(Exception $e){}
+    $pdo->prepare("INSERT INTO task_device_installs (task_id,device_index,vehicle_number,vehicle_type,gps_serial_no,name_on_server,server_name,server_id,device_id,remarks) VALUES (?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE vehicle_number=VALUES(vehicle_number),vehicle_type=VALUES(vehicle_type),gps_serial_no=VALUES(gps_serial_no),name_on_server=VALUES(name_on_server),server_name=VALUES(server_name),server_id=VALUES(server_id),device_id=VALUES(device_id),remarks=VALUES(remarks),saved_at=NOW()")
+        ->execute([$tid,$idx,trim($body['vehicle_number']??''),trim($body['vehicle_type']??''),trim($body['gps_serial_no']??''),trim($body['name_on_server']??''),trim($body['server_name']??''),(isset($body['server_id'])?intval($body['server_id']):null),trim($body['device_id']??''),trim($body['remarks']??'')]);
     if ($idx===1) {
         $pdo->prepare("UPDATE tasks SET gps_serial_no=?,name_on_server=?,server_name=? WHERE id=?")->execute([trim($body['gps_serial_no']??''),trim($body['name_on_server']??''),trim($body['server_name']??''),$tid]);
     }
