@@ -4005,13 +4005,40 @@ var _attendTaskId  = null;
 function renderAttendDeviceCards(){
   const container = document.getElementById('attend-device-cards');
   if(!container) return;
-  let html = '';
+  // STEPPER: show only the current device (first unsaved), plus a progress header.
+  let currentIdx = 1;
   for(let i=1; i<=_attendTaskQty; i++){
-    const saved = _attendSavedDevices[i];
-    const done  = !!(saved && saved.pushed);
-    html += buildAttendDeviceCard(i, saved, done);
+    const s = _attendSavedDevices[i];
+    if(!(s && s.pushed)){ currentIdx = i; break; }
+    currentIdx = i+1; // all up to i are done
+  }
+  const savedCount = Object.keys(_attendSavedDevices).filter(k=>_attendSavedDevices[k] && _attendSavedDevices[k].pushed).length;
+
+  let html = '';
+  if(_attendTaskQty > 1){
+    html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;flex-wrap:wrap">';
+    for(let i=1;i<=_attendTaskQty;i++){
+      const s=_attendSavedDevices[i];
+      const isDone=!!(s&&s.pushed), isCur=(i===currentIdx && !isDone);
+      const bg=isDone?'var(--green)':(isCur?'var(--accent2)':'var(--surface2)');
+      const col=(isDone||isCur)?'#fff':'var(--text3)';
+      html+='<div style="display:flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;background:'+bg+';color:'+col+';font-size:11px;font-weight:700">'+(isDone?'✅':'')+' Device '+i+'</div>';
+      if(i<_attendTaskQty) html+='<span style="color:var(--text3)">→</span>';
+    }
+    html += '</div>';
+    html += '<div style="font-size:12px;color:var(--text3);margin-bottom:10px">'+savedCount+' of '+_attendTaskQty+' devices added</div>';
+  }
+
+  if(savedCount >= _attendTaskQty){
+    // all done — show all saved summaries
+    for(let i=1;i<=_attendTaskQty;i++){ html += buildAttendDeviceCard(i, _attendSavedDevices[i], true); }
+  } else {
+    // show the current device card only
+    const saved = _attendSavedDevices[currentIdx];
+    html += buildAttendDeviceCard(currentIdx, saved, !!(saved&&saved.pushed));
   }
   container.innerHTML = html;
+  if(typeof populateAssignedDropdowns === 'function') populateAssignedDropdowns();
   checkAttendAllDevicesSaved();
 }
 
@@ -4383,9 +4410,8 @@ async function pushDeviceToServer(idx){
         ` | Installed: ${instDate} | Expires: ${expDate}`;
       await api('update_task',{},'POST',{id:_attendTaskId, remark: pushRemark}).catch(()=>{});
 
-      const card=document.getElementById('attend-dev-card-'+idx);
-      if(card) card.outerHTML=buildAttendDeviceCard(idx,_attendSavedDevices[idx],true);
-      checkAttendAllDevicesSaved();
+      // Re-render the stepper so it advances to the next device (or shows summary)
+      renderAttendDeviceCards();
     } else {
       alert('❌ GPS Server error: '+(data.error||'Unknown error'));
     }
