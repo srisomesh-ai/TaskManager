@@ -109,11 +109,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
 <title>GPS Troubleshoot Request — BharatGPS</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { width: 100%; overflow-x: hidden; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f2f5f9; color: #1a2230; padding: 12px; line-height: 1.5; -webkit-text-size-adjust: 100%; }
-  .wrap { max-width: 440px; margin: 0 auto; width: 100%; }
+  html { width: 100%; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f2f5f9; color: #1a2230; line-height: 1.5; -webkit-text-size-adjust: 100%;
+    min-height: 100vh; display: flex; justify-content: center; align-items: flex-start; padding: 20px 12px; overflow-x: hidden; }
+  .wrap { max-width: 440px; width: 100%; margin: 0 auto; }
   @media (max-width: 480px){
-    body { padding: 8px; }
+    body { padding: 10px 8px; }
     .hd { padding: 18px 16px !important; }
     .body { padding: 16px !important; }
   }
