@@ -1036,15 +1036,23 @@ case 'mark_access_given':
     try {
         try { $pdo->exec("ALTER TABLE task_device_installs ADD COLUMN access_given TINYINT DEFAULT 0"); } catch(Exception $e){}
         try { $pdo->exec("ALTER TABLE task_device_installs ADD COLUMN access_email VARCHAR(190) NULL"); } catch(Exception $e){}
-        if($imei !== ''){
-            $pdo->prepare("UPDATE task_device_installs SET access_given=1, access_email=? WHERE task_id=? AND gps_serial_no=?")->execute([$email?:null,$tid,$imei]);
-        } elseif($devIdx){
-            $pdo->prepare("UPDATE task_device_installs SET access_given=1, access_email=? WHERE task_id=? AND device_index=?")->execute([$email?:null,$tid,$devIdx]);
-        } else {
+        $done = false;
+        if($devIdx){
+            $st = $pdo->prepare("UPDATE task_device_installs SET access_given=1, access_email=? WHERE task_id=? AND device_index=?");
+            $st->execute([$email?:null,$tid,$devIdx]);
+            if($st->rowCount() > 0) $done = true;
+        }
+        if(!$done && $imei !== ''){
+            // match ignoring any non-digits stored in gps_serial_no
+            $st = $pdo->prepare("UPDATE task_device_installs SET access_given=1, access_email=? WHERE task_id=? AND REPLACE(REPLACE(gps_serial_no,' ',''),'-','') LIKE ?");
+            $st->execute([$email?:null,$tid,'%'.$imei.'%']);
+            if($st->rowCount() > 0) $done = true;
+        }
+        if(!$done && !$devIdx && $imei===''){
             // mark all installed devices of this task
             $pdo->prepare("UPDATE task_device_installs SET access_given=1, access_email=? WHERE task_id=? AND gps_serial_no IS NOT NULL AND gps_serial_no != ''")->execute([$email?:null,$tid]);
         }
-        echo json_encode(['success'=>true]);
+        echo json_encode(['success'=>true,'marked'=>$done]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
