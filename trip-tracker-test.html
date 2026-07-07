@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trip Tracker — Test</title>
+<style>
+  :root{
+    --ink:#12161c; --ink2:#3b444f; --mut:#8791a0; --line:#e3e7ee;
+    --bg:#eef1f6; --card:#ffffff; --brand:#1f5fd6; --brand-dk:#164aa8;
+    --go:#0f9d58; --go-bg:#e6f6ee; --stop:#d93a3a; --stop-bg:#fdecec;
+    --amber:#e08a1e; --amber-bg:#fff5e6;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5;-webkit-text-size-adjust:100%}
+  .app{max-width:440px;margin:0 auto;min-height:100vh;background:var(--bg);display:flex;flex-direction:column}
+
+  /* top switch to jump between the two roles while testing */
+  .roles{display:flex;gap:6px;padding:10px;background:#0d1420;position:sticky;top:0;z-index:20}
+  .roles button{flex:1;padding:9px;border:none;border-radius:8px;background:#1e2a3d;color:#9fb0c9;font-size:12px;font-weight:700;cursor:pointer}
+  .roles button.on{background:var(--brand);color:#fff}
+  .note{font-size:10px;color:#6b7a90;text-align:center;padding:4px 10px 8px;background:#0d1420}
+
+  .screen{padding:16px;flex:1;display:none}
+  .screen.on{display:block}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px}
+  .hd{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  .hd .dot{width:9px;height:9px;border-radius:50%;background:var(--brand)}
+  .hd h2{font-size:15px;font-weight:800;letter-spacing:-.2px}
+  .task-meta{font-size:12px;color:var(--mut);margin-bottom:2px}
+  .task-meta b{color:var(--ink2);font-weight:700}
+
+  .step{display:flex;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+  .step:first-of-type{border-top:none}
+  .step .n{width:26px;height:26px;border-radius:50%;background:var(--bg);color:var(--mut);font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .step.done .n{background:var(--go-bg);color:var(--go)}
+  .step.active .n{background:var(--brand);color:#fff}
+  .step .body{flex:1}
+  .step .title{font-size:13.5px;font-weight:700}
+  .step .sub{font-size:11.5px;color:var(--mut);margin-top:2px}
+
+  .btn{display:block;width:100%;padding:14px;border:none;border-radius:11px;font-size:14.5px;font-weight:800;cursor:pointer;text-align:center;text-decoration:none;transition:transform .05s}
+  .btn:active{transform:scale(.99)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn-brand{background:var(--brand);color:#fff}
+  .btn-go{background:var(--go);color:#fff}
+  .btn-stop{background:var(--stop);color:#fff}
+  .btn-ghost{background:#fff;color:var(--ink2);border:1.5px solid var(--line)}
+  .btn-wa{background:#25D366;color:#fff}
+  .btn + .btn{margin-top:9px}
+
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;padding:4px 11px;border-radius:20px}
+  .pill.go{background:var(--go-bg);color:var(--go)}
+  .pill.stop{background:var(--stop-bg);color:var(--stop)}
+  .pill.amber{background:var(--amber-bg);color:var(--amber)}
+
+  .stat-row{display:flex;gap:10px;margin-top:12px}
+  .stat{flex:1;background:var(--bg);border-radius:10px;padding:12px;text-align:center}
+  .stat .v{font-size:22px;font-weight:800;letter-spacing:-.5px}
+  .stat .l{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-top:2px}
+
+  .log{font-size:11.5px;color:var(--ink2);background:var(--bg);border-radius:8px;padding:10px 12px;margin-top:10px;line-height:1.7}
+  .log .k{color:var(--mut)}
+  .lock{background:var(--amber-bg);border:1.5px solid var(--amber);border-radius:10px;padding:11px 13px;font-size:12px;color:#7a5410;font-weight:600;margin-top:10px}
+  .ok{background:var(--go-bg);border:1.5px solid var(--go);border-radius:10px;padding:11px 13px;font-size:12px;color:#0c6b3d;font-weight:700;margin-top:10px}
+
+  .cust-hero{background:linear-gradient(150deg,#1f5fd6,#3f7ae6);color:#fff;border-radius:14px;padding:26px 20px;text-align:center;margin-bottom:14px}
+  .cust-hero .ic{font-size:40px}
+  .cust-hero h1{font-size:19px;font-weight:800;margin-top:8px}
+  .cust-hero p{font-size:12.5px;opacity:.92;margin-top:6px}
+
+  .field{font-size:12px;color:var(--mut);margin-top:8px}
+  .field b{color:var(--ink2)}
+  .muted{color:var(--mut);font-size:12px}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="roles">
+    <button id="tab-tech" class="on" onclick="showRole('tech')">👷 Technician view</button>
+    <button id="tab-cust" onclick="showRole('cust')">📍 Customer view</button>
+  </div>
+  <div class="note">Test harness — both roles in one page. Real flow: customer opens their view from a WhatsApp link.</div>
+
+  <!-- ══════════ TECHNICIAN ══════════ -->
+  <div class="screen on" id="screen-tech">
+    <div class="card">
+      <div class="hd"><span class="dot"></span><h2>Task · Troubleshoot</h2></div>
+      <div class="task-meta">Customer: <b>Ramesh Kumar</b></div>
+      <div class="task-meta">Vehicle: <b>AP31AB1234</b></div>
+      <div class="task-meta">Job: <b>Troubleshoot / Offline</b></div>
+    </div>
+
+    <div class="card">
+      <div class="hd"><span class="dot"></span><h2>Visit &amp; travel</h2></div>
+
+      <div class="step active" id="s1">
+        <div class="n">1</div>
+        <div class="body">
+          <div class="title">Get customer location</div>
+          <div class="sub">Send a link so the customer pins their exact spot.</div>
+          <div id="s1-actions" style="margin-top:10px">
+            <button class="btn btn-wa" onclick="askLocation()">📍 Ask customer location (WhatsApp)</button>
+          </div>
+          <div id="s1-status"></div>
+        </div>
+      </div>
+
+      <div class="step" id="s2">
+        <div class="n">2</div>
+        <div class="body">
+          <div class="title">Start navigation</div>
+          <div class="sub">Captures your start point &amp; time, then opens maps.</div>
+          <div id="s2-actions" style="margin-top:10px"></div>
+          <div id="s2-status"></div>
+        </div>
+      </div>
+
+      <div class="step" id="s3">
+        <div class="n">3</div>
+        <div class="body">
+          <div class="title">Reached location</div>
+          <div class="sub">Required. Captures your arrival point &amp; time.</div>
+          <div id="s3-actions" style="margin-top:10px"></div>
+          <div id="s3-status"></div>
+        </div>
+      </div>
+
+      <div class="step" id="s4">
+        <div class="n">4</div>
+        <div class="body">
+          <div class="title">Start the job</div>
+          <div class="sub">Unlocks only after you mark reached.</div>
+          <div id="s4-actions" style="margin-top:10px"></div>
+        </div>
+      </div>
+
+      <div id="trip-summary"></div>
+    </div>
+  </div>
+
+  <!-- ══════════ CUSTOMER ══════════ -->
+  <div class="screen" id="screen-cust">
+    <div class="cust-hero">
+      <div class="ic">📍</div>
+      <h1>Share your location</h1>
+      <p>Our technician is on the way for your GPS service. Tap below so they can find you.</p>
+    </div>
+    <div class="card">
+      <div id="cust-body">
+        <p class="muted">Vehicle <b>AP31AB1234</b> · BharatGPS troubleshoot</p>
+        <button class="btn btn-brand" style="margin-top:14px" onclick="custShare()">📍 Share my current location</button>
+        <div id="cust-status"></div>
+      </div>
+    </div>
+    <p class="note" style="background:none;color:var(--mut)">This link is one-time and valid for 6 hours.</p>
+  </div>
+
+</div>
+
+<script>
+// ───────── shared in-memory "backend" ─────────
+const trip = {
+  customerLoc: null,     // {lat,lng,at}
+  start: null,           // {lat,lng,at}
+  end: null,             // {lat,lng,at}
+  reached: false,
+};
+
+function showRole(r){
+  document.getElementById('tab-tech').classList.toggle('on', r==='tech');
+  document.getElementById('tab-cust').classList.toggle('on', r==='cust');
+  document.getElementById('screen-tech').classList.toggle('on', r==='tech');
+  document.getElementById('screen-cust').classList.toggle('on', r==='cust');
+  if(r==='tech') refreshTech();
+}
+
+// haversine km
+function distKm(a, b){
+  const R=6371, toRad=x=>x*Math.PI/180;
+  const dLat=toRad(b.lat-a.lat), dLng=toRad(b.lng-a.lng);
+  const s=Math.sin(dLat/2)**2 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(s), Math.sqrt(1-s));
+}
+function fmtTime(ts){ return new Date(ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
+function getPos(){
+  return new Promise((res,rej)=>{
+    if(!navigator.geolocation) return rej(new Error('Geolocation not supported on this device'));
+    navigator.geolocation.getCurrentPosition(
+      p=>res({lat:+p.coords.latitude.toFixed(6), lng:+p.coords.longitude.toFixed(6), acc:Math.round(p.coords.accuracy||0), at:Date.now()}),
+      e=>rej(new Error(e.message||'Location blocked')),
+      {enableHighAccuracy:true, timeout:12000, maximumAge:0}
+    );
+  });
+}
+
+// ───────── TECHNICIAN ─────────
+function askLocation(){
+  // In production this builds a tokenized link + opens WhatsApp. Here we simulate the send.
+  document.getElementById('s1-status').innerHTML =
+    '<div class="log"><span class="k">Link sent via WhatsApp:</span><br>bharatgps.com/loc.php?t=…&task=ID-2026-0142<br><span class="k">Waiting for customer to pin location…</span></div>'
+    + '<button class="btn btn-ghost" style="margin-top:9px" onclick="showRole(\'cust\')">▶ Open the customer view (simulate)</button>';
+}
+
+function refreshTech(){
+  // Step 1
+  const s1=document.getElementById('s1'), s2=document.getElementById('s2'), s3=document.getElementById('s3'), s4=document.getElementById('s4');
+  if(trip.customerLoc){
+    s1.classList.add('done'); s1.classList.remove('active');
+    document.getElementById('s1-status').innerHTML =
+      '<div class="ok">✅ Customer pinned their location.</div>'
+      + '<div class="log"><span class="k">Lat/Lng:</span> '+trip.customerLoc.lat+', '+trip.customerLoc.lng+' &nbsp;·&nbsp; <span class="k">at</span> '+fmtTime(trip.customerLoc.at)+'</div>';
+    document.getElementById('s1-actions').innerHTML='';
+  }
+
+  // Step 2 — start navigation
+  if(trip.customerLoc && !trip.start){
+    s2.classList.add('active');
+    document.getElementById('s2-actions').innerHTML =
+      '<button class="btn btn-go" onclick="startNav()">🧭 Start navigation</button>';
+  }
+  if(trip.start){
+    s2.classList.add('done'); s2.classList.remove('active');
+    document.getElementById('s2-actions').innerHTML='';
+    document.getElementById('s2-status').innerHTML =
+      '<div class="log"><span class="k">Start captured:</span> '+trip.start.lat+', '+trip.start.lng+' &nbsp;·&nbsp; '+fmtTime(trip.start.at)+'</div>'
+      + '<a class="btn btn-ghost" style="margin-top:9px" target="_blank" href="https://www.google.com/maps/dir/?api=1&destination='+trip.customerLoc.lat+','+trip.customerLoc.lng+'">🗺️ Reopen navigation</a>';
+  }
+
+  // Step 3 — reached (mandatory)
+  if(trip.start && !trip.reached){
+    s3.classList.add('active');
+    document.getElementById('s3-actions').innerHTML =
+      '<button class="btn btn-stop" onclick="markReached()">📍 Reached location</button>';
+  }
+  if(trip.reached){
+    s3.classList.add('done'); s3.classList.remove('active');
+    document.getElementById('s3-actions').innerHTML='';
+  }
+
+  // Step 4 — start job gated on reached
+  if(!trip.reached){
+    document.getElementById('s4-actions').innerHTML =
+      '<div class="lock">🔒 You must tap “Reached location” before you can start the job.</div>';
+  } else {
+    document.getElementById('s4-actions').innerHTML =
+      '<button class="btn btn-brand" onclick="alert(\'Proceed to installation / troubleshoot →\')">🔧 Start the job</button>';
+  }
+}
+
+async function startNav(){
+  const btn = event.target; btn.disabled=true; btn.textContent='⏳ Capturing start point…';
+  try{
+    trip.start = await getPos();
+    // open real maps navigation to the customer location
+    const url = 'https://www.google.com/maps/dir/?api=1&destination='+trip.customerLoc.lat+','+trip.customerLoc.lng;
+    window.open(url, '_blank');
+    refreshTech();
+  }catch(e){
+    btn.disabled=false; btn.textContent='🧭 Start navigation';
+    document.getElementById('s2-status').innerHTML='<div class="lock">⚠️ '+e.message+' — enable location to capture the start point.</div>';
+  }
+}
+
+async function markReached(){
+  const btn = event.target; btn.disabled=true; btn.textContent='⏳ Capturing arrival…';
+  try{
+    trip.end = await getPos();
+    trip.reached = true;
+    renderSummary();
+    refreshTech();
+  }catch(e){
+    btn.disabled=false; btn.textContent='📍 Reached location';
+    document.getElementById('s3-status').innerHTML='<div class="lock">⚠️ '+e.message+' — location is required to mark reached.</div>';
+  }
+}
+
+function renderSummary(){
+  if(!trip.start || !trip.end) return;
+  const km = distKm(trip.start, trip.end);
+  const mins = Math.max(0, Math.round((trip.end.at - trip.start.at)/60000));
+  // distance from arrival point to the customer's pinned spot (accuracy check)
+  const offM = trip.customerLoc ? Math.round(distKm(trip.end, trip.customerLoc)*1000) : null;
+  let flag = '';
+  if(offM !== null){
+    if(offM <= 200) flag = '<span class="pill go">✓ At customer location ('+offM+' m)</span>';
+    else flag = '<span class="pill amber">⚠ '+offM+' m from pinned spot</span>';
+  }
+  document.getElementById('trip-summary').innerHTML =
+    '<div style="border-top:1px solid var(--line);margin-top:6px;padding-top:14px">'
+    + '<div class="hd" style="margin-bottom:8px"><span class="dot" style="background:var(--go)"></span><h2>Trip captured</h2></div>'
+    + '<div class="stat-row">'
+    +   '<div class="stat"><div class="v">'+km.toFixed(2)+'</div><div class="l">km travelled</div></div>'
+    +   '<div class="stat"><div class="v">'+mins+'</div><div class="l">minutes</div></div>'
+    + '</div>'
+    + '<div style="margin-top:10px">'+flag+'</div>'
+    + '<div class="log">'
+    +   '<span class="k">Start:</span> '+trip.start.lat+', '+trip.start.lng+' · '+fmtTime(trip.start.at)+'<br>'
+    +   '<span class="k">Arrival:</span> '+trip.end.lat+', '+trip.end.lng+' · '+fmtTime(trip.end.at)+'<br>'
+    +   '<span class="k">Customer pin:</span> '+(trip.customerLoc?trip.customerLoc.lat+', '+trip.customerLoc.lng:'—')
+    + '</div>'
+    + '<div class="muted" style="margin-top:8px;font-size:10.5px">Admin &amp; technician both see km + minutes for this task. Distance is straight-line (haversine).</div>'
+    + '</div>';
+}
+
+// ───────── CUSTOMER ─────────
+async function custShare(){
+  const btn = event.target; btn.disabled=true; btn.textContent='⏳ Getting your location…';
+  try{
+    const loc = await getPos();
+    trip.customerLoc = loc;   // "saves to the link" (backend in production)
+    document.getElementById('cust-body').innerHTML =
+      '<div style="text-align:center;padding:14px 4px">'
+      + '<div style="font-size:44px">✅</div>'
+      + '<div style="font-size:17px;font-weight:800;color:var(--go);margin-top:6px">Location shared!</div>'
+      + '<p class="muted" style="margin-top:8px">Your technician can now navigate to you. You can close this page.</p>'
+      + '<div class="log" style="text-align:left"><span class="k">Pinned:</span> '+loc.lat+', '+loc.lng+' <span class="k">(±'+loc.acc+' m)</span></div>'
+      + '<button class="btn btn-ghost" style="margin-top:12px" onclick="showRole(\'tech\')">▶ Back to technician view</button>'
+      + '</div>';
+  }catch(e){
+    btn.disabled=false; btn.textContent='📍 Share my current location';
+    document.getElementById('cust-status').innerHTML='<div class="lock">⚠️ '+e.message+'. Please allow location access and try again.</div>';
+  }
+}
+</script>
+</body>
+</html>
