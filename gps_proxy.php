@@ -48,6 +48,33 @@ function do_post($url, $fields){
 $action = $_GET['action'] ?? '';
 
 // ── FIND — search all 4 servers by IMEI ──────────────────────────────────
+// ── GET ICONS — fetch device icon list from a server ─────────────────────
+if($action === 'get_icons'){
+    $server_id = intval($_GET['server_id'] ?? 0);
+    if(!$server_id || !isset($servers[$server_id])){ echo json_encode(['success'=>false,'error'=>'Invalid server']); exit; }
+    $srv = $servers[$server_id];
+    $r = do_get($srv['base'].'/get_icons?lang=en&user_api_hash='.rawurlencode($srv['hash']));
+    $icons = [];
+    if(is_array($r['json'])){
+        // GPSWOX returns { items:[...] } or a flat array
+        $list = isset($r['json']['items']) ? $r['json']['items'] : $r['json'];
+        if(is_array($list)){
+            foreach($list as $ic){
+                if(!is_array($ic)) continue;
+                $id  = $ic['id'] ?? null;
+                if($id === null) continue;
+                // build absolute image url
+                $img = $ic['url'] ?? ($ic['image'] ?? ($ic['path'] ?? ''));
+                if($img && strpos($img,'http')!==0){ $img = rtrim(str_replace('/api','',$srv['base']),'/').'/'.ltrim($img,'/'); }
+                if(!$img){ $img = rtrim(str_replace('/api','',$srv['base']),'/').'/images/markers/'.$id.'.svg'; }
+                $icons[] = ['id'=>intval($id), 'type'=>($ic['type']??''), 'img'=>$img];
+            }
+        }
+    }
+    echo json_encode(['success'=>true,'icons'=>$icons]);
+    exit;
+}
+
 if($action === 'find'){
     $keyword = trim($_GET['keyword'] ?? '');
     if(!$keyword){ echo json_encode(['success'=>false,'error'=>'Enter an IMEI number']); exit; }
@@ -130,6 +157,8 @@ if($action === 'update'){
         'comment'             => $_POST['comment']             ?? '',
     ];
     if(!empty($_POST['device_model'])) $fields['device_model'] = $_POST['device_model'];
+    if(!empty($_POST['icon_id']))      $fields['icon_id']      = intval($_POST['icon_id']);
+    if(!empty($_POST['icon_colors']))  $fields['icon_colors']  = $_POST['icon_colors'];
 
     $result = do_post($srv['base'].'/edit_device', $fields);
     $json   = $result['json'];
