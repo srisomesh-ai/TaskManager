@@ -808,12 +808,15 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
                 <div id="assign-done" style="display:none;padding:8px 10px;background:var(--green-bg);border:1.5px solid var(--green);border-radius:6px;font-size:12px;color:var(--green);font-weight:700">✅ Device assigned to customer account</div>
               </div>
 
-              <!-- Payment collection — shown after devices -->
-              <div id="attend-access-gate" style="display:none;background:#fff7e6;border:1.5px solid var(--saffron,#e8a33d);border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:12px;color:#9a6a00;font-weight:600">
-                ⚠️ Give customer access to ALL installed devices above before you can proceed to payment.
+              <!-- ③ Assign Installed Devices to Customer — appears only if some installed devices were NOT assigned during install -->
+              <div id="attend-assign-step" style="display:none;background:#eef4ff;border:1.5px solid var(--accent2);border-radius:8px;padding:14px;margin-bottom:12px">
+                <div style="font-size:12px;font-weight:800;color:var(--accent2);margin-bottom:6px">③ Assign Installed Device to Customer</div>
+                <div style="font-size:11px;color:var(--text3);margin-bottom:10px" id="attend-assign-step-note">Some installed devices are not yet assigned to the customer. Assign them before payment.</div>
+                <button onclick="openAssignStep()" style="width:100%;padding:11px;background:var(--accent2);color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:800;cursor:pointer">📧 Assign Installed Device to Customer</button>
+                <div id="attend-assign-step-panel" style="display:none;margin-top:10px"></div>
               </div>
+
               <div id="attend-payment-section" style="display:none;background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:14px;margin-bottom:12px;margin-top:4px">
-                <div id="attend-gate-dbg" style="background:#fff3cd;color:#664d03;font-size:10px;padding:6px 8px;border-radius:4px;margin-bottom:10px;word-break:break-all;font-family:monospace"></div>
                 <div style="font-size:12px;font-weight:800;color:var(--green);margin-bottom:10px">💰 Payment Collection</div>
                 <div class="form-row">
                   <div class="form-group">
@@ -4543,6 +4546,80 @@ function _revealPaymentIfAccessDone(){
   checkAttendAllDevicesSaved();
 }
 
+function openAssignStep(){
+  const panel = document.getElementById('attend-assign-step-panel');
+  if(!panel) return;
+  if(panel.style.display==='block'){ panel.style.display='none'; return; }
+  panel.style.display='block';
+  const need = [];
+  for(let i=1;i<=_attendTaskQty;i++){ const d=_attendSavedDevices[i]; if(d&&d.pushed&&!d.access_given) need.push(i); }
+  if(!need.length){ panel.innerHTML='<div style="font-size:12px;color:var(--green)">✅ All devices already assigned.</div>'; return; }
+  const email = (_detailTask&&_detailTask.email)?_detailTask.email:'';
+  panel.innerHTML =
+    '<div style="font-size:11px;color:var(--text3);margin-bottom:8px">'+need.length+' device(s) to assign to the customer:</div>'
+    + '<div style="display:flex;gap:6px;margin-bottom:8px">'
+    +   '<input type="email" id="asgstep-email" placeholder="customer@email.com" value="'+email+'" style="flex:1;padding:9px 11px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">'
+    +   '<button onclick="asgStepCheck()" style="padding:9px 14px;background:var(--accent2);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">🔍 Check</button>'
+    + '</div>'
+    + '<div id="asgstep-status" style="font-size:12px;margin-bottom:6px"></div>'
+    + '<div id="asgstep-create" style="display:none;margin-bottom:6px">'
+    +   '<input type="text" id="asgstep-pass" value="Bgt@1234" placeholder="Password (min 6)" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;margin-bottom:6px">'
+    +   '<button onclick="asgStepAssign(true)" style="width:100%;padding:9px;background:var(--accent2);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:800;cursor:pointer">➕ Create Account & Assign All</button>'
+    + '</div>'
+    + '<div id="asgstep-found" style="display:none"><button onclick="asgStepAssign(false)" style="width:100%;padding:9px;background:var(--green);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:800;cursor:pointer">🔗 Assign All to This Customer</button></div>';
+}
+async function asgStepCheck(){
+  const email=document.getElementById('asgstep-email')?.value.trim();
+  const st=document.getElementById('asgstep-status');
+  const cr=document.getElementById('asgstep-create');
+  const fo=document.getElementById('asgstep-found');
+  if(!email){ st.textContent='⚠️ Enter email first'; return; }
+  cr.style.display='none'; fo.style.display='none';
+  st.innerHTML='<span style="color:var(--text3)">🔍 Locating devices…</span>';
+  const need=[]; for(let i=1;i<=_attendTaskQty;i++){ const d=_attendSavedDevices[i]; if(d&&d.pushed&&!d.access_given) need.push(i); }
+  for(const k of need){ await devAccResolveServer(k); }
+  const anyDev=_attendSavedDevices[need[0]];
+  if(!anyDev||!anyDev.server_id){ st.innerHTML='<span style="color:var(--saffron)">⚠️ Could not locate devices on server.</span>'; return; }
+  st.innerHTML='<span style="color:var(--text3)">🔍 Checking account…</span>';
+  const r=await fetch('gps_proxy.php?action=find_user&server_id='+anyDev.server_id+'&email='+encodeURIComponent(email),{headers:{'X-Auth-Token':authToken}}).then(r=>r.json()).catch(()=>({}));
+  if(r.found){ st.innerHTML='<span style="color:var(--green);font-weight:700">✅ Account found</span>'; fo.style.display=''; }
+  else { st.innerHTML='<span style="color:var(--saffron);font-weight:700">⚠️ No account — create new</span>'; cr.style.display=''; }
+}
+async function asgStepAssign(doCreate){
+  const email=document.getElementById('asgstep-email')?.value.trim();
+  const st=document.getElementById('asgstep-status');
+  const pass=doCreate?(document.getElementById('asgstep-pass')?.value.trim()):'';
+  if(doCreate && (!pass||pass.length<6)){ alert('Password must be at least 6 characters'); return; }
+  st.innerHTML='<span style="color:var(--text3)">⏳ Assigning…</span>';
+  const need=[]; for(let i=1;i<=_attendTaskQty;i++){ const d=_attendSavedDevices[i]; if(d&&d.pushed&&!d.access_given) need.push(i); }
+  const userByServer={}; let ok=0, fail=0;
+  for(const k of need){
+    const dev=_attendSavedDevices[k];
+    if(!dev||!dev.server_id||!dev.device_id){ await devAccResolveServer(k); }
+    if(!dev.server_id||!dev.device_id){ fail++; continue; }
+    let uid=userByServer[dev.server_id];
+    if(!uid){
+      const fr=await fetch('gps_proxy.php?action=find_user&server_id='+dev.server_id+'&email='+encodeURIComponent(email),{headers:{'X-Auth-Token':authToken}}).then(r=>r.json()).catch(()=>({}));
+      if(fr.found){ uid=fr.user?.id; }
+      else if(doCreate){
+        const cf=new FormData(); cf.append('server_id',dev.server_id); cf.append('email',email); cf.append('password',pass); cf.append('phone',_detailTask?.contact_number||'');
+        const crr=await fetch('gps_proxy.php?action=create_user',{method:'POST',headers:{'X-Auth-Token':authToken},body:cf}).then(r=>r.json()).catch(()=>({}));
+        if(crr.success) uid=crr.user_id;
+        else { const fr2=await fetch('gps_proxy.php?action=find_user&server_id='+dev.server_id+'&email='+encodeURIComponent(email),{headers:{'X-Auth-Token':authToken}}).then(r=>r.json()).catch(()=>({})); if(fr2.found) uid=fr2.user?.id; }
+      }
+      if(uid) userByServer[dev.server_id]=uid;
+    }
+    if(!uid){ fail++; continue; }
+    const af=new FormData(); af.append('server_id',dev.server_id); af.append('user_id',uid); af.append('device_id',dev.device_id);
+    const ar=await fetch('gps_proxy.php?action=assign_device',{method:'POST',headers:{'X-Auth-Token':authToken},body:af}).then(r=>r.json()).catch(()=>({}));
+    if(ar.success){ ok++; dev.access_given=true; dev.access_email=email; api('mark_access_given',{},'POST',{task_id:_attendTaskId,imei:(dev.imei||'').replace(/\D/g,''),device_index:k,email:email}).catch(()=>{}); }
+    else fail++;
+  }
+  st.innerHTML='<span style="color:'+(fail?'var(--saffron)':'var(--green)')+';font-weight:700">✅ Assigned '+ok+(fail?(' · '+fail+' failed'):'')+'</span>';
+  // re-evaluate gate — if all now assigned, payment appears
+  checkAttendAllDevicesSaved();
+}
+
 function checkAttendAllDevicesSaved(){
   let allDone=true;
   for(let i=1;i<=_attendTaskQty;i++){ if(!_attendSavedDevices[i]?.pushed){allDone=false;break;} }
@@ -4551,7 +4628,7 @@ function checkAttendAllDevicesSaved(){
   const submitBtn     = document.getElementById('attend-submit-btn');
   const cancelBtn     = document.getElementById('attend-cancel-btn');
   const closeBtn      = document.getElementById('attend-close-btn');
-  const gate          = document.getElementById('attend-access-gate');
+  const assignStep    = document.getElementById('attend-assign-step');
 
   // Old single-assign step is retired — always keep hidden
   if(assignSection) assignSection.style.display='none';
@@ -4559,32 +4636,28 @@ function checkAttendAllDevicesSaved(){
   if(!allDone){
     if(cancelBtn) cancelBtn.style.display='';
     if(closeBtn)  closeBtn.style.display='';
-    if(gate)      gate.style.display='none';
+    if(assignStep) assignStep.style.display='none';
     if(paySection) paySection.style.display='none';
     if(submitBtn)  submitBtn.style.display='none';
     return;
   }
 
-  // All installed — check every device has customer access before allowing payment
-  let allAccess=true; let _dbgArr=[];
-  for(let i=1;i<=_attendTaskQty;i++){
-    const sv=_attendSavedDevices[i];
-    _dbgArr.push('D'+i+':pushed='+(sv&&sv.pushed?'Y':'N')+',access='+(sv&&sv.access_given?'Y':'N'));
-    if(!sv?.access_given){allAccess=false;}
-  }
-  window._attendGateDbg = 'qty='+_attendTaskQty+' allDone='+allDone+' allAccess='+allAccess+' | '+_dbgArr.join(' | ');
-  if(gate){ gate.setAttribute('title', window._attendGateDbg); }
+  // All installed — check every installed device has customer access
+  let allAccess=true;
+  for(let i=1;i<=_attendTaskQty;i++){ if(!_attendSavedDevices[i]?.access_given){allAccess=false;break;} }
 
   if(allAccess){
-    if(gate)      gate.style.display='none';
-    if(cancelBtn) cancelBtn.style.display='none';
-    if(closeBtn)  closeBtn.style.display='none';
-    if(paySection){ paySection.style.display=''; paySection.setAttribute('data-dbg', window._attendGateDbg||''); var _dbgEl=document.getElementById('attend-gate-dbg'); if(_dbgEl) _dbgEl.textContent='DEBUG: '+(window._attendGateDbg||''); }
+    // all assigned during install → skip assign step, go to payment
+    if(assignStep) assignStep.style.display='none';
+    if(cancelBtn)  cancelBtn.style.display='none';
+    if(closeBtn)   closeBtn.style.display='none';
+    if(paySection) paySection.style.display='';
     if(submitBtn){ submitBtn.style.display=''; submitBtn.textContent='✅ Submit — Request Approval'; submitBtn.style.background='var(--green)'; }
   } else {
-    if(gate)      gate.style.display='';
-    if(cancelBtn) cancelBtn.style.display='';
-    if(closeBtn)  closeBtn.style.display='';
+    // some installed devices were NOT assigned → show the assign-to-customer step, block payment
+    if(assignStep) assignStep.style.display='';
+    if(cancelBtn)  cancelBtn.style.display='';
+    if(closeBtn)   closeBtn.style.display='';
     if(paySection) paySection.style.display='none';
     if(submitBtn)  submitBtn.style.display='none';
   }
