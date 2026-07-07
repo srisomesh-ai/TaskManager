@@ -119,6 +119,12 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
 /* QUICK ACTIONS */
 .qa-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px}
 .qa-btn{display:flex;flex-direction:column;align-items:center;gap:5px;padding:13px 8px;border-radius:8px;border:1.5px solid var(--border);cursor:pointer;font-size:11px;font-weight:700;color:var(--text2);background:var(--surface2);transition:all .15s}
+.qt-switch{position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0}
+.qt-switch input{opacity:0;width:0;height:0}
+.qt-slider{position:absolute;cursor:pointer;inset:0;background:#ccc;border-radius:24px;transition:.2s}
+.qt-slider:before{content:"";position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s}
+.qt-switch input:checked + .qt-slider{background:#1a9d5a}
+.qt-switch input:checked + .qt-slider:before{transform:translateX(20px)}
 .qa-btn:hover{border-color:var(--accent2);color:var(--accent2);background:var(--accent-light)}
 .qa-icon{font-size:22px}
 
@@ -6025,6 +6031,8 @@ function openQuickTask(){
   document.getElementById('qt-name').value     = '';
   document.getElementById('qt-phone').value    = '';
   document.getElementById('qt-discount').value = '0';
+  var qp = document.getElementById('qt-price'); if(qp) qp.value = '';
+  var qg = document.getElementById('qt-gst'); if(qg) qg.checked = false;
   document.getElementById('qt-link-box').style.display = 'none';
   if(typeof qtServiceChange === 'function') qtServiceChange();
   document.getElementById('quick-task-overlay').style.display = 'flex';
@@ -6046,10 +6054,25 @@ function getQtLink(){
 
 function qtServiceChange(){
   const svc = document.getElementById('qt-service').value;
-  const dgEl = document.getElementById('qt-discount');
-  const dg = dgEl ? dgEl.closest('.form-group') : null;
-  if(dg) dg.style.display = (svc==='enquiry') ? '' : 'none';
+  const isEnq = (svc === 'enquiry');
+  const dg = document.getElementById('qt-discount-group');
+  const pg = document.getElementById('qt-price-group');
+  if(dg) dg.style.display = isEnq ? '' : 'none';
+  if(pg) pg.style.display = isEnq ? 'none' : '';
   const box = document.getElementById('qt-link-box'); if(box) box.style.display='none';
+  if(!isEnq) qtGstToggle();
+}
+
+function qtGstToggle(){
+  const on = document.getElementById('qt-gst').checked;
+  document.getElementById('qt-gst-label').textContent = on ? 'With GST' : 'Without GST';
+  const price = parseFloat(document.getElementById('qt-price').value||0);
+  const prev = document.getElementById('qt-price-preview');
+  if(prev){
+    if(price > 0 && on){ const g = Math.round(price*0.18); prev.textContent = 'Base Rs.'+price+' + GST Rs.'+g+' = Total Rs.'+(price+g); }
+    else if(price > 0){ prev.textContent = 'Total Rs.'+price+' (no GST)'; }
+    else prev.textContent = '';
+  }
 }
 
 async function sendQuickTask(){
@@ -6080,7 +6103,10 @@ async function sendQuickTask(){
     'gps-remove':     { file:'gps-remove.php',     label:'GPS Removal', line:'to request removal of your GPS device' },
   }[svc];
   let url = location.origin + '/' + meta.file + '?p=' + encodeURIComponent(phone);
-  try { const r = await api('make_req_link',{},'POST',{type:svc}); if(r && r.token){ url += '&t=' + encodeURIComponent(r.token); } } catch(e){}
+  const priceVal = parseFloat(document.getElementById('qt-price').value||0);
+  const gstOn = document.getElementById('qt-gst').checked ? 1 : 0;
+  if(!priceVal || priceVal <= 0){ alert('Please enter the service price.'); document.getElementById('qt-price').focus(); return; }
+  try { const r = await api('make_req_link',{},'POST',{type:svc, price:priceVal, gst:gstOn}); if(r && r.token){ url += '&t=' + encodeURIComponent(r.token); } } catch(e){}
   document.getElementById('qt-link-box').style.display = '';
   document.getElementById('qt-link-text').textContent  = url;
   const msg = encodeURIComponent(
@@ -6646,12 +6672,26 @@ async function submitJobOutcome(){
       <input type="tel" id="qt-phone" class="form-input" placeholder="10-digit mobile number" style="width:100%" maxlength="10">
     </div>
 
-    <div class="form-group" style="margin-bottom:16px">
+    <div class="form-group" id="qt-discount-group" style="margin-bottom:16px">
       <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:5px">Discount Amount (₹)</label>
       <div style="display:flex;gap:8px;align-items:center">
         <input type="number" id="qt-discount" class="form-input" placeholder="0" min="0" max="5000" value="0" style="width:120px">
         <span style="font-size:12px;color:var(--text3)">₹ off per device (0 = no discount)</span>
       </div>
+    </div>
+
+    <div class="form-group" id="qt-price-group" style="margin-bottom:16px;display:none">
+      <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:5px">Service Price (₹) *</label>
+      <input type="number" id="qt-price" class="form-input" placeholder="Enter final price" min="0" step="1" style="width:100%;margin-bottom:10px" oninput="qtGstToggle()">
+      <div style="display:flex;align-items:center;gap:10px;background:var(--surface2);border-radius:8px;padding:10px 12px">
+        <label style="font-size:12.5px;font-weight:700;color:var(--text2);flex:1">Add 18% GST?</label>
+        <label class="qt-switch">
+          <input type="checkbox" id="qt-gst" onchange="qtGstToggle()">
+          <span class="qt-slider"></span>
+        </label>
+        <span id="qt-gst-label" style="font-size:12px;font-weight:700;color:var(--text3);min-width:70px;text-align:right">Without GST</span>
+      </div>
+      <div id="qt-price-preview" style="font-size:11px;color:var(--text3);margin-top:8px"></div>
     </div>
 
     <div id="qt-link-box" style="display:none;background:var(--surface2);border-radius:8px;padding:12px 14px;margin-bottom:14px;word-break:break-all;font-size:12px;color:var(--text3)">
