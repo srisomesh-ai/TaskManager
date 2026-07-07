@@ -1,21 +1,47 @@
 <?php
 header('Content-Type: text/html; charset=UTF-8');
 require_once 'api/db.php';
+require_once 'api/req_token.php';
 $pdo = getDB();
 
 $SUPPORT_EMAIL = 'sales@bharatgps.com';
 $COMPANY_NAME  = 'Bharat GPS Tracker';
-@require_once 'api/mailer.php';
 
 $error = '';
 $success = false;
 $createdTaskId = '';
+$createdAmount = 0;
+
+// ---- LINK TOKEN VALIDATION (6h expiry + single use) ----
+$FORM_TYPE = 'troubleshoot';
+$token = trim($_GET['t'] ?? '');
+$LINK_STATE = 'valid'; // valid | expired | used | invalid | none
+if ($token === '') {
+    $LINK_STATE = 'none'; // allow direct open (no token) — treated as valid open link
+} else {
+    $tk = reqCheckToken($pdo, $token, $FORM_TYPE);
+    if ($tk['valid'])        $LINK_STATE = 'valid';
+    elseif ($tk['expired'])  $LINK_STATE = 'expired';
+    elseif ($tk['used'])     $LINK_STATE = 'used';
+    else                     $LINK_STATE = 'invalid';
+}
+$TOKEN_HASH = ($token !== '') ? hash('sha256', $token) : '';
 
 // Optional prefill from link
 $pref_vehicle = trim($_GET['v'] ?? '');
 $pref_phone   = trim($_GET['p'] ?? '');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
+    require_once 'api/mailer.php';
+    // Re-validate token on submit
+    $postToken = trim($_POST['tok'] ?? $token);
+    if ($postToken !== '') {
+        $tk2 = reqCheckToken($pdo, $postToken, $FORM_TYPE);
+        if (!$tk2['valid']) {
+            $error = $tk2['expired'] ? 'This link has expired.' : ($tk2['used'] ? 'This link has already been used.' : 'Invalid link.');
+        }
+        $TOKEN_HASH = $tk2['hash'];
+    }
     $cust_name   = trim($_POST['cust_name']   ?? '');
     $q_regular   = trim($_POST['q_regular']   ?? '');   // Yes / No
     $q_battery   = trim($_POST['q_battery']   ?? '');   // Yes / No
@@ -27,7 +53,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
     $geo         = trim($_POST['geo']         ?? '');
     $agree       = isset($_POST['agree']);
 
-    if (!$cust_name || !$q_regular || !$q_battery || !$offline_since || !$vehicle || !$phone || !$email || !$location) {
+    if ($error) {
+        // token error already set — do not proceed
+    } elseif (!$cust_name || !$q_regular || !$q_battery || !$offline_since || !$vehicle || !$phone || !$email || !$location) {
         $error = 'Please fill all required fields.';
     } elseif (!$agree) {
         $error = 'Please accept the service agreement before submitting.';
@@ -90,8 +118,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
                       . '</div></div>';
                     sendMail($SUPPORT_EMAIL, $COMPANY_NAME.' Support',
                         '🔧 Troubleshoot Request – '.$taskId.' | '.$vehicle, $body);
+
+                    // Confirmation email to the CUSTOMER (dispute awareness)
+                    $cbody = '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto">'
+                      . '<div style="background:#2E6BE2;color:#fff;padding:18px 20px;border-radius:10px 10px 0 0"><h2 style="margin:0;font-size:18px">✅ Request Received — BharatGPS</h2></div>'
+                      . '<div style="background:#fff;border:1px solid #e5e9f0;border-top:none;padding:18px 20px;border-radius:0 0 10px 10px">'
+                      . '<p style="color:#2a3548;font-size:14px;margin:0 0 10px">Dear '.htmlspecialchars($cust_name).',</p>'
+                      . '<p style="color:#4a5568;font-size:13.5px;line-height:1.6;margin:0 0 12px">We have received your <b>GPS Troubleshoot</b> request for vehicle <b>'.htmlspecialchars($vehicle).'</b>. Your reference number is <b>'.$taskId.'</b>. Our technician will contact you shortly.</p>'
+                      . '<div style="background:#fff7e6;border:1px solid #e8a33d;border-radius:8px;padding:12px;font-size:12px;color:#6b4e12;line-height:1.6">If you did <b>not</b> request this service, someone may have used your email by mistake. Please contact us immediately at <b>+91 98498 49824</b> to raise a dispute.</div>'
+                      . '<p style="color:#99a;font-size:11px;margin-top:14px">BharatGPS · Fleet Tracking Solutions</p>'
+                      . '</div></div>';
+                    if ($email) sendMail($email, $cust_name, 'BharatGPS — Troubleshoot Request Received ('.$taskId.')', $cbody);
                 } catch(Exception $e) {}
             }
+
+            // mark link used (single-use)
+            if (!empty($TOKEN_HASH)) reqMarkUsed($pdo, $TOKEN_HASH);
 
             $success = true;
             $createdTaskId = $taskId;
@@ -169,6 +211,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
     </div>
   </div>
   <div class="foot">BharatGPS · Fleet Tracking Solutions</div>
+  <script>
+    // Prevent resubmission via back button
+    if (window.history.replaceState) { window.history.replaceState(null, '', location.pathname); }
+    window.addEventListener('pageshow', function(e){ if(e.persisted){ location.reload(); } });
+    window.addEventListener('popstate', function(){ window.close(); location.href = 'about:blank'; });
+  </script>
+<?php elseif (in_array($LINK_STATE, ['expired','used','invalid'])): ?>
+  <div class="card">
+    <div class="hd">
+      <div class="logo-box"><img src="logo.png" alt="BharatGPS" onerror="this.style.display='none'"></div>
+      <h1>🔧 GPS Troubleshoot Request</h1>
+    </div>
+    <div class="body">
+      <div style="text-align:center;padding:30px 10px">
+        <div style="font-size:48px;margin-bottom:12px"><?= $LINK_STATE==='used' ? '✅' : '⏳' ?></div>
+        <h2 style="font-size:18px;color:#c0392b;margin-bottom:10px"><?= $LINK_STATE==='used' ? 'Link Already Used' : ($LINK_STATE==='expired' ? 'Link Expired' : 'Invalid Link') ?></h2>
+        <p style="font-size:13.5px;color:#555;line-height:1.6"><?= $LINK_STATE==='used' ? 'This request has already been submitted. If you need more help, please contact us.' : ($LINK_STATE==='expired' ? 'This link is valid for 6 hours only. Please ask BharatGPS to send you a fresh link.' : 'This link is not valid. Please ask BharatGPS to send you a new one.') ?></p>
+        <p style="margin-top:14px;font-size:13px;color:#2E6BE2;font-weight:700">📞 +91 98498 49824</p>
+      </div>
+    </div>
+  </div>
+  <div class="foot">BharatGPS · Fleet Tracking Solutions</div>
 <?php else: ?>
   <div class="card">
     <div class="hd">
@@ -196,6 +260,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
 
       <form method="POST" id="tsForm" style="display:none">
         <input type="hidden" name="form_submitted" value="1">
+        <input type="hidden" name="tok" value="<?= htmlspecialchars($token) ?>">
 
         <div class="sec-title">A few quick questions</div>
 
