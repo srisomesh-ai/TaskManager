@@ -3650,8 +3650,8 @@ async function submitTechAttend(){
       }
     }
     const workDone = document.getElementById('attend-work-done').value.trim();
-    const amount   = parseFloat(document.getElementById('attend-amount').value||0);
-    const payMode  = document.getElementById('attend-pay-mode').value;
+    const amount   = parseFloat(document.getElementById('attend-amount')?.value||0);
+    const payMode  = document.getElementById('attend-pay-mode')?.value||'';
 
     if(!workDone){ alert('Please enter overall work remarks.'); btn.disabled=false; btn.textContent='✅ Submit — Request Approval'; return; }
 
@@ -3668,10 +3668,8 @@ async function submitTechAttend(){
     body.server_name    = _attendSavedDevices[1]?.server_name||null;
     body.name_on_server = _attendSavedDevices[1]?.name_on_server||null;
     body.vehicle_no     = _attendSavedDevices[1]?.vehicle_number||null;
-    if(amount > 0){
-      body.amount_collected = (parseFloat(_detailTask?.amount_collected||0)) + amount;
-    }
-    if(payMode) body.payment_mode = payMode;
+    // NOTE: payment is recorded by the payment window (savePayment). Do NOT add it
+    // again here or it double-counts (e.g. ₹3500 collected becomes ₹7000 on submit).
 
   } else if(status === 'postponed'){
     const reason  = document.getElementById('attend-postpone-reason').value;
