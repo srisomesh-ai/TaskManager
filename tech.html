@@ -5285,13 +5285,19 @@ function openPaymentModal(taskId){
 
   const price = parseFloat(t.price_to_collect||0);
   const coll  = parseFloat(t.amount_collected||0);
-  const bal   = price - coll;
+  // For partial installs, the expected amount is proportional to installed devices,
+  // so the tech isn't shown the full task price for one device.
+  const _qty      = parseInt(t.device_qty||1) || 1;
+  const _installed= (t.device_installs||[]).filter(d=>d && d.gps_serial_no).length || 0;
+  const _expected = (_installed>0 && _installed < _qty) ? Math.round(price * _installed / _qty) : price;
+  const bal   = _expected - coll;
 
   document.getElementById('pm-subtitle').textContent = t.task_id + ' · ' + t.customer_name;
   document.getElementById('pm-agreed-box').innerHTML = `
     <div style="font-size:10px;font-weight:800;color:var(--accent2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Payment Agreement</div>
     <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--text3)">Customer agreed</span><strong>${_pmAgreedMode||'—'}</strong></div>
     <div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--text3)">Total price</span><strong>₹${price.toLocaleString('en-IN')}</strong></div>
+    ${(_installed>0 && _installed<_qty) ? `<div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--text3)">For ${_installed} of ${_qty} device(s)</span><strong>₹${_expected.toLocaleString('en-IN')}</strong></div>` : ''}
     <div style="display:flex;justify-content:space-between"><span style="color:var(--text3)">Balance due</span><strong style="color:var(--red)">₹${bal.toLocaleString('en-IN')}</strong></div>`;
 
   document.getElementById('pm-balance').textContent = '';
