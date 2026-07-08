@@ -3466,6 +3466,7 @@ function openTechAttend(taskId){
   _attendTaskQty = parseInt(_detailTask?.device_qty||1);
   _attendSavedDevices = {};
   _attendStep = 1;
+  _attendStopAfter = 0; _attendStopReason = ''; _attendStopNote = '';
 
   // Load this technician's assigned devices for the IMEI dropdown
   loadMyAssignedForAttend();
@@ -3654,7 +3655,9 @@ async function submitTechAttend(){
       alert('Please install and save at least one device before submitting.');
       btn.disabled=false; btn.textContent='✅ Submit — Request Approval'; return;
     }
-    const _allDone = (_doneCount >= _attendTaskQty);
+    // If the tech chose to stop early, the effective target is the stop point.
+    const _effectiveQty = (_attendStopAfter > 0) ? _attendStopAfter : _attendTaskQty;
+    const _allDone = (_doneCount >= _effectiveQty);
     const workDone = document.getElementById('attend-work-done').value.trim();
     const amount   = 0; // per-device payment already written live via collectDevicePayment
     const payMode  = _detailTask?.payment_mode || '';
@@ -3663,6 +3666,7 @@ async function submitTechAttend(){
 
     // Build remark from saved devices (only those actually installed)
     parts = [ _allDone ? '🔧 Installation completed' : `🔧 Partial install — ${_doneCount} of ${_attendTaskQty} device(s) done` ];
+    if(_attendStopAfter > 0 && _attendStopNote){ parts.push('Stop reason: ' + _attendStopNote); }
     for(let i=1; i<=_attendTaskQty; i++){
       const s = _attendSavedDevices[i]||{};
       if(s.gps_serial_no){
@@ -4257,6 +4261,9 @@ async function checkAndUpdateAttendBtn(taskId, taskObj){
 var _attendSavedDevices = {};
 var _attendTaskQty = 1;
 var _attendStep = 1;
+var _attendStopAfter = 0;      // if >0, tech stopped after this device — treat as effective last
+var _attendStopReason = '';
+var _attendStopNote = '';
 var _attendTaskId  = null;
 
 function skipToNextDevice(idx){
@@ -4316,9 +4323,10 @@ function renderAttendDeviceCards(){
       + '</div>';
   }
 
-  if(savedCount >= _attendTaskQty){
-    // all done — show all saved summaries
-    for(let i=1;i<=_attendTaskQty;i++){ html += buildAttendDeviceCard(i, _attendSavedDevices[i], true); }
+  const _renderEffQty = (typeof _attendStopAfter==='number' && _attendStopAfter>0) ? _attendStopAfter : _attendTaskQty;
+  if(savedCount >= _renderEffQty){
+    // all done (or stopped early) — show installed summaries up to the effective count
+    for(let i=1;i<=_renderEffQty;i++){ html += buildAttendDeviceCard(i, _attendSavedDevices[i], true); }
   } else {
     // ONE device per page — show only the current device
     const saved = _attendSavedDevices[currentIdx];
@@ -4483,22 +4491,22 @@ function _devPayBox(idx, saved){
   const perDevice = qty > 0 ? Math.round(price / qty) : 0;
   const isLast = idx >= _attendTaskQty;
 
-  // Already handled (paid or skipped) → compact status + continue (if not last)
+  // Already handled (paid) → show decision window (proceed to next / stop with reason)
   if(saved.paid){
     const statusLine = saved.paid_skipped
       ? '⏭️ Payment skipped for this device'
       : '💰 Payment collected'+(saved.paid_amount?(' — ₹'+parseFloat(saved.paid_amount).toLocaleString('en-IN')):'');
     return `<div style="margin-top:10px;padding:9px 12px;background:var(--green-bg);border:1.5px solid var(--green);border-radius:7px;font-size:12px;color:var(--green);font-weight:700;text-align:center">${statusLine}</div>`
-      + (!isLast ? `<button onclick="skipToNextDevice(${idx})" style="width:100%;margin-top:8px;padding:11px;background:var(--accent2);color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:800;cursor:pointer">Continue to Device ${idx+1} →</button>` : '');
+      + (!isLast ? _devDecisionWindow(idx) : '');
   }
 
-  // Not yet handled → two buttons side by side (Collect Payment | Continue)
+  // Not yet handled → Collect Payment + Next Step (decision) side by side
   return `
     <div style="display:flex;gap:8px;margin-top:12px">
       <button onclick="toggleDevPayForm(${idx})" id="devpay-open-${idx}"
         style="flex:1;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:800;cursor:pointer">💰 Collect Payment</button>
-      ${!isLast ? `<button onclick="skipToNextDevice(${idx})"
-        style="flex:1;padding:11px;background:var(--accent2);color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:800;cursor:pointer">Continue to Device ${idx+1} →</button>` : ''}
+      ${!isLast ? `<button onclick="openDevDecision(${idx})"
+        style="flex:1;padding:11px;background:var(--accent2);color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:800;cursor:pointer">Next Step →</button>` : ''}
     </div>
     <div id="devpay-form-${idx}" style="display:none;margin-top:10px;background:var(--surface2);border:1.5px solid var(--accent);border-radius:8px;padding:12px">
       <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Suggested ₹${price.toLocaleString('en-IN')} ÷ ${qty} = <strong>₹${perDevice.toLocaleString('en-IN')}</strong> · you can edit</div>
@@ -4515,7 +4523,58 @@ function _devPayBox(idx, saved){
       <button onclick="collectDevicePayment(${idx})" id="devpay-btn-${idx}"
         style="width:100%;padding:10px;background:var(--green);color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:800;cursor:pointer">✅ Save Payment</button>
       <div id="devpay-status-${idx}" style="font-size:12px;margin-top:6px;text-align:center"></div>
-    </div>`;
+    </div>
+    ${!isLast ? _devDecisionWindow(idx) : ''}`;
+}
+
+// ── Decision window shown after a device is installed+access, before moving on ──
+function _devDecisionWindow(idx){
+  return `<div id="dev-decision-${idx}" style="display:none;margin-top:10px;background:#eef4ff;border:1.5px solid var(--accent2);border-radius:9px;padding:12px">
+    <div style="font-size:12px;font-weight:800;color:var(--accent2);margin-bottom:10px">What next after Device ${idx}?</div>
+    <button onclick="devDecideProceed(${idx})" style="width:100%;margin-bottom:7px;padding:11px;background:var(--accent2);color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:800;cursor:pointer">🔧 Proceed to install Device ${idx+1}</button>
+    <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin:8px 0 6px">Or stop here — reason:</div>
+    <button onclick="devDecideStop(${idx},'vehicle_unavailable')" style="width:100%;margin-bottom:6px;padding:10px;background:#fff;color:var(--text2);border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;text-align:left">🚗 Vehicle not available for Device ${idx+1}</button>
+    <button onclick="devDecideStop(${idx},'postponed')" style="width:100%;margin-bottom:6px;padding:10px;background:#fff;color:var(--text2);border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;text-align:left">⏸️ Customer urgent — postpone Device ${idx+1}</button>
+    <button onclick="devDecideStop(${idx},'customer_reduced')" style="width:100%;padding:10px;background:#fff;color:var(--text2);border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;text-align:left">🙅 Customer wants only ${idx} device(s) now</button>
+    <div id="dev-decision-status-${idx}" style="font-size:12px;margin-top:8px;color:var(--saffron)"></div>
+  </div>`;
+}
+
+function openDevDecision(idx){
+  const w = document.getElementById('dev-decision-'+idx);
+  if(w) w.style.display = (w.style.display==='none' ? '' : 'none');
+}
+
+// Proceed → advance to next device install
+function devDecideProceed(idx){
+  _attendStopAfter = 0;                 // not stopping
+  _attendStep = idx + 1;
+  renderAttendDeviceCards();
+}
+
+// Stop with a reason → record reason, cap effective qty at idx, route to payment/submit
+async function devDecideStop(idx, reason){
+  const labels = {
+    vehicle_unavailable: 'Vehicle not available for remaining device(s)',
+    postponed:           'Customer urgent request — remaining device(s) postponed',
+    customer_reduced:    'Customer reduced order — only '+idx+' device(s) now'
+  };
+  const st = document.getElementById('dev-decision-status-'+idx);
+  if(st){ st.textContent = 'Saving…'; }
+  // Cap the flow at this device so submit treats it as the last one
+  _attendStopAfter = idx;
+  _attendStopReason = reason;
+  _attendStopNote   = labels[reason] || 'Stopped after device '+idx;
+  // Log the reason on the task immediately
+  try {
+    await api('update_task',{},'POST',{
+      id: _attendTaskId,
+      remark: '🛑 Stopped after Device '+idx+' of '+_attendTaskQty+' — '+(labels[reason]||reason)
+    });
+  } catch(e){}
+  if(st){ st.style.color='var(--green)'; st.textContent='✅ Noted — collect payment for installed device(s), then submit'; }
+  // Re-render so the "next" prompts disappear and submit reflects the stop
+  renderAttendDeviceCards();
 }
 
 function toggleDevPayForm(idx){
@@ -4968,8 +5027,9 @@ function checkAttendAllDevicesSaved(){
   for(let i=1;i<=_attendTaskQty;i++){
     if(_attendSavedDevices[i]?.pushed){ installedCount++; if(_attendSavedDevices[i]?.access_given) doneWithAccess++; }
   }
+  const _effQty  = (typeof _attendStopAfter==='number' && _attendStopAfter>0) ? _attendStopAfter : _attendTaskQty;
   const anyReady = installedCount >= 1;   // submit as soon as one device is installed (payment optional)
-  const allDone  = installedCount >= _attendTaskQty;
+  const allDone  = installedCount >= _effQty;
 
   const assignSection = document.getElementById('attend-assign-section');
   const paySection    = document.getElementById('attend-payment-section');
@@ -4997,7 +5057,7 @@ function checkAttendAllDevicesSaved(){
   if(submitBtn){
     submitBtn.style.display='';
     submitBtn.textContent = allDone ? '✅ Submit — Request Approval'
-                                    : `✅ Submit (${installedCount}/${_attendTaskQty} done) — rest later`;
+                                    : `✅ Submit (${installedCount}/${_effQty} done) — rest later`;
     submitBtn.style.background='var(--green)';
   }
 }
