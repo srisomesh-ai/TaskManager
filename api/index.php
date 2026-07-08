@@ -2205,6 +2205,16 @@ case 'confirm_cash_deposit':
     }
     $depositMethod = trim($body['deposit_method'] ?? '');
     if(!$depositMethod){ echo json_encode(['error'=>'Deposit method required']); break; }
+    // Compute how many devices remain not-installed (for office partial handling)
+    try { $pdo->exec("ALTER TABLE tasks ADD COLUMN pending_devices INT DEFAULT 0"); } catch(Exception $e){}
+    $instCnt = 0;
+    try {
+        $ic = $pdo->prepare("SELECT COUNT(*) FROM task_device_installs WHERE task_id=?");
+        $ic->execute([$id]); $instCnt = intval($ic->fetchColumn());
+    } catch(Exception $e){}
+    $totQty = intval($td['device_qty'] ?? 1); if($totQty < 1) $totQty = 1;
+    $pendDev = max(0, $totQty - $instCnt);
+    $pdo->prepare("UPDATE tasks SET pending_devices=? WHERE id=?")->execute([$pendDev, $id]);
     $pdo->prepare("UPDATE tasks SET
         cash_deposit_status='submitted',
         task_status='Awaiting Approval',
@@ -2226,6 +2236,37 @@ case 'confirm_cash_deposit':
     $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'remark')")
         ->execute([$id, $userId, "💰 Cash deposit submitted — Method: {$depositMethod}. Awaiting admin verification."]);
     echo json_encode(['success'=>true,'message'=>'Cash deposit submitted — admin will verify.']);
+    break;
+
+// ── OFFICE: Manage partially-complete tasks (keep pending / close / reopen) ──
+case 'office_task_action':
+    if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    $oid = intval($body['id'] ?? 0);
+    $oact = trim($body['office_action'] ?? '');
+    if(!$oid){ echo json_encode(['error'=>'Task ID required']); break; }
+    try { $pdo->exec("ALTER TABLE tasks ADD COLUMN pending_devices INT DEFAULT 0"); } catch(Exception $e){}
+    $ot = $pdo->prepare("SELECT * FROM tasks WHERE id=?"); $ot->execute([$oid]); $otask = $ot->fetch();
+    if(!$otask){ echo json_encode(['error'=>'Task not found']); break; }
+    $me = $currentUser['name'] ?? 'Office';
+    if($oact === 'keep_pending'){
+        $pdo->prepare("UPDATE tasks SET task_status='In Progress' WHERE id=?")->execute([$oid]);
+        $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'remark')")
+            ->execute([$oid, $userId, "⏳ Kept PENDING by {$me} — remaining device(s) to be installed later."]);
+        echo json_encode(['success'=>true,'message'=>'Task kept pending.']);
+    } elseif($oact === 'close'){
+        $pdo->prepare("UPDATE tasks SET task_status='Closed', closed_at=NOW() WHERE id=?")->execute([$oid]);
+        $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'remark')")
+            ->execute([$oid, $userId, "🔒 Task CLOSED by {$me}".(intval($otask['pending_devices'])>0 ? " with ".intval($otask['pending_devices'])." device(s) pending (can be reopened)." : ".")]);
+        echo json_encode(['success'=>true,'message'=>'Task closed.']);
+    } elseif($oact === 'reopen'){
+        // send back to the same technician for the remaining device(s)
+        $pdo->prepare("UPDATE tasks SET task_status='In Progress', closed_at=NULL WHERE id=?")->execute([$oid]);
+        $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'remark')")
+            ->execute([$oid, $userId, "🔓 Task REOPENED by {$me} for the remaining device(s) — back with the technician."]);
+        echo json_encode(['success'=>true,'message'=>'Task reopened for remaining devices.']);
+    } else {
+        echo json_encode(['error'=>'Unknown action']);
+    }
     break;
 
 // ── ADMIN: Verify cash deposit (approve → 'deposited' / reject → back to 'pending') ──
