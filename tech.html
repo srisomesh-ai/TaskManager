@@ -1047,6 +1047,17 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
     <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:10px 14px;margin-bottom:16px;text-align:center">
       <div style="font-size:11px;color:var(--text3);font-weight:600">Amount Collected</div>
       <div id="cd-amt" style="font-size:22px;font-weight:800;color:var(--green)">₹0</div>
+      <button type="button" onclick="cdToggleCorrect()" style="margin-top:4px;background:none;border:none;color:var(--accent);font-size:11px;font-weight:700;cursor:pointer;text-decoration:underline">✏️ Correct amount</button>
+      <div id="cd-correct-box" style="display:none;margin-top:8px;display:none">
+        <div style="display:flex;gap:6px;align-items:center;justify-content:center">
+          <span style="font-size:14px;font-weight:700">₹</span>
+          <input type="number" id="cd-correct-amt" min="0" placeholder="Correct amount"
+            style="width:130px;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:14px;font-weight:700;text-align:center">
+          <button type="button" onclick="cdSaveCorrect()" id="cd-correct-btn"
+            style="padding:8px 12px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:800;cursor:pointer">Save</button>
+        </div>
+        <div id="cd-correct-status" style="font-size:11px;margin-top:5px;color:var(--text3)"></div>
+      </div>
     </div>
     <div style="margin-bottom:14px">
       <label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:8px">How are you depositing? *</label>
@@ -1126,6 +1137,7 @@ function openCashDepositModal(taskId){
   // Populate modal
   document.getElementById('cd-sub').textContent = t.task_id + ' · ' + t.customer_name;
   document.getElementById('cd-amt').textContent = '₹' + parseFloat(t.amount_collected||0).toLocaleString('en-IN');
+  var _ccb = document.getElementById('cd-correct-box'); if(_ccb) _ccb.style.display='none';
   document.getElementById('cd-person').value  = '';
   document.getElementById('cd-ref').value     = '';
   document.getElementById('cd-remarks').value = '';
@@ -1149,6 +1161,53 @@ function openCashDepositModal(taskId){
 function cdClose(){
   document.getElementById('cd-overlay').style.display = 'none';
   document.getElementById('cd-modal').style.display   = 'none';
+}
+
+// Reveal / hide the correct-amount input
+function cdToggleCorrect(){
+  const box = document.getElementById('cd-correct-box');
+  if(!box) return;
+  const showing = box.style.display !== 'none' && box.style.display !== '';
+  // handle the double display:none in markup
+  const isHidden = box.style.display === 'none' || box.style.display === '';
+  box.style.display = isHidden ? 'block' : 'none';
+  if(box.style.display === 'block'){
+    const cur = parseFloat((_detailTask?.amount_collected)||0);
+    const inp = document.getElementById('cd-correct-amt');
+    if(inp) inp.value = cur;
+  }
+}
+
+// Save a corrected collected amount to the task
+async function cdSaveCorrect(){
+  const inp = document.getElementById('cd-correct-amt');
+  const btn = document.getElementById('cd-correct-btn');
+  const st  = document.getElementById('cd-correct-status');
+  const val = parseFloat(inp?.value);
+  if(isNaN(val) || val < 0){ if(st){ st.style.color='var(--red)'; st.textContent='Enter a valid amount'; } return; }
+  if(btn){ btn.disabled=true; btn.textContent='…'; }
+  try{
+    const res = await api('update_task',{},'POST',{
+      id: _cdTaskId,
+      amount_collected: val,
+      remark: '✏️ Collected amount corrected to ₹'+val.toLocaleString('en-IN')+' by technician'
+    });
+    if(res && res.success){
+      if(_detailTask) _detailTask.amount_collected = val;
+      const amtEl = document.getElementById('cd-amt');
+      if(amtEl) amtEl.textContent = '₹' + val.toLocaleString('en-IN');
+      if(st){ st.style.color='var(--green)'; st.textContent='✅ Corrected'; }
+      if(btn){ btn.disabled=false; btn.textContent='Save'; }
+      const box = document.getElementById('cd-correct-box'); if(box) setTimeout(()=>{ box.style.display='none'; }, 800);
+      if(typeof loadMyTasks==='function') setTimeout(loadMyTasks, 600);
+    } else {
+      if(btn){ btn.disabled=false; btn.textContent='Save'; }
+      if(st){ st.style.color='var(--red)'; st.textContent='❌ '+((res&&res.error)||'Failed'); }
+    }
+  }catch(e){
+    if(btn){ btn.disabled=false; btn.textContent='Save'; }
+    if(st){ st.style.color='var(--red)'; st.textContent='❌ '+e.message; }
+  }
 }
 
 function cdMethod(el, method){
