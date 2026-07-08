@@ -4066,8 +4066,11 @@ async function checkAndUpdateAttendBtn(taskId, taskObj){
   const addingDone = installs.length >= qty && installs.every(d=>d.gps_serial_no && d.name_on_server);
   const paid       = parseFloat(t?.amount_collected||0) > 0;
 
-  // STATE 3b: Cash collected but deposit not yet confirmed
-  if(addingDone && paid && t?.cash_deposit_status === 'pending'){
+  // STATE 3b: Cash collected but deposit not yet confirmed.
+  // Show this whenever cash is pending and payment was collected — even if not every
+  // device is installed (tech may have postponed/cancelled the rest). Deposit takes
+  // priority so the tech is never sent back to "proceed to adding".
+  if(paid && t?.cash_deposit_status === 'pending'){
     btn.className     = 'ts-btn';
     btn.style.background    = 'var(--saffron)';
     btn.style.border        = 'none';
@@ -4304,10 +4307,22 @@ async function submitDevReason(idx){
   _attendStopNote   = labels[reason] + (note ? (' — '+note) : '');
   if(st){ st.style.color='var(--text3)'; st.textContent='Saving reason…'; }
   try {
-    await api('update_task',{},'POST',{
+    const payload = {
       id: _attendTaskId,
       remark: '🛑 Stopped after Device '+idx+' of '+_attendTaskQty+' — '+_attendStopNote
-    });
+    };
+    // CANCELLED: remaining devices are dropped → reduce required qty to what's installed,
+    // so the task is treated as complete and moves to payment→deposit→close (no re-adding).
+    if(reason === 'cancelled'){
+      payload.device_qty = idx;
+      if(_detailTask) _detailTask.device_qty = idx;
+      _attendTaskQty = idx;
+    } else {
+      // POSTPONE / PAYMENT ISSUE: remaining device still owed later. Mark task pending
+      // reschedule but keep qty. Deposit/payment for installed device still proceeds.
+      payload.reschedule_reason = _attendStopNote;
+    }
+    await api('update_task',{},'POST',payload);
   } catch(e){}
   const r = document.getElementById('devreason-'+idx); if(r) r.style.display='none';
   if(typeof openPaymentModal==='function') openPaymentModal(_attendTaskId);
