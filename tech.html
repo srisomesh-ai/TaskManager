@@ -818,24 +818,9 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
               </div>
 
               <div id="attend-payment-section" style="display:none;background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:14px;margin-bottom:12px;margin-top:4px">
-                <div style="font-size:12px;font-weight:800;color:var(--green);margin-bottom:10px">💰 Payment Collection</div>
-                <div class="form-row">
-                  <div class="form-group">
-                    <label>Amount Collected (₹)</label>
-                    <input type="number" id="attend-amount" placeholder="0" min="0" oninput="updateAttendBalance()">
-                  </div>
-                  <div class="form-group">
-                    <label>Payment Mode</label>
-                    <select id="attend-pay-mode">
-                      <option value="">Select</option>
-                      <option>Cash</option>
-                      <option>UPI</option>
-                      <option>Bank Transfer</option>
-                      <option>Cheque</option>
-                    </select>
-                  </div>
-                </div>
-                <div id="attend-balance-line" style="font-size:12px;color:var(--text2);margin-top:6px"></div>
+                <div style="font-size:12px;font-weight:800;color:var(--green);margin-bottom:8px">💰 Payment Summary</div>
+                <div id="attend-pay-summary" style="font-size:13px;color:var(--text2);line-height:1.9"></div>
+                <div style="font-size:11px;color:var(--text3);margin-top:6px">Payment is collected per device above. Any balance can be collected later.</div>
               </div>
 
               <div class="form-group" style="margin-bottom:12px">
@@ -3620,13 +3605,23 @@ function closeTechAttend(){
 function updateAttendBalance(){
   if(!_detailTask) return;
   const price   = parseFloat(_detailTask.price_to_collect||0);
-  const prev    = parseFloat(_detailTask.amount_collected||0);
-  const nowColl = parseFloat(document.getElementById('attend-amount')?.value||0);
-  const bal     = price - prev - nowColl;
+  const coll    = parseFloat(_detailTask.amount_collected||0);
+  const bal     = Math.max(0, price - coll);
+  // Old balance line (may not exist anymore) — keep null-safe
   const el      = document.getElementById('attend-balance-line');
   if(el) el.innerHTML = bal > 0
-    ? `<span style="color:var(--red)">₹${bal.toLocaleString('en-IN')} still due after this</span>`
+    ? `<span style="color:var(--red)">₹${bal.toLocaleString('en-IN')} still due</span>`
     : `<span style="color:var(--green);font-weight:700">✅ Fully paid</span>`;
+  // New read-only payment summary
+  const sum = document.getElementById('attend-pay-summary');
+  if(sum){
+    sum.innerHTML =
+      `Task price: <strong>₹${price.toLocaleString('en-IN')}</strong><br>`+
+      `Collected so far: <strong style="color:var(--green)">₹${coll.toLocaleString('en-IN')}</strong><br>`+
+      (bal > 0
+        ? `Balance: <strong style="color:var(--red)">₹${bal.toLocaleString('en-IN')}</strong> <span style="color:var(--text3)">(collect later)</span>`
+        : `<strong style="color:var(--green)">✅ Fully paid</strong>`);
+  }
 }
 
 async function submitTechAttend(){
@@ -3665,8 +3660,8 @@ async function submitTechAttend(){
     }
     const _allDone = (_doneCount >= _attendTaskQty);
     const workDone = document.getElementById('attend-work-done').value.trim();
-    const amount   = parseFloat(document.getElementById('attend-amount').value||0);
-    const payMode  = document.getElementById('attend-pay-mode').value;
+    const amount   = 0; // per-device payment already written live via collectDevicePayment
+    const payMode  = _detailTask?.payment_mode || '';
 
     if(!workDone){ alert('Please enter overall work remarks.'); btn.disabled=false; btn.textContent='✅ Submit — Request Approval'; return; }
 
@@ -4986,6 +4981,7 @@ function checkAttendAllDevicesSaved(){
   if(cancelBtn)  cancelBtn.style.display='none';
   if(closeBtn)   closeBtn.style.display='none';
   if(paySection) paySection.style.display='';
+  if(typeof updateAttendBalance==='function') updateAttendBalance();
   if(submitBtn){
     submitBtn.style.display='';
     submitBtn.textContent = allDone ? '✅ Submit — Request Approval'
