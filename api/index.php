@@ -133,6 +133,17 @@ function _bsSyncInstalls($pdo, $cuName){
         $pend2     = max(0, $billTotal-$recv2);
         $pStatus   = ($recv2>=$billTotal && $billTotal>0) ? 'paid' : ($recv2>0 ? 'partially_paid' : 'pending');
         $profile2  = !empty($t2['profile']) ? $t2['profile'] : 'BGPT';
+
+        // FREE service (price 0) — do not create a balance sheet entry.
+        // If one was created earlier, remove it and clear the link.
+        if ($billTotal <= 0) {
+            if (!empty($t2['bs_entry_id'])) {
+                try { $pdo->prepare("DELETE FROM balance_sheet_entries WHERE id=?")->execute([intval($t2['bs_entry_id'])]); } catch(Exception $e){}
+                try { $pdo->prepare("UPDATE tasks SET bs_entry_id=NULL WHERE id=?")->execute([$tid]); } catch(Exception $e){}
+            }
+            continue;
+        }
+
         if (!empty($t2['bs_entry_id'])) {
             $pdo->prepare("UPDATE balance_sheet_entries SET gps_serial_no=?,name_on_server=?,server_name=?,qty=?,unit_price=?,total_price=?,payment_received=?,pending_payment=?,payment_status=?,updated_at=NOW() WHERE id=?")
                 ->execute([$allSerials?:null,$allNames?:null,$serverName,$billQty,$unit2,$billTotal,$recv2,$pend2,$pStatus,intval($t2['bs_entry_id'])]);
@@ -670,6 +681,11 @@ case 'update_task':
             $total3  = array_key_exists('price_to_collect', $body)
                         ? floatval($body['price_to_collect'])
                         : floatval($bsRow['price_to_collect']??0);
+            // Free service — remove the entry entirely, don't keep it in the balance sheet
+            if ($total3 <= 0) {
+                try { $pdo->prepare("DELETE FROM balance_sheet_entries WHERE id=?")->execute([intval($bsRow['bs_entry_id'])]); } catch(Exception $e){}
+                try { $pdo->prepare("UPDATE tasks SET bs_entry_id=NULL WHERE id=?")->execute([$id]); } catch(Exception $e){}
+            } else {
             $pmode3  = array_key_exists('payment_mode', $body)
                         ? $body['payment_mode']
                         : ($bsRow['payment_mode']??null);
@@ -694,6 +710,7 @@ case 'update_task':
                 payment_mode=?, total_price=?, updated_at=NOW()
                 WHERE id=?")
                 ->execute([$recv3, $pend3, $ps3, $pmode3, $total3, $bsRow['bs_entry_id']]);
+            }
         }
     } catch(Exception $bsSync) {
         error_log('BS sync error: '.$bsSync->getMessage());
