@@ -2520,6 +2520,27 @@ async function saveTask(){
     payload.payment_reminder_date = document.getElementById('fm-pay-reminder').value;
   }
   if(editingTaskId) payload.id = editingTaskId;
+
+  // GATE: for Troubleshoot / V2V / GPS Remove, a technician can only be assigned
+  // if the vehicle exists on the server (data confirmed). Otherwise fix the number.
+  const gatedJobs = ['Troubleshoot/Offline','Vehicle to Vehicle Change','Only Remove'];
+  const jobNow = (document.getElementById('fm-job')?.value||'').trim();
+  if(payload.assigned_to && gatedJobs.includes(jobNow)){
+    // confirmed if in-form pull found it, or the task already has a cached found status for the same vehicle
+    const vehNow = payload.vehicle_number || '';
+    const pulledFound = (_fmVehicleStatus && _fmVehicleStatus.vehicle && _fmVehicleStatus.found === true);
+    const cachedFound = (_detailTask && String(_detailTask.veh_status_found)==='1'
+                         && (_detailTask.vehicle_number||'').trim().toUpperCase() === vehNow.trim().toUpperCase());
+    if(!vehNow){
+      alert('Enter the vehicle number and pull its status before assigning a technician.');
+      btn.textContent='💾 Save Task'; btn.disabled=false; return;
+    }
+    if(!pulledFound && !cachedFound){
+      alert('This vehicle was not confirmed on the server. Please pull the vehicle status (must be found) before assigning. If the number is wrong, correct it and pull again.');
+      btn.textContent='💾 Save Task'; btn.disabled=false; return;
+    }
+  }
+
   const action = editingTaskId ? 'update_task' : 'create_task';
   const res = await api(action,{},'POST',payload).catch(()=>({}));
   btn.textContent='💾 Save Task'; btn.disabled=false;
@@ -3407,16 +3428,17 @@ async function fmPullVehicleStatus(){
     const r = await fetch('gps_proxy.php?action=find_by_plate&plate='+encodeURIComponent(veh), { headers:{'X-Auth-Token':authToken} }).then(x=>x.json());
     if(!r || !r.success){ throw new Error(r && r.error ? r.error : 'lookup failed'); }
     if(!r.matches || !r.matches.length){
-      res.innerHTML = '<span style="color:var(--saffron);font-weight:600">⚠️ No device found on servers for this vehicle number.</span>';
+      _fmVehicleStatus = { vehicle: veh, found: false };
+      res.innerHTML = '<span style="color:var(--saffron);font-weight:600">⚠️ No device found for this vehicle number. Fix the number to assign a technician.</span>';
     } else {
       const m = r.matches[0];
       const online = m.online === 'online';
-      _fmVehicleStatus = { vehicle: veh, online: online, last_time: m.last_time||'', server: m.server_name||'', device: m.device_name||'' };
+      _fmVehicleStatus = { vehicle: veh, found: true, online: online, last_time: m.last_time||'', server: m.server_name||'', device: m.device_name||'' };
       const badge = online
         ? '<span style="color:#1a9d5a;font-weight:800">🟢 ONLINE</span>'
         : '<span style="color:#c0392b;font-weight:800">🔴 OFFLINE</span>';
       const last = (!online && m.last_time) ? ' · 🕒 Last online: <b>'+m.last_time+'</b>' : (m.last_time?(' · 🕒 '+m.last_time):'');
-      res.innerHTML = badge + ' ('+(m.server_name||'')+')' + last + '<br><span style="color:var(--text3)">This status will be saved to the task activity log.</span>';
+      res.innerHTML = badge + ' ('+(m.server_name||'')+') <span style="color:#1a9d5a">✓ confirmed</span>' + last;
     }
   } catch(e){
     res.innerHTML = '<span style="color:var(--red)">Could not fetch status: '+(e.message||e)+'</span>';
@@ -3469,21 +3491,56 @@ async function officeTaskAction(taskId, action){
   }
 }
 
+// Service types where the device already exists on the server (data must be confirmed before assigning)
+const VEH_GATED_TYPES = ['Troubleshoot/Offline','Vehicle to Vehicle Change','Only Remove'];
+function taskNeedsVehicleData(t){
+  const job = (t.device_details||'').trim();
+  return VEH_GATED_TYPES.includes(job);
+}
+
 function renderVehicleStatusPanel(t){
   const box = document.getElementById('td-vehicle-status');
   if(!box) return;
   const veh = (t.vehicle_number || '').trim();
-  // Only show for service tasks that have a vehicle number
-  const svcTypes = ['Troubleshoot/Offline','Vehicle to Vehicle Change','Only Remove','Re-Adding'];
   if(!veh){ box.innerHTML=''; return; }
+
+  const gated = taskNeedsVehicleData(t);
+  const hasCached = (t.veh_status_at && (String(t.veh_status_found)==='1' || String(t.veh_status_found)==='0'));
+  const found = String(t.veh_status_found)==='1';
+
+  let resultHtml = '';
+  if(hasCached){
+    if(found){
+      const online = (t.veh_status_online === 'online');
+      const badge = online
+        ? '<span style="background:#e6f7ee;color:#1a9d5a;font-weight:800;padding:3px 10px;border-radius:20px;font-size:12px">🟢 ONLINE</span>'
+        : '<span style="background:#fdecec;color:#c0392b;font-weight:800;padding:3px 10px;border-radius:20px;font-size:12px">🔴 OFFLINE</span>';
+      const lastLine = (t.veh_status_last)
+        ? '<div style="font-size:11px;color:var(--text3);margin-top:4px">🕒 '+(online?'Last update':'Last online')+': <b>'+t.veh_status_last+'</b></div>'
+        : '';
+      resultHtml = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:6px">'
+        + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'
+        +   '<div style="font-weight:700;font-size:13px">'+(t.veh_status_name||veh)+'</div>'+badge
+        + '</div>'
+        + (t.veh_status_server?'<div style="font-size:11px;color:var(--text3);margin-top:4px">📡 '+t.veh_status_server+'</div>':'')
+        + lastLine
+        + '</div>';
+    } else {
+      resultHtml = '<div style="color:var(--saffron);font-weight:600;margin-top:4px">⚠️ No device found on servers for this vehicle number.'
+        + (gated ? ' Fix the vehicle number to assign this task.' : '') + '</div>';
+    }
+  } else {
+    resultHtml = '<div style="font-size:11px;color:var(--text3)">'+(gated?'Pull status to confirm the vehicle before assigning.':'Tap to check the vehicle status.')+'</div>';
+  }
+
   box.innerHTML =
     '<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:12px 14px">'
     + '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">'
     +   '<div><div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px">🚗 Vehicle (Plate No.)</div>'
     +   '<div style="font-size:15px;font-weight:800;color:var(--text)">'+veh+'</div></div>'
-    +   '<button onclick="pullVehicleStatus()" id="veh-pull-btn" style="padding:8px 14px;background:var(--accent2);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">📡 Pull Status</button>'
+    +   '<button onclick="pullVehicleStatus()" id="veh-pull-btn" style="padding:8px 14px;background:var(--accent2);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">'+(hasCached?'🔄 Refresh':'📡 Pull Status')+'</button>'
     + '</div>'
-    + '<div id="veh-status-result" style="font-size:12px;color:var(--text3)"></div>'
+    + '<div id="veh-status-result" style="font-size:12px;color:var(--text3)">'+resultHtml+'</div>'
     + '</div>';
 }
 
@@ -3498,30 +3555,26 @@ async function pullVehicleStatus(){
   try {
     const r = await fetch('gps_proxy.php?action=find_by_plate&plate='+encodeURIComponent(veh), { headers:{'X-Auth-Token':authToken} }).then(x=>x.json());
     if(!r || !r.success){ throw new Error(r && r.error ? r.error : 'lookup failed'); }
+    let payload = { id: t.id, found: 0 };
     if(!r.matches || !r.matches.length){
-      res.innerHTML = '<div style="color:var(--saffron);font-weight:600">⚠️ No device found on servers for this vehicle number.</div>';
+      payload.found = 0;
     } else {
-      res.innerHTML = r.matches.map(function(m){
-        const online = m.online === 'online';
-        const badge = online
-          ? '<span style="background:#e6f7ee;color:#1a9d5a;font-weight:800;padding:3px 10px;border-radius:20px;font-size:12px">🟢 ONLINE</span>'
-          : '<span style="background:#fdecec;color:#c0392b;font-weight:800;padding:3px 10px;border-radius:20px;font-size:12px">🔴 OFFLINE</span>';
-        const lastLine = (!online && m.last_time)
-          ? '<div style="font-size:11px;color:var(--text3);margin-top:4px">🕒 Last online: <b>'+m.last_time+'</b></div>'
-          : (m.last_time ? '<div style="font-size:11px;color:var(--text3);margin-top:4px">🕒 Last update: '+m.last_time+'</div>' : '');
-        return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:6px">'
-          + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'
-          +   '<div style="font-weight:700;font-size:13px">'+ (m.device_name||m.plate_number||veh) +'</div>'+badge
-          + '</div>'
-          + '<div style="font-size:11px;color:var(--text3);margin-top:4px">📡 '+m.server_name+(m.plate_number?(' · Plate: '+m.plate_number):'')+'</div>'
-          + lastLine
-          + '</div>';
-      }).join('');
+      const m = r.matches[0];
+      payload = { id: t.id, found: 1, online: m.online, last_time: m.last_time||'', device_name: m.device_name||m.plate_number||veh, server_name: m.server_name||'' };
     }
+    // Save once to backend so view & edit reuse it (no repeated pulls)
+    await api('save_vehicle_status', {}, 'POST', payload).catch(()=>{});
+    // update in-memory task and re-render
+    Object.assign(t, {
+      veh_status_found: payload.found, veh_status_online: payload.online||'', veh_status_last: payload.last_time||'',
+      veh_status_name: payload.device_name||'', veh_status_server: payload.server_name||'', veh_status_at: new Date().toISOString()
+    });
+    renderVehicleStatusPanel(t);
+    if(typeof refreshAssignGate === 'function') refreshAssignGate(t);
   } catch(e){
-    res.innerHTML = '<div style="color:var(--red)">Could not fetch status: '+(e.message||e)+'</div>';
+    if(res) res.innerHTML = '<div style="color:var(--red)">Could not fetch status: '+(e.message||e)+'</div>';
+    if(btn){ btn.disabled=false; btn.textContent='📡 Pull Status'; }
   }
-  if(btn){ btn.disabled=false; btn.textContent='📡 Pull Status'; }
 }
 
 function openTaskDetail(id){ viewTask(id); }async function viewTask(id){
