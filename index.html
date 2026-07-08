@@ -2426,10 +2426,11 @@ function renderTasksTable(){
     const isCrit    = age>=48;
     const isUrgent  = age>=24 && age<48;
     const rowStyle  = isCrit ? 'background:#fff5f5' : isUrgent ? 'background:#fffbf0' : '';
+    const closedStyle = ['Closed','Cancelled'].includes(t.task_status) ? 'opacity:.55;' : '';
     const ageTxt    = isCrit  ? `<span class="age-badge" style="background:#fdecea;color:#c0392b">🚨 ${age}h</span>`
                     : isUrgent? `<span class="age-badge" style="background:#fff3e0;color:#e07b00">⚠️ ${age}h</span>`
                     : age>0   ? `<span style="color:var(--text3);font-size:11px">${age}h</span>` : '–';
-    return `<tr class="${getRowClass(t)}" style="border-bottom:1px solid var(--border);cursor:pointer;${rowStyle}" onclick="viewTask(${t.id})">
+    return `<tr class="${getRowClass(t)}" style="border-bottom:1px solid var(--border);cursor:pointer;${rowStyle}${closedStyle}" onclick="viewTask(${t.id})">
       <td style="color:var(--text3);font-size:11px;padding:9px 12px">${start+i+1}</td>
       <td style="padding:9px 12px"><span class="task-id">${t.task_id||'–'}</span>${getWorkflowBadge(t)}</td>
       <td style="padding:9px 12px"><div class="cust-name">${t.customer_name||'–'}</div></td>
