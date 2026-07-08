@@ -3081,6 +3081,7 @@ async function shareCustomerLink(type){
     'troubleshoot':    { file:'troubleshoot.php',    label: 'GPS Troubleshoot', msg: 'Please fill this form to request a GPS troubleshoot check for your vehicle:' },
     'vehicle-change':  { file:'vehicle-change.php',  label: 'Vehicle to Vehicle Change', msg: 'Please fill this form to request moving your GPS device to a new vehicle:' },
     'gps-remove':      { file:'gps-remove.php',      label: 'GPS Removal', msg: 'Please fill this form to request removal of your GPS device:' },
+    're-adding':       { file:'re-adding.php',       label: 'GPS Re-Activation', msg: 'Please fill this form to renew and re-activate your expired GPS device:' },
   };
   const cfg = map[type]; if(!cfg) return;
   // get a 6-hour single-use token
@@ -6250,6 +6251,7 @@ async function sendQuickTask(){
     'troubleshoot':   { file:'troubleshoot.php',   label:'GPS Troubleshoot', line:'to request a GPS troubleshoot check for your vehicle' },
     'vehicle-change': { file:'vehicle-change.php', label:'Vehicle to Vehicle Change', line:'to move your GPS device to a new vehicle' },
     'gps-remove':     { file:'gps-remove.php',     label:'GPS Removal', line:'to request removal of your GPS device' },
+    're-adding':      { file:'re-adding.php',      label:'GPS Re-Activation', line:'to renew and re-activate your expired GPS device' },
   }[svc];
   let url = location.origin + '/' + meta.file + '?p=' + encodeURIComponent(phone);
   const priceVal = parseFloat(document.getElementById('qt-price').value||0);
@@ -6803,6 +6805,7 @@ async function submitJobOutcome(){
         <option value="troubleshoot">🔧 GPS Troubleshoot</option>
         <option value="vehicle-change">🔁 Vehicle to Vehicle Change</option>
         <option value="gps-remove">🗑️ GPS Removal</option>
+        <option value="re-adding">🔄 GPS Re-Activation (Re-Adding)</option>
       </select>
     </div>
 
