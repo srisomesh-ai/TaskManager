@@ -1164,6 +1164,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
             <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--accent2);margin-bottom:12px">📋 Task Information</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px" id="td-info-grid"></div>
             <div id="td-vehicle-status" style="margin-top:10px"></div>
+            <div id="td-office-partial" style="margin-top:10px"></div>
           </div>
 
           <!-- PAYMENT INFO -->
@@ -3421,6 +3422,51 @@ async function fmPullVehicleStatus(){
   if(btn){ btn.disabled=false; btn.textContent='📡 Pull Status'; }
 }
 
+function renderOfficePartialPanel(t){
+  const box = document.getElementById('td-office-partial');
+  if(!box){ return; }
+  const pending = parseInt(t.pending_devices||0);
+  const total = parseInt(t.device_qty||1);
+  const installed = Math.max(0, total - pending);
+  const isClosed = (t.task_status === 'Closed');
+  // Only relevant when there are pending devices (partial), or a closed task that had pending devices
+  if(pending <= 0 && !isClosed){ box.innerHTML=''; return; }
+  if(pending <= 0 && isClosed){ box.innerHTML=''; return; } // fully done & closed — nothing to manage
+
+  let buttons = '';
+  if(!isClosed){
+    // Task is open/in-progress with pending devices → office decides
+    buttons =
+      '<button onclick="officeTaskAction('+t.id+',\'keep_pending\')" style="flex:1;padding:11px;background:var(--saffron,#e08a1e);color:#fff;border:none;border-radius:8px;font-size:12.5px;font-weight:800;cursor:pointer">⏳ Keep Pending</button>'
+    + '<button onclick="officeTaskAction('+t.id+',\'close\')" style="flex:1;padding:11px;background:var(--text2,#3b444f);color:#fff;border:none;border-radius:8px;font-size:12.5px;font-weight:800;cursor:pointer">🔒 Close Task</button>';
+  } else {
+    // Closed but had pending devices → allow reopen
+    buttons =
+      '<button onclick="officeTaskAction('+t.id+',\'reopen\')" style="flex:1;padding:11px;background:var(--accent2,#1f5fd6);color:#fff;border:none;border-radius:8px;font-size:12.5px;font-weight:800;cursor:pointer">🔓 Reopen for remaining device</button>';
+  }
+
+  box.innerHTML =
+    '<div class="admin-only" style="background:#fff8ec;border:1.5px solid var(--saffron,#e08a1e);border-radius:10px;padding:13px 14px">'
+    + '<div style="font-size:12px;font-weight:800;color:#8a5a10;margin-bottom:4px">⚠️ Partially complete</div>'
+    + '<div style="font-size:11.5px;color:#7a5410;line-height:1.6;margin-bottom:10px"><b>'+installed+' of '+total+'</b> device(s) installed &amp; paid · <b>'+pending+'</b> pending (vehicle not available). Office decides:</div>'
+    + '<div style="display:flex;gap:8px">'+buttons+'</div>'
+    + '</div>';
+}
+
+async function officeTaskAction(taskId, action){
+  const labels = { keep_pending:'keep this task pending', close:'close this task', reopen:'reopen this task for the remaining device' };
+  if(!confirm('Are you sure you want to '+(labels[action]||action)+'?')) return;
+  const r = await api('office_task_action', {}, 'POST', {id: taskId, office_action: action}).catch(()=>({}));
+  if(r && r.success){
+    showToast('✅ '+(r.message||'Done'));
+    viewTask(taskId);
+    if(typeof loadTasks==='function') loadTasks();
+    if(typeof loadDashboard==='function') loadDashboard();
+  } else {
+    alert((r && r.error) || 'Action failed');
+  }
+}
+
 function renderVehicleStatusPanel(t){
   const box = document.getElementById('td-vehicle-status');
   if(!box) return;
@@ -3628,6 +3674,7 @@ function openTaskDetail(id){ viewTask(id); }async function viewTask(id){
 
   // ── VEHICLE STATUS (plate lookup from GPS servers) ─────
   renderVehicleStatusPanel(t);
+  renderOfficePartialPanel(t);
 
   // ── PAYMENT ────────────────────────────────────────────
   const price  = parseFloat(t.price_to_collect||0);
