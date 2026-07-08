@@ -4254,19 +4254,13 @@ var _attendTaskId  = null;
 
 // ── Per-device payment area: Collect Payment button + reason-first gate ──────
 function _devPayArea(idx, saved){
-  const t   = _detailTask||{};
-  const qty = parseInt(t.device_qty||1) || 1;
-  const price = parseFloat(t.price_to_collect||0) || 0;
-  const perDevice = qty > 0 ? Math.round(price / qty) : 0;
-  const nextPending = (idx < qty);   // is there a further device not yet done?
-
+  const qty = parseInt((_detailTask||{}).device_qty||1) || 1;
+  const nextPending = (idx < qty);
   return `
     <button onclick="onCollectPaymentClick(${idx}, ${nextPending?1:0})" id="devpay-open-${idx}"
       style="width:100%;margin-top:10px;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:800;cursor:pointer">💰 Collect Payment</button>
-
-    <!-- Reason picker (shown only if tech collects before finishing remaining device) -->
     <div id="devreason-${idx}" style="display:none;margin-top:10px;background:#fff8e6;border:1.5px solid #e08600;border-radius:9px;padding:12px">
-      <div style="font-size:12px;font-weight:800;color:var(--saffron,#c76e00);margin-bottom:4px">⚠️ Device ${idx+1} not installed yet</div>
+      <div style="font-size:12px;font-weight:800;color:#c76e00;margin-bottom:4px">⚠️ Device ${idx+1} not installed yet</div>
       <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Why are you collecting payment and stopping now? Pick a reason:</div>
       <label style="display:flex;align-items:center;gap:8px;padding:9px;border:1.5px solid var(--border);border-radius:7px;margin-bottom:6px;cursor:pointer;font-size:13px">
         <input type="radio" name="devreason-r-${idx}" value="postpone_vehicle"> ⏸️ Postpone — vehicle urgency (reschedule)
@@ -4280,44 +4274,20 @@ function _devPayArea(idx, saved){
       <input type="text" id="devreason-note-${idx}" placeholder="Add a short note (optional)"
         style="width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;margin-bottom:8px">
       <button onclick="submitDevReason(${idx})"
-        style="width:100%;padding:10px;background:var(--saffron,#e08600);color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:800;cursor:pointer">Confirm reason → Continue to Payment</button>
+        style="width:100%;padding:10px;background:#e08600;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:800;cursor:pointer">Confirm reason → Continue to Payment</button>
       <div id="devreason-status-${idx}" style="font-size:12px;margin-top:6px;text-align:center"></div>
-    </div>
-
-    <!-- Payment form (opened after reason confirmed, or directly if no pending device) -->
-    <div id="devpay-form-${idx}" style="display:none;margin-top:10px;background:var(--surface2);border:1.5px solid var(--accent);border-radius:8px;padding:12px">
-      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Suggested ₹${price.toLocaleString('en-IN')} ÷ ${qty} = <strong>₹${perDevice.toLocaleString('en-IN')}</strong> · you can edit</div>
-      <div style="display:flex;gap:6px;margin-bottom:8px">
-        <input type="number" id="devpay-amt-${idx}" value="${perDevice}" min="0" placeholder="Amount"
-          style="flex:1;padding:9px 11px;border:1.5px solid var(--border);border-radius:6px;font-size:14px;font-weight:700">
-        <select id="devpay-mode-${idx}" style="flex:1;padding:9px 11px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
-          <option value="Cash">Cash</option>
-          <option value="UPI">UPI</option>
-          <option value="Bank Transfer">Bank Transfer</option>
-          <option value="Card">Card</option>
-        </select>
-      </div>
-      <button onclick="collectDevicePayment(${idx})" id="devpay-btn-${idx}"
-        style="width:100%;padding:10px;background:var(--green);color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:800;cursor:pointer">✅ Save Payment</button>
-      <div id="devpay-status-${idx}" style="font-size:12px;margin-top:6px;text-align:center"></div>
     </div>`;
 }
 
-// When tech taps Collect Payment: if a later device is still pending, ask reason first.
 function onCollectPaymentClick(idx, nextPending){
   if(nextPending){
     const r = document.getElementById('devreason-'+idx);
-    const f = document.getElementById('devpay-form-'+idx);
-    if(f) f.style.display='none';
     if(r) r.style.display = (r.style.display==='none' ? '' : 'none');
   } else {
-    // last device — go straight to payment
-    const f = document.getElementById('devpay-form-'+idx);
-    if(f) f.style.display = (f.style.display==='none' ? '' : 'none');
+    if(typeof openPaymentModal==='function') openPaymentModal(_attendTaskId);
   }
 }
 
-// Confirm the stop reason, record it, then open the payment form.
 async function submitDevReason(idx){
   const sel = document.querySelector('input[name="devreason-r-'+idx+'"]:checked');
   const st  = document.getElementById('devreason-status-'+idx);
@@ -4329,7 +4299,6 @@ async function submitDevReason(idx){
     payment_issue:    'Payment issue (reschedule)',
     cancelled:        'Cancelled — customer dropped remaining device(s)'
   };
-  // Stop the flow here: treat this device as the effective last one
   _attendStopAfter  = idx;
   _attendStopReason = reason;
   _attendStopNote   = labels[reason] + (note ? (' — '+note) : '');
@@ -4340,47 +4309,10 @@ async function submitDevReason(idx){
       remark: '🛑 Stopped after Device '+idx+' of '+_attendTaskQty+' — '+_attendStopNote
     });
   } catch(e){}
-  // Hide reason, open payment form
   const r = document.getElementById('devreason-'+idx); if(r) r.style.display='none';
-  const f = document.getElementById('devpay-form-'+idx); if(f) f.style.display='';
+  if(typeof openPaymentModal==='function') openPaymentModal(_attendTaskId);
 }
 
-async function collectDevicePayment(idx){
-  const amtEl = document.getElementById('devpay-amt-'+idx);
-  const modeEl= document.getElementById('devpay-mode-'+idx);
-  const btn   = document.getElementById('devpay-btn-'+idx);
-  const st    = document.getElementById('devpay-status-'+idx);
-  const amount= parseFloat(amtEl?.value||0);
-  const mode  = modeEl?.value||'Cash';
-  if(!(amount>0)){ if(st){st.style.color='var(--red)';st.textContent='⚠️ Enter an amount greater than 0';} return; }
-  if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
-  try{
-    const prev = parseFloat(_detailTask?.amount_collected||0)||0;
-    const newTotal = prev + amount;
-    const isCash = (mode === 'Cash');
-    const payload = {
-      id: _attendTaskId,
-      amount_collected: newTotal,
-      payment_mode: mode,
-      remark: '💰 Device '+idx+' payment: ₹'+amount.toLocaleString('en-IN')+' via '+mode+' (total ₹'+newTotal.toLocaleString('en-IN')+')'
-    };
-    if(isCash) payload.cash_deposit_status = 'pending';
-    const res = await api('update_task',{},'POST',payload);
-    if(res && res.success){
-      if(_detailTask){ _detailTask.amount_collected = newTotal; _detailTask.payment_mode = mode; if(isCash) _detailTask.cash_deposit_status='pending'; }
-      if(st){ st.style.color='var(--green)'; st.textContent='✅ Collected ₹'+amount.toLocaleString('en-IN')+(isCash?' · deposit cash within 24h':''); }
-      if(btn){ btn.textContent='✅ Saved'; }
-      // Refresh the task view so submit/deposit buttons update
-      if(typeof loadMyTasks==='function') setTimeout(loadMyTasks, 400);
-    } else {
-      if(btn){ btn.disabled=false; btn.textContent='✅ Save Payment'; }
-      if(st){ st.style.color='var(--red)'; st.textContent='❌ '+((res&&res.error)||'Save failed'); }
-    }
-  }catch(e){
-    if(btn){ btn.disabled=false; btn.textContent='✅ Save Payment'; }
-    if(st){ st.style.color='var(--red)'; st.textContent='❌ '+e.message; }
-  }
-}
 
 function skipToNextDevice(idx){
   // advance the stepper to the next device without giving access
