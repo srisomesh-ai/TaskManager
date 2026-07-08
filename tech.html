@@ -817,11 +817,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
                 <div id="attend-assign-step-panel" style="display:none;margin-top:10px"></div>
               </div>
 
-              <div id="attend-payment-section" style="display:none;background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:14px;margin-bottom:12px;margin-top:4px">
-                <div style="font-size:12px;font-weight:800;color:var(--green);margin-bottom:8px">💰 Payment Summary</div>
-                <div id="attend-pay-summary" style="font-size:13px;color:var(--text2);line-height:1.9"></div>
-                <div style="font-size:11px;color:var(--text3);margin-top:6px">Payment is collected per device above. Any balance can be collected later.</div>
-              </div>
+              <div id="attend-payment-section" style="display:none"></div>
 
               <div class="form-group" style="margin-bottom:12px">
                 <label>Overall Work Remarks *</label>
@@ -3629,16 +3625,7 @@ async function submitTechAttend(){
   const status = document.getElementById('attend-install-status').value;
   if(!status){ alert('Please select installation status.'); return; }
 
-  // Block submit if no payment collected (for completed tasks with price > 0)
-  if(status === 'completed'){
-    const price     = parseFloat(_detailTask?.price_to_collect||0);
-    const collected = parseFloat(_detailTask?.amount_collected||0)
-                    + parseFloat(document.getElementById('attend-amount')?.value||0);
-    if(price > 0 && collected <= 0){
-      alert('⚠️ Payment must be collected before submitting for approval.\n\nPlease collect payment first using the payment button.');
-      return;
-    }
-  }
+  // Payment is optional at submit time — per-device collection handles it.
 
   const btn = document.getElementById('attend-submit-btn');
   if(btn){ btn.disabled=true; btn.textContent='Submitting…'; }
@@ -4485,32 +4472,46 @@ function _devPayBox(idx, saved){
   const qty = parseInt(t.device_qty||1) || 1;
   const price = parseFloat(t.price_to_collect||0) || 0;
   const perDevice = qty > 0 ? Math.round(price / qty) : 0;
+  const isLast = idx >= _attendTaskQty;
+
+  // Already handled (paid or skipped) → compact status + continue (if not last)
   if(saved.paid){
-    return `<div style="margin-top:10px;padding:9px 12px;background:var(--green-bg);border:1.5px solid var(--green);border-radius:7px;font-size:12px;color:var(--green);font-weight:700;text-align:center">
-      ${saved.paid_skipped ? '⏭️ Payment skipped — balance to collect later' : '💰 Payment collected for this device'+(saved.paid_amount?(' — ₹'+parseFloat(saved.paid_amount).toLocaleString('en-IN')):'')}
-    </div>`;
+    const statusLine = saved.paid_skipped
+      ? '⏭️ Payment skipped for this device'
+      : '💰 Payment collected'+(saved.paid_amount?(' — ₹'+parseFloat(saved.paid_amount).toLocaleString('en-IN')):'');
+    return `<div style="margin-top:10px;padding:9px 12px;background:var(--green-bg);border:1.5px solid var(--green);border-radius:7px;font-size:12px;color:var(--green);font-weight:700;text-align:center">${statusLine}</div>`
+      + (!isLast ? `<button onclick="skipToNextDevice(${idx})" style="width:100%;margin-top:8px;padding:11px;background:var(--accent2);color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:800;cursor:pointer">Continue to Device ${idx+1} →</button>` : '');
   }
-  const collectedSoFar = parseFloat(t.amount_collected||0)||0;
-  const balance = Math.max(0, price - collectedSoFar);
-  return `<div style="margin-top:10px;background:var(--surface2);border:1.5px solid var(--accent);border-radius:8px;padding:12px">
-    <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--accent);margin-bottom:8px">💰 Collect Payment — Device ${idx}</div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Task price ₹${price.toLocaleString('en-IN')} ÷ ${qty} = ₹${perDevice.toLocaleString('en-IN')}/device · Balance left: <strong style="color:var(--accent)">₹${balance.toLocaleString('en-IN')}</strong></div>
-    <div style="display:flex;gap:6px;margin-bottom:8px">
-      <input type="number" id="devpay-amt-${idx}" value="${perDevice}" min="0" placeholder="Amount"
-        style="flex:1;padding:9px 11px;border:1.5px solid var(--border);border-radius:6px;font-size:14px;font-weight:700">
-      <select id="devpay-mode-${idx}" style="flex:1;padding:9px 11px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
-        <option value="Cash">Cash</option>
-        <option value="UPI">UPI</option>
-        <option value="Bank Transfer">Bank Transfer</option>
-        <option value="Card">Card</option>
-      </select>
+
+  // Not yet handled → two buttons side by side (Collect Payment | Continue)
+  return `
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button onclick="toggleDevPayForm(${idx})" id="devpay-open-${idx}"
+        style="flex:1;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:800;cursor:pointer">💰 Collect Payment</button>
+      ${!isLast ? `<button onclick="skipToNextDevice(${idx})"
+        style="flex:1;padding:11px;background:var(--accent2);color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:800;cursor:pointer">Continue to Device ${idx+1} →</button>` : ''}
     </div>
-    <button onclick="collectDevicePayment(${idx})" id="devpay-btn-${idx}"
-      style="width:100%;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:800;cursor:pointer">✅ Collect ₹${perDevice.toLocaleString('en-IN')} for this Device</button>
-    <button onclick="skipDevicePayment(${idx})"
-      style="width:100%;margin-top:6px;padding:8px;background:transparent;color:var(--text3);border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">Skip — collect balance later</button>
-    <div id="devpay-status-${idx}" style="font-size:12px;margin-top:6px;text-align:center"></div>
-  </div>`;
+    <div id="devpay-form-${idx}" style="display:none;margin-top:10px;background:var(--surface2);border:1.5px solid var(--accent);border-radius:8px;padding:12px">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Suggested ₹${price.toLocaleString('en-IN')} ÷ ${qty} = <strong>₹${perDevice.toLocaleString('en-IN')}</strong> · you can edit</div>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <input type="number" id="devpay-amt-${idx}" value="${perDevice}" min="0" placeholder="Amount"
+          style="flex:1;padding:9px 11px;border:1.5px solid var(--border);border-radius:6px;font-size:14px;font-weight:700">
+        <select id="devpay-mode-${idx}" style="flex:1;padding:9px 11px;border:1.5px solid var(--border);border-radius:6px;font-size:13px">
+          <option value="Cash">Cash</option>
+          <option value="UPI">UPI</option>
+          <option value="Bank Transfer">Bank Transfer</option>
+          <option value="Card">Card</option>
+        </select>
+      </div>
+      <button onclick="collectDevicePayment(${idx})" id="devpay-btn-${idx}"
+        style="width:100%;padding:10px;background:var(--green);color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:800;cursor:pointer">✅ Save Payment</button>
+      <div id="devpay-status-${idx}" style="font-size:12px;margin-top:6px;text-align:center"></div>
+    </div>`;
+}
+
+function toggleDevPayForm(idx){
+  const f = document.getElementById('devpay-form-'+idx);
+  if(f) f.style.display = (f.style.display==='none' ? '' : 'none');
 }
 
 async function collectDevicePayment(idx){
@@ -4954,8 +4955,8 @@ function checkAttendAllDevicesSaved(){
   for(let i=1;i<=_attendTaskQty;i++){
     if(_attendSavedDevices[i]?.pushed){ installedCount++; if(_attendSavedDevices[i]?.access_given) doneWithAccess++; }
   }
-  const anyReady = doneWithAccess >= 1;
-  const allDone  = installedCount >= _attendTaskQty && doneWithAccess >= _attendTaskQty;
+  const anyReady = installedCount >= 1;   // submit as soon as one device is installed (payment optional)
+  const allDone  = installedCount >= _attendTaskQty;
 
   const assignSection = document.getElementById('attend-assign-section');
   const paySection    = document.getElementById('attend-payment-section');
@@ -4964,28 +4965,26 @@ function checkAttendAllDevicesSaved(){
   const closeBtn      = document.getElementById('attend-close-btn');
   const assignStep    = document.getElementById('attend-assign-step');
 
-  // Old single-assign step is retired — always keep hidden
+  // Old single-assign step + old payment summary are retired — keep hidden
   if(assignSection) assignSection.style.display='none';
   if(assignStep)    assignStep.style.display='none';
+  if(paySection)    paySection.style.display='none';
 
   if(!anyReady){
-    // No device fully done yet — keep working, no submit/payment
+    // No device installed yet — keep working, no submit
     if(cancelBtn) cancelBtn.style.display='';
     if(closeBtn)  closeBtn.style.display='';
-    if(paySection) paySection.style.display='none';
-    if(submitBtn)  submitBtn.style.display='none';
+    if(submitBtn) submitBtn.style.display='none';
     return;
   }
 
-  // At least one device installed + access given → allow final submit.
+  // At least one device installed → allow submit (payment optional).
   if(cancelBtn)  cancelBtn.style.display='none';
   if(closeBtn)   closeBtn.style.display='none';
-  if(paySection) paySection.style.display='';
-  if(typeof updateAttendBalance==='function') updateAttendBalance();
   if(submitBtn){
     submitBtn.style.display='';
     submitBtn.textContent = allDone ? '✅ Submit — Request Approval'
-                                    : `✅ Submit (${doneWithAccess}/${_attendTaskQty} done) — rest later`;
+                                    : `✅ Submit (${installedCount}/${_attendTaskQty} done) — rest later`;
     submitBtn.style.background='var(--green)';
   }
 }
