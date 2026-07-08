@@ -646,6 +646,13 @@ case 'update_task':
             $vals[]=($body[$f]===''&&in_array($f,['assigned_to','reminder_date']))?null:$body[$f];
         }
     }
+    // Technician may REDUCE device_qty (never increase) — used when the customer
+    // cancels remaining devices, so the task no longer waits on un-installed units.
+    if (!in_array($userRole,['admin','assigner']) && array_key_exists('device_qty',$body)) {
+        $newQty = intval($body['device_qty']);
+        $curQty = intval($existing['device_qty'] ?? 1);
+        if ($newQty >= 1 && $newQty < $curQty) { $sets[]="device_qty=?"; $vals[]=$newQty; }
+    }
     if (isset($body['task_status'])&&$body['task_status']==='Closed'&&$existing['task_status']!=='Closed') $sets[]="closed_at=NOW()";
     if ($sets) { $vals[]=$id; $pdo->prepare("UPDATE tasks SET ".implode(',',$sets)." WHERE id=?")->execute($vals); }
 
