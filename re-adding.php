@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
     $postToken = trim($_POST['tok'] ?? $token);
     if ($postToken !== '') { $tk2 = reqCheckToken($pdo, $postToken, $FORM_TYPE); if (!$tk2['valid']) { $error = $tk2['expired'] ? 'This link has expired.' : ($tk2['used'] ? 'This link has already been used.' : 'Invalid link.'); } else { if (floatval($tk2['price']) > 0) $PRICE = floatval($tk2['price']); $GST = !empty($tk2['gst']) ? 1 : 0; $GST_AMT = $GST ? round($PRICE*0.18,2) : 0; $TOTAL = $PRICE + $GST_AMT; } $TOKEN_HASH = $tk2['hash']; }
     $cust_name = trim($_POST['cust_name'] ?? '');
-    $vehicle   = trim($_POST['vehicle']   ?? '');
+    $vehicle   = strtoupper(trim($_POST['vehicle']   ?? ''));
     $reason    = trim($_POST['reason']    ?? '');
     $phone     = trim($_POST['phone']     ?? '');
     $email     = trim($_POST['email']     ?? '');
@@ -55,6 +55,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
     if ($error) {
     } elseif (!$cust_name || !$vehicle || !$phone || !$email || !$location) {
         $error = 'Please fill all required fields.';
+    } elseif (!preg_match('/^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}$/', strtoupper($vehicle))) {
+        $error = 'Vehicle number must be in format AB01CD1234.';
     } elseif (!$agree) {
         $error = 'Please accept the service agreement before submitting.';
     } else {
@@ -242,7 +244,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
 
         <div class="sec-title">Your Details</div>
         <div class="f"><label>Your Name <span class="req">*</span></label><input type="text" name="cust_name" placeholder="e.g. Ravi Kumar" required value="<?= htmlspecialchars($_POST['cust_name']??'') ?>"></div>
-        <div class="f"><label>Vehicle Number <span class="req">*</span></label><input type="text" name="vehicle" placeholder="e.g. AP31AB1234" required value="<?= htmlspecialchars($pref_vehicle) ?>"></div>
+        <div class="f"><label>Vehicle Number <span class="req">*</span></label><input type="text" name="vehicle" placeholder="AB01CD1234" required pattern="[A-Za-z]{2}[0-9]{2}[A-Za-z]{2}[0-9]{4}" maxlength="10" title="Format: AB01CD1234 (2 letters, 2 digits, 2 letters, 4 digits)" oninput="this.value=this.value.toUpperCase()" value="<?= htmlspecialchars($pref_vehicle) ?>"></div>
         <div class="f"><label>Contact Number <span class="req">*</span></label><input type="tel" name="phone" placeholder="9876543210" required value="<?= htmlspecialchars($pref_phone) ?>"></div>
         <div class="f"><label>Email ID <span class="req">*</span></label><input type="email" name="email" placeholder="your@email.com" required value="<?= htmlspecialchars($_POST['email']??'') ?>"></div>
         <div class="f">
