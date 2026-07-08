@@ -810,12 +810,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
               </div>
 
               <!-- ③ Assign Installed Devices to Customer — appears only if some installed devices were NOT assigned during install -->
-              <div id="attend-assign-step" style="display:none;background:#eef4ff;border:1.5px solid var(--accent2);border-radius:8px;padding:14px;margin-bottom:12px">
-                <div style="font-size:12px;font-weight:800;color:var(--accent2);margin-bottom:6px">③ Assign Installed Device to Customer</div>
-                <div style="font-size:11px;color:var(--text3);margin-bottom:10px" id="attend-assign-step-note">Some installed devices are not yet assigned to the customer. Assign them before payment.</div>
-                <button onclick="openAssignStep()" style="width:100%;padding:11px;background:var(--accent2);color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:800;cursor:pointer">📧 Assign Installed Device to Customer</button>
-                <div id="attend-assign-step-panel" style="display:none;margin-top:10px"></div>
-              </div>
+              <div id="attend-assign-step" style="display:none"><div id="attend-assign-step-panel" style="display:none"></div></div>
 
               <div id="attend-payment-section" style="display:none;background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:14px;margin-bottom:12px;margin-top:4px">
                 <div style="font-size:12px;font-weight:800;color:var(--green);margin-bottom:10px">💰 Payment Collection</div>
@@ -4874,32 +4869,31 @@ function checkAttendAllDevicesSaved(){
   const closeBtn      = document.getElementById('attend-close-btn');
   const assignStep    = document.getElementById('attend-assign-step');
 
-  // Old single-assign step is retired — always keep hidden
+  // Old single-assign step (section ③) is retired — per-device cards have their own
+  // "Give Customer Access" button, so this duplicate must always stay hidden.
   if(assignSection) assignSection.style.display='none';
+  if(assignStep)    assignStep.style.display='none';
 
   if(!allDone){
     if(cancelBtn) cancelBtn.style.display='';
     if(closeBtn)  closeBtn.style.display='';
-    if(assignStep) assignStep.style.display='none';
     if(paySection) paySection.style.display='none';
     if(submitBtn)  submitBtn.style.display='none';
     return;
   }
 
-  // All installed — check every installed device has customer access
+  // All installed — check every installed device has customer access (via its own card button)
   let allAccess=true;
   for(let i=1;i<=_attendTaskQty;i++){ if(!_attendSavedDevices[i]?.access_given){allAccess=false;break;} }
 
   if(allAccess){
-    // all assigned during install → skip assign step, go to payment
-    if(assignStep) assignStep.style.display='none';
+    // every device assigned during install → go to payment
     if(cancelBtn)  cancelBtn.style.display='none';
     if(closeBtn)   closeBtn.style.display='none';
     if(paySection) paySection.style.display='';
     if(submitBtn){ submitBtn.style.display=''; submitBtn.textContent='✅ Submit — Request Approval'; submitBtn.style.background='var(--green)'; }
   } else {
-    // some installed devices were NOT assigned → show the assign-to-customer step, block payment
-    if(assignStep) assignStep.style.display='';
+    // some devices still need access — tech uses the per-card "Give Customer Access" button; no duplicate step
     if(cancelBtn)  cancelBtn.style.display='';
     if(closeBtn)   closeBtn.style.display='';
     if(paySection) paySection.style.display='none';
