@@ -4535,16 +4535,20 @@ async function collectDevicePayment(idx){
   try{
     const prev = parseFloat(_detailTask?.amount_collected||0)||0;
     const newTotal = prev + amount;
-    const res = await api('update_task',{},'POST',{
+    const isCash = (mode === 'Cash');
+    const payload = {
       id: _attendTaskId,
       amount_collected: newTotal,
       payment_mode: mode,
       remark: '💰 Device '+idx+' payment collected: ₹'+amount.toLocaleString('en-IN')+' via '+mode+' (running total ₹'+newTotal.toLocaleString('en-IN')+')'
-    });
+    };
+    // Cash must be deposited & confirmed within 24h before the task can close.
+    if(isCash) payload.cash_deposit_status = 'pending';
+    const res = await api('update_task',{},'POST',payload);
     if(res && res.success){
-      if(_detailTask) _detailTask.amount_collected = newTotal;
+      if(_detailTask){ _detailTask.amount_collected = newTotal; _detailTask.payment_mode = mode; if(isCash) _detailTask.cash_deposit_status = 'pending'; }
       if(_attendSavedDevices[idx]){ _attendSavedDevices[idx].paid = true; _attendSavedDevices[idx].paid_amount = amount; _attendSavedDevices[idx].paid_mode = mode; }
-      if(st){ st.style.color='var(--green)'; st.textContent='✅ Collected ₹'+amount.toLocaleString('en-IN'); }
+      if(st){ st.style.color='var(--green)'; st.textContent='✅ Collected ₹'+amount.toLocaleString('en-IN')+(isCash?' · deposit cash within 24h':''); }
       renderAttendDeviceCards();
     } else {
       if(btn){ btn.disabled=false; btn.textContent='✅ Collect for this Device'; }
