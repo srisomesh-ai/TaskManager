@@ -52,8 +52,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
         $TOKEN_HASH = $tk2['hash'];
     }
     $cust_name = trim($_POST['cust_name'] ?? '');
-    $old_veh   = trim($_POST['old_veh']   ?? '');
-    $new_veh   = trim($_POST['new_veh']   ?? '');
+    $old_veh   = strtoupper(trim($_POST['old_veh']   ?? ''));
+    $new_veh   = strtoupper(trim($_POST['new_veh']   ?? ''));
     $new_type  = trim($_POST['new_type']  ?? '');
     $reason    = trim($_POST['reason']    ?? '');
     $phone     = trim($_POST['phone']     ?? '');
@@ -65,6 +65,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
     if ($error) {
     } elseif (!$cust_name || !$old_veh || !$new_veh || !$phone || !$email || !$location) {
         $error = 'Please fill all required fields.';
+    } elseif (!preg_match('/^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}$/', strtoupper($old_veh)) || !preg_match('/^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}$/', strtoupper($new_veh))) {
+        $error = 'Vehicle numbers must be in format AB01CD1234.';
     } elseif (!$agree) {
         $error = 'Please accept the service agreement before submitting.';
     } else {
@@ -249,8 +251,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
 
         <div class="sec-title">Vehicle Details</div>
         <div class="f"><label>Your Name <span class="req">*</span></label><input type="text" name="cust_name" placeholder="e.g. Ravi Kumar" required value="<?= htmlspecialchars($_POST['cust_name']??'') ?>"></div>
-        <div class="f"><label>Old Vehicle Number <span class="req">*</span></label><input type="text" name="old_veh" placeholder="Current vehicle (e.g. AP31AB1234)" required value="<?= htmlspecialchars($_POST['old_veh']??'') ?>"></div>
-        <div class="f"><label>New Vehicle Number <span class="req">*</span></label><input type="text" name="new_veh" placeholder="New vehicle (e.g. AP31XY5678)" required value="<?= htmlspecialchars($_POST['new_veh']??'') ?>"></div>
+        <div class="f"><label>Old Vehicle Number <span class="req">*</span></label><input type="text" name="old_veh" placeholder="AB01CD1234" required pattern="[A-Za-z]{2}[0-9]{2}[A-Za-z]{2}[0-9]{4}" maxlength="10" title="Format: AB01CD1234 (2 letters, 2 digits, 2 letters, 4 digits)" oninput="this.value=this.value.toUpperCase()" value="<?= htmlspecialchars($_POST['old_veh']??'') ?>"></div>
+        <div class="f"><label>New Vehicle Number <span class="req">*</span></label><input type="text" name="new_veh" placeholder="AB01CD1234" required pattern="[A-Za-z]{2}[0-9]{2}[A-Za-z]{2}[0-9]{4}" maxlength="10" title="Format: AB01CD1234 (2 letters, 2 digits, 2 letters, 4 digits)" oninput="this.value=this.value.toUpperCase()" value="<?= htmlspecialchars($_POST['new_veh']??'') ?>"></div>
         <div class="f"><label>New Vehicle Type</label>
           <select name="new_type">
             <option value="">Select (optional)</option>
