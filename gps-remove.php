@@ -338,14 +338,31 @@ function tsSubmitting(){
 }
 function captureGeo(){
   const btn = event.target;
-  if(!navigator.geolocation){ alert('Geolocation not supported.'); return; }
+  if(!navigator.geolocation){ alert('Geolocation not supported on this device.'); return; }
   btn.textContent = '📍 Getting location…';
   navigator.geolocation.getCurrentPosition(function(pos){
     const lat = pos.coords.latitude.toFixed(6), lng = pos.coords.longitude.toFixed(6);
     document.getElementById('geoInput').value = lat + ',' + lng;
-    const loc = document.getElementById('locInput'); if(!loc.value) loc.value = 'Lat ' + lat + ', Lng ' + lng;
-    btn.textContent = '✅ Location captured'; btn.style.background='#e6f7ee'; btn.style.color='#1a9d5a'; btn.style.borderColor='#1a9d5a';
-  }, function(){ btn.textContent='📍 Use My Current Location'; alert('Could not get location. Please enter manually.'); }, { enableHighAccuracy:true, timeout:10000 });
+    const loc = document.getElementById('locInput');
+    btn.textContent = '📍 Getting address…';
+    // Reverse-geocode to a readable address (free, no key)
+    fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lng + '&zoom=18&addressdetails=1', { headers: { 'Accept':'application/json' } })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(d && d.display_name){ loc.value = d.display_name; }
+        else if(!loc.value){ loc.value = 'Lat ' + lat + ', Lng ' + lng; }
+        btn.textContent = '✅ Location captured';
+        btn.style.background = '#e6f7ee'; btn.style.color = '#1a9d5a'; btn.style.borderColor = '#1a9d5a';
+      })
+      .catch(function(){
+        if(!loc.value) loc.value = 'Lat ' + lat + ', Lng ' + lng;
+        btn.textContent = '✅ Location captured';
+        btn.style.background = '#e6f7ee'; btn.style.color = '#1a9d5a'; btn.style.borderColor = '#1a9d5a';
+      });
+  }, function(){
+    btn.textContent = '📍 Use My Current Location';
+    alert('Could not get location. Please enter it manually.');
+  }, { enableHighAccuracy:true, timeout:10000 });
 }
 </script>
 </body>
