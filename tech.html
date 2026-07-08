@@ -2816,7 +2816,12 @@ async function viewTask(id){
   const _instCount = (t.device_installs||[]).length;
   const _reqQty    = parseInt(t.device_qty||1);
   const _hasPending = _instCount < _reqQty;
-  const isLocked   = ['Awaiting Approval','Closed','Cancelled'].includes(t.task_status) && !_hasPending;
+  // Cash deposit still owed → task must stay unlocked so the tech can deposit,
+  // even after it moved to Awaiting Approval.
+  const _cashDepositPending = (t.cash_deposit_status === 'pending')
+                            && parseFloat(t.amount_collected||0) > 0;
+  const isLocked   = ['Awaiting Approval','Closed','Cancelled'].includes(t.task_status)
+                     && !_hasPending && !_cashDepositPending;
 
   // Visual gray header for closed/cancelled tasks
   const drawerHdr = document.getElementById('task-detail-header');
@@ -4080,8 +4085,10 @@ async function checkAndUpdateAttendBtn(taskId, taskObj){
   const addingDone = installs.length >= qty && installs.every(d=>d.gps_serial_no && d.name_on_server);
   const paid       = parseFloat(t?.amount_collected||0) > 0;
 
-  // STATE 3b: Cash collected but deposit not yet confirmed
-  if(addingDone && paid && t?.cash_deposit_status === 'pending'){
+  // STATE 3b: Cash collected but deposit not yet confirmed.
+  // Show this whenever cash is pending and something was collected — even if not
+  // every device is installed (tech may have stopped early and just needs to deposit).
+  if(paid && t?.cash_deposit_status === 'pending'){
     btn.className     = 'ts-btn';
     btn.style.background    = 'var(--saffron)';
     btn.style.border        = 'none';
