@@ -53,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
     $q_regular   = trim($_POST['q_regular']   ?? '');   // Yes / No
     $q_battery   = trim($_POST['q_battery']   ?? '');   // Yes / No
     $offline_since = trim($_POST['offline_since'] ?? ''); // date
-    $vehicle     = trim($_POST['vehicle']     ?? '');
+    $vehicle     = strtoupper(trim($_POST['vehicle']     ?? ''));
     $phone       = trim($_POST['phone']       ?? '');
     $email       = trim($_POST['email']       ?? '');
     $location    = trim($_POST['location']    ?? '');
@@ -64,6 +64,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
         // token error already set — do not proceed
     } elseif (!$cust_name || !$q_regular || !$q_battery || !$offline_since || !$vehicle || !$phone || !$email || !$location) {
         $error = 'Please fill all required fields.';
+    } elseif (!preg_match('/^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}$/', strtoupper($vehicle))) {
+        $error = 'Vehicle number must be in format AB01CD1234.';
     } elseif (!$agree) {
         $error = 'Please accept the service agreement before submitting.';
     } else {
@@ -308,7 +310,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
         </div>
         <div class="f">
           <label>Vehicle Number <span class="req">*</span></label>
-          <input type="text" name="vehicle" placeholder="e.g. AP31AB1234" required value="<?= htmlspecialchars($pref_vehicle) ?>">
+          <input type="text" name="vehicle" placeholder="AB01CD1234" required pattern="[A-Za-z]{2}[0-9]{2}[A-Za-z]{2}[0-9]{4}" maxlength="10" title="Format: AB01CD1234 (2 letters, 2 digits, 2 letters, 4 digits)" oninput="this.value=this.value.toUpperCase()" value="<?= htmlspecialchars($pref_vehicle) ?>">
         </div>
         <div class="f">
           <label>Contact Number <span class="req">*</span></label>
