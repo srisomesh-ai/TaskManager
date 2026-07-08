@@ -2429,7 +2429,12 @@ function renderTasksTable(){
     const age       = openSt.includes(t.task_status) ? getAgeHours(t.created_at) : 0;
     const isCrit    = age>=48;
     const isUrgent  = age>=24 && age<48;
-    const rowStyle  = isCrit ? 'background:#fff5f5' : isUrgent ? 'background:#fffbf0' : '';
+    const isClosed   = t.task_status === 'Closed';
+    const isCancelled= t.task_status === 'Cancelled';
+    const rowStyle  = isClosed    ? 'background:#eaf7ee;border-left:4px solid #1a9d5a'
+                    : isCancelled ? 'background:#f3f4f6;border-left:4px solid #9aa5b1;opacity:.75'
+                    : isCrit      ? 'background:#fff5f5'
+                    : isUrgent    ? 'background:#fffbf0' : '';
     const ageTxt    = isCrit  ? `<span class="age-badge" style="background:#fdecea;color:#c0392b">🚨 ${age}h</span>`
                     : isUrgent? `<span class="age-badge" style="background:#fff3e0;color:#e07b00">⚠️ ${age}h</span>`
                     : age>0   ? `<span style="color:var(--text3);font-size:11px">${age}h</span>` : '–';
