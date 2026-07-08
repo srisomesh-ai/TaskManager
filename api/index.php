@@ -2239,6 +2239,22 @@ case 'confirm_cash_deposit':
     break;
 
 // ── OFFICE: Manage partially-complete tasks (keep pending / close / reopen) ──
+case 'save_vehicle_status':
+    $vid = intval($body['id'] ?? 0);
+    if(!$vid){ echo json_encode(['error'=>'Task ID required']); break; }
+    foreach(["veh_status_found TINYINT DEFAULT 0","veh_status_online VARCHAR(10) DEFAULT NULL","veh_status_last VARCHAR(60) DEFAULT NULL","veh_status_name VARCHAR(120) DEFAULT NULL","veh_status_server VARCHAR(60) DEFAULT NULL","veh_status_at DATETIME DEFAULT NULL"] as $c){
+        try { $pdo->exec("ALTER TABLE tasks ADD COLUMN $c"); } catch(Exception $e){}
+    }
+    $found  = !empty($body['found']) ? 1 : 0;
+    $online = trim($body['online'] ?? '');
+    $last   = trim($body['last_time'] ?? '');
+    $vname  = trim($body['device_name'] ?? '');
+    $vsrv   = trim($body['server_name'] ?? '');
+    $pdo->prepare("UPDATE tasks SET veh_status_found=?, veh_status_online=?, veh_status_last=?, veh_status_name=?, veh_status_server=?, veh_status_at=NOW() WHERE id=?")
+        ->execute([$found, $online, $last, $vname, $vsrv, $vid]);
+    echo json_encode(['success'=>true]);
+    break;
+
 case 'office_task_action':
     if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     $oid = intval($body['id'] ?? 0);
