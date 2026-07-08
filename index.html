@@ -3612,15 +3612,18 @@ function openTaskDetail(id){ viewTask(id); }async function viewTask(id){
   if(overlay) overlay.style.display = 'block';
   if(drawer)  drawer.style.transform = 'translateX(0)';
 
-  // Show loading state
-  document.getElementById('td-task-id').textContent   = 'Loading...';
-  document.getElementById('td-customer').textContent  = '';
-  document.getElementById('td-stepper').innerHTML     = '';
-  document.getElementById('td-info-grid').innerHTML   = '<div style="color:var(--text3);font-size:13px;padding:10px 0">⏳ Loading task...</div>';
-  document.getElementById('td-tech-actions').style.display = 'none';
-  document.getElementById('td-activity').innerHTML    = '';
-  const adFooter = document.getElementById('td-admin-footer');
-  if(adFooter) adFooter.style.display = 'none';
+  // Show loading state (skip on silent auto-refresh to avoid flicker)
+  const _silentRefresh = (String((_detailTask||{}).id) === String(id));
+  if(!_silentRefresh){
+    document.getElementById('td-task-id').textContent   = 'Loading...';
+    document.getElementById('td-customer').textContent  = '';
+    document.getElementById('td-stepper').innerHTML     = '';
+    document.getElementById('td-info-grid').innerHTML   = '<div style="color:var(--text3);font-size:13px;padding:10px 0">⏳ Loading task...</div>';
+    document.getElementById('td-tech-actions').style.display = 'none';
+    document.getElementById('td-activity').innerHTML    = '';
+    const adFooter = document.getElementById('td-admin-footer');
+    if(adFooter) adFooter.style.display = 'none';
+  }
 
   // Fetch task
   const res = await api('get_task', {id}).catch(()=>({}));
@@ -3630,6 +3633,12 @@ function openTaskDetail(id){ viewTask(id); }async function viewTask(id){
     return;
   }
   _detailTask = t;
+  // Track a change-signature and start auto-refresh so updates appear without reopening
+  window._detailLastSig = [t.task_status, t.amount_collected, t.cash_deposit_status, t.workflow_state,
+                           (t.device_installs||[]).length, t.last_tech_activity, t.updated_at].join('|');
+  if(window._detailRefreshId !== parseInt(id) && typeof startDetailAutoRefresh==='function'){
+    startDetailAutoRefresh(id);
+  }
 
   const isAdmin    = ['admin','assigner'].includes(currentUser?.role);
   const isTech     = currentUser?.role === 'technician';
@@ -3840,8 +3849,8 @@ function openTaskDetail(id){ viewTask(id); }async function viewTask(id){
   // Approve & Close: only when Awaiting Approval AND payment done
   // Reject: only when Awaiting Approval
   // Cancel: only when adding is NOT done (before installation)
-  adFooter.innerHTML = '';
-  adFooter.style.display = 'none';
+  const adFooter = document.getElementById('td-admin-footer');
+  if(adFooter){ adFooter.innerHTML = ''; adFooter.style.display = 'none'; }
 
   if(isAdmin){
     const taskInstalls   = t.device_installs || [];
@@ -4054,6 +4063,38 @@ function closeTaskDetail(){
     clearInterval(_consentPollTimer);
     _consentPollTimer = null;
   }
+  // stop auto-refresh of the open drawer
+  if(window._detailRefreshTimer){ clearInterval(window._detailRefreshTimer); window._detailRefreshTimer = null; }
+  window._detailRefreshId = null;
+}
+
+// Auto-refresh the open task drawer so admin sees tech updates without close/reopen.
+function startDetailAutoRefresh(id){
+  window._detailRefreshId = parseInt(id);
+  if(window._detailRefreshTimer){ clearInterval(window._detailRefreshTimer); }
+  window._detailRefreshTimer = setInterval(async ()=>{
+    try{
+      const openId = window._detailRefreshId;
+      if(!openId) return;
+      // Don't refresh if the drawer was closed
+      const drawer = document.getElementById('task-detail-drawer');
+      if(!drawer || drawer.style.transform === 'translateX(100%)') return;
+      // Skip while the user is typing in a field inside the drawer
+      const ae = document.activeElement;
+      if(ae && drawer.contains(ae) && ['INPUT','TEXTAREA','SELECT'].includes(ae.tagName)) return;
+      const res = await api('get_task', {id: openId}).catch(()=>({}));
+      const t = res.task || res;
+      if(!t || !t.id) return;
+      // Only re-render if something meaningful changed (avoid flicker)
+      const sig = [t.task_status, t.amount_collected, t.cash_deposit_status, t.workflow_state,
+                   (t.device_installs||[]).length, t.last_tech_activity, t.updated_at].join('|');
+      if(sig !== window._detailLastSig){
+        window._detailLastSig = sig;
+        // Re-render in place without the loading flash
+        if(String((_detailTask||{}).id) === String(openId)) viewTask(openId);
+      }
+    }catch(e){}
+  }, 7000);
 }
 
 function openEditFromDetail(){
