@@ -3485,15 +3485,21 @@ function openTechAttend(taskId){
 
   // Restore ANY already-pushed devices from a previous session (partial progress supported)
   const savedInstalls = _detailTask?.device_installs || [];
-  savedInstalls.forEach(d => {
-    if(d && d.gps_serial_no && d.name_on_server && d.device_index){
-      _attendSavedDevices[parseInt(d.device_index)] = {
-        pushed:true, imei:d.gps_serial_no, device_name:d.name_on_server,
-        server_name:d.server_name, plate_number:d.vehicle_number, vehicle_type:d.vehicle_type,
+  savedInstalls.forEach((d, pos) => {
+    if(d && d.gps_serial_no && d.name_on_server){
+      // Fall back to array position (1-based) when device_index is missing on older records
+      const slot = parseInt(d.device_index) || (pos + 1);
+      _attendSavedDevices[slot] = {
+        pushed:true,
+        imei:d.gps_serial_no, gps_serial_no:d.gps_serial_no,
+        device_name:d.name_on_server, name_on_server:d.name_on_server,
+        server_name:d.server_name, plate_number:d.vehicle_number, vehicle_number:d.vehicle_number,
+        vehicle_type:d.vehicle_type,
         installation_date:d.installation_date, expiration_date:d.expiration_date,
         server_id:d.server_id, device_id:d.device_id,
         access_given: (String(d.access_given)==='1'||d.access_given===1||d.access_given===true),
         access_email: d.access_email||'',
+        paid: (parseFloat(_detailTask?.amount_collected||0) > 0),
       };
     }
   });
@@ -3639,8 +3645,11 @@ async function submitTechAttend(){
     let _doneCount = 0;
     for(let i=1; i<=_attendTaskQty; i++){
       const s = _attendSavedDevices[i];
-      if(s && s.gps_serial_no) _doneCount++;
+      if(s && (s.gps_serial_no || s.imei || s.pushed)) _doneCount++;
     }
+    // Also honour devices already saved on the task from a prior session
+    const _priorInstalls = (_detailTask?.device_installs||[]).filter(d=>d && d.gps_serial_no).length;
+    if(_priorInstalls > _doneCount) _doneCount = _priorInstalls;
     if(_doneCount === 0){
       alert('Please install and save at least one device before submitting.');
       btn.disabled=false; btn.textContent='✅ Submit — Request Approval'; return;
