@@ -193,7 +193,7 @@ case 'ping':
 case 'make_req_link':
     require_once __DIR__.'/req_token.php';
     $rtype = trim($body['type'] ?? $_GET['type'] ?? '');
-    $allowed = ['troubleshoot','vehicle-change','gps-remove'];
+    $allowed = ['troubleshoot','vehicle-change','gps-remove','re-adding'];
     if(!in_array($rtype, $allowed)){ echo json_encode(['error'=>'Invalid type']); break; }
     $rprice = isset($body['price']) ? floatval($body['price']) : 0;
     $rgst   = !empty($body['gst']) ? 1 : 0;
