@@ -300,7 +300,7 @@
       hint='✅ Customer shared location — tap Navigate to start (your trip is recorded)'; hintCls='hint-green';
     } else {
       btn='<button class="act-btn act-red" id="loc-btn" onclick="reachedLocation()"><div class="ico">📍</div><div class="l">Reached</div><div class="s">Confirm arrival</div></button>';
-      hint='🧭 On the way — tap Reached when you arrive. <a target="_blank" href="https://www.google.com/maps/dir/?api=1&destination='+loc.lat+','+loc.lng+'" style="color:#1f5fd6;font-weight:700">Reopen map</a>'; hintCls='hint-amber';
+      hint='🧭 On the way — tap Reached when you arrive. <a href="#" onclick="openMapsNavigation('+loc.lat+','+loc.lng+');return false;" style="color:#1f5fd6;font-weight:700">Reopen navigation</a>'; hintCls='hint-amber';
     }
 
     // Two equal buttons in a row, slim hint line BELOW
@@ -323,11 +323,36 @@
     } else { alert('Could not create location link. Please try again.'); if(btn)btn.style.opacity='1'; }
   }
   function pollLocation(n){ if(n>40)return; setTimeout(async()=>{const s=await api('check_customer_location',{id:_curTask.id});if(s&&s.has_location){toast('✅ Customer shared their location!');renderActionArea();}else pollLocation(n+1);},3000); }
+  function openMapsNavigation(lat,lng){
+    const ua=navigator.userAgent||'';
+    const isAndroid=/Android/i.test(ua);
+    const isIOS=/iPhone|iPad|iPod/i.test(ua);
+    let url;
+    if(isAndroid){
+      // launches turn-by-turn navigation directly in the Google Maps app
+      url='google.navigation:q='+lat+','+lng+'&mode=d';
+    } else if(isIOS){
+      url='https://www.google.com/maps/dir/?api=1&destination='+lat+','+lng+'&travelmode=driving&dir_action=navigate';
+    } else {
+      url='https://www.google.com/maps/dir/?api=1&destination='+lat+','+lng+'&travelmode=driving';
+    }
+    // Use a real anchor click so Android hands off to the Maps app (window.open is often blocked)
+    const a=document.createElement('a');
+    a.href=url; a.target='_blank'; a.rel='noopener';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    // Safety fallback: if the app didn't take over, open the web maps URL
+    setTimeout(()=>{ if(isAndroid && !document.hidden){ window.location.href='https://www.google.com/maps/dir/?api=1&destination='+lat+','+lng+'&travelmode=driving&dir_action=navigate'; } },1200);
+  }
+
   async function startNav(lat,lng){
     const btn=document.getElementById('loc-btn'); if(btn)btn.style.opacity='.6';
-    try{ toast('📍 Capturing your start point…'); const pos=await getPos();
+    try{
+      toast('📍 Capturing your start point…');
+      const pos=await getPos();
       await apiPost('save_trip_start',{id:_curTask.id,lat:pos.lat,lng:pos.lng});
-      window.open('https://www.google.com/maps/dir/?api=1&destination='+lat+','+lng,'_blank'); renderActionArea();
+      toast('🧭 Opening Google Maps navigation…');
+      openMapsNavigation(lat,lng);
+      renderActionArea();
     }catch(e){ alert(e.message||'Could not capture start point.'); if(btn)btn.style.opacity='1'; }
   }
   async function reachedLocation(){
