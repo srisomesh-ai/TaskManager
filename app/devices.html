@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0E5C5C">
+<title>BharatGPS — My Devices</title>
+<style>
+  :root{--teal-dark:#0E5C5C;--teal:#137272;--accent:#16a34a;--bg:#f0f4f8;--card:#fff;
+    --text:#0f172a;--text2:#475569;--text3:#94a3b8;--border:#e8edf3;--green:#0a7d6b}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:'Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;min-height:100dvh}
+
+  .hdr{background:linear-gradient(135deg,var(--teal-dark),var(--teal));color:#fff;
+    padding:calc(12px + env(safe-area-inset-top)) 12px 14px;position:sticky;top:0;z-index:10;box-shadow:0 2px 12px rgba(0,0,0,.15)}
+  .hdr-row{display:flex;align-items:center;gap:10px}
+  .back{background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:9px;width:38px;height:38px;font-size:18px;cursor:pointer;flex-shrink:0}
+  .back:active{background:rgba(255,255,255,.28)}
+  .hdr-title{font-size:18px;font-weight:800}
+  .hdr-sub{font-size:12px;color:rgba(255,255,255,.72);margin-top:1px}
+
+  /* sticky search + summary */
+  .toolbar{position:sticky;top:calc(58px + env(safe-area-inset-top));z-index:9;background:var(--bg);padding:12px 12px 6px}
+  .search{position:relative}
+  .search .si{position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:15px;opacity:.5}
+  .search input{width:100%;height:46px;border:1.5px solid var(--border);border-radius:12px;background:var(--card);
+    padding:0 40px 0 40px;font-size:15px;color:var(--text);outline:none}
+  .search input:focus{border-color:var(--teal)}
+  .search .clr{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:16px;padding:8px;opacity:.5;cursor:pointer}
+  .count-row{display:flex;gap:8px;overflow-x:auto;padding:10px 2px 2px;scrollbar-width:none}
+  .count-row::-webkit-scrollbar{display:none}
+  .cbadge{flex-shrink:0;background:var(--card);border:1.5px solid var(--border);border-radius:20px;padding:6px 13px;font-size:12px;font-weight:700;color:var(--text2)}
+  .cbadge.on{background:var(--teal);border-color:var(--teal);color:#fff}
+  .cbadge b{font-weight:800}
+
+  .list{padding:4px 12px calc(24px + env(safe-area-inset-bottom))}
+  .dev{background:var(--card);border-radius:13px;padding:13px 14px;margin-bottom:9px;box-shadow:0 2px 8px rgba(15,23,42,.05);
+    display:flex;align-items:center;gap:12px}
+  .dev-ic{width:40px;height:40px;border-radius:11px;background:rgba(10,125,107,.1);display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
+  .dev-main{flex:1;min-width:0}
+  .dev-name{font-size:14px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dev-imei{font-size:12px;font-family:monospace;color:var(--green);margin-top:2px}
+  .dev-sub{font-size:11px;color:var(--text3);margin-top:3px}
+  .dev-srv{flex-shrink:0;text-align:right}
+  .srv-tag{font-size:10px;font-weight:700;background:#e0f2fe;color:#0369a1;padding:3px 8px;border-radius:10px;white-space:nowrap}
+  .stat-tag{font-size:9px;color:var(--text3);margin-top:5px;display:block}
+
+  .empty{text-align:center;padding:60px 20px;color:var(--text3)}
+  .empty .ico{font-size:44px;margin-bottom:10px}
+  .loading{text-align:center;padding:50px;color:var(--text3);font-size:14px}
+  .spin{display:inline-block;width:20px;height:20px;border:2.5px solid var(--border);border-top-color:var(--teal);border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle;margin-right:8px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+  <div class="hdr">
+    <div class="hdr-row">
+      <button class="back" onclick="location.href='dashboard.html'">←</button>
+      <div>
+        <div class="hdr-title">📦 My Devices</div>
+        <div class="hdr-sub" id="h-sub">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="search">
+      <span class="si">🔍</span>
+      <input type="text" id="q" placeholder="Search name, IMEI, model…" oninput="render()" autocapitalize="none" spellcheck="false">
+      <button class="clr" onclick="document.getElementById('q').value='';render()">✕</button>
+    </div>
+    <div class="count-row" id="server-filters"></div>
+  </div>
+
+  <div class="list" id="list"><div class="loading"><span class="spin"></span>Loading devices…</div></div>
+
+<script>
+  const API='../api/index.php';
+  const authToken=localStorage.getItem('bgps_tech_token')||'';
+  if(!authToken){ location.href='login.html'; }
+  let rows=[], srvFilter='';
+
+  async function api(action,params={}){
+    const url=API+'?action='+action+'&'+new URLSearchParams(params);
+    const r=await fetch(url,{cache:'no-store',headers:{'X-Auth-Token':authToken}});
+    const t=await r.text();
+    try{return JSON.parse(t);}catch(e){console.error('non-JSON',action,t.slice(0,200));return {};}
+  }
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+  function srvShort(s){return String(s||'').replace('bharatgps.','')||'—';}
+
+  function setSrv(el,val){ srvFilter=val; document.querySelectorAll('.cbadge').forEach(c=>c.classList.remove('on')); el.classList.add('on'); render(); }
+
+  function render(){
+    const q=(document.getElementById('q').value||'').toLowerCase().trim();
+    let list=rows.slice();
+    if(srvFilter) list=list.filter(r=>String(r.server||'')===srvFilter);
+    if(q) list=list.filter(r=>[(r.device_name||''),(r.imei||''),(r.model||''),(r.server||'')].join(' ').toLowerCase().includes(q));
+
+    const listEl=document.getElementById('list');
+    if(!list.length){ listEl.innerHTML='<div class="empty"><div class="ico">📭</div><div style="font-weight:700">No devices found</div><div style="font-size:13px;margin-top:4px">Try a different search.</div></div>'; return; }
+
+    // Render (cap DOM for very large lists, but note total)
+    const CAP=400;
+    const shown=list.slice(0,CAP);
+    let html=shown.map(r=>`<div class="dev">
+      <div class="dev-ic">📡</div>
+      <div class="dev-main">
+        <div class="dev-name">${esc(r.device_name||'Device')}</div>
+        <div class="dev-imei">${esc(r.imei||'—')}</div>
+        <div class="dev-sub">${esc(r.model||'—')}${r.assigned_at?' · '+esc(String(r.assigned_at).slice(0,10)):''}</div>
+      </div>
+      <div class="dev-srv"><span class="srv-tag">${esc(srvShort(r.server))}</span>${r.status?'<span class="stat-tag">'+esc(r.status)+'</span>':''}</div>
+    </div>`).join('');
+    if(list.length>CAP) html+='<div style="text-align:center;color:var(--text3);font-size:12px;padding:14px">Showing first '+CAP+' of '+list.length+'. Use search to narrow down.</div>';
+    listEl.innerHTML=html;
+  }
+
+  function buildServerFilters(){
+    const counts={};
+    rows.forEach(r=>{const s=r.server||'';counts[s]=(counts[s]||0)+1;});
+    const servers=Object.keys(counts).sort();
+    let html='<span class="cbadge on" onclick="setSrv(this,\'\')">All <b>'+rows.length+'</b></span>';
+    servers.forEach(s=>{ html+='<span class="cbadge" onclick="setSrv(this,\''+esc(s)+'\')">'+esc(srvShort(s))+' <b>'+counts[s]+'</b></span>'; });
+    document.getElementById('server-filters').innerHTML=html;
+  }
+
+  async function load(){
+    const d=await api('dev_assignments_get');
+    if(d&&d.error&&/auth/i.test(d.error)){ location.href='login.html'; return; }
+    rows=(d&&d.assignments)?d.assignments:[];
+    document.getElementById('h-sub').textContent=rows.length+' device'+(rows.length!==1?'s':'')+' assigned to you';
+    buildServerFilters();
+    render();
+  }
+  load();
+</script>
+</body>
+</html>
