@@ -128,6 +128,10 @@
   .icon-opt img{max-width:100%;max-height:100%}
   .dev-done{background:var(--green-bg);border:1.5px solid var(--green);border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:13px;color:var(--green);font-weight:700}
 
+  .pay-modes{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .pmode{padding:14px;border:2px solid var(--border);border-radius:10px;background:var(--surface);font-size:14px;font-weight:800;color:var(--text2);cursor:pointer}
+  .pmode.sel{border-color:var(--accent);background:var(--accent-light);color:var(--accent)}
+
   .loading{text-align:center;padding:50px;color:var(--text3);font-size:14px}
   .spin{display:inline-block;width:20px;height:20px;border:2.5px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle;margin-right:8px}
   @keyframes sp{to{transform:rotate(360deg)}}
@@ -186,6 +190,73 @@
     </div>
     <div class="inst-steps" id="inst-steps"></div>
     <div class="inst-bd" id="inst-bd"></div>
+  </div>
+
+  <!-- PAYMENT bottom sheet -->
+  <div class="sheet-ov" id="pay-ov" onclick="closePayment()"></div>
+  <div class="sheet" id="pay-sheet">
+    <div class="sheet-hd">
+      <div class="t">💰 Collect Payment</div>
+      <div class="r" id="pay-ref"></div>
+    </div>
+    <div class="sheet-bd">
+      <div id="pay-agreed" style="background:var(--surface2);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px"></div>
+      <div class="tu-lbl">Amount collected now *</div>
+      <input class="inst-in" type="number" id="pay-amount" placeholder="₹ enter amount" inputmode="numeric" oninput="payBalance()" style="margin-bottom:6px">
+      <div id="pay-bal" style="font-size:13px;margin-bottom:12px"></div>
+
+      <div class="tu-lbl">Payment mode *</div>
+      <div class="pay-modes" id="pay-modes">
+        <button class="pmode" data-m="Cash" onclick="selPayMode('Cash')">💵 Cash</button>
+        <button class="pmode" data-m="UPI" onclick="selPayMode('UPI')">📲 UPI</button>
+        <button class="pmode" data-m="Bank Transfer" onclick="selPayMode('Bank Transfer')">🏦 Bank</button>
+        <button class="pmode" data-m="Cheque" onclick="selPayMode('Cheque')">🧾 Cheque</button>
+      </div>
+
+      <div id="pay-cash-warn" style="display:none;background:var(--amber-bg);border:1.5px solid var(--amber);border-radius:9px;padding:10px 12px;font-size:12px;color:var(--saffron);font-weight:700;margin-top:12px">⏰ Cash must be deposited within 24 hours. You'll get a reminder.</div>
+
+      <div id="pay-cash-reason-box" style="display:none;background:#fff3cd;border:1.5px solid #e07b00;border-radius:9px;padding:12px;margin-top:12px">
+        <div style="font-size:12px;font-weight:800;color:#c76e00;margin-bottom:6px">Customer agreed <span id="pay-agreed-mode"></span> — why cash?</div>
+        <select class="inst-in" id="pay-cash-reason" onchange="payCashReason()">
+          <option value="">Select reason</option>
+          <option value="UPI not available">UPI not available on customer phone</option>
+          <option value="No internet connection">No internet connection</option>
+          <option value="Bank app not working">Bank app not working</option>
+          <option value="Customer requested cash">Customer requested cash payment</option>
+          <option value="Technical issue with UPI">Technical issue with UPI</option>
+          <option value="Other">Other reason</option>
+        </select>
+      </div>
+
+      <div id="pay-cheque-box" style="display:none;margin-top:12px">
+        <div class="tu-lbl">Cheque number *</div>
+        <input class="inst-in" id="pay-cheque-no" placeholder="Cheque number" style="margin-bottom:8px">
+        <div class="tu-lbl">Bank (optional)</div>
+        <input class="inst-in" id="pay-cheque-bank" placeholder="Bank name">
+      </div>
+
+      <div id="pay-balance-box" style="display:none;background:#fff3cd;border:1.5px solid #e07b00;border-radius:9px;padding:12px;margin-top:12px">
+        <div style="font-size:12px;font-weight:800;color:#c76e00;margin-bottom:6px">Balance <span id="pay-bal-amt"></span> pending — reason *</div>
+        <select class="inst-in" id="pay-balance-reason" style="margin-bottom:8px">
+          <option value="">Select reason</option>
+          <option value="Customer will pay remaining via UPI later">Customer will pay remaining via UPI later</option>
+          <option value="Customer will pay on next visit">Will collect on next technician visit</option>
+          <option value="Split payment agreed">Split payment agreed by customer</option>
+          <option value="Customer does not have full amount now">Customer does not have full amount now</option>
+          <option value="Customer paying in instalments">Customer paying in instalments</option>
+        </select>
+        <div class="tu-lbl">Collect balance by *</div>
+        <input class="inst-in" type="date" id="pay-balance-date">
+      </div>
+
+      <div class="tu-lbl" style="margin-top:14px">Reference / notes</div>
+      <input class="inst-in" id="pay-notes" placeholder="UPI ref, remarks (optional)">
+      <input type="hidden" id="pay-mode">
+    </div>
+    <div class="sheet-ft">
+      <button class="btn btn-cancel" onclick="closePayment()">Cancel</button>
+      <button class="btn btn-save" id="pay-save" onclick="savePaymentApp()">💰 Save Payment</button>
+    </div>
   </div>
 
   <div class="toast" id="toast"></div>
@@ -805,7 +876,115 @@
   }
 
 
-  function openPaymentSoon(){ toast('💰 Payment & Submit — coming next.'); }
+  function openPaymentSoon(){ openPayment(); }
+
+  // ═══════════════ PAYMENT (matches web) ═══════════════
+  const PM_ROUND_TOLERANCE=15;
+  let _payMode='', _payAgreed='';
+
+  function openPayment(){
+    const t=_curTask;
+    _payMode=''; _payAgreed=t.payment_mode||'';
+    document.getElementById('pay-ref').textContent=(t.task_id||'')+' · '+(t.customer_name||'');
+    document.getElementById('pay-amount').value='';
+    document.getElementById('pay-notes').value='';
+    document.getElementById('pay-mode').value='';
+    document.getElementById('pay-cheque-no').value='';
+    document.getElementById('pay-cheque-bank').value='';
+    document.getElementById('pay-balance-reason').value='';
+    document.getElementById('pay-balance-date').value='';
+    document.getElementById('pay-cash-reason').value='';
+    ['pay-cash-reason-box','pay-cash-warn','pay-cheque-box','pay-balance-box'].forEach(id=>document.getElementById(id).style.display='none');
+    document.querySelectorAll('.pmode').forEach(b=>b.classList.remove('sel'));
+    document.getElementById('pay-bal').innerHTML='';
+
+    const price=parseFloat(t.price_to_collect||0), coll=parseFloat(t.amount_collected||0);
+    const qty=parseInt(t.device_qty||1)||1;
+    const installed=(t.device_installs||[]).filter(d=>d&&d.gps_serial_no).length||0;
+    const expected=(installed>0&&installed<qty)?Math.round(price*installed/qty):price;
+    const bal=expected-coll;
+    document.getElementById('pay-agreed').innerHTML=
+      '<div style="font-size:10px;font-weight:800;color:var(--accent2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Payment Agreement</div>'+
+      '<div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--text3)">Customer agreed</span><strong>'+(_payAgreed||'—')+'</strong></div>'+
+      '<div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--text3)">Total price</span><strong>₹'+price.toLocaleString('en-IN')+'</strong></div>'+
+      ((installed>0&&installed<qty)?'<div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--text3)">For '+installed+' of '+qty+' device(s)</span><strong>₹'+expected.toLocaleString('en-IN')+'</strong></div>':'')+
+      '<div style="display:flex;justify-content:space-between"><span style="color:var(--text3)">Balance due</span><strong style="color:var(--red)">₹'+bal.toLocaleString('en-IN')+'</strong></div>';
+
+    document.getElementById('pay-ov').classList.add('open');
+    document.getElementById('pay-sheet').classList.add('open');
+  }
+  function closePayment(){ document.getElementById('pay-ov').classList.remove('open'); document.getElementById('pay-sheet').classList.remove('open'); }
+
+  function payBalance(){
+    const t=_curTask, price=parseFloat(t.price_to_collect||0), prev=parseFloat(t.amount_collected||0);
+    const now=parseFloat(document.getElementById('pay-amount').value||0);
+    const bal=price-prev-now, el=document.getElementById('pay-bal'), balBox=document.getElementById('pay-balance-box');
+    if(now<=0){ el.innerHTML=''; balBox.style.display='none'; return; }
+    if(bal<=PM_ROUND_TOLERANCE){
+      el.innerHTML='<span style="color:var(--green);font-weight:700">✅ '+(bal<=0?'Fully paid':'Accepted as full (₹'+Math.abs(bal)+' rounding)')+'</span>';
+      balBox.style.display='none';
+    } else {
+      el.innerHTML='<span style="color:var(--red);font-weight:700">₹'+bal.toLocaleString('en-IN')+' balance remaining</span>';
+      balBox.style.display='';
+      document.getElementById('pay-bal-amt').textContent='₹'+bal.toLocaleString('en-IN');
+      const bd=document.getElementById('pay-balance-date');
+      if(bd&&!bd.value){ const d=new Date();d.setDate(d.getDate()+1); bd.value=d.toISOString().slice(0,10); }
+    }
+  }
+
+  function selPayMode(mode){
+    _payMode=mode; document.getElementById('pay-mode').value=mode;
+    document.querySelectorAll('.pmode').forEach(b=>b.classList.toggle('sel',b.dataset.m===mode));
+    ['pay-cash-reason-box','pay-cash-warn','pay-cheque-box'].forEach(id=>document.getElementById(id).style.display='none');
+    const directModes=['Cash','UPI','Bank Transfer','Cheque'];
+    const mismatch=directModes.includes(_payAgreed)&&_payAgreed&&_payAgreed!==mode;
+    if(mode==='Cash'){
+      if(mismatch){ document.getElementById('pay-cash-reason-box').style.display=''; document.getElementById('pay-agreed-mode').textContent=_payAgreed; document.getElementById('pay-cash-reason').value=''; }
+      else document.getElementById('pay-cash-warn').style.display='';
+    } else if(mode==='Cheque'){ document.getElementById('pay-cheque-box').style.display=''; }
+  }
+  function payCashReason(){ document.getElementById('pay-cash-warn').style.display=document.getElementById('pay-cash-reason').value?'':'none'; }
+
+  async function savePaymentApp(){
+    const t=_curTask;
+    const amount=parseFloat(document.getElementById('pay-amount').value||0);
+    const mode=document.getElementById('pay-mode').value;
+    const notes=document.getElementById('pay-notes').value.trim();
+    if(!amount||amount<=0){ alert('⚠️ No payment collected. Collect at least a partial payment to proceed. If the customer refuses, escalate to your manager.'); return; }
+    if(!mode){ alert('Please select payment mode.'); return; }
+    const price=parseFloat(t.price_to_collect||0), prev=parseFloat(t.amount_collected||0);
+    const total=prev+amount, bal=price-total, isFullyPaid=bal<=PM_ROUND_TOLERANCE;
+    const directModes=['Cash','UPI','Bank Transfer','Cheque'];
+    const mismatch=directModes.includes(_payAgreed)&&_payAgreed&&_payAgreed!==mode;
+    if(mode==='Cash'&&mismatch&&!document.getElementById('pay-cash-reason').value){ alert('Please select the reason for cash payment.'); return; }
+    if(mode==='Cheque'&&!document.getElementById('pay-cheque-no').value.trim()){ alert('Please enter the cheque number.'); return; }
+    let balReason='',balDate='';
+    if(!isFullyPaid&&bal>0){
+      balReason=document.getElementById('pay-balance-reason').value; balDate=document.getElementById('pay-balance-date').value;
+      if(!balReason){ alert('Please select the reason for balance pending.'); return; }
+      if(!balDate){ alert('Please enter when you will collect the balance.'); return; }
+    }
+    const btn=document.getElementById('pay-save'); btn.textContent='Saving…'; btn.disabled=true;
+    const cashReason=document.getElementById('pay-cash-reason').value;
+    const chqNo=document.getElementById('pay-cheque-no').value.trim();
+    const chqBank=document.getElementById('pay-cheque-bank').value.trim();
+    const overridePart=(mismatch&&cashReason)?(' | Cash reason: '+cashReason):'';
+    const chequePart=(mode==='Cheque'&&chqNo)?(' | Cheque No: '+chqNo+(chqBank?' ('+chqBank+')':'')):'';
+    const cashDep=(mode==='Cash')?' | ⏰ Cash to be deposited within 24 hours':'';
+    const balPart=(!isFullyPaid&&balReason)?(' | Balance reason: '+balReason+' | Collect by: '+balDate):'';
+    const fullPaidPart=isFullyPaid&&bal>0?(' (₹'+(Math.round(bal*100)/100)+' rounding accepted)'):'';
+    const remark='💰 Payment collected: ₹'+amount.toLocaleString('en-IN')+' via '+mode+fullPaidPart+
+      (notes?(' | Ref: '+notes):'')+' | Total: ₹'+total.toLocaleString('en-IN')+
+      (isFullyPaid?' | ✅ Fully paid':' | Balance due: ₹'+bal.toLocaleString('en-IN'))+overridePart+chequePart+cashDep+balPart;
+    const body={id:t.id,amount_collected:total,payment_mode:mode,remark};
+    if(!isFullyPaid&&balDate){ body.reminder_date=balDate; }
+    else if(mode==='Cash'){ const d=new Date();d.setDate(d.getDate()+1); body.reminder_date=d.toISOString().slice(0,10); body.cash_deposit_status='pending'; }
+    const res=await apiPost('update_task',body);
+    btn.textContent='💰 Save Payment'; btn.disabled=false;
+    if(res&&res.success){ toast('✅ Payment saved'); closePayment(); setTimeout(load,400); }
+    else alert(res.error||'Save failed. Please try again.');
+  }
+
 
   load();
 </script>
