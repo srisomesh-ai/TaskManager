@@ -54,6 +54,16 @@
   .dev-chip .di{font-size:11px;color:var(--text3);margin-top:3px}
   .dev-empty{color:var(--text3);font-size:13px;padding:10px 16px}
 
+  /* my devices open card */
+  .dev-open-card{background:var(--card);border-radius:16px;padding:15px 16px;box-shadow:0 2px 10px rgba(15,23,42,.06);
+    display:flex;align-items:center;gap:14px;cursor:pointer;transition:transform .05s}
+  .dev-open-card:active{transform:scale(.99)}
+  .doc-ic{width:48px;height:48px;border-radius:14px;background:#e0f2fe;display:flex;align-items:center;justify-content:center;font-size:23px;flex-shrink:0}
+  .doc-main{flex:1;min-width:0}
+  .doc-n{font-size:22px;font-weight:800;line-height:1}
+  .doc-l{font-size:12px;color:var(--text3);font-weight:600;margin-top:4px}
+  .doc-arrow{font-size:28px;color:var(--text3);font-weight:300;flex-shrink:0}
+
   /* filter chips */
   .chips{display:flex;gap:8px;overflow-x:auto;padding:6px 14px 2px;scrollbar-width:none}
   .chips::-webkit-scrollbar{display:none}
@@ -122,8 +132,17 @@
     <div class="pill total"><div class="n" id="s-total">–</div><div class="l">Total</div></div>
   </div>
 
-  <div class="sec"><h2>📦 My Devices</h2><span class="link" id="dev-count-link"></span></div>
-  <div class="dev-strip" id="dev-strip"><div class="dev-empty">Loading…</div></div>
+  <div class="sec"><h2>📦 My Devices</h2></div>
+  <div style="padding:0 14px">
+    <div class="dev-open-card" onclick="location.href='devices.html'">
+      <div class="doc-ic">📡</div>
+      <div class="doc-main">
+        <div class="doc-n" id="dev-open-count">–</div>
+        <div class="doc-l">Devices assigned to you · tap to view all</div>
+      </div>
+      <div class="doc-arrow">›</div>
+    </div>
+  </div>
 
   <div class="sec"><h2>📋 My Tasks</h2></div>
   <div class="chips" id="chips">
@@ -187,10 +206,8 @@
     const d=await api('dev_assignments_get');
     const rows=(d&&d.assignments)?d.assignments:[];
     document.getElementById('t-devices').textContent=rows.length;
-    document.getElementById('dev-count-link').textContent=rows.length?rows.length+' total':'';
-    const strip=document.getElementById('dev-strip');
-    if(!rows.length){ strip.innerHTML='<div class="dev-empty">No devices assigned to you.</div>'; return; }
-    strip.innerHTML=rows.map(r=>`<div class="dev-chip"><div class="dn">${esc(r.device_name||r.imei||'—')}</div><div class="di">${esc(r.model||'—')} · ${esc(r.server||'')}</div></div>`).join('');
+    const oc=document.getElementById('dev-open-count');
+    if(oc) oc.textContent=rows.length;
   }
 
   async function load(){
