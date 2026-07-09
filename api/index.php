@@ -1116,6 +1116,30 @@ case 'mark_access_given':
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
+// ---- SAVE FCM DEVICE TOKEN (for push notifications) ----
+case 'save_fcm_token':
+    $fcm = trim($body['fcm_token'] ?? '');
+    $platform = trim($body['platform'] ?? 'android');
+    if ($fcm === '') { echo json_encode(['error'=>'Missing fcm_token']); break; }
+    try {
+        try { $pdo->exec("ALTER TABLE users ADD COLUMN fcm_token VARCHAR(255) NULL"); } catch(Exception $e){}
+        try { $pdo->exec("ALTER TABLE users ADD COLUMN fcm_platform VARCHAR(20) NULL"); } catch(Exception $e){}
+        try { $pdo->exec("ALTER TABLE users ADD COLUMN fcm_updated_at DATETIME NULL"); } catch(Exception $e){}
+        $pdo->prepare("UPDATE users SET fcm_token=?, fcm_platform=?, fcm_updated_at=NOW() WHERE id=?")
+            ->execute([$fcm, $platform, $userId]);
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// ---- CLEAR FCM TOKEN (on logout) ----
+case 'clear_fcm_token':
+    try {
+        try { $pdo->exec("ALTER TABLE users ADD COLUMN fcm_token VARCHAR(255) NULL"); } catch(Exception $e){}
+        $pdo->prepare("UPDATE users SET fcm_token=NULL WHERE id=?")->execute([$userId]);
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'save_device_install':
     $tid = intval($body['task_id']??0);
     $idx = intval($body['device_index']??1);
