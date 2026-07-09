@@ -603,6 +603,17 @@ case 'create_task':
                 if($tc && !empty($tc['email'])){
                     sendTaskCreatedTech($td, $tc['email'], $tc['name']);
                 }
+                // Push notification to the assigned technician (safe no-op if no token)
+                try {
+                    require_once __DIR__.'/fcm_send.php';
+                    $pnBody = trim(($td['customer_name']??'').' · '.($td['device_details']??'GPS Installation'));
+                    if(!empty($td['location'])) $pnBody .= ' · '.$td['location'];
+                    fcm_send_to_user($pdo, $at, '🔔 New Task Assigned', $pnBody, [
+                        'type'    => 'new_task',
+                        'task_id' => (string)($td['id'] ?? ''),
+                        'url'     => 'task.html?id='.($td['id'] ?? ''),
+                    ]);
+                } catch(Exception $e){ error_log('FCM new-task push error: '.$e->getMessage()); }
             }
 
             // Email customer if email provided
