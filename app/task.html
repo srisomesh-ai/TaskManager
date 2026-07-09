@@ -65,6 +65,38 @@
   .fb-done{background:var(--green-bg);border:1.5px solid var(--green);color:#166534}
   .trip-line{background:var(--surface2);border-radius:8px;padding:8px 12px;font-size:11px;color:var(--text3);margin-top:10px}
 
+  .act-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
+  .upd-btn{background:var(--surface2);border:2px solid var(--accent);border-radius:10px;padding:16px 12px;text-align:center;cursor:pointer}
+  .upd-btn:active{background:var(--accent-light)}
+  .upd-btn .ico{font-size:28px;margin-bottom:6px}
+  .upd-btn .l{font-size:14px;font-weight:800;color:var(--accent)}
+  .upd-btn .s{font-size:11px;color:var(--text3);margin-top:3px}
+  /* Update modal (bottom sheet) */
+  .sheet-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:none}
+  .sheet-ov.open{display:block}
+  .sheet{position:fixed;left:0;right:0;bottom:0;z-index:201;background:var(--surface);border-radius:20px 20px 0 0;
+    max-height:92vh;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .28s cubic-bezier(.4,0,.2,1)}
+  .sheet.open{transform:translateY(0)}
+  .sheet-hd{padding:16px 18px 10px;border-bottom:1px solid var(--border);flex-shrink:0}
+  .sheet-hd .t{font-size:16px;font-weight:900;color:var(--text)}
+  .sheet-hd .r{font-size:12px;color:var(--text3);margin-top:2px}
+  .sheet-bd{padding:14px 18px;overflow-y:auto}
+  .sheet-ft{padding:12px 18px calc(14px + env(safe-area-inset-bottom));border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:10px}
+  .tu-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+  .tu-card{border:2px solid var(--border);border-radius:9px;padding:10px 6px;cursor:pointer;background:var(--surface);text-align:center}
+  .tu-card:active{background:var(--accent-light)}
+  .tu-card.selected{background:var(--accent-light);border-color:var(--accent)}
+  .tu-card .ci{font-size:20px;margin-bottom:4px}
+  .tu-card .ct{font-size:11px;font-weight:800;color:var(--text);line-height:1.2}
+  .tu-card.selected .ct{color:var(--accent)}
+  .tu-card .cs{font-size:9px;color:var(--text3);margin-top:2px}
+  .tu-lbl{font-size:11px;font-weight:800;color:var(--text2);margin:2px 0 6px;text-transform:uppercase;letter-spacing:.4px}
+  .tu-ta{width:100%;min-height:80px;border:1.5px solid var(--border);border-radius:9px;padding:11px;font-size:14px;font-family:inherit;color:var(--text);outline:none;resize:vertical}
+  .tu-ta:focus{border-color:var(--accent)}
+  .tu-rem{background:var(--amber-bg);border:1.5px solid var(--amber);border-radius:9px;padding:10px 12px;font-size:12px;color:var(--saffron);font-weight:700;margin-top:10px;display:none}
+  .btn{flex:1;border:none;border-radius:10px;padding:14px;font-size:14px;font-weight:800;cursor:pointer}
+  .btn-cancel{background:var(--surface2);color:var(--text2);border:1.5px solid var(--border)}
+  .btn-save{background:var(--accent);color:#fff}
   .loading{text-align:center;padding:50px;color:var(--text3);font-size:14px}
   .spin{display:inline-block;width:20px;height:20px;border:2.5px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle;margin-right:8px}
   @keyframes sp{to{transform:rotate(360deg)}}
@@ -96,6 +128,25 @@
     <div class="loading"><span class="spin"></span>Loading task…</div>
   </div>
 
+  <!-- UPDATE (call log) bottom sheet -->
+  <div class="sheet-ov" id="upd-ov" onclick="closeUpdate()"></div>
+  <div class="sheet" id="upd-sheet">
+    <div class="sheet-hd">
+      <div class="t">📞 Update — Call Log</div>
+      <div class="r" id="upd-ref"></div>
+    </div>
+    <div class="sheet-bd">
+      <div class="tu-lbl">Quick response</div>
+      <div class="tu-grid" id="tu-grid"></div>
+      <div class="tu-lbl">What happened? *</div>
+      <textarea class="tu-ta" id="tu-discussed" placeholder="Describe what happened on the call/visit…"></textarea>
+      <div class="tu-rem" id="tu-rem"></div>
+    </div>
+    <div class="sheet-ft">
+      <button class="btn btn-cancel" onclick="closeUpdate()">Cancel</button>
+      <button class="btn btn-save" id="tu-save" onclick="submitUpdate()">💾 Save Update</button>
+    </div>
+  </div>
   <div class="toast" id="toast"></div>
 
 <script>
@@ -204,7 +255,7 @@
     const isLocked=['Awaiting Approval','Closed','Cancelled'].includes(t.task_status);
     document.getElementById('td-body').innerHTML=
       // ACTIONS panel (only if not locked)
-      (isLocked?'':'<div class="sec" id="td-tech-actions"><div class="sec-title t-accent">⚡ Actions</div><div id="action-area"><div style="color:var(--text3);font-size:13px">Loading…</div></div></div>')+
+      (isLocked?'':'<div class="sec" id="td-tech-actions"><div class="sec-title t-accent">⚡ Actions</div><div class="act-grid"><button class="upd-btn" onclick="openUpdate()"><div class="ico">📞</div><div class="l">Update</div><div class="s">Call log &amp; next step</div></button><div id="action-area"><div style="color:var(--text3);font-size:13px">Loading…</div></div></div></div>')+
       // locked banner
       (isLocked?'<div class="sec"><div style="background:'+(t.task_status==='Closed'?'var(--green-bg)':'var(--surface2)')+';border:1.5px solid '+(t.task_status==='Closed'?'var(--green)':'var(--border)')+';border-radius:8px;padding:14px;text-align:center"><div style="font-size:24px;margin-bottom:6px">'+(t.task_status==='Closed'?'✅':t.task_status==='Awaiting Approval'?'⏳':'❌')+'</div><div style="font-size:13px;font-weight:800;color:'+(t.task_status==='Closed'?'var(--green)':'var(--text2)')+'">'+({'Awaiting Approval':'⏳ Awaiting manager approval','Closed':'✅ Task closed','Cancelled':'❌ Task cancelled'}[t.task_status]||'🔒 Locked')+'</div></div></div>':'')+
       // INFO
@@ -276,6 +327,65 @@
       if(r&&r.success) toast('✅ Arrival recorded · '+(r.trip_km||0)+' km, '+(r.trip_minutes||0)+' min'); renderActionArea();
     }catch(e){ alert(e.message||'Could not record arrival.'); if(btn)btn.style.opacity='1'; }
   }
+
+  // ═══════════════ UPDATE (call log) — matches web ═══════════════
+  const TU_CARDS=[
+    {resp:'No answer',ico:'📵',t:'No Answer',s:'Nobody picked up',next:'Retry call in 2 hours',remind:2,prefill:'I called the customer but there was no answer. Will retry again shortly.'},
+    {resp:'Call back later',ico:'⏰',t:'Call Back Later',s:'Asked to call later',next:'Call back as requested',remind:4,prefill:'I called the customer. They picked up and asked me to call back later as they are busy right now.'},
+    {resp:'Called — come tomorrow',ico:'📅',t:'Come Tomorrow',s:'Called, come tomorrow',next:'Visit customer tomorrow',remind:24,prefill:'I called the customer. They confirmed availability and asked me to come tomorrow for the installation.'},
+    {resp:'Called — rescheduled',ico:'🗓️',t:'Rescheduled',s:'Requested reschedule',next:'Visit on rescheduled date',remind:24,prefill:'I called the customer. They requested to reschedule the installation. New date agreed and will be updated.'},
+    {resp:'Called — payment issue',ico:'💳',t:'Payment Issue',s:'Concern on payment',next:'Follow up on payment',remind:24,prefill:'I called the customer. They mentioned a concern regarding the payment. Will follow up to resolve this before visiting.'},
+    {resp:'Visited — not available',ico:'🚪',t:'Not Available',s:'Customer not at address',next:'Call customer to reschedule',remind:24,prefill:'I visited the customer location but the customer was not available at the address provided.'},
+    {resp:'Visited — vehicle not ready',ico:'🚗',t:'Vehicle Not Ready',s:'Vehicle not available',next:'Follow up when vehicle is ready',remind:48,prefill:'I visited the customer location. The vehicle was not available or ready for installation. Customer asked to reschedule when the vehicle is ready.'},
+    {resp:'Other',ico:'✏️',t:'Other',s:'Something else',next:'',remind:0,prefill:''}
+  ];
+  let _tuSel=null, _tuSubmitting=false;
+
+  function openUpdate(){
+    _tuSel=null;
+    document.getElementById('upd-ref').textContent=(_curTask.task_id||'')+' · '+(_curTask.customer_name||'');
+    document.getElementById('tu-discussed').value='';
+    document.getElementById('tu-rem').style.display='none';
+    document.getElementById('tu-grid').innerHTML=TU_CARDS.map((c,i)=>
+      '<div class="tu-card" onclick="selTu('+i+')" id="tu-c-'+i+'"><div class="ci">'+c.ico+'</div><div class="ct">'+c.t+'</div><div class="cs">'+c.s+'</div></div>').join('');
+    document.getElementById('upd-ov').classList.add('open');
+    document.getElementById('upd-sheet').classList.add('open');
+  }
+  function closeUpdate(){
+    document.getElementById('upd-ov').classList.remove('open');
+    document.getElementById('upd-sheet').classList.remove('open');
+  }
+  function selTu(i){
+    _tuSel=TU_CARDS[i];
+    document.querySelectorAll('.tu-card').forEach(c=>c.classList.remove('selected'));
+    document.getElementById('tu-c-'+i).classList.add('selected');
+    const ta=document.getElementById('tu-discussed');
+    ta.value=_tuSel.prefill; ta.focus();
+    const rem=document.getElementById('tu-rem');
+    if(_tuSel.remind>0){
+      const d=new Date(); d.setHours(d.getHours()+_tuSel.remind);
+      rem.style.display=''; rem.textContent='⏰ Follow-up reminder: '+d.toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+    } else rem.style.display='none';
+  }
+  async function submitUpdate(){
+    if(_tuSubmitting)return;
+    const discussed=document.getElementById('tu-discussed').value.trim();
+    if(!discussed){ alert('Please describe what happened.'); document.getElementById('tu-discussed').focus(); return; }
+    const parts=['📞 '+discussed];
+    if(_tuSel && _tuSel.resp!=='Other') parts.push('Customer: '+_tuSel.resp);
+    if(_tuSel && _tuSel.next) parts.push('Next step: '+_tuSel.next);
+    const body={id:_curTask.id, remark:parts.join(' | ')};
+    if(_tuSel && _tuSel.remind>0){ const d=new Date(); d.setHours(d.getHours()+_tuSel.remind); body.reminder_date=d.toISOString().slice(0,10); parts.push('Follow-up: '+body.reminder_date); body.remark=parts.join(' | '); }
+    _tuSubmitting=true;
+    const btn=document.getElementById('tu-save'); btn.textContent='Saving…'; btn.disabled=true;
+    try{
+      const res=await apiPost('update_task',body);
+      if(res && res.success){ toast('✅ Update saved'); closeUpdate(); setTimeout(load,400); }
+      else alert(res.error||'Update failed. Please try again.');
+    }catch(e){ alert('Connection error. Please try again.'); }
+    finally{ _tuSubmitting=false; btn.textContent='💾 Save Update'; btn.disabled=false; }
+  }
+
 
   load();
 </script>
