@@ -300,6 +300,51 @@
     </div>
   </div>
 
+  <!-- TROUBLESHOOT REPORT bottom sheet -->
+  <div class="sheet-ov" id="ts-ov" onclick="closeTroubleshoot()"></div>
+  <div class="sheet" id="ts-sheet">
+    <div class="sheet-hd">
+      <div class="t">🔧 Troubleshoot Report</div>
+      <div class="r" id="ts-ref"></div>
+    </div>
+    <div class="sheet-bd">
+      <div class="tu-lbl">What was the issue found? *</div>
+      <select class="inst-in" id="ts-issue" style="margin-bottom:12px">
+        <option value="">Select issue…</option>
+        <option>GPS offline — No power</option>
+        <option>GPS offline — SIM issue</option>
+        <option>GPS offline — Hardware fault</option>
+        <option>GPS offline — Wiring issue</option>
+        <option>GPS offline — Unknown</option>
+      </select>
+      <div class="tu-lbl">Steps taken to fix *</div>
+      <textarea class="inst-in" id="ts-steps" rows="3" placeholder="What did you do?" style="margin-bottom:12px"></textarea>
+      <div class="tu-lbl">Is GPS back online? *</div>
+      <select class="inst-in" id="ts-status" style="margin-bottom:12px">
+        <option value="">Select…</option>
+        <option value="yes">✅ Yes</option>
+        <option value="partial">⚠️ Partially</option>
+        <option value="no">❌ No</option>
+      </select>
+      <div class="tu-lbl">Hardware replaced?</div>
+      <select class="inst-in" id="ts-hw" onchange="tsToggleHw()" style="margin-bottom:12px">
+        <option value="no">No</option>
+        <option value="yes">Yes</option>
+      </select>
+      <div id="ts-hw-box" style="display:none;margin-bottom:12px">
+        <div class="tu-lbl">What was replaced?</div>
+        <input class="inst-in" id="ts-hw-txt" placeholder="e.g. GPS device, SIM, wiring harness">
+      </div>
+      <div class="tu-lbl">Remarks</div>
+      <textarea class="inst-in" id="ts-remarks" rows="2" placeholder="Optional"></textarea>
+      <div id="ts-err" style="display:none;color:var(--red);font-size:13px;font-weight:700;margin-top:10px"></div>
+    </div>
+    <div class="sheet-ft">
+      <button class="btn btn-cancel" onclick="closeTroubleshoot()">Cancel</button>
+      <button class="btn btn-save" id="ts-save" onclick="submitTroubleshoot()">✅ Submit &amp; Close Task</button>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
 <script>
@@ -492,6 +537,15 @@
     if(!loc || loc.reached){
       // location complete
       let trip=''; if(loc&&loc.trip_km!=null) trip=' · 🚗 '+loc.trip_km+' km, '+loc.trip_minutes+' min';
+
+      // SPECIAL JOB: Troubleshoot / Offline — no install/payment, just a report → close
+      const jobLower=(t.device_details||'').toLowerCase();
+      if(jobLower.includes('troubleshoot')||jobLower.includes('offline')){
+        btn='<button class="act-btn act-primary" id="loc-btn" onclick="openTroubleshoot()"><div class="ico">🔧</div><div class="l">Troubleshoot Report</div><div class="s">Log the fix &amp; close task</div></button>';
+        hint='🔧 On site'+trip+' — complete the troubleshoot report to close this task.'; hintCls='hint-done';
+        area.innerHTML='<div class="act-two"><button class="upd-btn" onclick="openUpdate()"><div class="ico">📞</div><div class="l">Update</div><div class="s">Call log &amp; next step</div></button>'+btn+'</div><div class="act-hint '+hintCls+'">'+hint+'</div>';
+        return;
+      }
 
       // Has installation been completed? (all devices pushed)
       const installs=t.device_installs||[], qty=parseInt(t.device_qty||1)||1;
@@ -720,9 +774,9 @@
 
   async function openInstall(){
     const t=_curTask;
-    // route special jobs — for now, only standard install supported in app
+    // route special jobs — troubleshoot has its own report flow; demo/v2v/remove still desktop-only for now
     const job=(t.device_details||'').toLowerCase();
-    if(job.includes('troubleshoot')||job.includes('offline')||job.includes('demo')||job.includes('v2v')||job.includes('vehicle to vehicle')||job.includes('remove only')||job.includes('only remove')){
+    if(job.includes('demo')||job.includes('v2v')||job.includes('vehicle to vehicle')||job.includes('remove only')||job.includes('only remove')){
       alert('This job type ('+(t.device_details||'')+') uses a different flow — please complete it on the desktop portal for now.');
       return;
     }
@@ -1131,6 +1185,54 @@
     const res=await apiPost('update_task',{id:_curTask.id,task_status:'Awaiting Approval',remark:'✅ Installation & payment complete — submitted for approval'});
     if(res&&res.success){ toast('✅ Submitted for approval'); setTimeout(()=>location.href='dashboard.html',1200); }
     else alert((res&&res.error)||'Submit failed. Please try again.');
+  }
+
+
+  // ═══════════════ TROUBLESHOOT REPORT (matches web save_job_outcome) ═══════════════
+  function openTroubleshoot(){
+    const t=_curTask;
+    document.getElementById('ts-ref').textContent=(t.task_id||'')+' · '+(t.customer_name||'');
+    document.getElementById('ts-issue').value='';
+    document.getElementById('ts-steps').value='';
+    document.getElementById('ts-status').value='';
+    document.getElementById('ts-hw').value='no';
+    document.getElementById('ts-hw-txt').value='';
+    document.getElementById('ts-hw-box').style.display='none';
+    document.getElementById('ts-remarks').value='';
+    document.getElementById('ts-err').style.display='none';
+    document.getElementById('ts-ov').classList.add('open');
+    document.getElementById('ts-sheet').classList.add('open');
+  }
+  function closeTroubleshoot(){ document.getElementById('ts-ov').classList.remove('open'); document.getElementById('ts-sheet').classList.remove('open'); }
+  function tsToggleHw(){ document.getElementById('ts-hw-box').style.display=(document.getElementById('ts-hw').value==='yes')?'block':'none'; }
+
+  async function submitTroubleshoot(){
+    const err=document.getElementById('ts-err'); err.style.display='none';
+    const issue=document.getElementById('ts-issue').value;
+    const steps=document.getElementById('ts-steps').value.trim();
+    const status=document.getElementById('ts-status').value;
+    if(!issue){ err.textContent='⚠️ Select the issue you found'; err.style.display=''; return; }
+    if(!steps){ err.textContent='⚠️ Describe the steps you took'; err.style.display=''; return; }
+    if(!status){ err.textContent='⚠️ Select whether GPS is back online'; err.style.display=''; return; }
+    const hwReplaced=document.getElementById('ts-hw').value==='yes'
+      ? (document.getElementById('ts-hw-txt').value.trim()||'Yes') : 'No';
+    const fields={
+      'Issue Found':issue,
+      'Steps Taken':steps,
+      'GPS Back Online':status,
+      'Hardware Replaced':hwReplaced,
+      'Remarks':document.getElementById('ts-remarks').value.trim()
+    };
+    const btn=document.getElementById('ts-save'); btn.textContent='⏳ Submitting…'; btn.disabled=true;
+    const res=await apiPost('save_job_outcome',{task_id:_curTask.id,job_type:'troubleshoot',summary:'🔧 Troubleshoot Report',fields,removed_serial:'',close_task:true});
+    btn.textContent='✅ Submit & Close Task'; btn.disabled=false;
+    if(res && res.success){
+      closeTroubleshoot();
+      toast('✅ Troubleshoot report saved — task sent for approval');
+      setTimeout(()=>location.href='dashboard.html',1200);
+    } else {
+      err.textContent='❌ '+((res&&res.error)||'Save failed — please try again'); err.style.display='';
+    }
   }
 
 
