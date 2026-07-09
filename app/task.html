@@ -469,6 +469,7 @@
   const taskId=new URLSearchParams(location.search).get('id');
   let _curTask=null;
   let _navStarted=false;  // optimistic: set true the moment technician taps Navigate
+  let _locSkippedFor=null; // task id for which location was skipped this session
 
   async function api(action,params={}){
     const url=API+'?action='+action+'&'+new URLSearchParams(params);
@@ -647,8 +648,9 @@
     area.innerHTML='<div style="color:var(--text3);font-size:12px;padding:14px 0;text-align:center">Checking…</div>';
     const loc=await api('check_customer_location',{id:t.id});
 
-    let btn='', hint='', hintCls='';
-    if(!loc || loc.reached){
+    let btn='', hint='', hintCls='', _showSkipLoc=false;
+    const _skipped = _locSkippedFor && String(_locSkippedFor)===String(t.id);
+    if(!loc || loc.reached || _skipped){
       // location complete
       let trip=''; if(loc&&loc.trip_km!=null) trip=' · 🚗 '+loc.trip_km+' km, '+loc.trip_minutes+' min';
 
@@ -732,9 +734,11 @@
     } else if(!loc.has_location){
       btn='<button class="act-btn act-blue" id="loc-btn" onclick="askLocation()"><div class="ico">📍</div><div class="l">Get Location</div><div class="s">Send link to customer</div></button>';
       hint='📍 First, send the customer a WhatsApp link to share their exact location'; hintCls='hint-blue';
+      _showSkipLoc=true;
     } else if(!loc.started && !_navStarted){
       btn='<button class="act-btn act-green" id="loc-btn" onclick="startNav('+loc.lat+','+loc.lng+')"><div class="ico">🧭</div><div class="l">Navigate</div><div class="s">Start trip to customer</div></button>';
       hint='✅ Customer shared location — tap Navigate to start (your trip is recorded)'; hintCls='hint-green';
+      _showSkipLoc=true;
     } else {
       btn='<button class="act-btn act-red" id="loc-btn" onclick="reachedLocation()"><div class="ico">📍</div><div class="l">Reached</div><div class="s">Confirm arrival</div></button>';
       hint='🧭 On the way — tap Reached when you arrive. <a href="#" onclick="openMapsNavigation('+loc.lat+','+loc.lng+');return false;" style="color:#1f5fd6;font-weight:700">Reopen navigation</a>'; hintCls='hint-amber';
@@ -746,7 +750,8 @@
         '<button class="upd-btn" onclick="openUpdate()"><div class="ico">📞</div><div class="l">Update</div><div class="s">Call log &amp; next step</div></button>'+
         btn+
       '</div>'+
-      '<div class="act-hint '+hintCls+'">'+hint+'</div>';
+      '<div class="act-hint '+hintCls+'">'+hint+'</div>'+
+      (_showSkipLoc?'<div style="text-align:center;margin-top:10px"><a href="#" onclick="skipLocation();return false;" style="font-size:12.5px;color:var(--text3);text-decoration:underline;font-weight:600">Customer won\'t share location? Skip &amp; continue →</a></div>':'');
   }
 
   async function askLocation(){
@@ -788,6 +793,18 @@
       const r=await apiPost('save_trip_reached',{id:_curTask.id,lat:pos.lat,lng:pos.lng});
       if(r&&r.success) toast('✅ Arrival recorded · '+(r.trip_km||0)+' km, '+(r.trip_minutes||0)+' min'); renderActionArea();
     }catch(e){ alert(e.message||'Could not record arrival.'); if(btn)btn.style.opacity='1'; }
+  }
+
+  async function skipLocation(){
+    const ok=confirm('Skip location sharing?\n\nUse this only when the customer won\'t share their location and has given directions over the phone.\n\nThis will move the task to the next step without recording GPS distance.');
+    if(!ok) return;
+    toast('⏭️ Skipping location…');
+    // Mark reached without coords so the flow advances to consent/attend
+    await apiPost('save_trip_reached',{id:_curTask.id,skipped:true}).catch(()=>{});
+    await apiPost('update_task',{id:_curTask.id,remark:'⏭️ Location skipped | Customer did not share location — directions taken over phone.'}).catch(()=>{});
+    _locSkippedFor=_curTask.id;
+    _navStarted=true;
+    renderActionArea();
   }
 
   // ═══════════════ UPDATE (call log) — matches web ═══════════════
