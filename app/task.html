@@ -4,321 +4,280 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#0E5C5C">
-<title>BharatGPS — Task Detail</title>
+<title>BharatGPS — Task Details</title>
 <style>
-  :root{--teal-dark:#0E5C5C;--teal:#137272;--accent:#16a34a;--bg:#f1f5f9;--card:#fff;
-    --text:#0f172a;--text2:#475569;--text3:#94a3b8;--border:#e2e8f0;--red:#dc2626;--amber:#d97706;--blue:#2563eb}
+  /* Same design tokens as desktop tech.html */
+  :root{
+    --bg:#EFF3F2;--surface:#fff;--surface2:#F3F6F5;--border:#D9E2E0;
+    --accent:#0E5C5C;--accent2:#137272;--accent-light:#E0EEEE;
+    --amber:#F5A623;--amber-bg:#FDF1DE;
+    --green:#27AE60;--green-bg:#E7F7EC;
+    --red:#E74C3C;--red-bg:#FCE9E7;
+    --saffron:#F39C12;--saffron-bg:#FDF1DE;
+    --text:#16201F;--text2:#55676A;--text3:#8A9A98;
+  }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
   html,body{height:100%}
-  body{font-family:'Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;min-height:100dvh}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;min-height:100dvh}
+  @keyframes pulse-badge{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
 
-  .hdr{background:linear-gradient(135deg,var(--teal-dark),var(--teal));color:#fff;
-    padding:calc(12px + env(safe-area-inset-top)) 12px 16px;position:sticky;top:0;z-index:10;box-shadow:0 2px 12px rgba(0,0,0,.15)}
-  .hdr-row{display:flex;align-items:center;gap:10px}
-  .back{background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:9px;width:38px;height:38px;font-size:18px;cursor:pointer;flex-shrink:0}
-  .back:active{background:rgba(255,255,255,.28)}
-  .hdr-id{font-size:12px;color:rgba(255,255,255,.7);font-weight:700}
-  .hdr-cust{font-size:18px;font-weight:800;line-height:1.2}
+  /* HEADER (same accent as desktop drawer header) */
+  #td-header{background:var(--accent);padding:calc(14px + env(safe-area-inset-top)) 16px 14px;
+    display:flex;align-items:flex-start;justify-content:space-between;flex-shrink:0;position:sticky;top:0;z-index:10}
+  #td-header .lbl{font-size:11px;color:rgba(255,255,255,.5);font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-bottom:3px}
+  #td-task-id{font-size:18px;font-weight:900;color:#fff}
+  #td-customer{font-size:13px;color:rgba(255,255,255,.7);margin-top:2px}
+  .hbtns{display:flex;gap:8px;align-items:center;flex-shrink:0}
+  .hbtn{border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:#fff}
+  .hbtn.back{background:rgba(255,255,255,.2);width:34px;height:34px;font-size:18px;line-height:1}
+  .hbtn.wa{background:rgba(37,211,102,.25);border:1.5px solid rgba(37,211,102,.4);padding:7px 12px}
 
-  /* stepper */
-  .steps{display:flex;align-items:center;padding:16px 14px 4px;overflow-x:auto;scrollbar-width:none}
-  .steps::-webkit-scrollbar{display:none}
-  .step{display:flex;flex-direction:column;align-items:center;flex-shrink:0;min-width:64px}
-  .step .dot{width:30px;height:30px;border-radius:50%;background:#fff;border:2px solid var(--border);
-    display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--text3)}
-  .step.done .dot{background:var(--accent);border-color:var(--accent);color:#fff}
-  .step.cur .dot{background:var(--teal);border-color:var(--teal);color:#fff}
-  .step .lbl{font-size:9px;color:var(--text3);margin-top:5px;font-weight:600;text-align:center}
-  .step.done .lbl,.step.cur .lbl{color:var(--text2)}
-  .step-line{height:2px;background:var(--border);flex:1;min-width:14px;margin-top:15px}
-  .step-line.done{background:var(--accent)}
+  /* STEPPER (identical to desktop) */
+  #td-stepper{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 16px;flex-shrink:0;overflow-x:auto}
 
-  .wrap{padding:8px 12px calc(90px + env(safe-area-inset-bottom))}
-  .card{background:var(--card);border-radius:14px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-  .card h3{font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:12px;font-weight:800}
-  .kv{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--border);font-size:14px}
-  .kv:last-child{border-bottom:none}
-  .kv .k{color:var(--text3);font-weight:600;flex-shrink:0}
-  .kv .v{color:var(--text);font-weight:700;text-align:right;word-break:break-word}
-  .badge{display:inline-block;font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px}
-  .b-open{background:#dbeafe;color:#1d4ed8}.b-prog{background:#fef3c7;color:#b45309}
-  .b-pend{background:#ede9fe;color:#6d28d9}.b-await{background:#dcfce7;color:#15803d}
-  .b-closed{background:#e2e8f0;color:#475569}.b-cancel{background:#fee2e2;color:#b91c1c}
+  /* SECTIONS (same surface + border pattern as desktop) */
+  .sec{padding:16px;border-bottom:1px solid var(--border);background:var(--surface)}
+  .sec-title{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px}
+  .t-accent{color:var(--accent2)}.t-green{color:var(--green)}.t-grey{color:var(--text3)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .cell{background:var(--surface2);border-radius:6px;padding:10px 12px}
+  .cell .k{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
+  .cell .v{font-size:13px;font-weight:600;color:var(--text);word-break:break-word}
+  .cell .v.big{font-size:16px;font-weight:900}
+  #td-notes{font-size:13px;color:var(--text2);line-height:1.7;white-space:pre-wrap}
 
-  .pay-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center}
-  .pay-box{background:var(--bg);border-radius:10px;padding:10px}
-  .pay-box .n{font-size:17px;font-weight:800}
-  .pay-box .l{font-size:10px;color:var(--text3);margin-top:3px;font-weight:600}
-  .pay-box.price .n{color:var(--text)}.pay-box.coll .n{color:var(--accent)}.pay-box.bal .n{color:var(--red)}
+  /* ACTIONS PANEL */
+  .act-btn{width:100%;border:none;border-radius:10px;padding:16px 12px;text-align:center;cursor:pointer;transition:opacity .2s}
+  .act-btn:active{opacity:.85}
+  .act-btn .ico{font-size:28px;margin-bottom:6px}
+  .act-btn .l{font-size:14px;font-weight:800}
+  .act-btn .s{font-size:11px;margin-top:3px}
+  .act-primary{background:var(--accent)}
+  .act-primary .l{color:#fff}.act-primary .s{color:rgba(255,255,255,.7)}
+  .act-blue{background:#1f5fd6}.act-blue .l{color:#fff}.act-blue .s{color:rgba(255,255,255,.75)}
+  .act-green{background:var(--green)}.act-green .l{color:#fff}.act-green .s{color:rgba(255,255,255,.8)}
+  .act-red{background:var(--saffron)}.act-red .l{color:#fff}.act-red .s{color:rgba(255,255,255,.8)}
+  .flowbox{border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.6;margin-bottom:10px}
+  .fb-blue{background:#eef4ff;border:1.5px solid #1f5fd6;color:#1f5fd6}
+  .fb-green{background:var(--green-bg);border:1.5px solid var(--green);color:var(--green)}
+  .fb-amber{background:var(--amber-bg);border:1.5px solid var(--amber);color:var(--saffron)}
+  .fb-done{background:var(--green-bg);border:1.5px solid var(--green);color:#166534}
+  .trip-line{background:var(--surface2);border-radius:8px;padding:8px 12px;font-size:11px;color:var(--text3);margin-top:10px}
 
-  .contact-row{display:flex;gap:10px}
-  .cbtn{flex:1;border:none;border-radius:12px;padding:14px;font-size:14px;font-weight:800;cursor:pointer;
-    display:flex;align-items:center;justify-content:center;gap:6px;color:#fff}
-  .cbtn:active{opacity:.85}
-  .c-call{background:var(--blue)}.c-wa{background:#25D366}
-
-  .note{background:#fff;border-radius:14px;padding:14px 16px;font-size:13px;color:var(--text2);line-height:1.6;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-
-  .act-btn{width:100%;border:none;border-radius:12px;padding:16px;font-size:15px;font-weight:800;color:#fff;
-    cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:transform .05s,opacity .15s}
-  .act-btn:active{transform:scale(.985)}
-  .act-btn:disabled{opacity:.6}
-  .act-blue{background:#1f5fd6}.act-green{background:var(--accent)}.act-red{background:#d93a3a}
-  .act-status{border-radius:10px;padding:11px 13px;font-size:12.5px;line-height:1.6;margin-bottom:12px}
-  .s-blue{background:#eef4ff;border:1.5px solid #1f5fd6;color:#1f5fd6}
-  .s-green{background:#dcfce7;border:1.5px solid var(--accent);color:#15803d}
-  .s-amber{background:#fef3c7;border:1.5px solid var(--amber);color:#b45309}
-  .s-done{background:#f0fdf4;border:1.5px solid var(--accent);color:#166534}
-  .trip-line{background:var(--bg);border-radius:8px;padding:9px 12px;font-size:12px;color:var(--text2);margin-top:10px}
+  .loading{text-align:center;padding:50px;color:var(--text3);font-size:14px}
+  .spin{display:inline-block;width:20px;height:20px;border:2.5px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle;margin-right:8px}
+  @keyframes sp{to{transform:rotate(360deg)}}
   .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);
-    background:#0f172a;color:#fff;font-size:13px;padding:11px 18px;border-radius:22px;z-index:100;max-width:90%;
+    background:#16201F;color:#fff;font-size:13px;padding:11px 18px;border-radius:22px;z-index:100;max-width:90%;
     text-align:center;opacity:0;transition:opacity .2s;box-shadow:0 6px 20px rgba(0,0,0,.3)}
   .toast.show{opacity:1}
-  .loading{text-align:center;padding:60px;color:var(--text3);font-size:14px}
-  .spin{display:inline-block;width:20px;height:20px;border:2.5px solid var(--border);border-top-color:var(--teal);border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle;margin-right:8px}
-  @keyframes sp{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
-  <div class="hdr">
-    <div class="hdr-row">
-      <button class="back" onclick="goBack()">←</button>
-      <div>
-        <div class="hdr-id" id="h-id">Loading…</div>
-        <div class="hdr-cust" id="h-cust"></div>
-      </div>
+  <!-- HEADER -->
+  <div id="td-header">
+    <div>
+      <div class="lbl">Task Details</div>
+      <div id="td-task-id">Loading…</div>
+      <div id="td-customer"></div>
+    </div>
+    <div class="hbtns">
+      <button class="hbtn wa" id="wa-btn" onclick="tdWhatsApp()">📱 WA</button>
+      <button class="hbtn back" onclick="location.href='dashboard.html'">←</button>
     </div>
   </div>
 
-  <div id="content">
+  <!-- STEPPER -->
+  <div id="td-stepper"></div>
+
+  <!-- BODY -->
+  <div id="td-body">
     <div class="loading"><span class="spin"></span>Loading task…</div>
   </div>
 
+  <div class="toast" id="toast"></div>
+
 <script>
-  const API = '../api/index.php';
-  const authToken = localStorage.getItem('bgps_tech_token') || '';
+  const API='../api/index.php';
+  const authToken=localStorage.getItem('bgps_tech_token')||'';
+  let currentUser={}; try{currentUser=JSON.parse(localStorage.getItem('bgps_tech_user')||'{}');}catch(e){}
   if(!authToken){ location.href='login.html'; }
-  const taskId = new URLSearchParams(location.search).get('id');
+  const taskId=new URLSearchParams(location.search).get('id');
+  let _curTask=null;
 
-  async function api(action, params={}){
-    const url = API+'?action='+action+'&'+new URLSearchParams(params);
-    const r = await fetch(url,{cache:'no-store',headers:{'X-Auth-Token':authToken}});
-    const t = await r.text();
-    try{ return JSON.parse(t); }catch(e){ console.error('non-JSON',action,t.slice(0,200)); return {}; }
+  async function api(action,params={}){
+    const url=API+'?action='+action+'&'+new URLSearchParams(params);
+    const r=await fetch(url,{cache:'no-store',headers:{'X-Auth-Token':authToken}});
+    const t=await r.text(); try{return JSON.parse(t);}catch(e){console.error('non-JSON',action,t.slice(0,200));return {};}
   }
-  function goBack(){ location.href='dashboard.html'; }
-  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
-
-  const STATUS={'Open':'b-open','In Progress':'b-prog','Task Pending':'b-pend','Awaiting Approval':'b-await','Closed':'b-closed','Cancelled':'b-cancel'};
-
-  function call(p){ if(p) location.href='tel:'+p; }
-  function whatsapp(p,name){
-    if(!p){ alert('No phone number.'); return; }
-    const msg = encodeURIComponent('Hello '+(name||'')+', this is BharatGPS technician.');
-    window.open('https://wa.me/91'+String(p).replace(/\D/g,'')+'?text='+msg,'_blank');
-  }
-
-  function stepper(t){
-    const installs = t.device_installs||[];
-    const qty = parseInt(t.device_qty||1)||1;
-    const addingDone = installs.length>=qty && installs.every(d=>d.gps_serial_no && d.name_on_server);
-    const techAct = !!(t.last_tech_activity||t.consent_token||t.customer_consent_at||['In Progress','Task Pending','Awaiting Approval','Closed'].includes(t.task_status));
-    const payDone = parseFloat(t.amount_collected||0) >= parseFloat(t.price_to_collect||0)-15 && parseFloat(t.price_to_collect||0)>0;
-    const reportDone = t.task_status==='Closed' || t.task_status==='Awaiting Approval';
-    const closed = t.task_status==='Closed';
-
-    const steps = [
-      {l:'Created', done:true},
-      {l:'Working', done:techAct},
-      {l:'Installed', done:addingDone},
-      {l:'Payment', done:payDone},
-      {l:'Report', done:reportDone},
-      {l:'Closed', done:closed}
-    ];
-    // mark first not-done as current
-    let curSet=false;
-    let html='';
-    steps.forEach((s,i)=>{
-      let cls = s.done?'done':'';
-      if(!s.done && !curSet){ cls='cur'; curSet=true; }
-      if(i>0) html += '<div class="step-line '+(steps[i-1].done?'done':'')+'"></div>';
-      html += '<div class="step '+cls+'"><div class="dot">'+(s.done?'✓':(i+1))+'</div><div class="lbl">'+s.l+'</div></div>';
-    });
-    return '<div class="steps">'+html+'</div>';
-  }
-
-  async function load(){
-    if(!taskId){ document.getElementById('content').innerHTML='<div class="note" style="margin:12px">No task id.</div>'; return; }
-    const res = await api('get_task',{id:taskId});
-    const t = res.task || res;
-    if(!t || !t.id){
-      document.getElementById('content').innerHTML='<div class="note" style="margin:12px;color:var(--red)">Task not found.</div>';
-      return;
-    }
-    document.getElementById('h-id').textContent = t.task_id||'—';
-    document.getElementById('h-cust').textContent = t.customer_name||'—';
-    _curTask = t;
-
-    const price=parseFloat(t.price_to_collect||0), coll=parseFloat(t.amount_collected||0), bal=price-coll;
-    const badge = STATUS[t.task_status]||'b-closed';
-    const phone = String(t.contact_number||'').replace(/\D/g,'');
-
-    document.getElementById('content').innerHTML =
-      stepper(t) +
-      '<div class="wrap">' +
-
-      '<div class="card"><h3>Status</h3>'+
-        '<div style="display:flex;justify-content:space-between;align-items:center">'+
-        '<span class="badge '+badge+'">'+(t.task_status||'—')+'</span>'+
-        (t.is_urgent=='1'?'<span class="badge b-cancel">🚨 URGENT</span>':'')+
-        '</div></div>'+
-
-      '<div class="card"><h3>Payment</h3><div class="pay-grid">'+
-        '<div class="pay-box price"><div class="n">₹'+price.toLocaleString('en-IN')+'</div><div class="l">Price</div></div>'+
-        '<div class="pay-box coll"><div class="n">₹'+coll.toLocaleString('en-IN')+'</div><div class="l">Collected</div></div>'+
-        '<div class="pay-box bal"><div class="n">₹'+bal.toLocaleString('en-IN')+'</div><div class="l">Balance</div></div>'+
-        '</div>'+(t.payment_mode?'<div class="kv" style="margin-top:10px"><span class="k">Mode</span><span class="v">'+esc(t.payment_mode)+'</span></div>':'')+'</div>'+
-
-      '<div class="card"><h3>Customer</h3>'+
-        '<div class="kv"><span class="k">Name</span><span class="v">'+esc(t.customer_name||'—')+'</span></div>'+
-        '<div class="kv"><span class="k">Phone</span><span class="v">'+esc(t.contact_number||'—')+'</span></div>'+
-        (t.email?'<div class="kv"><span class="k">Email</span><span class="v">'+esc(t.email)+'</span></div>':'')+
-        '<div class="kv"><span class="k">Location</span><span class="v">'+esc(t.location||'—')+'</span></div>'+
-        (t.vehicle_number?'<div class="kv"><span class="k">Vehicle</span><span class="v">'+esc(t.vehicle_number)+'</span></div>':'')+
-        '</div>'+
-
-      '<div class="card"><h3>Job Details</h3>'+
-        '<div class="kv"><span class="k">Job Type</span><span class="v">'+esc(t.lead_type||t.device_details||'—')+'</span></div>'+
-        '<div class="kv"><span class="k">Device</span><span class="v">'+esc(t.device_details||'—')+'</span></div>'+
-        '<div class="kv"><span class="k">Qty</span><span class="v">'+esc(t.device_qty||'1')+'</span></div>'+
-        '<div class="kv"><span class="k">Created</span><span class="v">'+esc((t.created_at||'').slice(0,16))+'</span></div>'+
-        '</div>'+
-
-      (t.general_notes?'<div class="card"><h3>Notes</h3><div style="font-size:14px;color:var(--text2);line-height:1.6">'+esc(t.general_notes)+'</div></div>':'')+
-
-      '<div class="card"><h3>Contact Customer</h3><div class="contact-row">'+
-        '<button class="cbtn c-call" onclick="call(\''+phone+'\')">📞 Call</button>'+
-        '<button class="cbtn c-wa" onclick="whatsapp(\''+phone+'\',\''+esc(t.customer_name||'').replace(/\x27/g,"")+'\')">💬 WhatsApp</button>'+
-        '</div></div>'+
-
-      '<div class="card" id="action-card"><h3>Task Flow</h3><div id="action-area"><div style="color:var(--text3);font-size:13px">Loading…</div></div></div>'+
-      '</div>';
-    renderActionArea();
-  }
-  // ═══════════════ TOAST + GEO HELPER ═══════════════
-  let _toastT=null;
-  function toast(msg){
-    const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
-    clearTimeout(_toastT); _toastT=setTimeout(()=>t.classList.remove('show'),3000);
-  }
-  async function apiPost(action, body){
+  async function apiPost(action,body){
     const r=await fetch(API+'?action='+action,{method:'POST',cache:'no-store',
       headers:{'X-Auth-Token':authToken,'Content-Type':'application/json'},body:JSON.stringify(body)});
     const t=await r.text(); try{return JSON.parse(t);}catch(e){console.error('non-JSON',action,t.slice(0,200));return {};}
   }
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+  let _toastT=null;
+  function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(_toastT);_toastT=setTimeout(()=>t.classList.remove('show'),3000);}
+
+  function tdWhatsApp(){
+    if(!_curTask)return;
+    const p=String(_curTask.contact_number||'').replace(/\D/g,'');
+    if(!p){alert('No phone number.');return;}
+    window.open('https://wa.me/91'+p+'?text='+encodeURIComponent('Hello '+(_curTask.customer_name||'')+', this is BharatGPS technician.'),'_blank');
+  }
+
+  // ── STEPPER (identical logic to desktop) ──
+  function buildStepper(t){
+    const cancelled=t.task_status==='Cancelled', isClosed=t.task_status==='Closed';
+    const installs=t.device_installs||[], qty=parseInt(t.device_qty||1)||1;
+    const addingDone=installs.length>=qty && installs.every(d=>d.gps_serial_no&&d.name_on_server);
+    const hasTechAct=!!(t.last_tech_activity||t.consent_token||t.customer_consent_at||['In Progress','Task Pending','Awaiting Approval','Closed'].includes(t.task_status));
+    const payDone=parseFloat(t.amount_collected||0)>=parseFloat(t.price_to_collect||0)-15 && parseFloat(t.price_to_collect||0)>0;
+    const jt=(t.device_details||'').toLowerCase();
+    const isDemo=jt.includes('demonstration')||jt.includes('demo');
+    const isTrbl=jt.includes('troubleshoot')||jt.includes('offline');
+    const reportDone=isClosed||t.task_status==='Awaiting Approval';
+    let stages;
+    if(isDemo) stages=[{i:'📋',l:'Created',d:true,a:!hasTechAct},{i:'🔧',l:'Tech Working',d:hasTechAct,a:hasTechAct&&!reportDone},{i:'📱',l:'Demo Done',d:reportDone,a:reportDone&&!isClosed},{i:'🎯',l:'Closed',d:isClosed,a:false}];
+    else if(isTrbl) stages=[{i:'📋',l:'Created',d:true,a:!hasTechAct},{i:'🔧',l:'Tech Working',d:hasTechAct,a:hasTechAct&&!reportDone},{i:'🛠',l:'Fix Done',d:reportDone,a:reportDone&&!isClosed},{i:'🎯',l:'Closed',d:isClosed,a:false}];
+    else stages=[{i:'📋',l:'Created',d:true,a:!hasTechAct},{i:'🔧',l:'Tech Working',d:hasTechAct,a:hasTechAct&&!addingDone},{i:'🛰',l:'Installed',d:addingDone,a:addingDone&&!payDone&&!isClosed},{i:'💰',l:'Payment',d:payDone,a:payDone&&!isClosed},{i:'🎯',l:'Closed',d:isClosed,a:false}];
+
+    if(cancelled) return '<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;color:var(--text3)">❌ Task Cancelled</div>';
+    let html='<div style="display:flex;align-items:center;width:100%;padding:2px 0">';
+    stages.forEach((sg,si)=>{
+      const cBg=sg.d?'var(--green)':sg.a?'var(--accent)':'#e2e8f0';
+      const lCol=sg.d?'var(--green)':sg.a?'var(--accent)':'var(--text3)';
+      const ico=sg.d?'✅':sg.i;
+      const pulse=sg.a&&!sg.d?'animation:pulse-badge 1.5s infinite;':'';
+      const lineBg=si<stages.length-1&&(stages[si+1].d||stages[si+1].a)?'var(--green)':'#e2e8f0';
+      html+='<div style="display:flex;align-items:center;flex:'+(si<stages.length-1?'1':'0')+'">';
+      html+='<div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0">';
+      html+='<div style="width:34px;height:34px;border-radius:50%;background:'+cBg+';display:flex;align-items:center;justify-content:center;font-size:16px;'+pulse+'">'+ico+'</div>';
+      html+='<div style="font-size:9px;font-weight:700;color:'+lCol+';white-space:nowrap;text-align:center;margin-top:2px">'+sg.l+'</div></div>';
+      if(si<stages.length-1) html+='<div style="flex:1;height:3px;background:'+lineBg+';margin:0 3px;margin-bottom:16px;border-radius:2px"></div>';
+      html+='</div>';
+    });
+    return html+'</div>';
+  }
+
+  function infoGrid(t){
+    const items=[
+      ['👤 Customer Name',esc(t.customer_name||'–')],
+      ['📞 Contact Number',esc(t.contact_number||'–')],
+      ['📧 Email ID',t.email?esc(t.email):'<span style="color:var(--text3)">Not provided</span>'],
+      ['📍 Location',esc(t.location||'–')],
+      ['📊 Lead Type',esc(t.lead_type||'–')],
+      ['🏢 Company Profile',esc(t.profile||'BGPT')],
+      ['🔧 Job Type',esc(t.device_details||'–')],
+      ['🔢 Device Qty',esc(t.device_qty||1)],
+      ['🙋 Assigned To',esc(t.tech_name||t.technician_name||currentUser.name||'–')],
+      ['📅 Created',esc((t.created_at||'').slice(0,10)||'–')],
+    ];
+    if(t.reminder_date) items.push(['⏰ Reminder',esc(t.reminder_date)]);
+    if(t.vehicle_number) items.push(['🚗 Vehicle',esc(t.vehicle_number)]);
+    if(t.is_urgent=='1') items.push(['🚨 Urgent','<span style="color:var(--red);font-weight:700">Yes — Marked Urgent</span>']);
+    if(t.gps_serial_no){ items.push(['📡 GPS Serial',esc(t.gps_serial_no)]); items.push(['📝 Name on Server',esc(t.name_on_server||'–')]); }
+    return items.map(([k,v])=>`<div class="cell"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+  }
+
+  function paymentGrid(t){
+    const price=parseFloat(t.price_to_collect||0),coll=parseFloat(t.amount_collected||0),bal=price-coll;
+    const payCol=bal>0?'var(--red)':'var(--green)';
+    let h=`<div class="cell"><div class="k">Price</div><div class="v big">₹${price.toLocaleString('en-IN')}</div></div>
+      <div class="cell"><div class="k">Collected</div><div class="v big" style="color:var(--green)">₹${coll.toLocaleString('en-IN')}</div></div>
+      <div class="cell"><div class="k">Balance</div><div class="v big" style="color:${payCol}">₹${bal.toLocaleString('en-IN')}</div></div>`;
+    if(t.payment_mode) h+=`<div class="cell" style="grid-column:1/-1"><div class="k">Payment Mode</div><div class="v">💳 ${esc(t.payment_mode)}</div></div>`;
+    return h;
+  }
+
+  async function load(){
+    if(!taskId){ document.getElementById('td-body').innerHTML='<div class="sec">No task id.</div>'; return; }
+    const res=await api('get_task',{id:taskId});
+    const t=res.task||res;
+    if(!t||!t.id){ document.getElementById('td-body').innerHTML='<div class="sec" style="color:var(--red)">Task not found.</div>'; return; }
+    _curTask=t;
+    document.getElementById('td-task-id').textContent=t.task_id||'–';
+    document.getElementById('td-customer').textContent=(t.customer_name||'–')+'  ·  '+(t.contact_number||'');
+    document.getElementById('td-stepper').innerHTML=buildStepper(t);
+
+    const isLocked=['Awaiting Approval','Closed','Cancelled'].includes(t.task_status);
+    document.getElementById('td-body').innerHTML=
+      // ACTIONS panel (only if not locked)
+      (isLocked?'':'<div class="sec" id="td-tech-actions"><div class="sec-title t-accent">⚡ Actions</div><div id="action-area"><div style="color:var(--text3);font-size:13px">Loading…</div></div></div>')+
+      // locked banner
+      (isLocked?'<div class="sec"><div style="background:'+(t.task_status==='Closed'?'var(--green-bg)':'var(--surface2)')+';border:1.5px solid '+(t.task_status==='Closed'?'var(--green)':'var(--border)')+';border-radius:8px;padding:14px;text-align:center"><div style="font-size:24px;margin-bottom:6px">'+(t.task_status==='Closed'?'✅':t.task_status==='Awaiting Approval'?'⏳':'❌')+'</div><div style="font-size:13px;font-weight:800;color:'+(t.task_status==='Closed'?'var(--green)':'var(--text2)')+'">'+({'Awaiting Approval':'⏳ Awaiting manager approval','Closed':'✅ Task closed','Cancelled':'❌ Task cancelled'}[t.task_status]||'🔒 Locked')+'</div></div></div>':'')+
+      // INFO
+      '<div class="sec"><div class="sec-title t-accent">📋 Task Information</div><div class="grid2">'+infoGrid(t)+'</div></div>'+
+      // PAYMENT
+      '<div class="sec"><div class="sec-title t-green">💰 Payment</div><div class="grid3">'+paymentGrid(t)+'</div></div>'+
+      // NOTES
+      '<div class="sec"><div class="sec-title t-grey">📝 Discussion &amp; Notes</div><div id="td-notes">'+esc(t.general_notes||t.remark||'No notes added.')+'</div></div>';
+
+    if(!isLocked) renderActionArea();
+  }
+
+  // ═══════════════ LOCATION FLOW (matches web) ═══════════════
   function getPos(){
     return new Promise((res,rej)=>{
       if(!('geolocation' in navigator)||!window.isSecureContext){rej(new Error('Location needs GPS enabled on a secure (https) page.'));return;}
       const ok=p=>res({lat:+p.coords.latitude.toFixed(6),lng:+p.coords.longitude.toFixed(6)});
-      const fail=e=>{let m='Could not get your location. Turn on GPS and retry.';
-        if(e&&e.code===1)m='Location permission denied. Allow location and retry.';
-        else if(e&&e.code===2)m='Turn on GPS / location services and retry.';rej(new Error(m));};
-      navigator.geolocation.getCurrentPosition(ok,()=>{
-        navigator.geolocation.getCurrentPosition(ok,()=>{
-          navigator.geolocation.getCurrentPosition(ok,fail,{enableHighAccuracy:false,timeout:30000,maximumAge:300000});
-        },{enableHighAccuracy:true,timeout:20000,maximumAge:0});
-      },{enableHighAccuracy:false,timeout:8000,maximumAge:60000});
+      const fail=e=>{let m='Could not get your location. Turn on GPS and retry.';if(e&&e.code===1)m='Location permission denied. Allow location and retry.';else if(e&&e.code===2)m='Turn on GPS / location services and retry.';rej(new Error(m));};
+      navigator.geolocation.getCurrentPosition(ok,()=>{navigator.geolocation.getCurrentPosition(ok,()=>{navigator.geolocation.getCurrentPosition(ok,fail,{enableHighAccuracy:false,timeout:30000,maximumAge:300000});},{enableHighAccuracy:true,timeout:20000,maximumAge:0});},{enableHighAccuracy:false,timeout:8000,maximumAge:60000});
     });
   }
 
-  // ═══════════════ LOCATION FLOW (matches web) ═══════════════
-  let _curTask=null;
-
   async function renderActionArea(){
-    const area=document.getElementById('action-area');
-    if(!_curTask){ area.innerHTML=''; return; }
+    const area=document.getElementById('action-area'); if(!area||!_curTask)return;
     const t=_curTask;
-    // Locked states
-    if(['Closed','Cancelled'].includes(t.task_status)){
-      area.innerHTML='<div class="act-status s-done">✅ This task is '+t.task_status.toLowerCase()+'. No further action needed.</div>';
-      return;
-    }
-    if(t.task_status==='Awaiting Approval'){
-      area.innerHTML='<div class="act-status s-green">🕒 Submitted — awaiting office approval.</div>';
-      return;
-    }
-
     area.innerHTML='<div style="color:var(--text3);font-size:13px">Checking location status…</div>';
     const loc=await api('check_customer_location',{id:t.id});
 
     if(!loc || loc.reached){
-      // Location done → next step is Attend/consent (built in the next screen)
-      let trip='';
-      if(loc && loc.trip_km!=null) trip='<div class="trip-line">🚗 Trip: <strong>'+loc.trip_km+' km</strong> · <strong>'+loc.trip_minutes+' min</strong></div>';
-      area.innerHTML='<div class="act-status s-done">✅ Location complete — you\'ve reached the customer.</div>'+trip+
-        '<div class="act-status s-amber" style="margin-top:12px;margin-bottom:0">▶️ Next: Attend / Consent — coming in the next screen.</div>';
+      let trip=''; if(loc&&loc.trip_km!=null) trip='<div class="trip-line">🚗 Trip: <strong>'+loc.trip_km+' km</strong> · <strong>'+loc.trip_minutes+' min</strong></div>';
+      area.innerHTML='<div class="flowbox fb-done">✅ Location complete — you\'ve reached the customer.</div>'+trip+
+        '<div class="flowbox fb-amber" style="margin-top:10px;margin-bottom:0">▶️ Next: Attend / Consent — coming in the next screen.</div>';
       return;
     }
-
     if(!loc.has_location){
-      area.innerHTML=
-        '<div class="act-status s-blue">📍 First, send the customer a link to share their exact location. Tap below to send via WhatsApp.</div>'+
-        '<button class="act-btn act-blue" id="loc-btn" onclick="askLocation()">📍 Get Customer Location</button>';
+      area.innerHTML='<div class="flowbox fb-blue">📍 First, send the customer a link to share their exact location. Tap to send via WhatsApp.</div>'+
+        '<button class="act-btn act-blue" id="loc-btn" onclick="askLocation()"><div class="ico">📍</div><div class="l">Get Customer Location</div><div class="s">Send location link to customer</div></button>';
     } else if(!loc.started){
-      area.innerHTML=
-        '<div class="act-status s-green">✅ Customer shared their location. Tap to start navigation — your start point &amp; time will be recorded.</div>'+
-        '<button class="act-btn act-green" id="loc-btn" onclick="startNav('+loc.lat+','+loc.lng+')">🧭 Navigate to Customer</button>';
+      area.innerHTML='<div class="flowbox fb-green">✅ Customer shared their location. Tap to start navigation — your start point &amp; time will be recorded.</div>'+
+        '<button class="act-btn act-green" id="loc-btn" onclick="startNav('+loc.lat+','+loc.lng+')"><div class="ico">🧭</div><div class="l">Navigate to Customer</div><div class="s">Start navigation</div></button>';
     } else {
-      area.innerHTML=
-        '<div class="act-status s-amber">🧭 On the way. Tap <strong>Reached Location</strong> when you arrive — required before consent.'+
-        '<div style="margin-top:6px"><a target="_blank" href="https://www.google.com/maps/dir/?api=1&destination='+loc.lat+','+loc.lng+'" style="color:#1f5fd6;font-weight:700">🗺️ Reopen navigation</a></div></div>'+
-        '<button class="act-btn act-red" id="loc-btn" onclick="reachedLocation()">📍 Reached Location</button>';
+      area.innerHTML='<div class="flowbox fb-amber">🧭 On the way. Tap <strong>Reached Location</strong> when you arrive — required before consent.<div style="margin-top:6px"><a target="_blank" href="https://www.google.com/maps/dir/?api=1&destination='+loc.lat+','+loc.lng+'" style="color:#1f5fd6;font-weight:700">🗺️ Reopen navigation</a></div></div>'+
+        '<button class="act-btn act-red" id="loc-btn" onclick="reachedLocation()"><div class="ico">📍</div><div class="l">Reached Location</div><div class="s">Confirm arrival to continue</div></button>';
     }
   }
 
   async function askLocation(){
-    const btn=document.getElementById('loc-btn'); if(btn)btn.disabled=true;
+    const btn=document.getElementById('loc-btn'); if(btn)btn.style.opacity='.6';
     const r=await apiPost('send_location_request',{id:_curTask.id});
-    if(r && r.success){
+    if(r&&r.success){
       const phone=(r.phone||'').replace(/\D/g,'');
       const msg=encodeURIComponent('Hello! Our BharatGPS technician is on the way. Please tap this link and share your location so we can reach you quickly:\n\n'+r.link);
       window.open('https://wa.me/'+(phone?'91'+phone:'')+'?text='+msg,'_blank');
-      toast('📍 Location link sent. Waiting for customer to share…');
-      pollLocation(0);
-    } else { alert('Could not create location link. Please try again.'); if(btn)btn.disabled=false; }
+      toast('📍 Location link sent. Waiting for customer…'); pollLocation(0);
+    } else { alert('Could not create location link. Please try again.'); if(btn)btn.style.opacity='1'; }
   }
-  function pollLocation(n){
-    if(n>40) return;
-    setTimeout(async()=>{
-      const s=await api('check_customer_location',{id:_curTask.id});
-      if(s && s.has_location){ toast('✅ Customer shared their location!'); renderActionArea(); }
-      else pollLocation(n+1);
-    },3000);
-  }
+  function pollLocation(n){ if(n>40)return; setTimeout(async()=>{const s=await api('check_customer_location',{id:_curTask.id});if(s&&s.has_location){toast('✅ Customer shared their location!');renderActionArea();}else pollLocation(n+1);},3000); }
   async function startNav(lat,lng){
-    const btn=document.getElementById('loc-btn'); if(btn)btn.disabled=true;
-    try{
-      toast('📍 Capturing your start point…');
-      const pos=await getPos();
+    const btn=document.getElementById('loc-btn'); if(btn)btn.style.opacity='.6';
+    try{ toast('📍 Capturing your start point…'); const pos=await getPos();
       await apiPost('save_trip_start',{id:_curTask.id,lat:pos.lat,lng:pos.lng});
-      window.open('https://www.google.com/maps/dir/?api=1&destination='+lat+','+lng,'_blank');
-      renderActionArea();
-    }catch(e){ alert(e.message||'Could not capture start point.'); if(btn)btn.disabled=false; }
+      window.open('https://www.google.com/maps/dir/?api=1&destination='+lat+','+lng,'_blank'); renderActionArea();
+    }catch(e){ alert(e.message||'Could not capture start point.'); if(btn)btn.style.opacity='1'; }
   }
   async function reachedLocation(){
-    const btn=document.getElementById('loc-btn'); if(btn)btn.disabled=true;
-    try{
-      toast('📍 Capturing your arrival…');
-      const pos=await getPos();
+    const btn=document.getElementById('loc-btn'); if(btn)btn.style.opacity='.6';
+    try{ toast('📍 Capturing your arrival…'); const pos=await getPos();
       const r=await apiPost('save_trip_reached',{id:_curTask.id,lat:pos.lat,lng:pos.lng});
-      if(r && r.success) toast('✅ Arrival recorded · '+(r.trip_km||0)+' km, '+(r.trip_minutes||0)+' min');
-      renderActionArea();
-    }catch(e){ alert(e.message||'Could not record arrival.'); if(btn)btn.disabled=false; }
+      if(r&&r.success) toast('✅ Arrival recorded · '+(r.trip_km||0)+' km, '+(r.trip_minutes||0)+' min'); renderActionArea();
+    }catch(e){ alert(e.message||'Could not record arrival.'); if(btn)btn.style.opacity='1'; }
   }
-
 
   load();
 </script>
-  <div class="toast" id="toast"></div>
 </body>
 </html>
