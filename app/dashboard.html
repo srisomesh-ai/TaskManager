@@ -170,7 +170,20 @@
     const t=await r.text();
     try{return JSON.parse(t);}catch(e){console.error('non-JSON',action,t.slice(0,200));return {};}
   }
-  function logout(){ if(!confirm('Log out?'))return; localStorage.removeItem('bgps_tech_token'); localStorage.removeItem('bgps_tech_user'); location.href='login.html'; }
+  function logout(){ if(!confirm('Log out?'))return; try{fetch(API+'?action=clear_fcm_token',{method:'POST',headers:{'X-Auth-Token':authToken}});}catch(e){} localStorage.removeItem('bgps_tech_token'); localStorage.removeItem('bgps_tech_user'); location.href='login.html'; }
+
+  // Register device FCM token (injected by Flutter WebView) so an already-logged-in tech still gets push.
+  function registerFcmToken(tries){
+    tries=tries||0;
+    var t=window.BGPS_FCM_TOKEN;
+    if(t&&authToken){
+      fetch(API+'?action=save_fcm_token',{method:'POST',headers:{'Content-Type':'application/json','X-Auth-Token':authToken},
+        body:JSON.stringify({fcm_token:t,platform:'android'})}).catch(function(){});
+      return;
+    }
+    if(tries<8) setTimeout(function(){registerFcmToken(tries+1);},1500);
+  }
+  registerFcmToken();
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
   function ageHours(c){ if(!c)return 0; const then=new Date(c.replace(' ','T')); return Math.max(0,Math.floor((Date.now()-then.getTime())/3600000)); }
   function ageText(h){ if(h<1)return 'just now'; if(h<24)return h+'h ago'; return Math.floor(h/24)+'d ago'; }
