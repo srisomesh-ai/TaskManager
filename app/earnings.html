@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0E5C5C">
+<title>BharatGPS — My Earnings</title>
+<style>
+  :root{--teal-dark:#0E5C5C;--teal:#137272;--teal-lite:#1a9b9b;--accent:#16a34a;--bg:#f0f4f8;--card:#fff;
+    --text:#0f172a;--text2:#475569;--text3:#94a3b8;--border:#e8edf3;--red:#dc2626;--amber:#d97706;--blue:#2563eb;--gold:#eab308}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:'Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;min-height:100dvh}
+  .hero{background:linear-gradient(150deg,var(--teal-dark) 0%,var(--teal) 55%,var(--teal-lite) 100%);color:#fff;
+    padding:calc(16px + env(safe-area-inset-top)) 18px 46px;position:relative;overflow:hidden}
+  .hero-row{display:flex;align-items:center;gap:12px;position:relative;z-index:1}
+  .back{background:rgba(255,255,255,.18);border:none;color:#fff;width:38px;height:38px;border-radius:12px;font-size:20px;cursor:pointer}
+  .hero h1{font-size:19px;font-weight:800}
+  .balance-card{background:var(--card);border-radius:20px;margin:-30px 16px 0;padding:22px 18px;box-shadow:0 10px 28px rgba(15,23,42,.12);text-align:center;position:relative;z-index:2}
+  .coin-big{font-size:44px;font-weight:900;color:var(--teal-dark);line-height:1}
+  .coin-lbl{font-size:13px;color:var(--text2);font-weight:700;margin-top:4px}
+  .coin-emoji{font-size:34px;margin-bottom:2px}
+  .summary{display:grid;grid-template-columns:1fr 1fr;gap:11px;padding:16px}
+  .sum{background:var(--card);border-radius:15px;padding:15px;box-shadow:0 2px 8px rgba(15,23,42,.05)}
+  .sum .n{font-size:22px;font-weight:800}
+  .sum .n.up{color:var(--accent)}
+  .sum .n.down{color:var(--red)}
+  .sum .t{font-size:12px;color:var(--text2);font-weight:600;margin-top:2px}
+  .sec-h{padding:4px 18px 8px;font-size:13px;font-weight:800;color:var(--text2);letter-spacing:.02em}
+  .list{padding:0 14px calc(24px + env(safe-area-inset-bottom))}
+  .row{background:var(--card);border-radius:14px;padding:13px 15px;margin-bottom:10px;box-shadow:0 2px 8px rgba(15,23,42,.05);display:flex;align-items:center;gap:12px}
+  .row .ic{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+  .row.pos .ic{background:#dcfce7}
+  .row.neg .ic{background:#fee2e2}
+  .row .mid{flex:1;min-width:0}
+  .row .rs{font-size:14px;font-weight:700;color:var(--text)}
+  .row .meta{font-size:11.5px;color:var(--text3);margin-top:2px}
+  .row .amt{font-size:16px;font-weight:800;flex-shrink:0}
+  .row.pos .amt{color:var(--accent)}
+  .row.neg .amt{color:var(--red)}
+  .empty{text-align:center;padding:50px 20px;color:var(--text3)}
+  .empty .ico{font-size:46px;margin-bottom:12px}
+  .empty .et{font-size:15px;font-weight:700;color:var(--text2)}
+  .empty .es{font-size:13px;margin-top:6px;line-height:1.5}
+  .loading{text-align:center;padding:40px;color:var(--text3);font-size:14px}
+</style>
+</head>
+<body>
+  <div class="hero">
+    <div class="hero-row">
+      <button class="back" onclick="location.href='dashboard.html'">←</button>
+      <h1>💰 My Earnings</h1>
+    </div>
+  </div>
+
+  <div class="balance-card">
+    <div class="coin-emoji">🪙</div>
+    <div class="coin-big" id="balance">…</div>
+    <div class="coin-lbl">Total Coins</div>
+  </div>
+
+  <div class="summary">
+    <div class="sum"><div class="n up" id="earned">…</div><div class="t">Coins Earned</div></div>
+    <div class="sum"><div class="n down" id="lost">…</div><div class="t">Coins Deducted</div></div>
+  </div>
+
+  <div class="sec-h">History</div>
+  <div class="list" id="list"><div class="loading">Loading…</div></div>
+
+<script>
+  const API='../api/index.php';
+  const authToken=localStorage.getItem('bgps_tech_token')||'';
+  if(!authToken){ location.href='login.html'; }
+
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+  function fmtDate(s){ if(!s)return''; const d=new Date(s.replace(' ','T')); if(isNaN(d))return esc(s);
+    return d.toLocaleDateString('en-IN',{day:'numeric',month:'short'})+' · '+d.toLocaleTimeString('en-IN',{hour:'numeric',minute:'2-digit',hour12:true}); }
+
+  async function load(){
+    try{
+      const r=await fetch(API+'?action=get_earnings',{cache:'no-store',headers:{'X-Auth-Token':authToken}});
+      const d=await r.json();
+      if(d.error){ document.getElementById('list').innerHTML='<div class="empty"><div class="ico">⚠️</div><div class="et">Couldn\'t load earnings</div></div>'; return; }
+      document.getElementById('balance').textContent = d.total_coins||0;
+      document.getElementById('earned').textContent = '+'+(d.total_earned||0);
+      document.getElementById('lost').textContent = '-'+(d.total_lost||0);
+      const list=document.getElementById('list');
+      const h=d.history||[];
+      if(!h.length){
+        list.innerHTML='<div class="empty"><div class="ico">🪙</div><div class="et">No coins yet</div>'+
+          '<div class="es">Submit tasks within 24 hours to start<br>earning coins!</div></div>';
+        return;
+      }
+      list.innerHTML=h.map(x=>{
+        const pos=(x.coins||0)>=0;
+        const cls=pos?'pos':'neg';
+        const ic=pos?'🟢':'🔴';
+        const amt=(pos?'+':'')+x.coins;
+        const tid=x.task_id?('Task '+esc(x.task_id)):'';
+        return `<div class="row ${cls}"><div class="ic">${ic}</div>`+
+          `<div class="mid"><div class="rs">${esc(x.reason)}</div>`+
+          `<div class="meta">${[tid,fmtDate(x.created_at)].filter(Boolean).join(' · ')}</div></div>`+
+          `<div class="amt">${amt}</div></div>`;
+      }).join('');
+    }catch(e){
+      document.getElementById('list').innerHTML='<div class="empty"><div class="ico">📶</div><div class="et">Connection error</div></div>';
+    }
+  }
+  load();
+</script>
+</body>
+</html>
