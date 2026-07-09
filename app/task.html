@@ -328,9 +328,31 @@
 
     let btn='', hint='', hintCls='';
     if(!loc || loc.reached){
-      // location complete — now the CONSENT step
+      // location complete
       let trip=''; if(loc&&loc.trip_km!=null) trip=' · 🚗 '+loc.trip_km+' km, '+loc.trip_minutes+' min';
-      // check current consent status from server
+
+      // Has installation been completed? (all devices pushed)
+      const installs=t.device_installs||[], qty=parseInt(t.device_qty||1)||1;
+      const addingDone=installs.length>=qty && installs.every(d=>d.gps_serial_no&&d.name_on_server);
+      const price=parseFloat(t.price_to_collect||0), coll=parseFloat(t.amount_collected||0);
+      const payDone=coll>=price-15 && price>0;
+
+      if(addingDone && !payDone){
+        // Installation complete → PAYMENT step
+        btn='<button class="act-btn" id="loc-btn" style="background:var(--green)" onclick="openPaymentSoon()"><div class="ico">💰</div><div class="l">Collect Payment</div><div class="s">₹'+(price-coll).toLocaleString('en-IN')+' to collect</div></button>';
+        hint='✅ Device(s) installed — collect payment to finish'; hintCls='hint-done';
+        area.innerHTML='<div class="act-two"><button class="upd-btn" onclick="openUpdate()"><div class="ico">📞</div><div class="l">Update</div><div class="s">Call log &amp; next step</div></button>'+btn+'</div><div class="act-hint '+hintCls+'">'+hint+'</div>';
+        return;
+      }
+      if(addingDone && payDone){
+        // Installed + paid → ready to submit / done
+        btn='<button class="act-btn act-primary" id="loc-btn" onclick="openPaymentSoon()"><div class="ico">✅</div><div class="l">Submit Task</div><div class="s">Installed &amp; paid</div></button>';
+        hint='✅ Installed &amp; payment collected — submit for approval'; hintCls='hint-done';
+        area.innerHTML='<div class="act-two"><button class="upd-btn" onclick="openUpdate()"><div class="ico">📞</div><div class="l">Update</div><div class="s">Call log &amp; next step</div></button>'+btn+'</div><div class="act-hint '+hintCls+'">'+hint+'</div>';
+        return;
+      }
+
+      // Not installed yet → CONSENT step
       const cs=await api('check_consent',{id:t.id});
       if(cs && cs.consented){
         btn='<button class="act-btn act-green" id="loc-btn" onclick="openInstallSoon()"><div class="ico">✅</div><div class="l">Proceed!</div><div class="s">'+esc(cs.name||'Customer')+' confirmed</div></button>';
@@ -608,7 +630,8 @@
           '<div class="inst-field"><div class="inst-lbl">Vehicle Icon *</div><div class="icon-grid" id="iicons-'+idx+'"><div style="font-size:12px;color:var(--text3)">Select a device first…</div></div></div>'+
           '<div class="inst-field"><div class="inst-lbl">Additional Notes</div><input class="inst-in" id="inotes-'+idx+'" placeholder="Optional"></div>'+
         '</div>'+
-        '<button class="inst-btn b-push" id="ipush-'+idx+'" onclick="pushDevice('+idx+')">🛰 Push to GPS Server</button>'+
+        '<div class="inst-res" id="ireview-'+idx+'" style="display:none;margin-bottom:10px"></div>'+
+        '<button class="inst-btn b-push" id="ipush-'+idx+'" onclick="reviewPush('+idx+')">📋 Review &amp; Push</button>'+
         '<button class="inst-btn b-back" style="margin-top:8px" onclick="backToSearch('+idx+')">← Search different IMEI</button>'+
       '</div>';
   }
@@ -702,17 +725,56 @@
     if(el)el.classList.add('sel');
   }
 
-  async function pushDevice(idx){
+  // Step 1: validate + show review table with Confirm/Back (no push yet)
+  function reviewPush(idx){
     const g=id=>document.getElementById(id+'-'+idx)?.value;
-    const serverId=g('iserverid'),deviceId=g('ideviceid'),imei=g('iimeih');
+    const serverId=g('iserverid'),imei=g('iimeih');
     const name=(g('iname')||'').trim(), plate=(g('iplate')||'').trim().toUpperCase(), vtype=g('ivtype');
-    const owner=(g('iowner')||'').trim(), reg=(g('ireg')||'').trim(), inst=g('iinst'), exp=g('iexp'), notes=(g('inotes')||'').trim(), iconId=g('iiconid');
+    const owner=(g('iowner')||'').trim(), inst=g('iinst'), exp=g('iexp'), notes=(g('inotes')||'').trim(), iconId=g('iiconid');
     if(!plate){ alert('Vehicle number / plate is required.'); return; }
     if(!/^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}$/.test(plate)){ alert('Vehicle number must be AB01CD1234 (2 letters, 2 digits, 2 letters, 4 digits).'); return; }
     if(!name){ alert('Name on server is required.'); return; }
     if(!inst){ alert('Installation date is required.'); return; }
     if(!iconId){ alert('Please select a vehicle icon.'); return; }
-    const btn=document.getElementById('ipush-'+idx); if(btn){btn.textContent='Pushing…';btn.disabled=true;}
+    const serverNames=['','Server 1 — bharatgps.com','Server 2 — bharatgps.in','Server 3 — bharatgps.school','Server 4 — bharatgps.org'];
+    const row=(k,v)=>'<tr><td style="color:var(--text3);padding:3px 0;width:42%">'+k+'</td><td style="font-weight:700">'+esc(v)+'</td></tr>';
+    const rev=document.getElementById('ireview-'+idx);
+    rev.style.display='';
+    rev.innerHTML='<div style="background:var(--surface2);border:1.5px solid var(--accent2);border-radius:10px;padding:14px">'+
+      '<div style="font-size:11px;font-weight:800;color:var(--accent2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📋 Review — Confirm Before Pushing</div>'+
+      '<table style="width:100%;border-collapse:collapse;font-size:13px">'+
+        row('Name on Server',name)+
+        '<tr><td style="color:var(--text3);padding:3px 0">IMEI</td><td style="font-weight:700;font-family:monospace">'+esc(imei)+'</td></tr>'+
+        row('GPS Server',serverNames[parseInt(serverId)||0]||('Server '+serverId))+
+        row('Vehicle Plate',plate)+
+        (vtype?row('Vehicle Type',vtype):'')+
+        (owner?row('Owner',owner):'')+
+        row('Install Date',inst)+
+        row('Expiry Date',exp)+
+        (notes?row('Notes',notes):'')+
+      '</table>'+
+      '<div style="margin-top:10px;font-size:11px;color:var(--saffron);font-weight:700">⚠️ Please verify all details carefully. Once pushed to the GPS server this cannot be changed from here.</div>'+
+      '</div>'+
+      '<div style="display:flex;gap:10px;margin-top:10px">'+
+        '<button class="inst-btn b-back" style="flex:1" onclick="cancelReview('+idx+')">← Back to Edit</button>'+
+        '<button class="inst-btn b-push" id="iconfirm-'+idx+'" style="flex:2" onclick="confirmPush('+idx+')">✅ Confirm &amp; Push</button>'+
+      '</div>';
+    // hide the original review/push buttons while confirming
+    document.getElementById('ipush-'+idx).style.display='none';
+    rev.scrollIntoView({behavior:'smooth',block:'center'});
+  }
+  function cancelReview(idx){
+    const rev=document.getElementById('ireview-'+idx); rev.style.display='none'; rev.innerHTML='';
+    document.getElementById('ipush-'+idx).style.display='';
+  }
+
+  // Step 2: actually push to GPS server
+  async function confirmPush(idx){
+    const g=id=>document.getElementById(id+'-'+idx)?.value;
+    const serverId=g('iserverid'),deviceId=g('ideviceid'),imei=g('iimeih');
+    const name=(g('iname')||'').trim(), plate=(g('iplate')||'').trim().toUpperCase(), vtype=g('ivtype');
+    const owner=(g('iowner')||'').trim(), reg=(g('ireg')||'').trim(), inst=g('iinst'), exp=g('iexp'), notes=(g('inotes')||'').trim(), iconId=g('iiconid');
+    const btn=document.getElementById('iconfirm-'+idx); if(btn){btn.textContent='Pushing…';btn.disabled=true;}
     try{
       const fd=new FormData();
       fd.append('server_id',serverId); fd.append('device_id',deviceId); fd.append('name',name);
@@ -722,7 +784,6 @@
       fd.append('comment','Installed via BharatGPS TaskManager — Task '+(_curTask.task_id||''));
       const r=await fetch(GPS_PROXY+'?action=update',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd});
       const data=await r.json();
-      if(btn){btn.textContent='🛰 Push to GPS Server';btn.disabled=false;}
       if(data.success){
         _instSaved[idx]={pushed:true,server_id:serverId,device_id:deviceId,imei,name,server_name:'Server '+serverId,plate,vtype,inst,exp};
         await apiPost('save_device_install',{task_id:_curTask.id,device_index:idx,vehicle_number:plate,vehicle_type:vtype||'',gps_serial_no:imei,name_on_server:name,server_name:'Server '+serverId,server_id:serverId,device_id:deviceId,remarks:notes||'GPS device added to server'}).catch(()=>{});
@@ -731,8 +792,8 @@
         await apiPost('update_task',{id:_curTask.id,remark}).catch(()=>{});
         toast('✅ Device '+idx+' pushed to GPS server');
         renderInstall();
-      } else { alert('❌ GPS Server error: '+(data.error||'Unknown error')); }
-    }catch(e){ if(btn){btn.textContent='🛰 Push to GPS Server';btn.disabled=false;} alert('Error: '+e.message); }
+      } else { if(btn){btn.textContent='✅ Confirm & Push';btn.disabled=false;} alert('❌ GPS Server error: '+(data.error||'Unknown error')); }
+    }catch(e){ if(btn){btn.textContent='✅ Confirm & Push';btn.disabled=false;} alert('Error: '+e.message); }
   }
 
   async function finishInstall(){
@@ -743,6 +804,8 @@
     load();
   }
 
+
+  function openPaymentSoon(){ toast('💰 Payment & Submit — coming next.'); }
 
   load();
 </script>
