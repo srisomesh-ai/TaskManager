@@ -62,6 +62,36 @@ if (!in_array($action, $skipAuth)) {
     $userRole = $cu['role'];
 }
 
+// ── Coin / earnings helpers ──
+function _ensureCoinLedger($pdo){
+    $pdo->exec("CREATE TABLE IF NOT EXISTS coin_ledger (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        task_id INT NULL,
+        coins INT NOT NULL,
+        reason VARCHAR(190) NOT NULL,
+        event_key VARCHAR(120) NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_user (user_id),
+        UNIQUE KEY uniq_event (event_key)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+}
+// Award (or deduct) coins. event_key makes it idempotent — same key won't double-award.
+function award_coins($pdo, $userId, $coins, $reason, $taskId = null, $eventKey = null){
+    try {
+        if (!$userId) return false;
+        _ensureCoinLedger($pdo);
+        if ($eventKey) {
+            $st = $pdo->prepare("INSERT IGNORE INTO coin_ledger (user_id,task_id,coins,reason,event_key) VALUES (?,?,?,?,?)");
+            $st->execute([$userId, $taskId, $coins, $reason, $eventKey]);
+        } else {
+            $st = $pdo->prepare("INSERT INTO coin_ledger (user_id,task_id,coins,reason) VALUES (?,?,?,?)");
+            $st->execute([$userId, $taskId, $coins, $reason]);
+        }
+        return true;
+    } catch(Exception $e){ error_log('award_coins: '.$e->getMessage()); return false; }
+}
+
 // ── Device sync helpers ──
 function _devEnsureTables($pdo){
     $pdo->exec("CREATE TABLE IF NOT EXISTS server_devices (
@@ -1166,6 +1196,33 @@ case 'clear_fcm_token':
         try { $pdo->exec("ALTER TABLE users ADD COLUMN fcm_token VARCHAR(255) NULL"); } catch(Exception $e){}
         $pdo->prepare("UPDATE users SET fcm_token=NULL WHERE id=?")->execute([$userId]);
         echo json_encode(['success'=>true]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// ---- MY EARNINGS (technician coin ledger) ----
+case 'get_earnings':
+    try {
+        _ensureCoinLedger($pdo);
+        $bal = $pdo->prepare("SELECT COALESCE(SUM(coins),0) FROM coin_ledger WHERE user_id=?");
+        $bal->execute([$userId]);
+        $total = intval($bal->fetchColumn());
+        $earnedQ = $pdo->prepare("SELECT COALESCE(SUM(coins),0) FROM coin_ledger WHERE user_id=? AND coins>0");
+        $earnedQ->execute([$userId]);
+        $earned = intval($earnedQ->fetchColumn());
+        $lostQ = $pdo->prepare("SELECT COALESCE(SUM(coins),0) FROM coin_ledger WHERE user_id=? AND coins<0");
+        $lostQ->execute([$userId]);
+        $lost = intval($lostQ->fetchColumn());
+        $rows = $pdo->prepare("SELECT c.coins, c.reason, c.created_at, t.task_id
+                               FROM coin_ledger c LEFT JOIN tasks t ON c.task_id=t.id
+                               WHERE c.user_id=? ORDER BY c.created_at DESC LIMIT 100");
+        $rows->execute([$userId]);
+        echo json_encode([
+            'success'      => true,
+            'total_coins'  => $total,
+            'total_earned' => $earned,
+            'total_lost'   => abs($lost),
+            'history'      => $rows->fetchAll(),
+        ]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
