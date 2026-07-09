@@ -324,36 +324,24 @@
   }
   function pollLocation(n){ if(n>40)return; setTimeout(async()=>{const s=await api('check_customer_location',{id:_curTask.id});if(s&&s.has_location){toast('✅ Customer shared their location!');renderActionArea();}else pollLocation(n+1);},3000); }
   function openMapsNavigation(lat,lng){
-    const ua=navigator.userAgent||'';
-    const isAndroid=/Android/i.test(ua);
-    const isIOS=/iPhone|iPad|iPod/i.test(ua);
-    let url;
-    if(isAndroid){
-      // launches turn-by-turn navigation directly in the Google Maps app
-      url='google.navigation:q='+lat+','+lng+'&mode=d';
-    } else if(isIOS){
-      url='https://www.google.com/maps/dir/?api=1&destination='+lat+','+lng+'&travelmode=driving&dir_action=navigate';
-    } else {
-      url='https://www.google.com/maps/dir/?api=1&destination='+lat+','+lng+'&travelmode=driving';
-    }
-    // Use a real anchor click so Android hands off to the Maps app (window.open is often blocked)
-    const a=document.createElement('a');
-    a.href=url; a.target='_blank'; a.rel='noopener';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    // Safety fallback: if the app didn't take over, open the web maps URL
-    setTimeout(()=>{ if(isAndroid && !document.hidden){ window.location.href='https://www.google.com/maps/dir/?api=1&destination='+lat+','+lng+'&travelmode=driving&dir_action=navigate'; } },1200);
+    // Universal maps URL that Android/Chrome reliably hands off to the Google Maps app
+    // and starts turn-by-turn navigation (dir_action=navigate). Works on iOS + desktop too.
+    const url='https://www.google.com/maps/dir/?api=1&destination='+lat+','+lng+'&travelmode=driving&dir_action=navigate';
+    // Open immediately (must run inside the tap gesture, before any await)
+    const w=window.open(url,'_blank');
+    if(!w){ window.location.href=url; }
   }
 
-  async function startNav(lat,lng){
+  function startNav(lat,lng){
+    // 1) Open Google Maps navigation FIRST, synchronously, so Android keeps the user gesture
+    openMapsNavigation(lat,lng);
+    toast('🧭 Opening Google Maps navigation…');
+    // 2) Capture start point + save trip in the background (no await blocking the map launch)
     const btn=document.getElementById('loc-btn'); if(btn)btn.style.opacity='.6';
-    try{
-      toast('📍 Capturing your start point…');
-      const pos=await getPos();
-      await apiPost('save_trip_start',{id:_curTask.id,lat:pos.lat,lng:pos.lng});
-      toast('🧭 Opening Google Maps navigation…');
-      openMapsNavigation(lat,lng);
-      renderActionArea();
-    }catch(e){ alert(e.message||'Could not capture start point.'); if(btn)btn.style.opacity='1'; }
+    getPos()
+      .then(pos=>apiPost('save_trip_start',{id:_curTask.id,lat:pos.lat,lng:pos.lng}))
+      .then(()=>renderActionArea())
+      .catch(e=>{ toast('⚠️ '+(e.message||'Could not record start point')); if(btn)btn.style.opacity='1'; renderActionArea(); });
   }
   async function reachedLocation(){
     const btn=document.getElementById('loc-btn'); if(btn)btn.style.opacity='.6';
