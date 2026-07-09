@@ -417,9 +417,59 @@
       // PAYMENT
       '<div class="sec"><div class="sec-title t-green">💰 Payment</div><div class="grid3">'+paymentGrid(t)+'</div></div>'+
       // NOTES
-      '<div class="sec"><div class="sec-title t-grey">📝 Discussion &amp; Notes</div><div id="td-notes">'+esc(t.general_notes||t.remark||'No notes added.')+'</div></div>';
+      '<div class="sec"><div class="sec-title t-grey">📝 Discussion &amp; Notes</div><div id="td-notes">'+esc(t.general_notes||t.remark||'No notes added.')+'</div></div>'+
+      // ACTIVITY LOG
+      '<div class="sec"><div class="sec-title t-grey">🕐 Activity Log</div><div id="td-activity"></div></div>';
 
+    renderActivityLog(t.activities||[]);
     if(!isLocked) renderActionArea();
+  }
+
+  // ═══════════════ ACTIVITY LOG (matches web) ═══════════════
+  function renderActivityLog(activities){
+    const el=document.getElementById('td-activity'); if(!el) return;
+    if(!activities || !activities.length){
+      el.innerHTML='<div style="text-align:center;padding:20px 0;color:var(--text3)"><div style="font-size:28px;margin-bottom:6px">📋</div><div style="font-size:12px">No activity yet — updates will appear here</div></div>';
+      return;
+    }
+    const sorted=[...activities].reverse();
+    const cfgMap={
+      'remark':{color:'var(--accent)',bg:'var(--accent-light)',icon:'💬'},
+      'status_change':{color:'var(--green)',bg:'var(--green-bg)',icon:'🔄'},
+      'payment':{color:'var(--saffron)',bg:'var(--saffron-bg)',icon:'💰'},
+      'default':{color:'var(--text3)',bg:'var(--surface2)',icon:'📝'}
+    };
+    el.innerHTML=sorted.map((log,idx)=>{
+      const type=log.activity_type||'remark';
+      const cfg=cfgMap[type]||cfgMap.default;
+      const name=log.user_name||'System';
+      const initials=name.split(' ').map(w=>w[0]||'').join('').slice(0,2).toUpperCase();
+      const dt=(log.created_at||'').slice(0,16).replace('T',' at ');
+      const isNew=idx===0;
+      const remark=log.remark||'';
+      let remarkHtml;
+      if(remark.includes(' | ')){
+        remarkHtml=remark.split(' | ').map((p,i)=>'<div style="font-size:'+(i===0?'13px':'12px')+';'+(i===0?'font-weight:700;color:var(--text)':'color:var(--text2);margin-top:3px')+'">'+esc(p)+'</div>').join('');
+      } else {
+        remarkHtml='<div style="font-size:13px;font-weight:600;color:var(--text)">'+esc(remark)+'</div>';
+      }
+      const emailSent=(type==='remark')?'<span style="font-size:9px;background:#e8f5ec;color:#1a7a3a;padding:1px 6px;border-radius:4px;font-weight:700">✉️ Emailed to customer</span>':'';
+      return '<div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">'+
+          '<div style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:4px">'+
+            '<div style="width:34px;height:34px;border-radius:50%;background:'+cfg.bg+';border:2px solid '+cfg.color+';display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:'+cfg.color+'">'+(initials||cfg.icon)+'</div>'+
+            (idx<sorted.length-1?'<div style="width:2px;flex:1;background:var(--border);border-radius:1px;min-height:12px"></div>':'')+
+          '</div>'+
+          '<div style="flex:1;min-width:0;padding-top:4px">'+
+            '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap">'+
+              '<span style="font-size:11px;font-weight:800;color:'+cfg.color+'">'+esc(name)+'</span>'+
+              (isNew?'<span style="background:'+cfg.bg+';color:'+cfg.color+';font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px">NEW</span>':'')+
+              emailSent+
+              '<span style="font-size:10px;color:var(--text3);margin-left:auto;white-space:nowrap">'+esc(dt)+'</span>'+
+            '</div>'+
+            '<div style="background:var(--surface2);border-radius:6px;padding:8px 10px;border-left:3px solid '+cfg.color+'">'+remarkHtml+'</div>'+
+          '</div>'+
+        '</div>';
+    }).join('');
   }
 
   // ═══════════════ LOCATION FLOW (matches web) ═══════════════
