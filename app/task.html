@@ -425,6 +425,40 @@
     </div>
   </div>
 
+  <!-- GIVE ACCESS / ASSIGN bottom sheet -->
+  <div class="sheet-ov" id="asg-ov" onclick="closeAssign()"></div>
+  <div class="sheet" id="asg-sheet">
+    <div class="sheet-hd">
+      <div class="t">👤 Give Customer Access</div>
+      <div class="r" id="asg-ref"></div>
+    </div>
+    <div class="sheet-bd">
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:14px">Assign the installed device(s) to the customer's GPS account so they can track their vehicle. Enter their email and check if an account exists.</div>
+      <div class="tu-lbl">Customer Email *</div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <input class="inst-in" id="asg-email" type="email" placeholder="customer@email.com" style="flex:1">
+        <button class="inst-btn b-search" style="width:auto;padding:12px 16px;white-space:nowrap" onclick="asgCheck()">🔍 Check</button>
+      </div>
+      <div id="asg-status" style="font-size:13px;margin-bottom:10px;font-weight:700"></div>
+
+      <div id="asg-create-box" style="display:none;margin-bottom:8px">
+        <div class="tu-lbl">Set password for new account</div>
+        <input class="inst-in" id="asg-pass" value="Bgt@1234" placeholder="Min 6 characters" style="margin-bottom:10px">
+        <button class="inst-btn" style="background:var(--accent2)" onclick="asgCreateAndAssign()">➕ Create Account &amp; Assign</button>
+      </div>
+
+      <div id="asg-found-box" style="display:none;margin-bottom:8px">
+        <button class="inst-btn b-push" onclick="asgAssign()">🔗 Assign Device(s) to This Account</button>
+      </div>
+
+      <div id="asg-done" style="display:none;background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:12px;font-size:13px;color:var(--green);font-weight:700;text-align:center;margin-bottom:8px">✅ Device(s) assigned to customer account</div>
+    </div>
+    <div class="sheet-ft">
+      <button class="btn btn-cancel" onclick="closeAssign()">Skip</button>
+      <button class="btn btn-save" id="asg-next" style="display:none" onclick="asgProceedPayment()">💰 Collect Payment →</button>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
 <script>
@@ -915,8 +949,9 @@
     if(saved && saved.pushed){
       bd.innerHTML='<div class="dev-done">✅ Device '+idx+' installed — '+esc(saved.name||'')+' · '+esc(saved.plate||'')+'<br>IMEI '+esc(saved.imei||'')+'</div>'+
         (idx<_instQty?'<button class="inst-btn b-push" onclick="gotoInstDev('+(idx+1)+')">Next Device →</button>':
-          '<div class="inst-card"><div style="font-weight:800;color:var(--green);margin-bottom:6px">🎉 All '+_instQty+' device(s) installed!</div><div style="font-size:13px;color:var(--text2)">Next: give customer access & collect payment — coming next.</div></div>'+
-          '<button class="inst-btn b-push" onclick="finishInstall()">✅ Done — Back to Task</button>');
+          '<div class="inst-card"><div style="font-weight:800;color:var(--green);margin-bottom:6px">🎉 All '+_instQty+' device(s) installed!</div><div style="font-size:13px;color:var(--text2)">Now give the customer access to the device on their GPS account, then collect payment.</div></div>'+
+          '<button class="inst-btn b-push" style="background:var(--accent2)" onclick="openAssign()">👤 Give Customer Access</button>'+
+          '<button class="inst-btn" style="background:var(--surface2);color:var(--text2);border:1.5px solid var(--border);margin-top:8px" onclick="finishInstall()">Skip → Back to Task</button>');
       return;
     }
 
@@ -1439,6 +1474,97 @@
       setTimeout(()=>location.href='dashboard.html',1200);
     } else { err.textContent='❌ '+((res&&res.error)||'Save failed — please try again'); err.style.display=''; }
   }
+
+
+  // ═══════════════ GIVE ACCESS / ASSIGN (matches web checkGpsUser/createGpsUser/assignGpsDevice) ═══════════════
+  let _asgUserId=null;
+  function pushedDevices(){ return Object.keys(_instSaved).map(k=>_instSaved[k]).filter(d=>d&&d.pushed&&d.server_id&&d.device_id); }
+
+  function openAssign(){
+    const t=_curTask;
+    _asgUserId=null;
+    document.getElementById('asg-ref').textContent=(t.task_id||'')+' · '+(t.customer_name||'');
+    document.getElementById('asg-email').value=t.email||'';
+    document.getElementById('asg-pass').value='Bgt@1234';
+    document.getElementById('asg-status').innerHTML='';
+    document.getElementById('asg-create-box').style.display='none';
+    document.getElementById('asg-found-box').style.display='none';
+    document.getElementById('asg-done').style.display='none';
+    document.getElementById('asg-next').style.display='none';
+    document.getElementById('asg-ov').classList.add('open');
+    document.getElementById('asg-sheet').classList.add('open');
+  }
+  function closeAssign(){ document.getElementById('asg-ov').classList.remove('open'); document.getElementById('asg-sheet').classList.remove('open'); }
+
+  async function asgCheck(){
+    const email=document.getElementById('asg-email').value.trim();
+    const st=document.getElementById('asg-status');
+    const createB=document.getElementById('asg-create-box'), foundB=document.getElementById('asg-found-box');
+    if(!email){ st.innerHTML='<span style="color:var(--saffron)">⚠️ Enter email first</span>'; return; }
+    const devs=pushedDevices();
+    if(!devs.length){ st.innerHTML='<span style="color:var(--red)">❌ No pushed device found</span>'; return; }
+    const serverId=devs[0].server_id;
+    st.innerHTML='<span style="color:var(--text3)">🔍 Checking…</span>';
+    createB.style.display='none'; foundB.style.display='none'; _asgUserId=null;
+    let r={};
+    try{ r=await fetch(GPS_PROXY+'?action=find_user&server_id='+serverId+'&email='+encodeURIComponent(email),{headers:{'X-Auth-Token':authToken}}).then(x=>x.json()); }catch(e){ r={}; }
+    if(r.found){
+      _asgUserId=r.user&&r.user.id;
+      st.innerHTML='<span style="color:var(--green)">✅ Account found — '+esc((r.user&&r.user.email)||email)+'</span>';
+      foundB.style.display='';
+    } else {
+      st.innerHTML='<span style="color:var(--saffron)">⚠️ No account found — create a new one</span>';
+      createB.style.display='';
+    }
+  }
+
+  async function asgCreateAndAssign(){
+    const email=document.getElementById('asg-email').value.trim();
+    const pass=document.getElementById('asg-pass').value.trim();
+    const st=document.getElementById('asg-status');
+    if(!pass||pass.length<6){ st.innerHTML='<span style="color:var(--red)">❌ Password must be at least 6 characters</span>'; return; }
+    const devs=pushedDevices(); if(!devs.length){ st.innerHTML='<span style="color:var(--red)">❌ No pushed device</span>'; return; }
+    const serverId=devs[0].server_id, phone=String(_curTask.contact_number||'');
+    st.innerHTML='<span style="color:var(--text3)">⏳ Creating account…</span>';
+    const fd=new FormData(); fd.append('server_id',serverId); fd.append('email',email); fd.append('password',pass); fd.append('phone',phone);
+    let r={};
+    try{ r=await fetch(GPS_PROXY+'?action=create_user',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd}).then(x=>x.json()); }catch(e){ r={}; }
+    if(r.success){
+      _asgUserId=r.user_id;
+      st.innerHTML='<span style="color:var(--green)">✅ Account created</span>';
+      document.getElementById('asg-create-box').style.display='none';
+      await asgAssign();
+    } else {
+      st.innerHTML='<span style="color:var(--red)">❌ '+esc(r.error||'Could not create account')+'</span>';
+    }
+  }
+
+  async function asgAssign(){
+    const st=document.getElementById('asg-status');
+    if(!_asgUserId){ st.innerHTML='<span style="color:var(--red)">❌ No account selected — check email first</span>'; return; }
+    const devs=pushedDevices();
+    st.innerHTML='<span style="color:var(--text3)">⏳ Assigning '+devs.length+' device(s)…</span>';
+    let allOk=true;
+    for(const dev of devs){
+      const fd=new FormData(); fd.append('server_id',dev.server_id); fd.append('device_id',dev.device_id); fd.append('user_id',_asgUserId);
+      let r={};
+      try{ r=await fetch(GPS_PROXY+'?action=assign_device',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd}).then(x=>x.json()); }catch(e){ r={}; }
+      if(!r.success) allOk=false;
+    }
+    if(allOk){
+      document.getElementById('asg-found-box').style.display='none';
+      document.getElementById('asg-create-box').style.display='none';
+      document.getElementById('asg-status').innerHTML='';
+      document.getElementById('asg-done').style.display='';
+      document.getElementById('asg-next').style.display='';
+      toast('✅ Device(s) assigned to customer');
+      apiPost('update_task',{id:_curTask.id,remark:'👤 Access given | Device(s) assigned to customer GPS account ('+document.getElementById('asg-email').value.trim()+')'}).catch(()=>{});
+    } else {
+      st.innerHTML='<span style="color:var(--red)">❌ Assignment failed for one or more devices — try again</span>';
+    }
+  }
+
+  function asgProceedPayment(){ closeAssign(); closeInstall(); openPayment(); }
 
 
   load();
