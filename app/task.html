@@ -677,9 +677,17 @@
       }
 
       if(addingDone && !payDone){
-        // Installation complete → PAYMENT step
+        // Installation complete → must give customer access BEFORE payment
+        const allAccessGiven=installs.length>0 && installs.every(d=>String(d.access_given)==='1'||d.access_given===1||d.access_given===true);
+        if(!allAccessGiven){
+          btn='<button class="act-btn" id="loc-btn" style="background:var(--accent2)" onclick="openAssign()"><div class="ico">📧</div><div class="l">Give Customer Access</div><div class="s">Assign device before payment</div></button>';
+          hint='📧 Device(s) installed — assign them to the customer\'s GPS account before collecting payment.'; hintCls='hint-blue';
+          area.innerHTML='<div class="act-two"><button class="upd-btn" onclick="openUpdate()"><div class="ico">📞</div><div class="l">Update</div><div class="s">Call log &amp; next step</div></button>'+btn+'</div><div class="act-hint '+hintCls+'">'+hint+'</div>';
+          return;
+        }
+        // Access given → PAYMENT step
         btn='<button class="act-btn" id="loc-btn" style="background:var(--green)" onclick="openPaymentSoon()"><div class="ico">💰</div><div class="l">Collect Payment</div><div class="s">₹'+(price-coll).toLocaleString('en-IN')+' to collect</div></button>';
-        hint='✅ Device(s) installed — collect payment to finish'; hintCls='hint-done';
+        hint='✅ Device(s) installed &amp; access given — collect payment to finish'; hintCls='hint-done';
         area.innerHTML='<div class="act-two"><button class="upd-btn" onclick="openUpdate()"><div class="ico">📞</div><div class="l">Update</div><div class="s">Call log &amp; next step</div></button>'+btn+'</div><div class="act-hint '+hintCls+'">'+hint+'</div>';
         return;
       }
@@ -1478,7 +1486,14 @@
 
   // ═══════════════ GIVE ACCESS / ASSIGN (matches web checkGpsUser/createGpsUser/assignGpsDevice) ═══════════════
   let _asgUserId=null;
-  function pushedDevices(){ return Object.keys(_instSaved).map(k=>_instSaved[k]).filter(d=>d&&d.pushed&&d.server_id&&d.device_id); }
+  function pushedDevices(){
+    // primary: freshly-installed devices in this session
+    let list=Object.keys(_instSaved).map(k=>_instSaved[k]).filter(d=>d&&d.pushed&&d.server_id&&d.device_id);
+    if(list.length) return list;
+    // fallback (after refresh): rebuild from saved task installs
+    const installs=(_curTask&&_curTask.device_installs)||[];
+    return installs.filter(d=>d&&d.server_id&&d.device_id).map(d=>({pushed:true,server_id:d.server_id,device_id:d.device_id,imei:d.gps_serial_no,name:d.name_on_server,device_index:d.device_index,access_given:d.access_given}));
+  }
 
   function openAssign(){
     const t=_curTask;
@@ -1542,6 +1557,7 @@
   async function asgAssign(){
     const st=document.getElementById('asg-status');
     if(!_asgUserId){ st.innerHTML='<span style="color:var(--red)">❌ No account selected — check email first</span>'; return; }
+    const email=document.getElementById('asg-email').value.trim();
     const devs=pushedDevices();
     st.innerHTML='<span style="color:var(--text3)">⏳ Assigning '+devs.length+' device(s)…</span>';
     let allOk=true;
@@ -1549,7 +1565,10 @@
       const fd=new FormData(); fd.append('server_id',dev.server_id); fd.append('device_id',dev.device_id); fd.append('user_id',_asgUserId);
       let r={};
       try{ r=await fetch(GPS_PROXY+'?action=assign_device',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd}).then(x=>x.json()); }catch(e){ r={}; }
-      if(!r.success) allOk=false;
+      if(r.success){
+        // persist access so it survives refresh and gates payment (matches desktop mark_access_given)
+        await apiPost('mark_access_given',{task_id:_curTask.id,imei:String(dev.imei||'').replace(/\D/g,''),device_index:dev.device_index,email:email}).catch(()=>{});
+      } else { allOk=false; }
     }
     if(allOk){
       document.getElementById('asg-found-box').style.display='none';
@@ -1558,13 +1577,13 @@
       document.getElementById('asg-done').style.display='';
       document.getElementById('asg-next').style.display='';
       toast('✅ Device(s) assigned to customer');
-      apiPost('update_task',{id:_curTask.id,remark:'👤 Access given | Device(s) assigned to customer GPS account ('+document.getElementById('asg-email').value.trim()+')'}).catch(()=>{});
+      await apiPost('update_task',{id:_curTask.id,remark:'👤 Access given | Device(s) assigned to customer GPS account ('+email+')'}).catch(()=>{});
     } else {
       st.innerHTML='<span style="color:var(--red)">❌ Assignment failed for one or more devices — try again</span>';
     }
   }
 
-  function asgProceedPayment(){ closeAssign(); closeInstall(); openPayment(); }
+  async function asgProceedPayment(){ closeAssign(); closeInstall(); await load(); openPayment(); }
 
 
   load();
