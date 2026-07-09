@@ -132,6 +132,10 @@
   .pmode{padding:14px;border:2px solid var(--border);border-radius:10px;background:var(--surface);font-size:14px;font-weight:800;color:var(--text2);cursor:pointer}
   .pmode.sel{border-color:var(--accent);background:var(--accent-light);color:var(--accent)}
 
+  .cd-methods{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .cdm{padding:14px 8px;border:2px solid var(--border);border-radius:10px;background:var(--surface);font-size:12px;font-weight:800;color:var(--text2);cursor:pointer;line-height:1.5}
+  .cdm.sel{border-color:var(--green);background:var(--green-bg);color:var(--green)}
+
   .loading{text-align:center;padding:50px;color:var(--text3);font-size:14px}
   .spin{display:inline-block;width:20px;height:20px;border:2.5px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle;margin-right:8px}
   @keyframes sp{to{transform:rotate(360deg)}}
@@ -256,6 +260,43 @@
     <div class="sheet-ft">
       <button class="btn btn-cancel" onclick="closePayment()">Cancel</button>
       <button class="btn btn-save" id="pay-save" onclick="savePaymentApp()">💰 Save Payment</button>
+    </div>
+  </div>
+
+  <!-- CASH DEPOSIT bottom sheet -->
+  <div class="sheet-ov" id="cd-ov" onclick="closeCashDeposit()"></div>
+  <div class="sheet" id="cd-sheet">
+    <div class="sheet-hd">
+      <div class="t">🏦 Confirm Cash Deposit</div>
+      <div class="r" id="cd-ref"></div>
+    </div>
+    <div class="sheet-bd">
+      <div style="background:var(--green-bg);border:1.5px solid var(--green);border-radius:10px;padding:12px 14px;margin-bottom:14px;text-align:center">
+        <div style="font-size:11px;color:var(--text3);font-weight:700">CASH AMOUNT TO DEPOSIT</div>
+        <div style="font-size:26px;font-weight:900;color:var(--green)" id="cd-amt">₹0</div>
+      </div>
+      <div class="tu-lbl">How did you deposit the cash? *</div>
+      <div class="cd-methods" id="cd-methods">
+        <button class="cdm" data-m="Cash Handed Over" onclick="cdMethod('Cash Handed Over')">💵<br>Handed Over</button>
+        <button class="cdm" data-m="Bank Transfer" onclick="cdMethod('Bank Transfer')">🏦<br>Bank Transfer</button>
+        <button class="cdm" data-m="ATM Deposit" onclick="cdMethod('ATM Deposit')">🏧<br>ATM Deposit</button>
+        <button class="cdm" data-m="UPI Transfer" onclick="cdMethod('UPI Transfer')">📱<br>UPI Transfer</button>
+      </div>
+      <div id="cd-person-box" style="display:none;margin-top:12px">
+        <div class="tu-lbl">Handed over to (person) *</div>
+        <input class="inst-in" id="cd-person" placeholder="Name of office person">
+      </div>
+      <div id="cd-ref-box" style="display:none;margin-top:12px">
+        <div class="tu-lbl">Reference / transaction no *</div>
+        <input class="inst-in" id="cd-refno" placeholder="Deposit / UTR / txn reference">
+      </div>
+      <div class="tu-lbl" style="margin-top:12px">Remarks</div>
+      <input class="inst-in" id="cd-remarks" placeholder="Optional notes">
+      <div id="cd-err" style="display:none;color:var(--red);font-size:13px;font-weight:700;margin-top:10px"></div>
+    </div>
+    <div class="sheet-ft">
+      <button class="btn btn-cancel" onclick="closeCashDeposit()">Cancel</button>
+      <button class="btn btn-save" id="cd-save" onclick="submitCashDeposit()">✅ Confirm & Submit</button>
     </div>
   </div>
 
@@ -407,6 +448,15 @@
       const addingDone=installs.length>=qty && installs.every(d=>d.gps_serial_no&&d.name_on_server);
       const price=parseFloat(t.price_to_collect||0), coll=parseFloat(t.amount_collected||0);
       const payDone=coll>=price-15 && price>0;
+      const cashPending=(t.cash_deposit_status==='pending');
+
+      // Cash collected but deposit not confirmed → must deposit before submit (priority)
+      if(coll>0 && cashPending){
+        btn='<button class="act-btn" id="loc-btn" style="background:var(--saffron)" onclick="openCashDeposit()"><div class="ico">🏦</div><div class="l">Confirm Cash Deposit</div><div class="s">Deposit cash &amp; submit</div></button>';
+        hint='🏦 Cash deposit pending — deposit the cash & confirm within 24h. Once confirmed, the task is submitted for approval.'; hintCls='hint-amber';
+        area.innerHTML='<div class="act-two"><button class="upd-btn" onclick="openUpdate()"><div class="ico">📞</div><div class="l">Update</div><div class="s">Call log &amp; next step</div></button>'+btn+'</div><div class="act-hint '+hintCls+'">'+hint+'</div>';
+        return;
+      }
 
       if(addingDone && !payDone){
         // Installation complete → PAYMENT step
@@ -416,8 +466,8 @@
         return;
       }
       if(addingDone && payDone){
-        // Installed + paid → ready to submit / done
-        btn='<button class="act-btn act-primary" id="loc-btn" onclick="openPaymentSoon()"><div class="ico">✅</div><div class="l">Submit Task</div><div class="s">Installed &amp; paid</div></button>';
+        // Installed + paid (non-cash or cash already deposited) → submit for approval
+        btn='<button class="act-btn act-primary" id="loc-btn" onclick="submitForApproval()"><div class="ico">✅</div><div class="l">Submit Task</div><div class="s">Installed &amp; paid</div></button>';
         hint='✅ Installed &amp; payment collected — submit for approval'; hintCls='hint-done';
         area.innerHTML='<div class="act-two"><button class="upd-btn" onclick="openUpdate()"><div class="ico">📞</div><div class="l">Update</div><div class="s">Call log &amp; next step</div></button>'+btn+'</div><div class="act-hint '+hintCls+'">'+hint+'</div>';
         return;
@@ -983,6 +1033,54 @@
     btn.textContent='💰 Save Payment'; btn.disabled=false;
     if(res&&res.success){ toast('✅ Payment saved'); closePayment(); setTimeout(load,400); }
     else alert(res.error||'Save failed. Please try again.');
+  }
+
+
+  // ═══════════════ CASH DEPOSIT + SUBMIT (matches web) ═══════════════
+  let _cdMethod='';
+
+  function openCashDeposit(){
+    const t=_curTask; _cdMethod='';
+    document.getElementById('cd-ref').textContent=(t.task_id||'')+' · '+(t.customer_name||'');
+    document.getElementById('cd-amt').textContent='₹'+parseFloat(t.amount_collected||0).toLocaleString('en-IN');
+    document.getElementById('cd-person').value='';
+    document.getElementById('cd-refno').value='';
+    document.getElementById('cd-remarks').value='';
+    document.getElementById('cd-person-box').style.display='none';
+    document.getElementById('cd-ref-box').style.display='none';
+    document.getElementById('cd-err').style.display='none';
+    document.querySelectorAll('.cdm').forEach(b=>b.classList.remove('sel'));
+    document.getElementById('cd-ov').classList.add('open');
+    document.getElementById('cd-sheet').classList.add('open');
+  }
+  function closeCashDeposit(){ document.getElementById('cd-ov').classList.remove('open'); document.getElementById('cd-sheet').classList.remove('open'); }
+
+  function cdMethod(method){
+    _cdMethod=method;
+    document.querySelectorAll('.cdm').forEach(b=>b.classList.toggle('sel',b.dataset.m===method));
+    document.getElementById('cd-person-box').style.display=(method==='Cash Handed Over')?'':'none';
+    document.getElementById('cd-ref-box').style.display=(method!=='Cash Handed Over')?'':'none';
+  }
+
+  async function submitCashDeposit(){
+    const err=document.getElementById('cd-err'); err.style.display='none';
+    if(!_cdMethod){ err.textContent='⚠️ Please select how you deposited the cash'; err.style.display=''; return; }
+    if(_cdMethod==='Cash Handed Over' && !document.getElementById('cd-person').value.trim()){ err.textContent='⚠️ Enter who you handed the cash to'; err.style.display=''; return; }
+    if(_cdMethod!=='Cash Handed Over' && !document.getElementById('cd-refno').value.trim()){ err.textContent='⚠️ Enter the deposit reference / transaction no'; err.style.display=''; return; }
+    const btn=document.getElementById('cd-save'); btn.textContent='⏳ Submitting…'; btn.disabled=true;
+    const payload={id:_curTask.id,deposit_method:_cdMethod,handover_to:document.getElementById('cd-person').value||'',deposit_ref:document.getElementById('cd-refno').value||'',remarks:document.getElementById('cd-remarks').value||''};
+    const res=await apiPost('confirm_cash_deposit',payload);
+    btn.textContent='✅ Confirm & Submit'; btn.disabled=false;
+    if(res&&res.success){ closeCashDeposit(); toast('✅ Cash deposit confirmed — task submitted for approval'); setTimeout(()=>location.href='dashboard.html',1200); }
+    else { err.textContent='❌ '+((res&&res.error)||'Failed — please try again'); err.style.display=''; }
+  }
+
+  // Non-cash: submit the completed task for approval directly
+  async function submitForApproval(){
+    if(!confirm('Submit this task for approval?\n\nInstallation and payment are complete.')) return;
+    const res=await apiPost('update_task',{id:_curTask.id,task_status:'Awaiting Approval',remark:'✅ Installation & payment complete — submitted for approval'});
+    if(res&&res.success){ toast('✅ Submitted for approval'); setTimeout(()=>location.href='dashboard.html',1200); }
+    else alert((res&&res.error)||'Submit failed. Please try again.');
   }
 
 
