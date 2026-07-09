@@ -220,7 +220,24 @@ function sendTaskClosedCustomer(array $task): void {
     );
 }
 
-// ---- TASK UPDATE — Customer Email with full history + Report button ----
+// ---- SIMPLE THANK-YOU — generic, no task/payment details ----
+function sendTaskThankYouCustomer(array $task): void {
+    if (empty($task['email'])) return;
+    $name = trim($task['customer_name'] ?? '');
+    $greeting = $name !== '' ? 'Dear ' . htmlspecialchars($name) . ',' : 'Dear Customer,';
+    $content = '
+    <div class="greeting">' . $greeting . '</div>
+    <p style="font-size:14px;color:#4a5568;margin-bottom:16px">Your service request has been <strong style="color:#1a7a3a">successfully completed</strong>.</p>
+    <p style="font-size:15px;font-weight:700;color:#1a3a6b;margin-top:16px">Thank you for choosing Bharat GPS Tracker! 🙏</p>
+    <p style="font-size:13px;color:#4a5568;margin-top:6px">For any support, call us at <strong>9849849824</strong>.</p>';
+
+    sendMail(
+        $task['email'],
+        $name !== '' ? $name : 'Customer',
+        'Thank You – Service Completed | Bharat GPS Tracker',
+        emailTemplate($content)
+    );
+}
 function sendTaskUpdateCustomer(array $task, string $remark, string $techName, array $activities = []): void {
     if (empty($task['email'])) return;
 
