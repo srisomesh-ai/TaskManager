@@ -83,9 +83,23 @@
           setLoading(false);showErr('This portal is for technicians only.');return;}
         localStorage.setItem('bgps_tech_token',d.token);
         localStorage.setItem('bgps_tech_user',JSON.stringify(d.user));
+        registerFcmToken(d.token);
         location.href='dashboard.html';
       }else{setLoading(false);showErr(d.error||'Invalid email or password.');}
     }catch(e){setLoading(false);showErr('Connection error. Try again.');}
+  }
+
+  // Send the device's FCM token (injected by the Flutter WebView as window.BGPS_FCM_TOKEN) to the backend.
+  // Retries briefly in case the native layer sets the token a moment after page load.
+  function registerFcmToken(authToken, tries){
+    tries = tries||0;
+    var t = window.BGPS_FCM_TOKEN;
+    if(t){
+      fetch(API+'?action=save_fcm_token',{method:'POST',headers:{'Content-Type':'application/json','X-Auth-Token':authToken},
+        body:JSON.stringify({fcm_token:t,platform:'android'})}).catch(function(){});
+      return;
+    }
+    if(tries<8) setTimeout(function(){registerFcmToken(authToken,tries+1);},1500);
   }
 </script>
 </body>
