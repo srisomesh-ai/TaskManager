@@ -144,6 +144,17 @@
     </div>
   </div>
 
+  <div style="padding:10px 14px 0">
+    <div class="dev-open-card" onclick="location.href='earnings.html'">
+      <div class="doc-ic">💰</div>
+      <div class="doc-main">
+        <div class="doc-n"><span id="coin-count">–</span> <span style="font-size:13px;font-weight:600;color:var(--text2)">coins</span></div>
+        <div class="doc-l">My Earnings · tap to view</div>
+      </div>
+      <div class="doc-arrow">›</div>
+    </div>
+  </div>
+
   <div class="sec"><h2>📋 My Tasks</h2></div>
   <div class="chips" id="chips">
     <div class="chip on" data-f="active" onclick="setFilter(this)">🔵 Active</div>
@@ -223,6 +234,14 @@
     if(oc) oc.textContent=rows.length;
   }
 
+  async function loadCoins(){
+    try{
+      const d=await api('get_earnings');
+      const el=document.getElementById('coin-count');
+      if(el) el.textContent=(d&&typeof d.total_coins!=='undefined')?d.total_coins:0;
+    }catch(e){ const el=document.getElementById('coin-count'); if(el) el.textContent='0'; }
+  }
+
   async function load(){
     const first=currentUser.name?currentUser.name.split(' ')[0]:'Technician';
     document.getElementById('h-name').textContent='Hi, '+first;
@@ -245,6 +264,7 @@
 
     render();
     loadDevices();
+    loadCoins();
   }
   load();
 </script>
