@@ -158,6 +158,7 @@
   if(!authToken){ location.href='login.html'; }
   const taskId=new URLSearchParams(location.search).get('id');
   let _curTask=null;
+  let _navStarted=false;  // optimistic: set true the moment technician taps Navigate
 
   async function api(action,params={}){
     const url=API+'?action='+action+'&'+new URLSearchParams(params);
@@ -295,7 +296,7 @@
     } else if(!loc.has_location){
       btn='<button class="act-btn act-blue" id="loc-btn" onclick="askLocation()"><div class="ico">📍</div><div class="l">Get Location</div><div class="s">Send link to customer</div></button>';
       hint='📍 First, send the customer a WhatsApp link to share their exact location'; hintCls='hint-blue';
-    } else if(!loc.started){
+    } else if(!loc.started && !_navStarted){
       btn='<button class="act-btn act-green" id="loc-btn" onclick="startNav('+loc.lat+','+loc.lng+')"><div class="ico">🧭</div><div class="l">Navigate</div><div class="s">Start trip to customer</div></button>';
       hint='✅ Customer shared location — tap Navigate to start (your trip is recorded)'; hintCls='hint-green';
     } else {
@@ -335,13 +336,15 @@
   function startNav(lat,lng){
     // 1) Open Google Maps navigation FIRST, synchronously, so Android keeps the user gesture
     openMapsNavigation(lat,lng);
-    toast('🧭 Opening Google Maps navigation…');
-    // 2) Capture start point + save trip in the background (no await blocking the map launch)
-    const btn=document.getElementById('loc-btn'); if(btn)btn.style.opacity='.6';
+    toast('🧭 Navigation started');
+    // 2) Optimistically advance the UI to the "Reached" step right away
+    _navStarted=true;
+    renderActionArea();
+    // 3) Save trip start in the background — try GPS, but save even if GPS is slow/denied
     getPos()
       .then(pos=>apiPost('save_trip_start',{id:_curTask.id,lat:pos.lat,lng:pos.lng}))
-      .then(()=>renderActionArea())
-      .catch(e=>{ toast('⚠️ '+(e.message||'Could not record start point')); if(btn)btn.style.opacity='1'; renderActionArea(); });
+      .catch(()=>apiPost('save_trip_start',{id:_curTask.id}))  // save without coords rather than failing
+      .catch(()=>{});
   }
   async function reachedLocation(){
     const btn=document.getElementById('loc-btn'); if(btn)btn.style.opacity='.6';
@@ -413,6 +416,13 @@
   function attendNext(){
     toast('▶️ Consent / Installation — coming in the next screen.');
   }
+
+  // When the technician returns to this tab (e.g. back from Google Maps), refresh the action step
+  document.addEventListener('visibilitychange',()=>{
+    if(!document.hidden && _curTask && !['Awaiting Approval','Closed','Cancelled'].includes(_curTask.task_status)){
+      renderActionArea();
+    }
+  });
 
   load();
 </script>
