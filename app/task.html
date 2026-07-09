@@ -48,7 +48,7 @@
   #td-notes{font-size:13px;color:var(--text2);line-height:1.7;white-space:pre-wrap}
 
   /* ACTIONS PANEL */
-  .act-btn{width:100%;border:none;border-radius:10px;padding:16px 12px;text-align:center;cursor:pointer;transition:opacity .2s}
+  .act-btn{width:100%;border:none;border-radius:12px;padding:18px 12px;text-align:center;cursor:pointer;transition:opacity .2s;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:118px}
   .act-btn:active{opacity:.85}
   .act-btn .ico{font-size:28px;margin-bottom:6px}
   .act-btn .l{font-size:14px;font-weight:800}
@@ -65,8 +65,10 @@
   .fb-done{background:var(--green-bg);border:1.5px solid var(--green);color:#166534}
   .trip-line{background:var(--surface2);border-radius:8px;padding:8px 12px;font-size:11px;color:var(--text3);margin-top:10px}
 
-  .act-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
-  .upd-btn{background:var(--surface2);border:2px solid var(--accent);border-radius:10px;padding:16px 12px;text-align:center;cursor:pointer}
+  .act-two{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:stretch}
+  .act-hint{margin-top:10px;font-size:12.5px;line-height:1.5;color:var(--text2);padding-left:2px}
+  .hint-blue{color:#1f5fd6}.hint-green{color:var(--green)}.hint-amber{color:var(--saffron)}.hint-done{color:#166534}
+  .upd-btn{background:var(--surface2);border:2px solid var(--accent);border-radius:12px;padding:18px 12px;text-align:center;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:118px}
   .upd-btn:active{background:var(--accent-light)}
   .upd-btn .ico{font-size:28px;margin-bottom:6px}
   .upd-btn .l{font-size:14px;font-weight:800;color:var(--accent)}
@@ -255,7 +257,7 @@
     const isLocked=['Awaiting Approval','Closed','Cancelled'].includes(t.task_status);
     document.getElementById('td-body').innerHTML=
       // ACTIONS panel (only if not locked)
-      (isLocked?'':'<div class="sec" id="td-tech-actions"><div class="sec-title t-accent">⚡ Actions</div><div class="act-grid"><button class="upd-btn" onclick="openUpdate()"><div class="ico">📞</div><div class="l">Update</div><div class="s">Call log &amp; next step</div></button><div id="action-area"><div style="color:var(--text3);font-size:13px">Loading…</div></div></div></div>')+
+      (isLocked?'':'<div class="sec" id="td-tech-actions"><div class="sec-title t-accent">⚡ Actions</div><div id="action-area"><div style="color:var(--text3);font-size:13px">Loading…</div></div></div>')+
       // locked banner
       (isLocked?'<div class="sec"><div style="background:'+(t.task_status==='Closed'?'var(--green-bg)':'var(--surface2)')+';border:1.5px solid '+(t.task_status==='Closed'?'var(--green)':'var(--border)')+';border-radius:8px;padding:14px;text-align:center"><div style="font-size:24px;margin-bottom:6px">'+(t.task_status==='Closed'?'✅':t.task_status==='Awaiting Approval'?'⏳':'❌')+'</div><div style="font-size:13px;font-weight:800;color:'+(t.task_status==='Closed'?'var(--green)':'var(--text2)')+'">'+({'Awaiting Approval':'⏳ Awaiting manager approval','Closed':'✅ Task closed','Cancelled':'❌ Task cancelled'}[t.task_status]||'🔒 Locked')+'</div></div></div>':'')+
       // INFO
@@ -281,25 +283,33 @@
   async function renderActionArea(){
     const area=document.getElementById('action-area'); if(!area||!_curTask)return;
     const t=_curTask;
-    area.innerHTML='<div style="color:var(--text3);font-size:13px">Checking location status…</div>';
+    area.innerHTML='<div style="color:var(--text3);font-size:12px;padding:14px 0;text-align:center">Checking…</div>';
     const loc=await api('check_customer_location',{id:t.id});
 
+    let btn='', hint='', hintCls='';
     if(!loc || loc.reached){
-      let trip=''; if(loc&&loc.trip_km!=null) trip='<div class="trip-line">🚗 Trip: <strong>'+loc.trip_km+' km</strong> · <strong>'+loc.trip_minutes+' min</strong></div>';
-      area.innerHTML='<div class="flowbox fb-done">✅ Location complete — you\'ve reached the customer.</div>'+trip+
-        '<div class="flowbox fb-amber" style="margin-top:10px;margin-bottom:0">▶️ Next: Attend / Consent — coming in the next screen.</div>';
-      return;
-    }
-    if(!loc.has_location){
-      area.innerHTML='<div class="flowbox fb-blue">📍 First, send the customer a link to share their exact location. Tap to send via WhatsApp.</div>'+
-        '<button class="act-btn act-blue" id="loc-btn" onclick="askLocation()"><div class="ico">📍</div><div class="l">Get Customer Location</div><div class="s">Send location link to customer</div></button>';
+      // location complete — button becomes Attend (leads to consent, next screen)
+      btn='<button class="act-btn act-primary" id="loc-btn" onclick="attendNext()"><div class="ico">🔧</div><div class="l">Attend</div><div class="s">'+esc(t.device_details||'Start task')+'</div></button>';
+      let trip=''; if(loc&&loc.trip_km!=null) trip=' · 🚗 '+loc.trip_km+' km, '+loc.trip_minutes+' min';
+      hint='✅ Location complete — you\'ve reached the customer'+trip; hintCls='hint-done';
+    } else if(!loc.has_location){
+      btn='<button class="act-btn act-blue" id="loc-btn" onclick="askLocation()"><div class="ico">📍</div><div class="l">Get Location</div><div class="s">Send link to customer</div></button>';
+      hint='📍 First, send the customer a WhatsApp link to share their exact location'; hintCls='hint-blue';
     } else if(!loc.started){
-      area.innerHTML='<div class="flowbox fb-green">✅ Customer shared their location. Tap to start navigation — your start point &amp; time will be recorded.</div>'+
-        '<button class="act-btn act-green" id="loc-btn" onclick="startNav('+loc.lat+','+loc.lng+')"><div class="ico">🧭</div><div class="l">Navigate to Customer</div><div class="s">Start navigation</div></button>';
+      btn='<button class="act-btn act-green" id="loc-btn" onclick="startNav('+loc.lat+','+loc.lng+')"><div class="ico">🧭</div><div class="l">Navigate</div><div class="s">Start trip to customer</div></button>';
+      hint='✅ Customer shared location — tap Navigate to start (your trip is recorded)'; hintCls='hint-green';
     } else {
-      area.innerHTML='<div class="flowbox fb-amber">🧭 On the way. Tap <strong>Reached Location</strong> when you arrive — required before consent.<div style="margin-top:6px"><a target="_blank" href="https://www.google.com/maps/dir/?api=1&destination='+loc.lat+','+loc.lng+'" style="color:#1f5fd6;font-weight:700">🗺️ Reopen navigation</a></div></div>'+
-        '<button class="act-btn act-red" id="loc-btn" onclick="reachedLocation()"><div class="ico">📍</div><div class="l">Reached Location</div><div class="s">Confirm arrival to continue</div></button>';
+      btn='<button class="act-btn act-red" id="loc-btn" onclick="reachedLocation()"><div class="ico">📍</div><div class="l">Reached</div><div class="s">Confirm arrival</div></button>';
+      hint='🧭 On the way — tap Reached when you arrive. <a target="_blank" href="https://www.google.com/maps/dir/?api=1&destination='+loc.lat+','+loc.lng+'" style="color:#1f5fd6;font-weight:700">Reopen map</a>'; hintCls='hint-amber';
     }
+
+    // Two equal buttons in a row, slim hint line BELOW
+    area.innerHTML =
+      '<div class="act-two">'+
+        '<button class="upd-btn" onclick="openUpdate()"><div class="ico">📞</div><div class="l">Update</div><div class="s">Call log &amp; next step</div></button>'+
+        btn+
+      '</div>'+
+      '<div class="act-hint '+hintCls+'">'+hint+'</div>';
   }
 
   async function askLocation(){
@@ -386,6 +396,10 @@
     finally{ _tuSubmitting=false; btn.textContent='💾 Save Update'; btn.disabled=false; }
   }
 
+
+  function attendNext(){
+    toast('▶️ Consent / Installation — coming in the next screen.');
+  }
 
   load();
 </script>
