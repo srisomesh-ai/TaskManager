@@ -345,6 +345,86 @@
     </div>
   </div>
 
+  <!-- DEMO REPORT bottom sheet -->
+  <div class="sheet-ov" id="dm-ov" onclick="closeDemo()"></div>
+  <div class="sheet" id="dm-sheet">
+    <div class="sheet-hd">
+      <div class="t">📱 Demonstration Report</div>
+      <div class="r" id="dm-ref"></div>
+    </div>
+    <div class="sheet-bd">
+      <div id="dm-ro-banner" style="display:none;background:var(--green-bg);border:1.5px solid var(--green);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--green);margin-bottom:14px">✅ This report was already submitted and is awaiting admin review (read-only).</div>
+      <div class="tu-lbl">Company / Customer Name *</div>
+      <input class="inst-in" id="dm-company" placeholder="Company or customer name" style="margin-bottom:12px">
+      <div class="tu-lbl">Who attended? (Name &amp; designation) *</div>
+      <input class="inst-in" id="dm-attendee" placeholder="e.g. Ravi Kumar — Fleet Manager" style="margin-bottom:12px">
+      <div class="tu-lbl">Products demonstrated *</div>
+      <input class="inst-in" id="dm-products" placeholder="e.g. Basic GPS, Engine Cut, VLTD" style="margin-bottom:12px">
+      <div class="tu-lbl">Customer interest level *</div>
+      <select class="inst-in" id="dm-interest" style="margin-bottom:12px">
+        <option value="">Select…</option>
+        <option value="high">🔥 High — Ready to buy</option>
+        <option value="medium">👍 Medium — Considering</option>
+        <option value="low">👎 Low — Not sure</option>
+        <option value="none">❌ Not Interested</option>
+      </select>
+      <div class="tu-lbl">Customer concerns / questions raised *</div>
+      <textarea class="inst-in" id="dm-concerns" rows="2" placeholder="What did the customer ask? (Write None if no concerns)" style="margin-bottom:12px"></textarea>
+      <div class="tu-lbl">Follow-up required? *</div>
+      <select class="inst-in" id="dm-followup" onchange="dmToggleFu()" style="margin-bottom:12px">
+        <option value="">Select…</option>
+        <option value="no">No</option>
+        <option value="yes">Yes — Set follow-up date</option>
+      </select>
+      <div id="dm-fu-box" style="display:none;margin-bottom:12px">
+        <div class="tu-lbl">Follow-up date *</div>
+        <input class="inst-in" type="date" id="dm-fu-date">
+      </div>
+      <div class="tu-lbl">Remarks *</div>
+      <textarea class="inst-in" id="dm-remarks" rows="2" placeholder="Write None if nothing else to add"></textarea>
+      <div id="dm-err" style="display:none;color:var(--red);font-size:13px;font-weight:700;margin-top:10px"></div>
+    </div>
+    <div class="sheet-ft" id="dm-ft">
+      <button class="btn btn-cancel" onclick="closeDemo()">Cancel</button>
+      <button class="btn btn-save" id="dm-save" onclick="submitDemo()">✅ Submit &amp; Close Task</button>
+    </div>
+  </div>
+
+  <!-- V2V TRANSFER bottom sheet -->
+  <div class="sheet-ov" id="v2-ov" onclick="closeV2V()"></div>
+  <div class="sheet" id="v2-sheet">
+    <div class="sheet-hd">
+      <div class="t">🚗 Vehicle-to-Vehicle Transfer</div>
+      <div class="r" id="v2-ref"></div>
+    </div>
+    <div class="sheet-bd">
+      <div class="tu-lbl">IMEI / GPS Serial No *</div>
+      <input class="inst-in" id="v2-imei" placeholder="IMEI or serial" style="margin-bottom:12px">
+      <div class="tu-lbl">New Vehicle Number *</div>
+      <input class="inst-in" id="v2-newveh" placeholder="e.g. AP31AB1234" style="text-transform:uppercase;margin-bottom:12px">
+      <div class="tu-lbl">New Vehicle Type</div>
+      <select class="inst-in" id="v2-vtype" style="margin-bottom:12px">
+        <option value="">Select…</option>
+        <option>Car</option><option>Truck</option><option>Bus</option><option>Auto</option>
+        <option>Bike</option><option>JCB</option><option>Tractor</option><option>Van</option>
+        <option>Mini Truck</option><option>Other</option>
+      </select>
+      <div class="tu-lbl">Transfer confirmed? *</div>
+      <select class="inst-in" id="v2-done" style="margin-bottom:12px">
+        <option value="">Select…</option>
+        <option value="yes">✅ Yes</option>
+        <option value="no">❌ No</option>
+      </select>
+      <div class="tu-lbl">Remarks</div>
+      <textarea class="inst-in" id="v2-remarks" rows="2" placeholder="Optional"></textarea>
+      <div id="v2-err" style="display:none;color:var(--red);font-size:13px;font-weight:700;margin-top:10px"></div>
+    </div>
+    <div class="sheet-ft">
+      <button class="btn btn-cancel" onclick="closeV2V()">Cancel</button>
+      <button class="btn btn-save" id="v2-save" onclick="submitV2V()">✅ Submit &amp; Close Task</button>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
 <script>
@@ -580,8 +660,25 @@
       // Not installed yet → CONSENT step
       const cs=await api('check_consent',{id:t.id});
       if(cs && cs.consented){
-        btn='<button class="act-btn act-green" id="loc-btn" onclick="openInstallSoon()"><div class="ico">✅</div><div class="l">Proceed!</div><div class="s">'+esc(cs.name||'Customer')+' confirmed</div></button>';
-        hint='✅ '+esc(cs.name||'Customer')+' agreed to T&amp;C and payment — tap Proceed to install'+trip; hintCls='hint-done';
+        const cName=esc(cs.name||'Customer');
+        const jl=(t.device_details||'').toLowerCase();
+        if(jl.includes('demonstration')||jl.includes('demo')){
+          // Demo: two-step — Proceed for Demo, then Demo Complete → report
+          const demoProceeded=localStorage.getItem('demo_proceeded_'+t.id)==='1';
+          if(demoProceeded){
+            btn='<button class="act-btn act-green" id="loc-btn" onclick="openDemo()"><div class="ico">📱</div><div class="l">Demo Complete</div><div class="s">Tap to record demo report</div></button>';
+            hint='📱 '+cName+' confirmed — once the demo is done, submit the demo report to close the task.'+trip; hintCls='hint-done';
+          } else {
+            btn='<button class="act-btn act-green" id="loc-btn" onclick="proceedForDemo()"><div class="ico">🎬</div><div class="l">Proceed for Demo</div><div class="s">'+cName+' confirmed — tap to start</div></button>';
+            hint='✅ '+cName+' agreed — tap to start the demonstration. When done, submit the report.'+trip; hintCls='hint-done';
+          }
+        } else if(jl.includes('vehicle to vehicle')||jl.includes('v2v')){
+          btn='<button class="act-btn act-green" id="loc-btn" onclick="openV2V()"><div class="ico">🚗</div><div class="l">Record Transfer</div><div class="s">'+cName+' confirmed</div></button>';
+          hint='✅ '+cName+' agreed — move the device to the new vehicle, then record the transfer to close.'+trip; hintCls='hint-done';
+        } else {
+          btn='<button class="act-btn act-green" id="loc-btn" onclick="openInstallSoon()"><div class="ico">✅</div><div class="l">Proceed!</div><div class="s">'+cName+' confirmed</div></button>';
+          hint='✅ '+cName+' agreed to T&amp;C and payment — tap Proceed to install'+trip; hintCls='hint-done';
+        }
       } else if(_consentSent){
         btn='<button class="act-btn" id="loc-btn" style="background:var(--saffron)" onclick="resendConsent()"><div class="ico">⏳</div><div class="l">Waiting…</div><div class="s">Tap to resend consent</div></button>';
         hint='⏳ Consent sent — waiting for customer to confirm T&amp;C &amp; payment. This updates automatically.'; hintCls='hint-amber';
@@ -774,10 +871,10 @@
 
   async function openInstall(){
     const t=_curTask;
-    // route special jobs — troubleshoot has its own report flow; demo/v2v/remove still desktop-only for now
+    // route special jobs — troubleshoot/demo/v2v now have their own flows; only remove is desktop-only
     const job=(t.device_details||'').toLowerCase();
-    if(job.includes('demo')||job.includes('v2v')||job.includes('vehicle to vehicle')||job.includes('remove only')||job.includes('only remove')){
-      alert('This job type ('+(t.device_details||'')+') uses a different flow — please complete it on the desktop portal for now.');
+    if(job.includes('remove only')||job.includes('only remove')){
+      alert('Device removal uses a different flow — please complete it on the desktop portal for now.');
       return;
     }
     _instQty=parseInt(t.device_qty||1)||1;
@@ -1233,6 +1330,114 @@
     } else {
       err.textContent='❌ '+((res&&res.error)||'Save failed — please try again'); err.style.display='';
     }
+  }
+
+
+  // ═══════════════ DEMO FLOW (matches web proceedForDemo + openJobOutcome demo) ═══════════════
+  function proceedForDemo(){
+    const t=_curTask;
+    alert('🎉 Great! All set.\n\n'+(t.customer_name||'The customer')+' has confirmed. You can now go ahead with the demonstration.\n\nOnce the demo is complete, tap the green button again to submit the demo report.');
+    localStorage.setItem('demo_proceeded_'+t.id,'1');
+    renderActionArea();
+  }
+
+  function openDemo(){
+    const t=_curTask;
+    // Already submitted? show read-only from demo_report_json
+    let prior=null;
+    if(t.demo_report_json){ try{ prior=JSON.parse(t.demo_report_json); }catch(e){ prior=null; } }
+    document.getElementById('dm-ref').textContent=(t.task_id||'')+' · '+(t.customer_name||'');
+    document.getElementById('dm-err').style.display='none';
+    if(prior){
+      document.getElementById('dm-ro-banner').style.display='block';
+      document.getElementById('dm-company').value=prior['Company/Customer']||'';
+      document.getElementById('dm-attendee').value=prior['Attendee']||'';
+      document.getElementById('dm-products').value=prior['Products Demo']||'';
+      document.getElementById('dm-interest').value=prior['Interest Level']||'';
+      document.getElementById('dm-concerns').value=prior['Concerns Raised']||'';
+      const fu=(prior['Follow-up']||'').toString().toLowerCase().startsWith('yes')?'yes':'no';
+      document.getElementById('dm-followup').value=fu; dmToggleFu();
+      document.getElementById('dm-remarks').value=prior['Remarks']||'';
+      ['dm-company','dm-attendee','dm-products','dm-interest','dm-concerns','dm-followup','dm-fu-date','dm-remarks'].forEach(id=>{const e=document.getElementById(id);if(e)e.disabled=true;});
+      document.getElementById('dm-ft').style.display='none';
+    } else {
+      document.getElementById('dm-ro-banner').style.display='none';
+      document.getElementById('dm-ft').style.display='flex';
+      ['dm-company','dm-attendee','dm-products','dm-interest','dm-concerns','dm-followup','dm-fu-date','dm-remarks'].forEach(id=>{const e=document.getElementById(id);if(e)e.disabled=false;});
+      document.getElementById('dm-company').value=t.customer_name||'';
+      document.getElementById('dm-attendee').value='';
+      document.getElementById('dm-products').value='';
+      document.getElementById('dm-interest').value='';
+      document.getElementById('dm-concerns').value='';
+      document.getElementById('dm-followup').value=''; dmToggleFu();
+      document.getElementById('dm-fu-date').value='';
+      document.getElementById('dm-remarks').value='';
+    }
+    document.getElementById('dm-ov').classList.add('open');
+    document.getElementById('dm-sheet').classList.add('open');
+  }
+  function closeDemo(){ document.getElementById('dm-ov').classList.remove('open'); document.getElementById('dm-sheet').classList.remove('open'); }
+  function dmToggleFu(){ document.getElementById('dm-fu-box').style.display=(document.getElementById('dm-followup').value==='yes')?'block':'none'; }
+
+  async function submitDemo(){
+    const err=document.getElementById('dm-err'); err.style.display='none';
+    const g=id=>document.getElementById(id).value.trim();
+    const company=g('dm-company'),attendee=g('dm-attendee'),products=g('dm-products');
+    const interest=document.getElementById('dm-interest').value,concerns=g('dm-concerns');
+    const followup=document.getElementById('dm-followup').value,remarks=g('dm-remarks');
+    if(!company||!attendee||!products||!interest||!concerns||!followup||!remarks){
+      err.textContent='⚠️ Please fill all required fields'; err.style.display=''; return;
+    }
+    let fuVal='No';
+    if(followup==='yes'){
+      const d=document.getElementById('dm-fu-date').value;
+      if(!d){ err.textContent='⚠️ Set the follow-up date'; err.style.display=''; return; }
+      fuVal='Yes — '+d;
+    }
+    const fields={'Company/Customer':company,'Attendee':attendee,'Products Demo':products,'Interest Level':interest,'Concerns Raised':concerns,'Follow-up':fuVal,'Remarks':remarks};
+    const btn=document.getElementById('dm-save'); btn.textContent='⏳ Submitting…'; btn.disabled=true;
+    const res=await apiPost('save_job_outcome',{task_id:_curTask.id,job_type:'demo',summary:'📱 Demo Report',fields,removed_serial:'',close_task:true});
+    btn.textContent='✅ Submit & Close Task'; btn.disabled=false;
+    if(res && res.success){
+      localStorage.removeItem('demo_proceeded_'+_curTask.id);
+      closeDemo();
+      toast('✅ Demo report saved — task sent for approval');
+      setTimeout(()=>location.href='dashboard.html',1200);
+    } else { err.textContent='❌ '+((res&&res.error)||'Save failed — please try again'); err.style.display=''; }
+  }
+
+  // ═══════════════ V2V TRANSFER (matches web openJobOutcome v2v) ═══════════════
+  function openV2V(){
+    const t=_curTask;
+    document.getElementById('v2-ref').textContent=(t.task_id||'')+' · '+(t.customer_name||'');
+    document.getElementById('v2-imei').value=t.gps_serial_no||'';
+    document.getElementById('v2-newveh').value='';
+    document.getElementById('v2-vtype').value='';
+    document.getElementById('v2-done').value='';
+    document.getElementById('v2-remarks').value='';
+    document.getElementById('v2-err').style.display='none';
+    document.getElementById('v2-ov').classList.add('open');
+    document.getElementById('v2-sheet').classList.add('open');
+  }
+  function closeV2V(){ document.getElementById('v2-ov').classList.remove('open'); document.getElementById('v2-sheet').classList.remove('open'); }
+
+  async function submitV2V(){
+    const err=document.getElementById('v2-err'); err.style.display='none';
+    const imei=document.getElementById('v2-imei').value.trim();
+    const newveh=document.getElementById('v2-newveh').value.trim().toUpperCase();
+    const done=document.getElementById('v2-done').value;
+    if(!imei){ err.textContent='⚠️ Enter the IMEI / GPS serial'; err.style.display=''; return; }
+    if(!newveh){ err.textContent='⚠️ Enter the new vehicle number'; err.style.display=''; return; }
+    if(!done){ err.textContent='⚠️ Select whether the transfer is confirmed'; err.style.display=''; return; }
+    const fields={'IMEI':imei,'New Vehicle No':newveh,'New Vehicle Type':document.getElementById('v2-vtype').value,'Transfer Done':done,'Remarks':document.getElementById('v2-remarks').value.trim()};
+    const btn=document.getElementById('v2-save'); btn.textContent='⏳ Submitting…'; btn.disabled=true;
+    const res=await apiPost('save_job_outcome',{task_id:_curTask.id,job_type:'v2v',summary:'🚗 V2V Transfer Report',fields,removed_serial:'',close_task:true});
+    btn.textContent='✅ Submit & Close Task'; btn.disabled=false;
+    if(res && res.success){
+      closeV2V();
+      toast('✅ Transfer recorded — task sent for approval');
+      setTimeout(()=>location.href='dashboard.html',1200);
+    } else { err.textContent='❌ '+((res&&res.error)||'Save failed — please try again'); err.style.display=''; }
   }
 
 
