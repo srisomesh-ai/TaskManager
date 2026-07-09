@@ -289,10 +289,21 @@
 
     let btn='', hint='', hintCls='';
     if(!loc || loc.reached){
-      // location complete — button becomes Attend (leads to consent, next screen)
-      btn='<button class="act-btn act-primary" id="loc-btn" onclick="attendNext()"><div class="ico">🔧</div><div class="l">Attend</div><div class="s">'+esc(t.device_details||'Start task')+'</div></button>';
+      // location complete — now the CONSENT step
       let trip=''; if(loc&&loc.trip_km!=null) trip=' · 🚗 '+loc.trip_km+' km, '+loc.trip_minutes+' min';
-      hint='✅ Location complete — you\'ve reached the customer'+trip; hintCls='hint-done';
+      // check current consent status from server
+      const cs=await api('check_consent',{id:t.id});
+      if(cs && cs.consented){
+        btn='<button class="act-btn act-green" id="loc-btn" onclick="openInstallSoon()"><div class="ico">✅</div><div class="l">Proceed!</div><div class="s">'+esc(cs.name||'Customer')+' confirmed</div></button>';
+        hint='✅ '+esc(cs.name||'Customer')+' agreed to T&amp;C and payment — tap Proceed to install'+trip; hintCls='hint-done';
+      } else if(_consentSent){
+        btn='<button class="act-btn" id="loc-btn" style="background:var(--saffron)" onclick="resendConsent()"><div class="ico">⏳</div><div class="l">Waiting…</div><div class="s">Tap to resend consent</div></button>';
+        hint='⏳ Consent sent — waiting for customer to confirm T&amp;C &amp; payment. This updates automatically.'; hintCls='hint-amber';
+        startConsentPoll(t.id);
+      } else {
+        btn='<button class="act-btn act-primary" id="loc-btn" onclick="handleAttend()"><div class="ico">🔧</div><div class="l">Attend</div><div class="s">Send consent to customer</div></button>';
+        hint='✅ Location complete'+trip+' — tap Attend to send the consent &amp; payment request'; hintCls='hint-done';
+      }
     } else if(!loc.has_location){
       btn='<button class="act-btn act-blue" id="loc-btn" onclick="askLocation()"><div class="ico">📍</div><div class="l">Get Location</div><div class="s">Send link to customer</div></button>';
       hint='📍 First, send the customer a WhatsApp link to share their exact location'; hintCls='hint-blue';
@@ -413,9 +424,57 @@
   }
 
 
-  function attendNext(){
-    toast('▶️ Consent / Installation — coming in the next screen.');
+  // ═══════════════ CONSENT STEP (matches web) ═══════════════
+  let _consentSent=false, _consentPoll=null;
+
+  async function handleAttend(){
+    const t=_curTask;
+    const ok=confirm('Ready for Installation?\n\nCustomer: '+(t.customer_name||'')+'\nJob: '+(t.device_details||'GPS Installation')+(t.location?'\nLocation: '+t.location:'')+'\n\nThis will send a consent & payment confirmation request to the customer.\n\nAre you at the location and ready to proceed?');
+    if(!ok) return;
+    // already consented?
+    const check=await api('check_consent',{id:t.id});
+    if(check && check.consented){ toast('✅ Already confirmed — proceed to install'); renderActionArea(); return; }
+    // send consent
+    const btn=document.getElementById('loc-btn'); if(btn)btn.style.opacity='.6';
+    toast('📤 Sending consent request…');
+    const res=await apiPost('send_consent',{id:t.id});
+    if(res && res.success){
+      _consentSent=true;
+      if(res.email_sent) toast('📧 Consent sent to customer');
+      else {
+        // no email — share the consent link via WhatsApp
+        const phone=String(t.contact_number||'').replace(/\D/g,'');
+        const link=res.link||res.consent_link||'https://salmon-goldfish-110661.hostingersite.com/consent.php';
+        const msg=encodeURIComponent('Hello '+(t.customer_name||'')+', please review the terms and confirm your BharatGPS installation & payment here:\n\n'+link);
+        window.open('https://wa.me/'+(phone?'91'+phone:'')+'?text='+msg,'_blank');
+        toast('📱 Share consent link via WhatsApp');
+      }
+      renderActionArea();
+    } else {
+      if(btn)btn.style.opacity='1';
+      alert('Could not send consent request. Please try again.');
+    }
   }
+
+  function resendConsent(){ _consentSent=false; handleAttend(); }
+
+  function startConsentPoll(taskId){
+    if(_consentPoll) return; // already polling
+    _consentPoll=setInterval(async()=>{
+      const poll=await api('check_consent',{id:taskId});
+      if(poll && poll.consented){
+        clearInterval(_consentPoll); _consentPoll=null;
+        toast('✅ '+(poll.name||'Customer')+' confirmed!');
+        renderActionArea();
+      }
+    },8000);
+  }
+
+  function openInstallSoon(){
+    toast('▶️ Device Installation (IMEI + server push) — coming next.');
+  }
+
+  window.addEventListener('pagehide',()=>{ if(_consentPoll){clearInterval(_consentPoll);_consentPoll=null;} });
 
   // When the technician returns to this tab (e.g. back from Google Maps), refresh the action step
   document.addEventListener('visibilitychange',()=>{
