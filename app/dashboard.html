@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0E5C5C">
+<title>BharatGPS — My Dashboard</title>
+<style>
+  :root{--teal-dark:#0E5C5C;--teal:#137272;--accent:#16a34a;--bg:#f1f5f9;--card:#fff;
+    --text:#0f172a;--text2:#475569;--text3:#94a3b8;--border:#e2e8f0;--red:#dc2626;--amber:#d97706;--blue:#2563eb}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:'Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);
+    min-height:100vh;min-height:100dvh}
+
+  /* ── Header ── */
+  .hdr{background:linear-gradient(135deg,var(--teal-dark),var(--teal));color:#fff;
+    padding:calc(14px + env(safe-area-inset-top)) 16px 16px;position:sticky;top:0;z-index:10;box-shadow:0 2px 12px rgba(0,0,0,.15)}
+  .hdr-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .hdr-name{font-size:18px;font-weight:800;line-height:1.2}
+  .hdr-sub{font-size:12px;color:rgba(255,255,255,.7);margin-top:2px}
+  .hdr-logout{background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:9px;
+    padding:9px 12px;font-size:12px;font-weight:700;cursor:pointer}
+  .hdr-logout:active{background:rgba(255,255,255,.25)}
+
+  /* ── Stat cards ── */
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:14px 12px 4px}
+  .stat{background:var(--card);border-radius:14px;padding:12px 10px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .stat .n{font-size:22px;font-weight:800;line-height:1}
+  .stat .l{font-size:10px;color:var(--text3);margin-top:5px;font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+  .stat.open .n{color:var(--blue)}
+  .stat.prog .n{color:var(--amber)}
+  .stat.pend .n{color:#7c3aed}
+  .stat.await .n{color:var(--accent)}
+  .stat.closed .n{color:#059669}
+  .stat.total .n{color:var(--text)}
+
+  /* ── Filter chips ── */
+  .chips{display:flex;gap:8px;overflow-x:auto;padding:12px;scrollbar-width:none}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{flex-shrink:0;background:var(--card);border:1.5px solid var(--border);color:var(--text2);
+    border-radius:20px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+  .chip.on{background:var(--teal);border-color:var(--teal);color:#fff}
+
+  /* ── Task list ── */
+  .list{padding:0 12px calc(24px + env(safe-area-inset-bottom))}
+  .task{background:var(--card);border-radius:14px;padding:14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.06);
+    border-left:4px solid var(--border);cursor:pointer;transition:transform .05s}
+  .task:active{transform:scale(.99)}
+  .task.urgent{border-left-color:var(--red)}
+  .task.done{opacity:.6}
+  .task-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  .task-id{font-size:11px;color:var(--text3);font-weight:700}
+  .task-cust{font-size:16px;font-weight:800;margin-top:2px}
+  .badge{font-size:10px;font-weight:800;padding:4px 9px;border-radius:20px;white-space:nowrap}
+  .b-open{background:#dbeafe;color:#1d4ed8}
+  .b-prog{background:#fef3c7;color:#b45309}
+  .b-pend{background:#ede9fe;color:#6d28d9}
+  .b-await{background:#dcfce7;color:#15803d}
+  .b-closed{background:#e2e8f0;color:#475569}
+  .b-cancel{background:#fee2e2;color:#b91c1c}
+  .task-meta{font-size:13px;color:var(--text2);margin-top:8px;line-height:1.6}
+  .task-meta .row{display:flex;gap:6px;align-items:center}
+  .task-foot{display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+  .task-price{font-size:15px;font-weight:800;color:var(--accent)}
+  .task-age{font-size:11px;color:var(--text3)}
+  .urgent-tag{background:#fee2e2;color:#b91c1c;font-size:10px;font-weight:800;padding:2px 8px;border-radius:12px;margin-left:6px}
+
+  .empty{text-align:center;padding:60px 20px;color:var(--text3)}
+  .empty .ico{font-size:44px;margin-bottom:10px}
+  .loading{text-align:center;padding:50px;color:var(--text3);font-size:14px}
+  .spin{display:inline-block;width:20px;height:20px;border:2.5px solid var(--border);border-top-color:var(--teal);
+    border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle;margin-right:8px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+  <div class="hdr">
+    <div class="hdr-row">
+      <div>
+        <div class="hdr-name" id="h-name">My Dashboard</div>
+        <div class="hdr-sub" id="h-sub">Loading…</div>
+      </div>
+      <button class="hdr-logout" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat open"><div class="n" id="s-open">–</div><div class="l">Open</div></div>
+    <div class="stat prog"><div class="n" id="s-prog">–</div><div class="l">Progress</div></div>
+    <div class="stat pend"><div class="n" id="s-pend">–</div><div class="l">Pending</div></div>
+    <div class="stat await"><div class="n" id="s-await">–</div><div class="l">Awaiting</div></div>
+    <div class="stat closed"><div class="n" id="s-closed">–</div><div class="l">Closed</div></div>
+    <div class="stat total"><div class="n" id="s-total">–</div><div class="l">Total</div></div>
+  </div>
+
+  <div class="chips" id="chips">
+    <div class="chip on" data-f="active" onclick="setFilter(this)">🔵 Active</div>
+    <div class="chip" data-f="all" onclick="setFilter(this)">All</div>
+    <div class="chip" data-f="Open" onclick="setFilter(this)">Open</div>
+    <div class="chip" data-f="In Progress" onclick="setFilter(this)">In Progress</div>
+    <div class="chip" data-f="Awaiting Approval" onclick="setFilter(this)">Awaiting</div>
+    <div class="chip" data-f="Closed" onclick="setFilter(this)">Closed</div>
+  </div>
+
+  <div class="list" id="list">
+    <div class="loading"><span class="spin"></span>Loading your tasks…</div>
+  </div>
+
+<script>
+  const API = '../api/index.php';
+  let authToken = localStorage.getItem('bgps_tech_token') || '';
+  let currentUser = {};
+  try{ currentUser = JSON.parse(localStorage.getItem('bgps_tech_user')||'{}'); }catch(e){}
+  let allTasks = [];
+  let filter = 'active';
+
+  // Guard: not logged in → back to login
+  if(!authToken){ location.href = 'login.html'; }
+
+  async function api(action, params={}){
+    const url = API+'?action='+action+'&'+new URLSearchParams(params);
+    const r = await fetch(url,{cache:'no-store',headers:{'X-Auth-Token':authToken}});
+    const t = await r.text();
+    try{ return JSON.parse(t); }catch(e){ console.error('non-JSON',action,t.slice(0,200)); return {}; }
+  }
+
+  function logout(){
+    if(!confirm('Log out?')) return;
+    localStorage.removeItem('bgps_tech_token');
+    localStorage.removeItem('bgps_tech_user');
+    location.href='login.html';
+  }
+
+  function ageHours(created){
+    if(!created) return 0;
+    const then = new Date(created.replace(' ','T'));
+    return Math.max(0, Math.floor((Date.now()-then.getTime())/3600000));
+  }
+  function ageText(h){
+    if(h<1) return 'just now';
+    if(h<24) return h+'h ago';
+    return Math.floor(h/24)+'d ago';
+  }
+
+  const STATUS = {
+    'Open':{c:'b-open'},'In Progress':{c:'b-prog'},'Task Pending':{c:'b-pend'},
+    'Awaiting Approval':{c:'b-await'},'Closed':{c:'b-closed'},'Cancelled':{c:'b-cancel'}
+  };
+
+  function setFilter(el){
+    document.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));
+    el.classList.add('on');
+    filter = el.getAttribute('data-f');
+    render();
+  }
+
+  function render(){
+    const list = document.getElementById('list');
+    let tasks = allTasks.slice();
+    if(filter==='active') tasks = tasks.filter(t=>!['Closed','Cancelled'].includes(t.task_status));
+    else if(filter!=='all') tasks = tasks.filter(t=>t.task_status===filter);
+
+    if(!tasks.length){
+      list.innerHTML = '<div class="empty"><div class="ico">📋</div><div style="font-weight:700">No tasks found</div><div style="font-size:13px;margin-top:4px">Nothing in this filter.</div></div>';
+      return;
+    }
+    list.innerHTML = tasks.map(t=>{
+      const h = ['Open','In Progress','Task Pending'].includes(t.task_status) ? ageHours(t.created_at) : 0;
+      const urgent = t.is_urgent=='1' || h>=24;
+      const done = ['Closed','Cancelled'].includes(t.task_status);
+      const st = STATUS[t.task_status] || {c:'b-closed'};
+      const price = parseFloat(t.price_to_collect||0);
+      return `<div class="task ${urgent&&!done?'urgent':''} ${done?'done':''}" onclick="openTask(${t.id})">
+        <div class="task-top">
+          <div>
+            <div class="task-id">${t.task_id||'—'}${urgent&&!done?'<span class="urgent-tag">🚨 URGENT</span>':''}</div>
+            <div class="task-cust">${esc(t.customer_name||'—')}</div>
+          </div>
+          <span class="badge ${st.c}">${t.task_status||'—'}</span>
+        </div>
+        <div class="task-meta">
+          <div class="row">📞 ${esc(t.contact_number||'—')}</div>
+          <div class="row">📍 ${esc(t.location||'—')}</div>
+          <div class="row">🔧 ${esc(t.device_details||t.lead_type||'—')}</div>
+        </div>
+        <div class="task-foot">
+          <div class="task-price">₹${price.toLocaleString('en-IN')}</div>
+          <div class="task-age">${h>0?ageText(h):(t.created_at||'').slice(0,10)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+  function openTask(id){
+    // Next screen — task detail. For now just note it.
+    location.href = 'task.html?id='+id;
+  }
+
+  async function load(){
+    document.getElementById('h-name').textContent = 'Hi, '+(currentUser.name? currentUser.name.split(' ')[0] : 'Technician');
+    document.getElementById('h-sub').textContent = currentUser.email || 'Technician Portal';
+
+    const res = await api('get_tasks',{limit:500});
+    if(res && res.error && /auth/i.test(res.error)){ logout(); return; }
+    allTasks = res.tasks || [];
+
+    const sRes = await api('get_stats');
+    const s = sRes.stats || {};
+    const sv=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=(v??0);};
+    sv('s-open',s.open); sv('s-prog',s.in_progress); sv('s-pend',s.task_pending);
+    sv('s-await',s.awaiting_approval); sv('s-closed',s.closed); sv('s-total',s.total);
+
+    render();
+  }
+  load();
+</script>
+</body>
+</html>
