@@ -99,6 +99,35 @@
   .btn{flex:1;border:none;border-radius:10px;padding:14px;font-size:14px;font-weight:800;cursor:pointer}
   .btn-cancel{background:var(--surface2);color:var(--text2);border:1.5px solid var(--border)}
   .btn-save{background:var(--accent);color:#fff}
+  /* ── INSTALL full-screen sheet ── */
+  .inst-ov{position:fixed;inset:0;background:var(--bg);z-index:300;display:none;flex-direction:column}
+  .inst-ov.open{display:flex}
+  .inst-hd{background:var(--accent);color:#fff;padding:calc(12px + env(safe-area-inset-top)) 16px 12px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+  .inst-hd .t{font-size:16px;font-weight:900;flex:1}
+  .inst-hd .x{background:rgba(255,255,255,.2);border:none;color:#fff;width:34px;height:34px;border-radius:8px;font-size:18px;cursor:pointer;flex-shrink:0}
+  .inst-steps{display:flex;gap:6px;padding:12px 16px;background:var(--surface);border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0}
+  .inst-pill{flex-shrink:0;font-size:11px;font-weight:800;padding:6px 12px;border-radius:20px;background:var(--surface2);color:var(--text3);border:1.5px solid var(--border);white-space:nowrap}
+  .inst-pill.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .inst-pill.done{background:var(--green-bg);color:var(--green);border-color:var(--green)}
+  .inst-bd{flex:1;overflow-y:auto;padding:16px}
+  .inst-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px}
+  .inst-lbl{font-size:11px;font-weight:800;color:var(--text2);margin:0 0 6px;text-transform:uppercase;letter-spacing:.4px}
+  .inst-in{width:100%;padding:12px;border:1.5px solid var(--border);border-radius:9px;font-size:15px;font-family:inherit;color:var(--text);outline:none;background:#fff}
+  .inst-in:focus{border-color:var(--accent)}
+  .inst-in[readonly]{background:var(--surface2);color:var(--text3)}
+  .inst-row{display:flex;gap:10px;margin-bottom:12px}
+  .inst-row>div{flex:1}
+  .inst-field{margin-bottom:12px}
+  .inst-btn{width:100%;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:800;cursor:pointer;color:#fff}
+  .inst-btn:disabled{opacity:.6}
+  .b-search{background:var(--accent2)}.b-push{background:var(--green)}.b-back{background:var(--surface2);color:var(--text2);border:1.5px solid var(--border)}
+  .inst-res{margin-top:10px;font-size:13px}
+  .icon-grid{display:grid;grid-template-columns:repeat(auto-fill,48px);gap:8px;margin-top:6px}
+  .icon-opt{width:48px;height:48px;border:2px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;background:#fff;padding:3px;cursor:pointer}
+  .icon-opt.sel{border-color:var(--green)}
+  .icon-opt img{max-width:100%;max-height:100%}
+  .dev-done{background:var(--green-bg);border:1.5px solid var(--green);border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:13px;color:var(--green);font-weight:700}
+
   .loading{text-align:center;padding:50px;color:var(--text3);font-size:14px}
   .spin{display:inline-block;width:20px;height:20px;border:2.5px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle;margin-right:8px}
   @keyframes sp{to{transform:rotate(360deg)}}
@@ -149,6 +178,16 @@
       <button class="btn btn-save" id="tu-save" onclick="submitUpdate()">💾 Save Update</button>
     </div>
   </div>
+  <!-- INSTALL full-screen sheet -->
+  <div class="inst-ov" id="inst-ov">
+    <div class="inst-hd">
+      <button class="x" onclick="closeInstall()">✕</button>
+      <div class="t" id="inst-title">🔧 Install Device</div>
+    </div>
+    <div class="inst-steps" id="inst-steps"></div>
+    <div class="inst-bd" id="inst-bd"></div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
 <script>
@@ -470,9 +509,7 @@
     },8000);
   }
 
-  function openInstallSoon(){
-    toast('▶️ Device Installation (IMEI + server push) — coming next.');
-  }
+  function openInstallSoon(){ openInstall(); }
 
   window.addEventListener('pagehide',()=>{ if(_consentPoll){clearInterval(_consentPoll);_consentPoll=null;} });
 
@@ -482,6 +519,230 @@
       renderActionArea();
     }
   });
+
+  // ═══════════════ DEVICE INSTALLATION (matches web) ═══════════════
+  const GPS_PROXY='../gps_proxy.php';
+  const SERVER_LABELS=['','bharatgps.com','bharatgps.in','bharatgps.school','bharatgps.org'];
+  let _instQty=1, _instStep=1, _instSaved={}, _myDevices=[];
+
+  async function openInstall(){
+    const t=_curTask;
+    // route special jobs — for now, only standard install supported in app
+    const job=(t.device_details||'').toLowerCase();
+    if(job.includes('troubleshoot')||job.includes('offline')||job.includes('demo')||job.includes('v2v')||job.includes('vehicle to vehicle')||job.includes('remove only')||job.includes('only remove')){
+      alert('This job type ('+(t.device_details||'')+') uses a different flow — please complete it on the desktop portal for now.');
+      return;
+    }
+    _instQty=parseInt(t.device_qty||1)||1;
+    _instStep=1; _instSaved={};
+    // restore already-installed devices
+    (t.device_installs||[]).forEach(d=>{
+      if(d && d.gps_serial_no && d.name_on_server && d.device_index){
+        _instSaved[parseInt(d.device_index)]={pushed:true,imei:d.gps_serial_no,name:d.name_on_server,server_name:d.server_name,plate:d.vehicle_number,vtype:d.vehicle_type,inst:d.installation_date,exp:d.expiration_date,server_id:d.server_id,device_id:d.device_id};
+      }
+    });
+    // load my assigned devices for the dropdown
+    const res=await api('dev_assignments_get'); _myDevices=(res&&res.assignments)?res.assignments:[];
+    // jump to first unsaved device
+    for(let i=1;i<=_instQty;i++){ if(!(_instSaved[i]&&_instSaved[i].pushed)){ _instStep=i; break; } if(i===_instQty) _instStep=i; }
+    document.getElementById('inst-ov').classList.add('open');
+    renderInstall();
+  }
+  function closeInstall(){ document.getElementById('inst-ov').classList.remove('open'); }
+
+  function renderInstallSteps(){
+    let h='';
+    for(let i=1;i<=_instQty;i++){
+      const cls=_instSaved[i]&&_instSaved[i].pushed?'done':(i===_instStep?'active':'');
+      h+='<div class="inst-pill '+cls+'" onclick="gotoInstDev('+i+')">'+(_instSaved[i]&&_instSaved[i].pushed?'✅ ':'')+'Device '+i+'</div>';
+    }
+    document.getElementById('inst-steps').innerHTML=h;
+  }
+  function gotoInstDev(i){ _instStep=i; renderInstall(); }
+
+  function renderInstall(){
+    document.getElementById('inst-title').textContent='🔧 '+(_curTask.device_details||'Install')+' ('+_instStep+'/'+_instQty+')';
+    renderInstallSteps();
+    const idx=_instStep, saved=_instSaved[idx];
+    const bd=document.getElementById('inst-bd');
+
+    // all devices done?
+    const pushedCount=Object.keys(_instSaved).filter(k=>_instSaved[k]&&_instSaved[k].pushed).length;
+    if(saved && saved.pushed){
+      bd.innerHTML='<div class="dev-done">✅ Device '+idx+' installed — '+esc(saved.name||'')+' · '+esc(saved.plate||'')+'<br>IMEI '+esc(saved.imei||'')+'</div>'+
+        (idx<_instQty?'<button class="inst-btn b-push" onclick="gotoInstDev('+(idx+1)+')">Next Device →</button>':
+          '<div class="inst-card"><div style="font-weight:800;color:var(--green);margin-bottom:6px">🎉 All '+_instQty+' device(s) installed!</div><div style="font-size:13px;color:var(--text2)">Next: give customer access & collect payment — coming next.</div></div>'+
+          '<button class="inst-btn b-push" onclick="finishInstall()">✅ Done — Back to Task</button>');
+      return;
+    }
+
+    // IMEI search + form (two sub-steps inside one screen, toggled)
+    bd.innerHTML=
+      '<div class="inst-card" id="inst-search-'+idx+'">'+
+        '<div class="inst-lbl">① Select device (IMEI)</div>'+
+        '<select class="inst-in" id="isel-'+idx+'" style="margin-bottom:10px" onchange="pickDev('+idx+')">'+deviceOptions(idx)+'</select>'+
+        '<div class="inst-lbl">or enter IMEI manually</div>'+
+        '<div class="inst-row" style="margin-bottom:0">'+
+          '<div style="flex:2"><input class="inst-in" id="iimei-'+idx+'" placeholder="Enter IMEI number" inputmode="numeric"></div>'+
+          '<div style="flex:1"><button class="inst-btn b-search" id="isearch-'+idx+'" onclick="doSearchIMEI('+idx+')">🔍 Search</button></div>'+
+        '</div>'+
+        '<div class="inst-res" id="ires-'+idx+'"></div>'+
+      '</div>'+
+      // form (hidden until a device is found)
+      '<div id="iform-'+idx+'" style="display:none">'+
+        '<div class="inst-card">'+
+          '<div class="inst-lbl">② Installation details</div>'+
+          '<div id="idevinfo-'+idx+'" style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px"></div>'+
+          '<input type="hidden" id="iserverid-'+idx+'"><input type="hidden" id="ideviceid-'+idx+'"><input type="hidden" id="iimeih-'+idx+'"><input type="hidden" id="iiconid-'+idx+'">'+
+          '<div class="inst-field"><div class="inst-lbl">Vehicle Number / Plate *</div><input class="inst-in" id="iplate-'+idx+'" placeholder="AB01CD1234" style="text-transform:uppercase" maxlength="10"></div>'+
+          '<div class="inst-row">'+
+            '<div><div class="inst-lbl">Vehicle Type</div><select class="inst-in" id="ivtype-'+idx+'"><option value="">Select</option><option>Car</option><option>Truck</option><option>Bus</option><option>Auto</option><option>Bike</option><option>JCB</option><option>Tractor</option><option>Van</option><option>Mini Truck</option><option>Other</option></select></div>'+
+            '<div><div class="inst-lbl">Owner</div><input class="inst-in" id="iowner-'+idx+'" placeholder="Owner name"></div>'+
+          '</div>'+
+          '<div class="inst-field"><div class="inst-lbl">Name on Server *</div><input class="inst-in" id="iname-'+idx+'" placeholder="Display name on GPS server"></div>'+
+          '<div class="inst-row">'+
+            '<div><div class="inst-lbl">Install Date *</div><input class="inst-in" type="date" id="iinst-'+idx+'" onchange="autoExp('+idx+')"></div>'+
+            '<div><div class="inst-lbl">Expiry (auto)</div><input class="inst-in" type="date" id="iexp-'+idx+'" readonly></div>'+
+          '</div>'+
+          '<div class="inst-field"><div class="inst-lbl">Registration / Asset No</div><input class="inst-in" id="ireg-'+idx+'" placeholder="Optional"></div>'+
+          '<div class="inst-field"><div class="inst-lbl">Vehicle Icon *</div><div class="icon-grid" id="iicons-'+idx+'"><div style="font-size:12px;color:var(--text3)">Select a device first…</div></div></div>'+
+          '<div class="inst-field"><div class="inst-lbl">Additional Notes</div><input class="inst-in" id="inotes-'+idx+'" placeholder="Optional"></div>'+
+        '</div>'+
+        '<button class="inst-btn b-push" id="ipush-'+idx+'" onclick="pushDevice('+idx+')">🛰 Push to GPS Server</button>'+
+        '<button class="inst-btn b-back" style="margin-top:8px" onclick="backToSearch('+idx+')">← Search different IMEI</button>'+
+      '</div>';
+  }
+
+  function deviceOptions(idx){
+    const used=Object.keys(_instSaved).map(k=>(_instSaved[k]||{}).imei).filter(Boolean);
+    let opts='<option value="">— Select from my devices —</option>';
+    _myDevices.forEach(d=>{
+      const im=(d.imei||'').replace(/\D/g,''); if(!im||used.indexOf(im)!==-1)return;
+      const label=(d.device_name||'Device')+' — '+im+(d.server?(' ('+d.server.replace('bharatgps.','')+')'):'');
+      opts+='<option value="'+im+'" data-server="'+esc(d.server||'')+'">'+esc(label)+'</option>';
+    });
+    return opts;
+  }
+  function pickDev(idx){
+    const sel=document.getElementById('isel-'+idx); if(!sel||!sel.value)return;
+    const server=sel.options[sel.selectedIndex]?.getAttribute('data-server')||'';
+    document.getElementById('iimei-'+idx).value=sel.value;
+    doSearchIMEI(idx,server);
+  }
+  function autoExp(idx){
+    const d=document.getElementById('iinst-'+idx)?.value; if(!d)return;
+    const e=new Date(d); e.setFullYear(e.getFullYear()+1);
+    const el=document.getElementById('iexp-'+idx); if(el)el.value=e.toISOString().slice(0,10);
+  }
+  function backToSearch(idx){
+    document.getElementById('iform-'+idx).style.display='none';
+    document.getElementById('inst-search-'+idx).style.display='';
+    document.getElementById('ires-'+idx).innerHTML='';
+  }
+
+  async function doSearchIMEI(idx,onlyServer){
+    const imei=(document.getElementById('iimei-'+idx)?.value||'').trim();
+    if(!imei){ alert('Please enter an IMEI number.'); return; }
+    const btn=document.getElementById('isearch-'+idx), res=document.getElementById('ires-'+idx);
+    if(btn){btn.textContent='…';btn.disabled=true;}
+    let sp='';
+    if(onlyServer){ const host=onlyServer.replace(/^https?:\/\//,'').replace(/\/.*$/,''); sp='&server='+encodeURIComponent(host); res.innerHTML='<span style="color:var(--text3)">🔍 Searching '+esc(host)+'…</span>'; }
+    else res.innerHTML='<span style="color:var(--text3)">🔍 Searching servers…</span>';
+    try{
+      const r=await fetch(GPS_PROXY+'?action=find&keyword='+encodeURIComponent(imei)+sp,{headers:{'X-Auth-Token':authToken}});
+      const data=await r.json();
+      if(btn){btn.textContent='🔍 Search';btn.disabled=false;}
+      if(!data.success){ res.innerHTML='<span style="color:var(--red)">❌ '+esc(data.error||'Search failed')+'</span>'; return; }
+      if(!data.devices||!data.devices.length){ res.innerHTML='<span style="color:var(--red)">❌ No device found with this IMEI.</span>'; return; }
+      if(data.devices.length===1){ res.innerHTML='<span style="color:var(--green)">✅ Device found! Fill the details below.</span>'; loadDevice(idx,data.devices[0]); }
+      else {
+        window['_isr_'+idx]=data.devices;
+        res.innerHTML='<div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:6px">'+data.devices.length+' found — tap to select:</div>'+
+          data.devices.map((d,i)=>'<div onclick="loadDevice('+idx+',window[\'_isr_'+idx+'\']['+i+'])" style="padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;margin-bottom:6px;font-size:12px"><strong>'+esc(d.name||'–')+'</strong><br>IMEI: '+esc(d.device_data?.imei||'–')+' · '+esc(d._server_name||'–')+'</div>').join('');
+      }
+    }catch(e){ if(btn){btn.textContent='🔍 Search';btn.disabled=false;} res.innerHTML='<span style="color:var(--red)">❌ '+esc(e.message)+'</span>'; }
+  }
+
+  function loadDevice(idx,device){
+    const dd=device.device_data||{}, res=document.getElementById('ires-'+idx);
+    const installed=dd.installation_date && dd.installation_date!=='0000-00-00' && dd.plate_number && dd.plate_number.trim()!=='';
+    if(installed){
+      res.innerHTML='<div style="background:#fff3cd;border:1.5px solid #e07b00;border-radius:8px;padding:12px;font-size:12px;line-height:1.7;color:#5a3e00"><strong style="color:#e07b00">⚠️ Already installed</strong><br>Plate: <strong>'+esc(dd.plate_number||'–')+'</strong><br>Owner: <strong>'+esc(dd.object_owner||'–')+'</strong><br>Installed: <strong>'+esc(dd.installation_date||'–')+'</strong><br>Server: <strong>'+esc(device._server_name||'–')+'</strong><br><span style="color:#7a3e00;font-weight:700">🚫 This IMEI is in use. Search a different one.</span></div>';
+      return;
+    }
+    document.getElementById('iserverid-'+idx).value=device._server_id||'';
+    document.getElementById('ideviceid-'+idx).value=dd.id||device.id||'';
+    document.getElementById('iimeih-'+idx).value=dd.imei||'';
+    document.getElementById('idevinfo-'+idx).innerHTML='<strong>📡 '+esc(device.name||'–')+'</strong><br><span style="color:var(--text3)">IMEI: '+esc(dd.imei||'–')+' · Server: '+esc(device._server_name||'–')+'</span>';
+    const sv=(id,v)=>{const el=document.getElementById(id);if(el&&v)el.value=v;};
+    sv('iname-'+idx,device.name); sv('iplate-'+idx,dd.plate_number); sv('iowner-'+idx,dd.object_owner); sv('ireg-'+idx,dd.registration_number); sv('inotes-'+idx,dd.additional_notes);
+    const today=new Date().toISOString().slice(0,10);
+    document.getElementById('iinst-'+idx).value=(dd.installation_date&&dd.installation_date!=='0000-00-00')?dd.installation_date:today;
+    autoExp(idx);
+    loadIcons(idx,device._server_id||'',dd.icon_id||'');
+    document.getElementById('inst-search-'+idx).style.display='none';
+    document.getElementById('iform-'+idx).style.display='';
+  }
+
+  async function loadIcons(idx,serverId,curIcon){
+    const grid=document.getElementById('iicons-'+idx); if(!grid)return;
+    if(!serverId){ grid.innerHTML='<div style="font-size:12px;color:var(--text3)">No server.</div>'; return; }
+    grid.innerHTML='<div style="font-size:12px;color:var(--text3)">Loading icons…</div>';
+    try{
+      const r=await fetch(GPS_PROXY+'?action=get_icons&server_id='+encodeURIComponent(serverId),{headers:{'X-Auth-Token':authToken}});
+      const data=await r.json(); const icons=(data&&data.icons)?data.icons:[];
+      if(!icons.length){ grid.innerHTML='<div style="font-size:12px;color:var(--text3)">No icons on this server.</div>'; return; }
+      grid.innerHTML=icons.map(ic=>{ const sel=String(curIcon)===String(ic.id); return '<div class="icon-opt icon-opt-'+idx+(sel?' sel':'')+'" onclick="pickIcon('+idx+','+ic.id+',this)"><img src="'+esc(ic.img)+'" onerror="this.style.display=\'none\'"></div>'; }).join('');
+      if(curIcon) document.getElementById('iiconid-'+idx).value=curIcon;
+    }catch(e){ grid.innerHTML='<div style="font-size:12px;color:var(--red)">Failed to load icons.</div>'; }
+  }
+  function pickIcon(idx,iconId,el){
+    document.getElementById('iiconid-'+idx).value=iconId;
+    document.querySelectorAll('.icon-opt-'+idx).forEach(d=>d.classList.remove('sel'));
+    if(el)el.classList.add('sel');
+  }
+
+  async function pushDevice(idx){
+    const g=id=>document.getElementById(id+'-'+idx)?.value;
+    const serverId=g('iserverid'),deviceId=g('ideviceid'),imei=g('iimeih');
+    const name=(g('iname')||'').trim(), plate=(g('iplate')||'').trim().toUpperCase(), vtype=g('ivtype');
+    const owner=(g('iowner')||'').trim(), reg=(g('ireg')||'').trim(), inst=g('iinst'), exp=g('iexp'), notes=(g('inotes')||'').trim(), iconId=g('iiconid');
+    if(!plate){ alert('Vehicle number / plate is required.'); return; }
+    if(!/^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}$/.test(plate)){ alert('Vehicle number must be AB01CD1234 (2 letters, 2 digits, 2 letters, 4 digits).'); return; }
+    if(!name){ alert('Name on server is required.'); return; }
+    if(!inst){ alert('Installation date is required.'); return; }
+    if(!iconId){ alert('Please select a vehicle icon.'); return; }
+    const btn=document.getElementById('ipush-'+idx); if(btn){btn.textContent='Pushing…';btn.disabled=true;}
+    try{
+      const fd=new FormData();
+      fd.append('server_id',serverId); fd.append('device_id',deviceId); fd.append('name',name);
+      fd.append('plate_number',plate); fd.append('registration_number',reg); fd.append('object_owner',owner);
+      fd.append('installation_date',inst); fd.append('expiration_date',exp); fd.append('icon_id',iconId);
+      fd.append('additional_notes',notes+(vtype?' | Vehicle Type: '+vtype:''));
+      fd.append('comment','Installed via BharatGPS TaskManager — Task '+(_curTask.task_id||''));
+      const r=await fetch(GPS_PROXY+'?action=update',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd});
+      const data=await r.json();
+      if(btn){btn.textContent='🛰 Push to GPS Server';btn.disabled=false;}
+      if(data.success){
+        _instSaved[idx]={pushed:true,server_id:serverId,device_id:deviceId,imei,name,server_name:'Server '+serverId,plate,vtype,inst,exp};
+        await apiPost('save_device_install',{task_id:_curTask.id,device_index:idx,vehicle_number:plate,vehicle_type:vtype||'',gps_serial_no:imei,name_on_server:name,server_name:'Server '+serverId,server_id:serverId,device_id:deviceId,remarks:notes||'GPS device added to server'}).catch(()=>{});
+        const lbl=SERVER_LABELS[parseInt(serverId)||0]||('Server '+serverId);
+        const remark='🛰 Device added to GPS server | IMEI: '+imei+' | Name: '+name+' | Plate: '+plate+(vtype?' | Type: '+vtype:'')+' | Server: '+lbl+' | Installed: '+inst+' | Expires: '+exp;
+        await apiPost('update_task',{id:_curTask.id,remark}).catch(()=>{});
+        toast('✅ Device '+idx+' pushed to GPS server');
+        renderInstall();
+      } else { alert('❌ GPS Server error: '+(data.error||'Unknown error')); }
+    }catch(e){ if(btn){btn.textContent='🛰 Push to GPS Server';btn.disabled=false;} alert('Error: '+e.message); }
+  }
+
+  async function finishInstall(){
+    closeInstall();
+    // reload task to refresh stepper + payment
+    const res=await api('get_task',{id:taskId}); const t=res.task||res;
+    if(t&&t.id){ _curTask=t; toast('✅ Installation saved'); }
+    load();
+  }
+
 
   load();
 </script>
