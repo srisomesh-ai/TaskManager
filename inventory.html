@@ -768,6 +768,13 @@ function renderStockLedger(){
   var stTotal = document.getElementById('st-total-items'); if(stTotal) stTotal.textContent = totalItems;
   var stOff   = document.getElementById('st-in-office');   if(stOff)   stOff.textContent   = inOffice;
   var stTech  = document.getElementById('st-with-techs');  if(stTech)  stTech.textContent  = withTechs;
+  // TEMP DEBUG: show how many assignments ASG_DATA holds (remove after diagnosis)
+  try{
+    var _asgN = (typeof ASG_DATA!=='undefined' && ASG_DATA) ? ASG_DATA.length : 'undef';
+    var _dbgEl = document.getElementById('st-with-techs');
+    if(_dbgEl){ var sub=_dbgEl.parentElement && _dbgEl.parentElement.querySelector('.stat-sub'); if(sub) sub.textContent='Units issued · ASG='+_asgN; }
+    console.log('[stock-debug] ASG_DATA count =', _asgN, ' _items =', (_items||[]).length, ' withTechs total =', withTechs);
+  }catch(e){}
   var stLow   = document.getElementById('st-low-stock');   if(stLow)   stLow.textContent   = lowStock;
 
   // Low stock banner
