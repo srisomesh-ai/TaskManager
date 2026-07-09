@@ -664,19 +664,10 @@ function renderTechOptions(){
 
 // ── COMPUTED STOCK ───────────────────────────────────────────────────
 function computeStock(){
-  // Synced GPS devices assigned to technicians (Device Sync → device_assignments) are
-  // real stock held by techs but live outside _movements. Fold each into its matching
-  // stock item BY MODEL, so they land on the correct product (not all on the first one).
-  var asgByModel = {};   // normalized model -> count
-  var asgUnmatched = 0;
-  if(typeof ASG_DATA !== 'undefined' && ASG_DATA){
-    ASG_DATA.forEach(function(a){
-      var mdl = String((a && a.model) || '').trim().toLowerCase();
-      if(mdl){ asgByModel[mdl] = (asgByModel[mdl]||0) + 1; }
-      else   { asgUnmatched++; }
-    });
-  }
-  var firstGpsMatched = false;
+  // Count synced GPS devices assigned to technicians (from Device Sync → device_assignments).
+  // These are real stock held by techs but live outside _movements, so fold them in here.
+  var asgWithTechs = (typeof ASG_DATA !== 'undefined' && ASG_DATA) ? ASG_DATA.length : 0;
+  var gpsItemUsed = false;
   var result = _items.map(function(item){
     var movs = _movements.filter(function(m){ return m.itemId === item.id; });
     var totalIn  = movs.filter(function(m){ return m.type === 'in'; }).reduce(function(s,m){ return s + m.qty; }, 0);
@@ -685,15 +676,10 @@ function computeStock(){
     var adj      = movs.filter(function(m){ return m.type === 'adjustment'; }).reduce(function(s,m){ return s + m.qty; }, 0);
     var withTechs = totalOut - returns;
     var officeStock = item.opening + totalIn - totalOut + returns + adj;
-    // Match assigned devices to THIS item by model (item.model or item.name)
+    // Add device-sync assignments to the FIRST GPS Tracker item's with-techs count
     var extraTech = 0;
-    var im = String(item.model||'').trim().toLowerCase();
-    var inm = String(item.name||'').trim().toLowerCase();
-    if(im && asgByModel[im]){ extraTech += asgByModel[im]; asgByModel[im] = 0; }
-    if(inm && asgByModel[inm]){ extraTech += asgByModel[inm]; asgByModel[inm] = 0; }
-    // Devices with no model info → attach to the first GPS Tracker item as a fallback
-    if(!firstGpsMatched && item.category === 'GPS Tracker' && asgUnmatched > 0){
-      extraTech += asgUnmatched; asgUnmatched = 0; firstGpsMatched = true;
+    if(!gpsItemUsed && item.category === 'GPS Tracker' && asgWithTechs > 0){
+      extraTech = asgWithTechs; gpsItemUsed = true;
     }
     return Object.assign({}, item, {
       totalIn: totalIn, totalOut: totalOut, returns: returns, adj: adj,
