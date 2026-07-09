@@ -740,6 +740,17 @@ case 'update_task':
     if (isset($body['task_status'])&&$body['task_status']!==$existing['task_status'])
         $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")->execute([$id,$userId,"Status: {$existing['task_status']} → {$body['task_status']}"]);
 
+    // Thank-you email if this update closes the task (only on transition into Closed)
+    if (isset($body['task_status']) && $body['task_status']==='Closed' && $existing['task_status']!=='Closed') {
+        try {
+            $tc = $pdo->prepare("SELECT * FROM tasks WHERE id=?"); $tc->execute([$id]); $ct=$tc->fetch();
+            if ($ct && !empty($ct['email'])) {
+                require_once __DIR__.'/mailer.php';
+                sendTaskThankYouCustomer($ct);
+            }
+        } catch(Exception $e){ error_log('Thank-you email (update) error: '.$e->getMessage()); }
+    }
+
     // ── Respond to browser immediately — DB is updated, that is what matters ──
     echo json_encode(['success'=>true]);
 
@@ -894,6 +905,13 @@ case 'approve_task':
     // Close the task
     $pdo->prepare("UPDATE tasks SET task_status='Closed',closed_at=NOW() WHERE id=?")->execute([$id]);
     $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")->execute([$id,$userId,'Task approved and closed by manager. Full payment confirmed.']);
+    // Thank-you email to customer (simple, generic; safe no-op if no email)
+    try {
+        if (!empty($t['email'])) {
+            require_once __DIR__.'/mailer.php';
+            sendTaskThankYouCustomer($t);
+        }
+    } catch(Exception $e){ error_log('Thank-you email error: '.$e->getMessage()); }
     // Star rating
     $hrs=(time()-strtotime($t['created_at']))/3600;
     $stars=$hrs<=12?5:($hrs<=24?4:($hrs<=48?3:($hrs<=72?2:1)));
