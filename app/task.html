@@ -59,6 +59,21 @@
 
   .note{background:#fff;border-radius:14px;padding:14px 16px;font-size:13px;color:var(--text2);line-height:1.6;box-shadow:0 1px 3px rgba(0,0,0,.06)}
 
+  .act-btn{width:100%;border:none;border-radius:12px;padding:16px;font-size:15px;font-weight:800;color:#fff;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:transform .05s,opacity .15s}
+  .act-btn:active{transform:scale(.985)}
+  .act-btn:disabled{opacity:.6}
+  .act-blue{background:#1f5fd6}.act-green{background:var(--accent)}.act-red{background:#d93a3a}
+  .act-status{border-radius:10px;padding:11px 13px;font-size:12.5px;line-height:1.6;margin-bottom:12px}
+  .s-blue{background:#eef4ff;border:1.5px solid #1f5fd6;color:#1f5fd6}
+  .s-green{background:#dcfce7;border:1.5px solid var(--accent);color:#15803d}
+  .s-amber{background:#fef3c7;border:1.5px solid var(--amber);color:#b45309}
+  .s-done{background:#f0fdf4;border:1.5px solid var(--accent);color:#166534}
+  .trip-line{background:var(--bg);border-radius:8px;padding:9px 12px;font-size:12px;color:var(--text2);margin-top:10px}
+  .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);
+    background:#0f172a;color:#fff;font-size:13px;padding:11px 18px;border-radius:22px;z-index:100;max-width:90%;
+    text-align:center;opacity:0;transition:opacity .2s;box-shadow:0 6px 20px rgba(0,0,0,.3)}
+  .toast.show{opacity:1}
   .loading{text-align:center;padding:60px;color:var(--text3);font-size:14px}
   .spin{display:inline-block;width:20px;height:20px;border:2.5px solid var(--border);border-top-color:var(--teal);border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle;margin-right:8px}
   @keyframes sp{to{transform:rotate(360deg)}}
@@ -142,6 +157,7 @@
     }
     document.getElementById('h-id').textContent = t.task_id||'—';
     document.getElementById('h-cust').textContent = t.customer_name||'—';
+    _curTask = t;
 
     const price=parseFloat(t.price_to_collect||0), coll=parseFloat(t.amount_collected||0), bal=price-coll;
     const badge = STATUS[t.task_status]||'b-closed';
@@ -185,10 +201,124 @@
         '<button class="cbtn c-wa" onclick="whatsapp(\''+phone+'\',\''+esc(t.customer_name||'').replace(/\x27/g,"")+'\')">💬 WhatsApp</button>'+
         '</div></div>'+
 
-      '<div class="note">ℹ️ This is a read-only view for now. Actions like sending location, consent, installation and payment will be added in the next screens.</div>'+
+      '<div class="card" id="action-card"><h3>Task Flow</h3><div id="action-area"><div style="color:var(--text3);font-size:13px">Loading…</div></div></div>'+
       '</div>';
+    renderActionArea();
   }
+  // ═══════════════ TOAST + GEO HELPER ═══════════════
+  let _toastT=null;
+  function toast(msg){
+    const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+    clearTimeout(_toastT); _toastT=setTimeout(()=>t.classList.remove('show'),3000);
+  }
+  async function apiPost(action, body){
+    const r=await fetch(API+'?action='+action,{method:'POST',cache:'no-store',
+      headers:{'X-Auth-Token':authToken,'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const t=await r.text(); try{return JSON.parse(t);}catch(e){console.error('non-JSON',action,t.slice(0,200));return {};}
+  }
+  function getPos(){
+    return new Promise((res,rej)=>{
+      if(!('geolocation' in navigator)||!window.isSecureContext){rej(new Error('Location needs GPS enabled on a secure (https) page.'));return;}
+      const ok=p=>res({lat:+p.coords.latitude.toFixed(6),lng:+p.coords.longitude.toFixed(6)});
+      const fail=e=>{let m='Could not get your location. Turn on GPS and retry.';
+        if(e&&e.code===1)m='Location permission denied. Allow location and retry.';
+        else if(e&&e.code===2)m='Turn on GPS / location services and retry.';rej(new Error(m));};
+      navigator.geolocation.getCurrentPosition(ok,()=>{
+        navigator.geolocation.getCurrentPosition(ok,()=>{
+          navigator.geolocation.getCurrentPosition(ok,fail,{enableHighAccuracy:false,timeout:30000,maximumAge:300000});
+        },{enableHighAccuracy:true,timeout:20000,maximumAge:0});
+      },{enableHighAccuracy:false,timeout:8000,maximumAge:60000});
+    });
+  }
+
+  // ═══════════════ LOCATION FLOW (matches web) ═══════════════
+  let _curTask=null;
+
+  async function renderActionArea(){
+    const area=document.getElementById('action-area');
+    if(!_curTask){ area.innerHTML=''; return; }
+    const t=_curTask;
+    // Locked states
+    if(['Closed','Cancelled'].includes(t.task_status)){
+      area.innerHTML='<div class="act-status s-done">✅ This task is '+t.task_status.toLowerCase()+'. No further action needed.</div>';
+      return;
+    }
+    if(t.task_status==='Awaiting Approval'){
+      area.innerHTML='<div class="act-status s-green">🕒 Submitted — awaiting office approval.</div>';
+      return;
+    }
+
+    area.innerHTML='<div style="color:var(--text3);font-size:13px">Checking location status…</div>';
+    const loc=await api('check_customer_location',{id:t.id});
+
+    if(!loc || loc.reached){
+      // Location done → next step is Attend/consent (built in the next screen)
+      let trip='';
+      if(loc && loc.trip_km!=null) trip='<div class="trip-line">🚗 Trip: <strong>'+loc.trip_km+' km</strong> · <strong>'+loc.trip_minutes+' min</strong></div>';
+      area.innerHTML='<div class="act-status s-done">✅ Location complete — you\'ve reached the customer.</div>'+trip+
+        '<div class="act-status s-amber" style="margin-top:12px;margin-bottom:0">▶️ Next: Attend / Consent — coming in the next screen.</div>';
+      return;
+    }
+
+    if(!loc.has_location){
+      area.innerHTML=
+        '<div class="act-status s-blue">📍 First, send the customer a link to share their exact location. Tap below to send via WhatsApp.</div>'+
+        '<button class="act-btn act-blue" id="loc-btn" onclick="askLocation()">📍 Get Customer Location</button>';
+    } else if(!loc.started){
+      area.innerHTML=
+        '<div class="act-status s-green">✅ Customer shared their location. Tap to start navigation — your start point &amp; time will be recorded.</div>'+
+        '<button class="act-btn act-green" id="loc-btn" onclick="startNav('+loc.lat+','+loc.lng+')">🧭 Navigate to Customer</button>';
+    } else {
+      area.innerHTML=
+        '<div class="act-status s-amber">🧭 On the way. Tap <strong>Reached Location</strong> when you arrive — required before consent.'+
+        '<div style="margin-top:6px"><a target="_blank" href="https://www.google.com/maps/dir/?api=1&destination='+loc.lat+','+loc.lng+'" style="color:#1f5fd6;font-weight:700">🗺️ Reopen navigation</a></div></div>'+
+        '<button class="act-btn act-red" id="loc-btn" onclick="reachedLocation()">📍 Reached Location</button>';
+    }
+  }
+
+  async function askLocation(){
+    const btn=document.getElementById('loc-btn'); if(btn)btn.disabled=true;
+    const r=await apiPost('send_location_request',{id:_curTask.id});
+    if(r && r.success){
+      const phone=(r.phone||'').replace(/\D/g,'');
+      const msg=encodeURIComponent('Hello! Our BharatGPS technician is on the way. Please tap this link and share your location so we can reach you quickly:\n\n'+r.link);
+      window.open('https://wa.me/'+(phone?'91'+phone:'')+'?text='+msg,'_blank');
+      toast('📍 Location link sent. Waiting for customer to share…');
+      pollLocation(0);
+    } else { alert('Could not create location link. Please try again.'); if(btn)btn.disabled=false; }
+  }
+  function pollLocation(n){
+    if(n>40) return;
+    setTimeout(async()=>{
+      const s=await api('check_customer_location',{id:_curTask.id});
+      if(s && s.has_location){ toast('✅ Customer shared their location!'); renderActionArea(); }
+      else pollLocation(n+1);
+    },3000);
+  }
+  async function startNav(lat,lng){
+    const btn=document.getElementById('loc-btn'); if(btn)btn.disabled=true;
+    try{
+      toast('📍 Capturing your start point…');
+      const pos=await getPos();
+      await apiPost('save_trip_start',{id:_curTask.id,lat:pos.lat,lng:pos.lng});
+      window.open('https://www.google.com/maps/dir/?api=1&destination='+lat+','+lng,'_blank');
+      renderActionArea();
+    }catch(e){ alert(e.message||'Could not capture start point.'); if(btn)btn.disabled=false; }
+  }
+  async function reachedLocation(){
+    const btn=document.getElementById('loc-btn'); if(btn)btn.disabled=true;
+    try{
+      toast('📍 Capturing your arrival…');
+      const pos=await getPos();
+      const r=await apiPost('save_trip_reached',{id:_curTask.id,lat:pos.lat,lng:pos.lng});
+      if(r && r.success) toast('✅ Arrival recorded · '+(r.trip_km||0)+' km, '+(r.trip_minutes||0)+' min');
+      renderActionArea();
+    }catch(e){ alert(e.message||'Could not record arrival.'); if(btn)btn.disabled=false; }
+  }
+
+
   load();
 </script>
+  <div class="toast" id="toast"></div>
 </body>
 </html>
