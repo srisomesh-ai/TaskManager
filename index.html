@@ -76,6 +76,7 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
 .nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;font-size:13px;font-weight:500;color:rgba(255,255,255,.68);transition:all .15s;border-left:3px solid transparent;position:relative}
 .nav-item:hover{background:rgba(255,255,255,.08);color:#fff}
 .nav-item.active{background:rgba(255,255,255,.13);color:#fff;font-weight:700;border-left-color:#60a5fa}
+@keyframes raPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.18);opacity:.85}}
 .nav-icon{font-size:14px;width:18px;text-align:center}
 .nav-badge{margin-left:auto;background:#ef4444;color:#fff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:8px;display:none}
 .sb-footer{margin-top:auto;padding:12px 14px;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:10px}
@@ -6233,9 +6234,23 @@ async function loadReaddingBadge(){
   try{
     const d = await api('readding_count');
     const b = document.getElementById('readding-badge');
+    const nav = document.getElementById('nav-readding');
     const n = (d&&d.count)?d.count:0;
-    if(b){ if(n>0){ b.textContent=n; b.style.display=''; } else b.style.display='none'; }
+    if(b){
+      if(n>0){ b.textContent=n; b.style.display=''; b.style.animation='raPulse 1.6s ease-in-out infinite'; }
+      else { b.style.display='none'; b.style.animation=''; }
+    }
+    if(nav){
+      if(n>0){ nav.style.background='rgba(220,38,38,.16)'; nav.style.fontWeight='700'; }
+      else { nav.style.background=''; nav.style.fontWeight=''; }
+    }
   }catch(e){}
+}
+// Keep the pending badge fresh for approvers
+if(!window._raBadgeTimer){
+  window._raBadgeTimer = setInterval(function(){
+    if(currentUser && ['admin','assigner','manager'].includes(currentUser.role)) loadReaddingBadge();
+  }, 30000);
 }
 async function loadReaddingPage(){
   const tbody = document.getElementById('readding-tbody');
@@ -6326,33 +6341,34 @@ async function approveReadding(id, btn){
       return;
     }
 
-    // 2) Give access to support@bharatgps.com by default
-    let accessMsg = '';
-    if(btn) btn.textContent='⏳ Giving access…';
-    try{
-      const fu = await _raFetchJSON('gps_proxy.php?action=find_user&server_id='+row.server_id+'&email='+encodeURIComponent('support@bharatgps.com'),{headers:{'X-Auth-Token':authToken}});
-      const supportUserId = fu && fu.found && fu.user ? fu.user.id : null;
-      if(supportUserId && deviceId){
-        const afd = new FormData();
-        afd.append('server_id', row.server_id);
-        afd.append('device_id', deviceId);
-        afd.append('user_id', supportUserId);
-        const asg = await _raFetchJSON('gps_proxy.php?action=assign_device',{method:'POST',headers:{'X-Auth-Token':authToken},body:afd});
-        accessMsg = (asg && asg.success) ? ' · support access ✅' : ' · ⚠️ support access failed';
-      } else {
-        accessMsg = ' · ⚠️ support@bharatgps.com not found';
-      }
-    }catch(e){ accessMsg = ' · ⚠️ access step skipped'; }
-
-    // 3) Record approval + assign to requesting technician stock (server-side, always runs)
+    // 2) Record approval + assign to requesting technician stock (server-side, fast, always runs)
     if(btn) btn.textContent='⏳ Finishing…';
     const ar = await api('readding_approve', {}, 'POST', {id:id, device_id:deviceId});
     if(ar && ar.success){
-      showToast('✅ Approved — pushed to '+((_RA_SRV[row.server_id])||'server')+accessMsg+' · added to technician stock');
+      showToast('✅ Approved — pushed to '+((_RA_SRV[row.server_id])||'server')+' · added to technician stock');
     } else {
       showToast('⚠️ Pushed to server but could not record approval: '+((ar&&ar.error)||''));
     }
+    // Refresh the list immediately so the row updates — admin does not wait on support access
     loadReaddingPage();
+
+    // 3) Give access to support@bharatgps.com in the BACKGROUND (never blocks the UI)
+    if(deviceId){
+      (async()=>{
+        try{
+          const fu = await _raFetchJSON('gps_proxy.php?action=find_user&server_id='+row.server_id+'&email='+encodeURIComponent('support@bharatgps.com'),{headers:{'X-Auth-Token':authToken}});
+          const supportUserId = fu && fu.found && fu.user ? fu.user.id : null;
+          if(supportUserId){
+            const afd = new FormData();
+            afd.append('server_id', row.server_id);
+            afd.append('device_id', deviceId);
+            afd.append('user_id', supportUserId);
+            const asg = await _raFetchJSON('gps_proxy.php?action=assign_device',{method:'POST',headers:{'X-Auth-Token':authToken},body:afd});
+            if(asg && asg.success) showToast('✅ Support access granted for '+row.name);
+          }
+        }catch(e){}
+      })();
+    }
   }catch(e){
     showToast('❌ '+e.message);
     if(btn){ btn.disabled=false; btn.textContent='✅ Approve & Push'; }
