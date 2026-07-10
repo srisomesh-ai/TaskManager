@@ -3854,14 +3854,20 @@ case 'renewal_approve':
             } catch(Exception $e){}
             $gst = $gstAmt;
             $noteExtra = ($amount<=0) ? ' [PRICE MISSING — set the renewal plan price in Price List, then edit this entry]' : '';
+            // Clean server label: "Server 1/2/3/4" instead of the raw URL/name.
+            $srvNum = intval($r['server_id']);
+            $srvLabel = $srvNum ? ('Server '.$srvNum) : ($r['server_name'] ?: '');
+            // If a payment screenshot was attached, the payment was made by UPI.
+            $payMode = !empty($r['payment_screenshot']) ? 'UPI' : null;
             $pdo->prepare("INSERT INTO balance_sheet_entries
-                (type,profile,date,gps_serial_no,name_on_server,server_name,device_model,service_type,license_plan,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_transaction_details,remarks,created_by_code)
-                VALUES ('license',?,CURDATE(),?,?,?,?,?,?,1,?,?,?,'paid',?,0,?,?,?)")
+                (type,profile,date,gps_serial_no,name_on_server,server_name,device_model,service_type,license_plan,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_mode,payment_transaction_details,payment_received_on,remarks,created_by_code)
+                VALUES ('license',?,CURDATE(),?,?,?,?,?,?,1,?,?,?,'paid',?,0,?,?,CURDATE(),?,?)")
                 ->execute([
                     $rnwProfile,
-                    $r['imei'] ?: null, $r['owner'] ?: $r['device_name'], $r['server_name'],
+                    $r['imei'] ?: null, $r['owner'] ?: $r['device_name'], $srvLabel,
                     'Renewal', 'Renewal', $r['label'],
                     $amount - $gst, $gst, $amount, $amount,
+                    $payMode,
                     $r['payment_screenshot'] ?: null,
                     'Renewal '.$r['label'].' — '.$r['device_name'].' ('.$r['plate'].') new expiry '.$r['new_expiry'].$noteExtra,
                     $cu['name'] ?? 'admin'
