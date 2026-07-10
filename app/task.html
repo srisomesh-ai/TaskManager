@@ -397,56 +397,6 @@
     </div>
   </div>
 
-  <!-- V2V TRANSFER bottom sheet -->
-  <div class="sheet-ov" id="v2-ov" onclick="closeV2V()"></div>
-  <div class="sheet" id="v2-sheet">
-    <div class="sheet-hd">
-      <div class="t">🚗 Vehicle-to-Vehicle Transfer</div>
-      <div class="r" id="v2-ref"></div>
-    </div>
-    <div class="sheet-bd">
-      <!-- Step 1: find the device on the server -->
-      <div id="v2-search-step">
-        <div class="tu-lbl">IMEI / GPS Serial No *</div>
-        <div style="display:flex;gap:8px;margin-bottom:8px">
-          <input class="inst-in" id="v2-imei" placeholder="IMEI or serial" style="flex:1;margin:0">
-          <button class="btn btn-save" id="v2-searchbtn" onclick="v2Search()" style="width:auto;padding:0 16px">🔍 Search</button>
-        </div>
-        <div id="v2-search-res" style="font-size:12px;margin-bottom:6px"></div>
-      </div>
-
-      <!-- Step 2: confirmed device + new vehicle details -->
-      <div id="v2-form-step" style="display:none">
-        <div id="v2-cur" style="background:var(--surface2,#F3F6F5);border:1.5px solid var(--border);border-radius:10px;padding:12px;font-size:12px;line-height:1.7;margin-bottom:14px"></div>
-
-        <div class="tu-lbl">New Vehicle Number *</div>
-        <input class="inst-in" id="v2-newveh" placeholder="e.g. AP31AB1234" style="text-transform:uppercase;margin-bottom:12px">
-
-        <div class="tu-lbl">New Vehicle Type</div>
-        <select class="inst-in" id="v2-vtype" style="margin-bottom:12px">
-          <option value="">Select…</option>
-          <option>Car</option><option>Truck</option><option>Bus</option><option>Auto</option>
-          <option>Bike</option><option>JCB</option><option>Tractor</option><option>Van</option>
-          <option>Mini Truck</option><option>Other</option>
-        </select>
-
-        <div class="tu-lbl">New Owner Name (optional)</div>
-        <input class="inst-in" id="v2-owner" placeholder="Leave blank to keep same" style="margin-bottom:12px">
-
-        <div class="tu-lbl">Remarks</div>
-        <textarea class="inst-in" id="v2-remarks" rows="2" placeholder="Optional"></textarea>
-      </div>
-
-      <div id="v2-err" style="display:none;color:var(--red);font-size:13px;font-weight:700;margin-top:10px"></div>
-      <!-- hidden captured server refs -->
-      <input type="hidden" id="v2-serverid"><input type="hidden" id="v2-deviceid">
-      <input type="hidden" id="v2-servername"><input type="hidden" id="v2-oldplate">
-    </div>
-    <div class="sheet-ft">
-      <button class="btn btn-cancel" onclick="closeV2V()">Cancel</button>
-      <button class="btn btn-save" id="v2-save" onclick="submitV2V()" style="display:none">✅ Update Server &amp; Close</button>
-    </div>
-  </div>
 
   <!-- GIVE ACCESS / ASSIGN bottom sheet -->
   <div class="sheet-ov" id="asg-ov" onclick="closeAssign()"></div>
@@ -728,7 +678,8 @@
       }
 
       // Has installation been completed? (all devices pushed)
-      const installs=t.device_installs||[], qty=parseInt(t.device_qty||1)||1;
+      const installs=t.device_installs||[]; let qty=parseInt(t.device_qty||1)||1;
+      if((jobLower.includes('vehicle to vehicle')||jobLower.includes('v2v'))&&qty<1) qty=1;
       const addingDone=installs.length>=qty && installs.every(d=>d.gps_serial_no&&d.name_on_server);
       const price=parseFloat(t.price_to_collect||0), coll=parseFloat(t.amount_collected||0);
       const payDone=coll>=price-15 && price>0;
@@ -1018,9 +969,11 @@
   const GPS_PROXY='../gps_proxy.php';
   const SERVER_LABELS=['','bharatgps.com','bharatgps.in','bharatgps.school','bharatgps.org'];
   let _instQty=1, _instStep=1, _instSaved={}, _myDevices=[];
+  let _v2vMode=false;
 
   async function openInstall(){
     const t=_curTask;
+    _v2vMode=false;
     // route special jobs — troubleshoot/demo/v2v now have their own flows; only remove is desktop-only
     const job=(t.device_details||'').toLowerCase();
     if(job.includes('remove only')||job.includes('only remove')){
@@ -1028,6 +981,7 @@
       return;
     }
     _instQty=parseInt(t.device_qty||1)||1;
+    if(_v2vMode) _instQty=1;
     _instStep=1; _instSaved={};
     // restore already-installed devices
     (t.device_installs||[]).forEach(d=>{
@@ -1162,9 +1116,13 @@
   function loadDevice(idx,device){
     const dd=device.device_data||{}, res=document.getElementById('ires-'+idx);
     const installed=dd.installation_date && dd.installation_date!=='0000-00-00' && dd.plate_number && dd.plate_number.trim()!=='';
-    if(installed){
+    // V2V mode: the device IS already installed (that's expected) — load it for editing instead of blocking.
+    if(installed && !_v2vMode){
       res.innerHTML='<div style="background:#fff3cd;border:1.5px solid #e07b00;border-radius:8px;padding:12px;font-size:12px;line-height:1.7;color:#5a3e00"><strong style="color:#e07b00">⚠️ Already installed</strong><br>Plate: <strong>'+esc(dd.plate_number||'–')+'</strong><br>Owner: <strong>'+esc(dd.object_owner||'–')+'</strong><br>Installed: <strong>'+esc(dd.installation_date||'–')+'</strong><br>Server: <strong>'+esc(device._server_name||'–')+'</strong><br><span style="color:#7a3e00;font-weight:700">🚫 This IMEI is in use. Search a different one.</span></div>';
       return;
+    }
+    if(_v2vMode && installed){
+      res.innerHTML='<div style="background:var(--accent-light,#E0EEEE);border:1.5px solid var(--accent2,#137272);border-radius:8px;padding:10px;font-size:12px;line-height:1.6;color:#0c4a4a"><strong>🚗 Device found — editing for vehicle change</strong><br>Current plate: <strong>'+esc(dd.plate_number||'–')+'</strong> · Update the details below and push.</div>';
     }
     document.getElementById('iserverid-'+idx).value=device._server_id||'';
     document.getElementById('ideviceid-'+idx).value=dd.id||device.id||'';
@@ -1174,7 +1132,13 @@
     sv('iname-'+idx,device.name); sv('iplate-'+idx,dd.plate_number); sv('iowner-'+idx,dd.object_owner); sv('ireg-'+idx,dd.registration_number); sv('inotes-'+idx,dd.additional_notes);
     const today=new Date().toISOString().slice(0,10);
     document.getElementById('iinst-'+idx).value=(dd.installation_date&&dd.installation_date!=='0000-00-00')?dd.installation_date:today;
-    autoExp(idx);
+    if(_v2vMode){
+      // Preserve the existing expiry date — do NOT recompute for a vehicle change
+      const expEl=document.getElementById('iexp-'+idx);
+      if(expEl){ expEl.value=(dd.expiration_date&&dd.expiration_date!=='0000-00-00')?dd.expiration_date:(dd.expiration_date||''); }
+    } else {
+      autoExp(idx);
+    }
     loadIcons(idx,device._server_id||'',dd.icon_id||'');
     document.getElementById('inst-search-'+idx).style.display='none';
     document.getElementById('iform-'+idx).style.display='';
@@ -1254,16 +1218,16 @@
       fd.append('plate_number',plate); fd.append('registration_number',reg); fd.append('object_owner',owner);
       fd.append('installation_date',inst); fd.append('expiration_date',exp); fd.append('icon_id',iconId);
       fd.append('additional_notes',notes+(vtype?' | Vehicle Type: '+vtype:''));
-      fd.append('comment','Installed via BharatGPS TaskManager — Task '+(_curTask.task_id||''));
+      fd.append('comment',(_v2vMode?'Vehicle changed (V2V) via BharatGPS TaskManager — Task ':'Installed via BharatGPS TaskManager — Task ')+(_curTask.task_id||''));
       const r=await fetch(GPS_PROXY+'?action=update',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd});
       const data=await r.json();
       if(data.success){
         _instSaved[idx]={pushed:true,server_id:serverId,device_id:deviceId,imei,name,server_name:'Server '+serverId,plate,vtype,inst,exp};
-        await apiPost('save_device_install',{task_id:_curTask.id,device_index:idx,vehicle_number:plate,vehicle_type:vtype||'',gps_serial_no:imei,name_on_server:name,server_name:'Server '+serverId,server_id:serverId,device_id:deviceId,remarks:notes||'GPS device added to server'}).catch(()=>{});
+        await apiPost('save_device_install',{task_id:_curTask.id,device_index:idx,vehicle_number:plate,vehicle_type:vtype||'',gps_serial_no:imei,name_on_server:name,server_name:'Server '+serverId,server_id:serverId,device_id:deviceId,remarks:notes||(_v2vMode?'Vehicle changed on server':'GPS device added to server')}).catch(()=>{});
         const lbl=SERVER_LABELS[parseInt(serverId)||0]||('Server '+serverId);
-        const remark='🛰 Device added to GPS server | IMEI: '+imei+' | Name: '+name+' | Plate: '+plate+(vtype?' | Type: '+vtype:'')+' | Server: '+lbl+' | Installed: '+inst+' | Expires: '+exp;
+        const remark=(_v2vMode?'🚗 Vehicle changed on GPS server':'🛰 Device added to GPS server')+' | IMEI: '+imei+' | Name: '+name+' | Plate: '+plate+(vtype?' | Type: '+vtype:'')+' | Server: '+lbl+(_v2vMode?'':(' | Installed: '+inst))+' | Expires: '+exp;
         await apiPost('update_task',{id:_curTask.id,remark}).catch(()=>{});
-        toast('✅ Device '+idx+' pushed to GPS server');
+        toast(_v2vMode?'✅ Vehicle changed on GPS server':'✅ Device '+idx+' pushed to GPS server');
         renderInstall();
       } else { if(btn){btn.textContent='✅ Confirm & Push';btn.disabled=false;} alert('❌ GPS Server error: '+(data.error||'Unknown error')); }
     }catch(e){ if(btn){btn.textContent='✅ Confirm & Push';btn.disabled=false;} alert('Error: '+e.message); }
@@ -1577,95 +1541,10 @@
     } else { err.textContent='❌ '+((res&&res.error)||'Save failed — please try again'); err.style.display=''; }
   }
 
-  // ═══════════════ V2V TRANSFER (searches device, pushes new vehicle to GPS server) ═══════════════
+  // ═══════════════ V2V TRANSFER — reuses the full Install engine (editable, with icon/access/payment) ═══════════════
   function openV2V(){
-    const t=_curTask;
-    document.getElementById('v2-ref').textContent=(t.task_id||'')+' · '+(t.customer_name||'');
-    document.getElementById('v2-imei').value=t.gps_serial_no||'';
-    ['v2-newveh','v2-owner','v2-remarks','v2-serverid','v2-deviceid','v2-servername','v2-oldplate'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
-    document.getElementById('v2-vtype').value='';
-    document.getElementById('v2-search-res').innerHTML='';
-    document.getElementById('v2-search-step').style.display='';
-    document.getElementById('v2-form-step').style.display='none';
-    document.getElementById('v2-save').style.display='none';
-    document.getElementById('v2-err').style.display='none';
-    document.getElementById('v2-ov').classList.add('open');
-    document.getElementById('v2-sheet').classList.add('open');
-  }
-  function closeV2V(){ document.getElementById('v2-ov').classList.remove('open'); document.getElementById('v2-sheet').classList.remove('open'); }
-
-  async function v2Search(){
-    const imei=(document.getElementById('v2-imei').value||'').trim();
-    const res=document.getElementById('v2-search-res');
-    if(!imei){ res.innerHTML='<span style="color:var(--red)">Enter the IMEI / serial first.</span>'; return; }
-    const btn=document.getElementById('v2-searchbtn'); btn.textContent='…'; btn.disabled=true;
-    res.innerHTML='<span style="color:var(--text3)">🔍 Searching servers…</span>';
-    try{
-      const r=await fetch(GPS_PROXY+'?action=find&keyword='+encodeURIComponent(imei),{headers:{'X-Auth-Token':authToken}});
-      const data=await r.json();
-      btn.textContent='🔍 Search'; btn.disabled=false;
-      if(!data.success){ res.innerHTML='<span style="color:var(--red)">❌ '+esc(data.error||'Search failed')+'</span>'; return; }
-      if(!data.devices||!data.devices.length){ res.innerHTML='<span style="color:var(--red)">❌ No device found with this IMEI on any server.</span>'; return; }
-      if(data.devices.length===1){ v2Load(data.devices[0]); }
-      else{
-        window._v2sr=data.devices;
-        res.innerHTML='<div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:6px">'+data.devices.length+' found — tap to select:</div>'+
-          data.devices.map((d,i)=>'<div onclick="v2Load(window._v2sr['+i+'])" style="padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;margin-bottom:6px;font-size:12px;cursor:pointer"><strong>'+esc(d.name||'–')+'</strong><br>IMEI: '+esc(d.device_data?.imei||'–')+' · '+esc(d._server_name||'–')+'</div>').join('');
-      }
-    }catch(e){ btn.textContent='🔍 Search'; btn.disabled=false; res.innerHTML='<span style="color:var(--red)">❌ '+esc(e.message)+'</span>'; }
-  }
-
-  function v2Load(device){
-    const dd=device.device_data||{};
-    document.getElementById('v2-serverid').value=device._server_id||'';
-    document.getElementById('v2-deviceid').value=dd.id||device.id||'';
-    document.getElementById('v2-servername').value=device._server_name||'';
-    document.getElementById('v2-oldplate').value=dd.plate_number||'';
-    document.getElementById('v2-cur').innerHTML=
-      '<strong style="color:var(--accent2,#137272)">📡 Device found — current vehicle</strong><br>'+
-      'Name: <strong>'+esc(device.name||'–')+'</strong><br>'+
-      'Old Plate: <strong>'+esc(dd.plate_number||'–')+'</strong><br>'+
-      'Owner: <strong>'+esc(dd.object_owner||'–')+'</strong><br>'+
-      'Server: <strong>'+esc(device._server_name||'–')+'</strong>';
-    // default new owner to existing owner (editable)
-    const ow=document.getElementById('v2-owner'); if(ow&&!ow.value) ow.placeholder=(dd.object_owner?('Keep: '+dd.object_owner):'Leave blank to keep same');
-    document.getElementById('v2-search-step').style.display='none';
-    document.getElementById('v2-form-step').style.display='';
-    document.getElementById('v2-save').style.display='';
-  }
-
-  async function submitV2V(){
-    const err=document.getElementById('v2-err'); err.style.display='none';
-    const serverId=document.getElementById('v2-serverid').value;
-    const deviceId=document.getElementById('v2-deviceid').value;
-    const imei=(document.getElementById('v2-imei').value||'').trim();
-    const newveh=document.getElementById('v2-newveh').value.trim().toUpperCase();
-    const vtype=document.getElementById('v2-vtype').value;
-    const newOwner=document.getElementById('v2-owner').value.trim();
-    const oldPlate=document.getElementById('v2-oldplate').value;
-    const remarks=document.getElementById('v2-remarks').value.trim();
-    if(!serverId||!deviceId){ err.textContent='⚠️ Search and select the device first.'; err.style.display=''; return; }
-    if(!newveh){ err.textContent='⚠️ Enter the new vehicle number.'; err.style.display=''; return; }
-    if(!/^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}$/.test(newveh)){ err.textContent='⚠️ Vehicle number must be like AP31AB1234.'; err.style.display=''; return; }
-    const btn=document.getElementById('v2-save'); btn.textContent='⏳ Updating server…'; btn.disabled=true;
-    try{
-      // 1) Push the vehicle change to the GPS server (edit_device)
-      const fd=new FormData();
-      fd.append('server_id',serverId); fd.append('device_id',deviceId);
-      fd.append('name',newveh); fd.append('plate_number',newveh);
-      if(newOwner) fd.append('object_owner',newOwner);
-      fd.append('additional_notes','V2V transfer'+(vtype?(' | Vehicle Type: '+vtype):'')+(oldPlate?(' | Moved from '+oldPlate):''));
-      fd.append('comment','Vehicle changed via BharatGPS TaskManager — Task '+(_curTask.task_id||''));
-      const ur=await fetch(GPS_PROXY+'?action=update',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd});
-      const ud=await ur.json();
-      if(!ud||!ud.success){ btn.textContent='✅ Update Server & Close'; btn.disabled=false; err.textContent='❌ Server update failed: '+((ud&&ud.error)||'unknown'); err.style.display=''; return; }
-      // 2) Save the report + close the task
-      const fields={'IMEI':imei,'Old Vehicle':oldPlate||'–','New Vehicle No':newveh,'New Vehicle Type':vtype||'–','New Owner':newOwner||'(unchanged)','Server':document.getElementById('v2-servername').value,'Remarks':remarks};
-      const res=await apiPost('save_job_outcome',{task_id:_curTask.id,job_type:'v2v',summary:'🚗 V2V Transfer Report',fields,removed_serial:'',close_task:true});
-      btn.textContent='✅ Update Server & Close'; btn.disabled=false;
-      if(res && res.success){ closeV2V(); showTechAppreciation(); }
-      else { err.textContent='❌ '+((res&&res.error)||'Report save failed — but server was updated. Try submitting again.'); err.style.display=''; }
-    }catch(e){ btn.textContent='✅ Update Server & Close'; btn.disabled=false; err.textContent='❌ '+e.message; err.style.display=''; }
+    _v2vMode=true;
+    openInstall();
   }
 
 
