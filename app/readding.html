@@ -52,28 +52,25 @@
 
   <div class="wrap">
     <div class="card">
-      <div class="info">Fill in the device details and submit. A manager or admin will review and approve — once approved, the device is pushed to the server and you can give access.</div>
+      <div class="info">Fill in the device details and submit. A manager or admin will review and approve — once approved, the device is pushed to the server and access is given.</div>
 
       <label class="lbl">Device Name <span class="req">*</span></label>
-      <input class="in" id="f_name" type="text" placeholder="e.g. AP09AZ1234">
+      <input class="in" id="f_name" type="text" placeholder="Name on server">
 
-      <label class="lbl">Device Model <span class="req">*</span></label>
-      <select class="sel" id="f_model">
-        <option value="">— Select Model —</option>
-        <option>GT06</option><option>GT06N</option><option>TK103</option><option>TK103B</option>
-        <option>Concox GT06E</option><option>Concox AT4</option><option>Teltonika FMB120</option>
-        <option>Teltonika FMB920</option><option>Meitrack T366G</option><option>Queclink GV300</option>
-        <option>Queclink GL300</option><option>Ruptela FM-Eco4</option><option>Other</option>
-      </select>
+      <label class="lbl">Vehicle Number <span class="req">*</span></label>
+      <input class="in" id="f_plate" type="text" placeholder="e.g. AP09AZ1234" oninput="this.value=this.value.toUpperCase()">
 
-      <label class="lbl">IMEI Number <span class="req">*</span></label>
+      <label class="lbl">VIN <span class="req">*</span></label>
+      <input class="in" id="f_vin" type="text" placeholder="Vehicle VIN">
+
+      <label class="lbl">Mobile Number <span class="req">*</span></label>
+      <input class="in" id="f_reg" type="tel" placeholder="Registration / asset number" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+
+      <label class="lbl">Customer Name <span class="req">*</span></label>
+      <input class="in" id="f_owner" type="text" placeholder="Object owner / manager">
+
+      <label class="lbl">GPS IMEI Number <span class="req">*</span></label>
       <input class="in" id="f_imei" type="tel" placeholder="15-digit IMEI" maxlength="20" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
-
-      <label class="lbl">VIN / Vehicle No.</label>
-      <input class="in" id="f_vin" type="text" placeholder="Optional">
-
-      <label class="lbl">SIM Number</label>
-      <input class="in" id="f_sim" type="tel" placeholder="Optional" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
 
       <label class="lbl">Server <span class="req">*</span></label>
       <div class="srv-grid" id="srv-grid">
@@ -116,22 +113,25 @@
 
   async function submitReq(){
     const name=document.getElementById('f_name').value.trim();
-    const model=document.getElementById('f_model').value;
-    const imei=document.getElementById('f_imei').value.trim();
+    const plate=document.getElementById('f_plate').value.trim();
     const vin=document.getElementById('f_vin').value.trim();
-    const sim=document.getElementById('f_sim').value.trim();
+    const reg=document.getElementById('f_reg').value.trim();
+    const owner=document.getElementById('f_owner').value.trim();
+    const imei=document.getElementById('f_imei').value.trim();
     if(!name){ toast('⚠️ Enter device name'); return; }
-    if(!model){ toast('⚠️ Select device model'); return; }
+    if(!plate){ toast('⚠️ Enter vehicle number'); return; }
+    if(!vin){ toast('⚠️ Enter VIN'); return; }
+    if(!reg){ toast('⚠️ Enter mobile number'); return; }
+    if(!owner){ toast('⚠️ Enter customer name'); return; }
     if(!imei||imei.length<10){ toast('⚠️ Enter a valid IMEI'); return; }
     if(!_srv){ toast('⚠️ Select a server'); return; }
     const btn=document.getElementById('submitBtn'); btn.disabled=true; btn.textContent='Submitting…';
-    const r=await api('readding_submit',{name,model,imei,vin,sim,server_id:_srv});
+    const r=await api('readding_submit',{name,plate_number:plate,vin,registration_number:reg,object_owner:owner,imei,server_id:_srv});
     btn.disabled=false; btn.textContent='📤 Submit for Approval';
     if(r&&r.success){
       toast('✅ Request submitted — waiting for approval');
-      document.getElementById('f_name').value=''; document.getElementById('f_imei').value='';
-      document.getElementById('f_vin').value=''; document.getElementById('f_sim').value='';
-      document.getElementById('f_model').value=''; _srv=0;
+      ['f_name','f_plate','f_vin','f_reg','f_owner','f_imei'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+      _srv=0;
       document.querySelectorAll('.srv').forEach(s=>s.classList.remove('sel'));
       loadMine();
     } else { toast('❌ '+((r&&r.error)||'Could not submit')); }
@@ -151,7 +151,7 @@
       else extra='⏳ Waiting for approval';
       return `<div class="rq">
         <div class="top"><div class="nm">${esc(r.name)}</div><span class="st ${st}">${st}</span></div>
-        <div class="meta">📡 ${esc(SRVN[r.server_id]||('Server '+r.server_id))} · ${esc(r.model||'—')}<br>IMEI ${esc(r.imei)}${r.vin?(' · VIN '+esc(r.vin)):''}<br>${extra}<br><span style="font-size:11px">${esc((r.created_at||'').replace('T',' ').slice(0,16))}</span></div>
+        <div class="meta">📡 ${esc(SRVN[r.server_id]||('Server '+r.server_id))} · ${esc(r.plate_number||'—')}<br>IMEI ${esc(r.imei)}${r.object_owner?(' · '+esc(r.object_owner)):''}<br>${extra}<br><span style="font-size:11px">${esc((r.created_at||'').replace('T',' ').slice(0,16))}</span></div>
       </div>`;
     }).join('');
   }
