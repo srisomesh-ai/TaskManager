@@ -350,8 +350,8 @@ function sendTaskUpdateCustomer(array $task, string $remark, string $techName, a
 }
 
 // ---- CONSENT REQUEST — sent to customer before installation ----
-function sendConsentRequest(array $task, string $techName): void {
-    if (empty($task['email'])) return;
+function sendConsentRequest(array $task, string $techName): bool {
+    if (empty($task['email'])) return false;
     $BASE_URL   = 'https://salmon-goldfish-110661.hostingersite.com';
     $consentUrl = $BASE_URL . '/consent.php?token=' . urlencode($task['consent_token'] ?? '');
     $price      = number_format(floatval($task['price_to_collect'] ?? 0), 0);
@@ -431,7 +431,7 @@ function sendConsentRequest(array $task, string $techName): void {
         . "</div>"
         . "<p style=\"font-size:12px;color:#8a9ab0;margin-top:16px\">For help call <strong>9849849824</strong></p>";
 
-    sendMail(
+    return sendMail(
         $task['email'],
         $task['customer_name'],
         $emailSubject,
