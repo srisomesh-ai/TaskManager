@@ -1700,6 +1700,45 @@
     return installs.filter(d=>d&&d.server_id&&d.device_id).map(d=>({pushed:true,server_id:d.server_id,device_id:d.device_id,imei:d.gps_serial_no,name:d.name_on_server,device_index:d.device_index,access_given:d.access_given}));
   }
 
+  // Devices that were installed but are missing the GPS server_id/device_id
+  // (e.g. saved on a different device/session, or an older install flow).
+  // We resolve those IDs from the server by IMEI so access can still be given.
+  function installedNeedingResolve(){
+    const have=new Set(pushedDevices().map(d=>String(d.imei||'').replace(/\D/g,'')));
+    const installs=(_curTask&&_curTask.device_installs)||[];
+    return installs.filter(d=>{
+      const imei=String(d.gps_serial_no||'').replace(/\D/g,'');
+      return imei && (!d.server_id||!d.device_id) && !have.has(imei);
+    }).map(d=>({imei:d.gps_serial_no,name:d.name_on_server,device_index:d.device_index,access_given:d.access_given}));
+  }
+
+  async function resolveByImei(imei){
+    const clean=String(imei||'').replace(/\D/g,'');
+    if(!clean) return null;
+    try{
+      const r=await fetch(GPS_PROXY+'?action=find&keyword='+encodeURIComponent(clean),{headers:{'X-Auth-Token':authToken}}).then(x=>x.json());
+      if(!r||!r.success||!r.devices||!r.devices.length) return null;
+      const hit=r.devices.find(x=>String((x.device_data&&x.device_data.imei)||'').replace(/\D/g,'')===clean)||r.devices[0];
+      const dd=(hit&&hit.device_data)||{};
+      const sid=hit&&hit._server_id, did=dd.id||hit.id;
+      if(sid&&did){
+        return {pushed:true,server_id:sid,device_id:did,imei:dd.imei||clean,name:hit.name||'',device_index:null};
+      }
+    }catch(e){}
+    return null;
+  }
+
+  // Full device list for assignment: pushed ones + IMEI-resolved ones.
+  async function assignableDevices(){
+    let devs=pushedDevices().slice();
+    const need=installedNeedingResolve();
+    for(const n of need){
+      const r=await resolveByImei(n.imei);
+      if(r){ r.device_index=n.device_index; devs.push(r); }
+    }
+    return devs;
+  }
+
   function openAssign(){
     const t=_curTask;
     _asgUserId=null;
@@ -1721,8 +1760,9 @@
     const st=document.getElementById('asg-status');
     const createB=document.getElementById('asg-create-box'), foundB=document.getElementById('asg-found-box');
     if(!email){ st.innerHTML='<span style="color:var(--saffron)">⚠️ Enter email first</span>'; return; }
-    const devs=pushedDevices();
-    if(!devs.length){ st.innerHTML='<span style="color:var(--red)">❌ No pushed device found</span>'; return; }
+    st.innerHTML='<span style="color:var(--text3)">🔍 Locating device(s)…</span>';
+    const devs=await assignableDevices();
+    if(!devs.length){ st.innerHTML='<span style="color:var(--red)">❌ No pushed device found — open the device on the GPS server first, then try again</span>'; return; }
     const serverId=devs[0].server_id;
     st.innerHTML='<span style="color:var(--text3)">🔍 Checking…</span>';
     createB.style.display='none'; foundB.style.display='none'; _asgUserId=null;
@@ -1743,7 +1783,7 @@
     const pass=document.getElementById('asg-pass').value.trim();
     const st=document.getElementById('asg-status');
     if(!pass||pass.length<6){ st.innerHTML='<span style="color:var(--red)">❌ Password must be at least 6 characters</span>'; return; }
-    const devs=pushedDevices(); if(!devs.length){ st.innerHTML='<span style="color:var(--red)">❌ No pushed device</span>'; return; }
+    const devs=await assignableDevices(); if(!devs.length){ st.innerHTML='<span style="color:var(--red)">❌ No pushed device</span>'; return; }
     const serverId=devs[0].server_id, phone=String(_curTask.contact_number||'');
     st.innerHTML='<span style="color:var(--text3)">⏳ Creating account…</span>';
     const fd=new FormData(); fd.append('server_id',serverId); fd.append('email',email); fd.append('password',pass); fd.append('phone',phone);
@@ -1763,7 +1803,8 @@
     const st=document.getElementById('asg-status');
     if(!_asgUserId){ st.innerHTML='<span style="color:var(--red)">❌ No account selected — check email first</span>'; return; }
     const email=document.getElementById('asg-email').value.trim();
-    const devs=pushedDevices();
+    const devs=await assignableDevices();
+    if(!devs.length){ st.innerHTML='<span style="color:var(--red)">❌ No device found to assign</span>'; return; }
     st.innerHTML='<span style="color:var(--text3)">⏳ Assigning '+devs.length+' device(s)…</span>';
     let allOk=true;
     for(const dev of devs){
