@@ -54,9 +54,22 @@ $skipAuth = ['login','ping','verify_pin'];
 $cu = null; $userId = null; $userRole = null;
 if (!in_array($action, $skipAuth)) {
     if ($token) {
-        $s = $pdo->prepare("SELECT * FROM users WHERE auth_token=? AND is_active=1");
-        $s->execute([$token]);
-        $cu = $s->fetch() ?: null;
+        // Multi-session: match the token against active sessions first (lets the same
+        // account stay logged in on multiple PCs simultaneously).
+        try {
+            $ss = $pdo->prepare("SELECT u.* FROM auth_sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND u.is_active=1 LIMIT 1");
+            $ss->execute([$token]);
+            $cu = $ss->fetch() ?: null;
+            if ($cu) {
+                try { $pdo->prepare("UPDATE auth_sessions SET last_active=NOW() WHERE token=?")->execute([$token]); } catch(Exception $e){}
+            }
+        } catch(Exception $e){ $cu = null; }
+        // Fallback for older sessions / clients still using users.auth_token
+        if (!$cu) {
+            $s = $pdo->prepare("SELECT * FROM users WHERE auth_token=? AND is_active=1");
+            $s->execute([$token]);
+            $cu = $s->fetch() ?: null;
+        }
     }
     if (!$cu) { http_response_code(401); echo json_encode(['error'=>'Not authenticated']); exit; }
     $userId   = $cu['id'];
@@ -258,6 +271,23 @@ case 'login':
     $user = $s->fetch();
     if ($user && password_verify($pass, $user['password'])) {
         $tok = bin2hex(random_bytes(32));
+        // Multi-session: store each login as its own session so the same account
+        // can be open on several PCs at once without logging each other out.
+        try {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS auth_sessions (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                token VARCHAR(80) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_active DATETIME NULL,
+                UNIQUE KEY uniq_token (token),
+                INDEX idx_user (user_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            $pdo->prepare("INSERT INTO auth_sessions (user_id, token, last_active) VALUES (?,?,NOW())")->execute([$user['id'], $tok]);
+            // Housekeeping: drop sessions older than 30 days
+            $pdo->prepare("DELETE FROM auth_sessions WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)")->execute();
+        } catch(Exception $e){ error_log('auth_sessions login: '.$e->getMessage()); }
+        // Keep users.auth_token as the most-recent token for backward compatibility
         $pdo->prepare("UPDATE users SET auth_token=?, last_active=NOW() WHERE id=?")->execute([$tok, $user['id']]);
         echo json_encode(['success'=>true,'token'=>$tok,'user'=>[
             'id'=>$user['id'],'name'=>$user['name'],'role'=>$user['role'],'email'=>$user['email']
@@ -270,7 +300,10 @@ case 'login':
 
 // ---- LOGOUT ----
 case 'logout':
-    if ($userId) $pdo->prepare("UPDATE users SET auth_token=NULL, last_active=NOW() WHERE id=?")->execute([$userId]);
+    // Remove only THIS session's token so other PCs on the same account stay logged in.
+    if ($token) { try { $pdo->prepare("DELETE FROM auth_sessions WHERE token=?")->execute([$token]); } catch(Exception $e){} }
+    // Only clear users.auth_token if it happens to be this exact token (don't kill others)
+    if ($userId && $token) { $pdo->prepare("UPDATE users SET auth_token=NULL WHERE id=? AND auth_token=?")->execute([$userId, $token]); }
     echo json_encode(['success'=>true]);
     break;
 
@@ -380,6 +413,8 @@ case 'admin_reset_password':
     if (!$uid || strlen($pass) < 6) { echo json_encode(['error'=>'User ID and password (min 6 chars) required']); break; }
     $hash = password_hash($pass, PASSWORD_DEFAULT);
     $pdo->prepare("UPDATE users SET password=?, auth_token=NULL WHERE id=?")->execute([$hash, $uid]);
+    // Password changed → invalidate ALL of that user's sessions (security)
+    try { $pdo->prepare("DELETE FROM auth_sessions WHERE user_id=?")->execute([$uid]); } catch(Exception $e){}
     echo json_encode(['success'=>true]);
     break;
 
@@ -2451,7 +2486,11 @@ case 'verify_token':
 
 case 'logout':
     $tok = $_SERVER['HTTP_X_AUTH_TOKEN'] ?? '';
-    if($tok) $pdo->prepare("UPDATE users SET auth_token=NULL WHERE auth_token=?")->execute([$tok]);
+    // Remove only this session; keep other PCs on the same account logged in.
+    if($tok){
+        try { $pdo->prepare("DELETE FROM auth_sessions WHERE token=?")->execute([$tok]); } catch(Exception $e){}
+        $pdo->prepare("UPDATE users SET auth_token=NULL WHERE auth_token=?")->execute([$tok]);
+    }
     echo json_encode(['success'=>true]);
     break;
 
