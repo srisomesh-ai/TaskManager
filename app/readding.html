@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Re-Adding · BharatGPS</title>
+<style>
+  :root{--teal-dark:#0E5C5C;--teal:#137272;--teal-lite:#1a9b9b;--accent:#16a34a;--bg:#f0f4f8;--card:#fff;
+    --text:#0f172a;--text2:#475569;--text3:#94a3b8;--border:#e8edf3;--red:#dc2626;--amber:#d97706;--blue:#2563eb}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100dvh}
+  .hero{background:linear-gradient(150deg,var(--teal-dark) 0%,var(--teal) 55%,var(--teal-lite) 100%);color:#fff;padding:16px 16px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10}
+  .hbtn{width:38px;height:38px;border:none;border-radius:12px;background:rgba(255,255,255,.18);color:#fff;font-size:20px;cursor:pointer;flex-shrink:0}
+  .hero h1{font-size:18px;font-weight:800}
+  .hero p{font-size:12px;opacity:.85;margin-top:2px}
+  .wrap{padding:14px 14px calc(30px + env(safe-area-inset-bottom))}
+  .card{background:var(--card);border-radius:16px;padding:16px;box-shadow:0 2px 10px rgba(15,23,42,.06);margin-bottom:14px}
+  .lbl{font-size:11px;font-weight:800;color:var(--text2);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px;display:block}
+  .req{color:var(--red)}
+  .in,.sel{width:100%;padding:12px 13px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;background:#fafcfe;color:var(--text);outline:none;margin-bottom:14px;font-family:inherit}
+  .in:focus,.sel:focus{border-color:var(--teal)}
+  .srv-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+  .srv{border:2px solid var(--border);border-radius:12px;padding:12px 8px;text-align:center;cursor:pointer;background:#fafcfe;transition:all .12s}
+  .srv.sel{border-color:var(--teal);background:#e8f5f5}
+  .srv .n{font-size:16px;font-weight:900;color:var(--teal)}
+  .srv .s{font-size:10.5px;color:var(--text3);margin-top:3px}
+  .btn{width:100%;padding:14px;border:none;border-radius:12px;background:var(--teal);color:#fff;font-size:15px;font-weight:800;cursor:pointer}
+  .btn:disabled{opacity:.6}
+  .info{background:#fff8e6;border:1px solid #ffe0a3;border-radius:10px;padding:12px;font-size:12px;color:#7a5c00;line-height:1.6;margin-bottom:14px}
+  .sec-t{font-size:14px;font-weight:800;margin:6px 2px 10px}
+  .rq{border:1px solid var(--border);border-radius:12px;padding:12px 13px;margin-bottom:9px;background:#fff}
+  .rq .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .rq .nm{font-weight:800;font-size:14px}
+  .st{font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:20px;text-transform:uppercase;letter-spacing:.3px}
+  .st.pending{background:#fef3c7;color:#92600a}
+  .st.approved{background:#dcfce7;color:#15803d}
+  .st.cancelled{background:#fee2e2;color:#b91c1c}
+  .rq .meta{font-size:12px;color:var(--text3);margin-top:5px;line-height:1.6}
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#16201F;color:#fff;font-size:13px;padding:11px 18px;border-radius:22px;z-index:100;max-width:90%;opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.show{opacity:1}
+  .empty{text-align:center;color:var(--text3);padding:20px;font-size:13px}
+</style>
+</head>
+<body>
+  <div class="hero">
+    <button class="hbtn" onclick="location.href='dashboard.html'">←</button>
+    <div>
+      <h1>🔌 Re-Adding</h1>
+      <p>Request a device re-add · admin approves &amp; pushes to server</p>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="card">
+      <div class="info">Fill in the device details and submit. A manager or admin will review and approve — once approved, the device is pushed to the server and you can give access.</div>
+
+      <label class="lbl">Device Name <span class="req">*</span></label>
+      <input class="in" id="f_name" type="text" placeholder="e.g. AP09AZ1234">
+
+      <label class="lbl">Device Model <span class="req">*</span></label>
+      <select class="sel" id="f_model">
+        <option value="">— Select Model —</option>
+        <option>GT06</option><option>GT06N</option><option>TK103</option><option>TK103B</option>
+        <option>Concox GT06E</option><option>Concox AT4</option><option>Teltonika FMB120</option>
+        <option>Teltonika FMB920</option><option>Meitrack T366G</option><option>Queclink GV300</option>
+        <option>Queclink GL300</option><option>Ruptela FM-Eco4</option><option>Other</option>
+      </select>
+
+      <label class="lbl">IMEI Number <span class="req">*</span></label>
+      <input class="in" id="f_imei" type="tel" placeholder="15-digit IMEI" maxlength="20" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+
+      <label class="lbl">VIN / Vehicle No.</label>
+      <input class="in" id="f_vin" type="text" placeholder="Optional">
+
+      <label class="lbl">SIM Number</label>
+      <input class="in" id="f_sim" type="tel" placeholder="Optional" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+
+      <label class="lbl">Server <span class="req">*</span></label>
+      <div class="srv-grid" id="srv-grid">
+        <div class="srv" data-id="1" onclick="pickSrv(this)"><div class="n">S1</div><div class="s">bharatgps.com</div></div>
+        <div class="srv" data-id="2" onclick="pickSrv(this)"><div class="n">S2</div><div class="s">bharatgps.in</div></div>
+        <div class="srv" data-id="3" onclick="pickSrv(this)"><div class="n">S3</div><div class="s">bharatgps.school</div></div>
+      </div>
+
+      <button class="btn" id="submitBtn" onclick="submitReq()">📤 Submit for Approval</button>
+    </div>
+
+    <div class="sec-t">📋 My Requests</div>
+    <div id="myReqs"><div class="empty">Loading…</div></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+  const API='../api/index.php';
+  const authToken=localStorage.getItem('bgps_tech_token')||'';
+  let currentUser={}; try{currentUser=JSON.parse(localStorage.getItem('bgps_tech_user')||'{}');}catch(e){}
+  if(!authToken){ location.href='login.html'; }
+  let _srv=0;
+
+  async function api(action,body,method){
+    const opt={cache:'no-store',headers:{'X-Auth-Token':authToken}};
+    let url=API+'?action='+action;
+    if(method==='POST'||body){ opt.method='POST'; opt.headers['Content-Type']='application/json'; opt.body=JSON.stringify(body||{}); }
+    const r=await fetch(url,opt); const t=await r.text();
+    try{return JSON.parse(t);}catch(e){console.error('non-JSON',action,t.slice(0,200));return {};}
+  }
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+  let _tt=null;
+  function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>t.classList.remove('show'),3000);}
+
+  function pickSrv(el){
+    document.querySelectorAll('.srv').forEach(s=>s.classList.remove('sel'));
+    el.classList.add('sel'); _srv=parseInt(el.getAttribute('data-id'));
+  }
+
+  async function submitReq(){
+    const name=document.getElementById('f_name').value.trim();
+    const model=document.getElementById('f_model').value;
+    const imei=document.getElementById('f_imei').value.trim();
+    const vin=document.getElementById('f_vin').value.trim();
+    const sim=document.getElementById('f_sim').value.trim();
+    if(!name){ toast('⚠️ Enter device name'); return; }
+    if(!model){ toast('⚠️ Select device model'); return; }
+    if(!imei||imei.length<10){ toast('⚠️ Enter a valid IMEI'); return; }
+    if(!_srv){ toast('⚠️ Select a server'); return; }
+    const btn=document.getElementById('submitBtn'); btn.disabled=true; btn.textContent='Submitting…';
+    const r=await api('readding_submit',{name,model,imei,vin,sim,server_id:_srv});
+    btn.disabled=false; btn.textContent='📤 Submit for Approval';
+    if(r&&r.success){
+      toast('✅ Request submitted — waiting for approval');
+      document.getElementById('f_name').value=''; document.getElementById('f_imei').value='';
+      document.getElementById('f_vin').value=''; document.getElementById('f_sim').value='';
+      document.getElementById('f_model').value=''; _srv=0;
+      document.querySelectorAll('.srv').forEach(s=>s.classList.remove('sel'));
+      loadMine();
+    } else { toast('❌ '+((r&&r.error)||'Could not submit')); }
+  }
+
+  const SRVN={1:'bharatgps.com',2:'bharatgps.in',3:'bharatgps.school',4:'bharatgps.org'};
+  async function loadMine(){
+    const d=await api('readding_list');
+    const box=document.getElementById('myReqs');
+    const rows=(d&&d.requests)?d.requests:[];
+    if(!rows.length){ box.innerHTML='<div class="empty">No requests yet.</div>'; return; }
+    box.innerHTML=rows.map(r=>{
+      const st=(r.status||'pending');
+      let extra='';
+      if(st==='approved') extra='✅ Pushed to server'+(r.device_id?(' · Device ID '+esc(r.device_id)):'')+' · by '+esc(r.approved_by||'—');
+      else if(st==='cancelled') extra='❌ Cancelled by '+esc(r.cancelled_by||'—');
+      else extra='⏳ Waiting for approval';
+      return `<div class="rq">
+        <div class="top"><div class="nm">${esc(r.name)}</div><span class="st ${st}">${st}</span></div>
+        <div class="meta">📡 ${esc(SRVN[r.server_id]||('Server '+r.server_id))} · ${esc(r.model||'—')}<br>IMEI ${esc(r.imei)}${r.vin?(' · VIN '+esc(r.vin)):''}<br>${extra}<br><span style="font-size:11px">${esc((r.created_at||'').replace('T',' ').slice(0,16))}</span></div>
+      </div>`;
+    }).join('');
+  }
+  loadMine();
+</script>
+</body>
+</html>
