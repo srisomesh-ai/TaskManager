@@ -1103,9 +1103,10 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
                 <th style="padding:10px 12px;text-align:left;font-weight:700">Vehicle / Owner</th>
                 <th style="padding:10px 12px;text-align:left;font-weight:700">Server</th>
                 <th style="padding:10px 12px;text-align:left;font-weight:700">Expiry</th>
-                <th style="padding:10px 12px;text-align:left;font-weight:700">Renew</th>
+                <th style="padding:10px 12px;text-align:left;font-weight:700">Renewal Plan</th>
+                <th style="padding:10px 12px;text-align:left;font-weight:700">Action</th>
               </tr></thead>
-              <tbody id="rnw-devices-tbody"><tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text3)">Fetch devices to begin.</td></tr></tbody>
+              <tbody id="rnw-devices-tbody"><tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text3)">Fetch devices to begin.</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -6552,16 +6553,14 @@ async function rnwFetch(){
   rnwRenderDevices();
 }
 function _rnwRenewOptions(){
-  // Build <option>s from Price List renewal items; value carries months+amount+gst+name
+  // Build grouped <option>s: BGT (No GST) and SBGT (With GST). value = months|amount|gst|name
   if(!_rnwRenewalItems.length){
-    return '<option value="12|0|0|Annual Renewal">1 Year</option><option value="6|0|0|6 Month Renewal">6 Months</option><option value="3|0|0|3 Month Renewal">3 Months</option>';
+    return '<option value="">⚠ Plans not loaded — reload page</option>';
   }
-  return _rnwRenewalItems.map(function(it){
+  function optFor(it){
     const nm=(it.product_name||'').toLowerCase();
     let months = 12;
-    // Years first (2 Years, 4 Years, 1 Year), then months
-    let ym = nm.match(/(\d+)\s*year/);
-    let mm = nm.match(/(\d+)\s*month/);
+    let ym = nm.match(/(\d+)\s*year/), mm = nm.match(/(\d+)\s*month/);
     if(ym) months = parseInt(ym[1])*12;
     else if(mm) months = parseInt(mm[1]);
     else if(nm.indexOf('annual')!==-1) months=12;
@@ -6570,48 +6569,61 @@ function _rnwRenewOptions(){
     const incl = parseFloat(it.price_incl_gst||0);
     const excl = parseFloat(it.price_excl_gst||0);
     const gst = Math.max(0, incl-excl);
-    const per = (months>=12 && months%12===0) ? ((months/12)+'y') : (months+'m');
-    return '<option value="'+months+'|'+incl+'|'+gst.toFixed(2)+'|'+escHtml(it.product_name)+'">'+escHtml(it.product_name)+' — ₹'+incl.toLocaleString('en-IN')+' ('+per+')</option>';
-  }).join('');
+    const per = (months>=12 && months%12===0) ? ((months/12)+' Year'+((months/12)>1?'s':'')) : (months+' Months');
+    // Show a clean label: "3 Months — ₹350" (name carries the profile marker in value)
+    return '<option value="'+months+'|'+incl+'|'+gst.toFixed(2)+'|'+escHtml(it.product_name)+'">'+per+' — ₹'+incl.toLocaleString('en-IN')+'</option>';
+  }
+  const bgt  = _rnwRenewalItems.filter(function(i){ return /\(BGT\)/i.test(i.product_name||'') || (parseFloat(i.gst_percent||0)===0 && !/SBGT/i.test(i.product_name||'')); });
+  const sbgt = _rnwRenewalItems.filter(function(i){ return /SBGT/i.test(i.product_name||'') || parseFloat(i.gst_percent||0)>0; });
+  let html='';
+  if(bgt.length)  html += '<optgroup label="BGT — No GST">'+bgt.map(optFor).join('')+'</optgroup>';
+  if(sbgt.length) html += '<optgroup label="SBGT — With GST (18%)">'+sbgt.map(optFor).join('')+'</optgroup>';
+  if(!html) html = _rnwRenewalItems.map(optFor).join('');
+  return html;
 }
 function rnwRenderDevices(){
   const q=(document.getElementById('rnw-table-filter').value||'').toLowerCase();
   const tbody=document.getElementById('rnw-devices-tbody');
   let rows=_rnwDevices.slice();
   if(q) rows=rows.filter(function(d){ return [(d.name||''),(d.imei||''),(d.plate||''),(d.owner||'')].join(' ').toLowerCase().indexOf(q)!==-1; });
-  if(!rows.length){ tbody.innerHTML='<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text3)">No devices.</td></tr>'; return; }
+  if(!rows.length){ tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text3)">No devices. Fetch to begin.</td></tr>'; return; }
   tbody.innerHTML=rows.map(function(d,i){
     const realIdx=_rnwDevices.indexOf(d);
-    const stColor = d.status==='expired'?'#c0392b':(d.status==='critical'?'#e07b00':(d.status==='warning'?'#c8860a':'var(--text2)'));
-    const dl = d.days_left<0 ? ('expired '+Math.abs(d.days_left)+'d ago') : (d.days_left+'d left');
+    const stColor = d.days_left<0?'#c0392b':(d.days_left<=7?'#e07b00':(d.days_left<=30?'#c8860a':'#16794a'));
+    const dl = d.days_left<0 ? ('Expired '+Math.abs(d.days_left)+'d ago') : (d.days_left===0?'Expires today':(d.days_left+'d left'));
     return '<tr style="border-bottom:1px solid var(--border)">'
-      + '<td style="padding:9px 12px;font-weight:700">'+escHtml(d.name)+'<br><span style="font-family:monospace;font-size:11px;color:var(--text3)">'+escHtml(d.imei)+'</span></td>'
-      + '<td style="padding:9px 12px;font-size:12px">'+escHtml(d.plate)+'<br><span style="color:var(--text3);font-size:11px">'+escHtml(d.owner)+'</span></td>'
-      + '<td style="padding:9px 12px;font-size:12px;color:var(--text2)">'+escHtml(_RNW_SRV[d.server_id]||('S'+d.server_id))+'</td>'
-      + '<td style="padding:9px 12px;font-size:12px;color:'+stColor+';font-weight:700">'+escHtml(d.expiry)+'<br><span style="font-size:11px;font-weight:600">'+dl+'</span></td>'
-      + '<td style="padding:9px 12px"><div style="display:flex;flex-direction:column;gap:6px;min-width:230px">'
-        + '<div style="display:flex;gap:6px;align-items:center">'
-          + '<select id="rnw-sel-'+realIdx+'" class="form-input" style="width:auto;font-size:12px;padding:5px 8px">'+_rnwRenewOptions()+'</select>'
-          + '<button class="ra-btn ra-approve" onclick="requestRenewal('+realIdx+',this)">🔄 Renew</button></div>'
-        + '<label style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:5px;cursor:pointer">📎 Payment screenshot (required): '
-          + '<input type="file" id="rnw-shot-'+realIdx+'" accept="image/*" style="font-size:11px" onchange="rnwShotPicked('+realIdx+')"></label>'
-        + '<span id="rnw-shot-status-'+realIdx+'" style="font-size:11px;color:var(--text3)"></span>'
-      + '</div></td>'
+      // Device
+      + '<td style="padding:10px 12px"><div style="font-weight:700;font-size:13px">'+escHtml(d.name)+'</div><div style="font-family:monospace;font-size:11px;color:var(--text3)">'+escHtml(d.imei)+'</div></td>'
+      // Vehicle / owner
+      + '<td style="padding:10px 12px;font-size:12px"><div style="font-weight:600">'+escHtml(d.plate||'—')+'</div><div style="color:var(--text3);font-size:11px">'+escHtml(d.owner||'')+'</div></td>'
+      // Server
+      + '<td style="padding:10px 12px;font-size:12px;color:var(--text2);white-space:nowrap">'+escHtml(_RNW_SRV[d.server_id]||('S'+d.server_id))+'</td>'
+      // Expiry
+      + '<td style="padding:10px 12px;white-space:nowrap"><div style="font-size:12px;font-weight:700;color:'+stColor+'">'+escHtml(d.expiry)+'</div><div style="font-size:11px;color:'+stColor+'">'+dl+'</div></td>'
+      // Plan dropdown
+      + '<td style="padding:10px 12px"><select id="rnw-sel-'+realIdx+'" class="form-input" style="width:100%;min-width:200px;font-size:12px;padding:6px 8px">'+_rnwRenewOptions()+'</select></td>'
+      // Screenshot + Renew (one tidy column)
+      + '<td style="padding:10px 12px;white-space:nowrap">'
+        + '<div style="display:flex;align-items:center;gap:8px">'
+          + '<label class="rnw-file-btn" style="font-size:11px;font-weight:600;color:var(--accent2);cursor:pointer;border:1px dashed var(--border);border-radius:6px;padding:6px 8px;white-space:nowrap">📎 <span id="rnw-shot-status-'+realIdx+'">Proof</span>'
+            + '<input type="file" id="rnw-shot-'+realIdx+'" accept="image/*" style="display:none" onchange="rnwShotPicked('+realIdx+')"></label>'
+          + '<button class="ra-btn ra-approve" onclick="requestRenewal('+realIdx+',this)">🔄 Renew</button>'
+        + '</div></td>'
     + '</tr>';
   }).join('');
 }
 function rnwShotPicked(idx){
   const inp=document.getElementById('rnw-shot-'+idx);
   const st=document.getElementById('rnw-shot-status-'+idx);
-  if(inp && inp.files && inp.files[0] && st){ st.textContent='✅ '+inp.files[0].name; st.style.color='var(--green)'; }
+  if(inp && inp.files && inp.files[0] && st){ st.textContent='✅ Proof'; st.style.color='var(--green)'; st.parentElement.style.borderColor='var(--green)'; st.parentElement.style.borderStyle='solid'; }
 }
 async function requestRenewal(idx, btn){
   const d=_rnwDevices[idx]; if(!d) return;
   const sel=document.getElementById('rnw-sel-'+idx);
   const parts=(sel?sel.value:'12|0|0|Renewal').split('|');
   const months=parseInt(parts[0])||12, amount=parseFloat(parts[1])||0, gst=parseFloat(parts[2])||0, itemName=parts[3]||'Renewal';
-  const label = months===12?'1 Year':(months+' Months');
-  if(amount<=0){ showToast('⚠️ Renewal price is 0 — reload the page so plans load, or set the price in Price List'); return; }
+  const label = (months>=12&&months%12===0)?((months/12)+' Year'+((months/12)>1?'s':'')):(months+' Months');
+  if(!sel || !sel.value || amount<=0){ showToast('⚠️ Select a renewal plan first. If the list is empty, reload the page so plans load (or add them in Price List).'); return; }
   const shotInp=document.getElementById('rnw-shot-'+idx);
   if(!shotInp || !shotInp.files || !shotInp.files[0]){ showToast('⚠️ Attach the payment screenshot first'); return; }
   if(!confirm('Request renewal of "'+d.name+'" for '+label+(amount>0?(' (₹'+amount.toLocaleString('en-IN')+')'):'')+'?\n\nThis will be sent to admin for approval.')) return;
