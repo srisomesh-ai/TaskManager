@@ -3871,6 +3871,43 @@ case 'renewal_approve':
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
+case 'renewal_bs_check':
+    // Admin: report each approved renewal and whether its balance-sheet entry exists + where.
+    try {
+        if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+        _renewalEnsureTable($pdo);
+        $rows = $pdo->query("SELECT id,ref,device_name,plate,price_item,amount,gst,status,bs_entry_id,approved_at FROM renewal_requests WHERE status='approved' ORDER BY id DESC LIMIT 50")->fetchAll();
+        $out = [];
+        foreach($rows as $r){
+            $bs = null;
+            if(!empty($r['bs_entry_id'])){
+                $b = $pdo->prepare("SELECT id,type,profile,total_price,date,service_type,payment_transaction_details FROM balance_sheet_entries WHERE id=?");
+                $b->execute([$r['bs_entry_id']]); $bs = $b->fetch();
+            }
+            // Also try to find any license entry that matches this renewal by remark, in case bs_entry_id wasn't linked
+            $orphan = null;
+            if(!$bs){
+                $o = $pdo->prepare("SELECT id,type,profile,total_price,date FROM balance_sheet_entries WHERE type='license' AND remarks LIKE ? ORDER BY id DESC LIMIT 1");
+                $o->execute(['%'.$r['device_name'].'%'.$r['plate'].'%']);
+                $orphan = $o->fetch();
+            }
+            $out[] = [
+                'renewal_id'=>$r['id'], 'ref'=>$r['ref'],
+                'device'=>$r['device_name'].' ('.$r['plate'].')',
+                'plan'=>$r['price_item'], 'amount'=>$r['amount'],
+                'bs_entry_id'=>$r['bs_entry_id'],
+                'bs_entry_found'=>$bs?true:false,
+                'bs_profile'=>$bs?$bs['profile']:null,
+                'bs_type'=>$bs?$bs['type']:null,
+                'bs_total'=>$bs?$bs['total_price']:null,
+                'bs_date'=>$bs?$bs['date']:null,
+                'orphan_match'=>$orphan?('id '.$orphan['id'].' profile '.$orphan['profile']):null,
+            ];
+        }
+        echo json_encode(['success'=>true,'approved_renewals'=>count($rows),'details'=>$out]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'renewal_bs_repair':
     // Admin: fix balance-sheet entries for already-approved renewals — correct the profile
     // (SBGT plan -> SBGT company) and create any missing entries.
