@@ -246,11 +246,60 @@
     </div>
   </div>
 
+  <!-- Custom confirm dialog (replaces the ugly native confirm) -->
+  <div id="cx-overlay" style="display:none;position:fixed;inset:0;background:rgba(15,30,40,.55);z-index:3000;align-items:center;justify-content:center;padding:24px;backdrop-filter:blur(2px)">
+    <div style="background:#fff;border-radius:18px;max-width:340px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,.28);overflow:hidden;animation:cxPop .18s ease">
+      <div style="padding:22px 22px 8px;text-align:center">
+        <div id="cx-icon" style="font-size:34px;margin-bottom:8px">❓</div>
+        <div id="cx-title" style="font-size:17px;font-weight:800;color:#1a2b33;margin-bottom:6px">Are you sure?</div>
+        <div id="cx-msg" style="font-size:13.5px;color:#5b6b73;line-height:1.5"></div>
+      </div>
+      <div style="display:flex;gap:0;border-top:1px solid #eef1f3;margin-top:14px">
+        <button id="cx-cancel" style="flex:1;padding:15px;border:none;background:#fff;color:#8a9aa2;font-weight:700;font-size:15px;cursor:pointer;border-right:1px solid #eef1f3">Cancel</button>
+        <button id="cx-ok" style="flex:1;padding:15px;border:none;background:#fff;color:#16a34a;font-weight:800;font-size:15px;cursor:pointer">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="cx-toast" style="display:none;position:fixed;left:50%;bottom:32px;transform:translateX(-50%);z-index:3200;background:#1a2b33;color:#fff;padding:12px 20px;border-radius:30px;font-size:13.5px;font-weight:600;box-shadow:0 8px 28px rgba(0,0,0,.3);max-width:88%;text-align:center"></div>
+
+  <style>
+    @keyframes cxPop{from{transform:scale(.92);opacity:0}to{transform:scale(1);opacity:1}}
+  </style>
+
 <script>
   const API='../api/index.php';
   let authToken=localStorage.getItem('bgps_tech_token')||'';
   let currentUser={}; try{currentUser=JSON.parse(localStorage.getItem('bgps_tech_user')||'{}');}catch(e){}
   let allTasks=[], filter='active';
+
+  // ── Custom dialogs (replace native alert/confirm) ──
+  function cxConfirm(opts){
+    // opts: {title, message, icon, okText, cancelText, danger}
+    return new Promise(function(resolve){
+      const ov=document.getElementById('cx-overlay');
+      document.getElementById('cx-icon').textContent = opts.icon || '❓';
+      document.getElementById('cx-title').textContent = opts.title || 'Are you sure?';
+      document.getElementById('cx-msg').textContent = opts.message || '';
+      const ok=document.getElementById('cx-ok'), cancel=document.getElementById('cx-cancel');
+      ok.textContent = opts.okText || 'OK';
+      cancel.textContent = opts.cancelText || 'Cancel';
+      ok.style.color = opts.danger ? '#dc2626' : '#16a34a';
+      ov.style.display='flex';
+      function done(val){ ov.style.display='none'; ok.onclick=null; cancel.onclick=null; ov.onclick=null; resolve(val); }
+      ok.onclick=function(){ done(true); };
+      cancel.onclick=function(){ done(false); };
+      ov.onclick=function(e){ if(e.target===ov) done(false); };
+    });
+  }
+  let _cxToastTimer=null;
+  function cxToast(msg){
+    const t=document.getElementById('cx-toast');
+    t.textContent=msg; t.style.display='block';
+    clearTimeout(_cxToastTimer);
+    _cxToastTimer=setTimeout(function(){ t.style.display='none'; }, 2800);
+  }
 
   // Track which tasks this technician has opened (per-device), so new/unopened tasks can flash.
   const OPENED_KEY='bgps_opened_tasks';
@@ -269,7 +318,12 @@
     const t=await r.text();
     try{return JSON.parse(t);}catch(e){console.error('non-JSON',action,t.slice(0,200));return {};}
   }
-  function logout(){ if(!confirm('Log out?'))return; try{fetch(API+'?action=clear_fcm_token',{method:'POST',headers:{'X-Auth-Token':authToken}});}catch(e){} localStorage.removeItem('bgps_tech_token'); localStorage.removeItem('bgps_tech_user'); location.href='login.html'; }
+  async function logout(){
+    const yes = await cxConfirm({title:'Log out?', message:'You will need to sign in again to access your tasks.', icon:'👋', okText:'Log out', danger:true});
+    if(!yes) return;
+    try{fetch(API+'?action=clear_fcm_token',{method:'POST',headers:{'X-Auth-Token':authToken}});}catch(e){}
+    localStorage.removeItem('bgps_tech_token'); localStorage.removeItem('bgps_tech_user'); location.href='login.html';
+  }
 
   // Register device FCM token (injected by Flutter WebView) so an already-logged-in tech still gets push.
   function registerFcmToken(tries){
@@ -431,15 +485,15 @@
     const name=(document.getElementById('sr-name').value||'').trim();
     const phone=(document.getElementById('sr-phone').value||'').replace(/\D/g,'');
     const email=(document.getElementById('sr-email').value||'').trim();
-    if(!name){ alert('Please enter the customer name.'); return; }
-    if(!phone || phone.length<10){ alert('Please enter a valid 10-digit mobile number.'); return; }
+    if(!name){ cxToast('⚠️ Please enter the customer name'); return; }
+    if(!phone || phone.length<10){ cxToast('⚠️ Enter a valid 10-digit mobile number'); return; }
     const btn=document.getElementById('sr-send-btn');
     if(btn){ btn.disabled=true; btn.textContent='…'; }
 
     // New installation enquiry — sender picks the GPS model; lock it into the link.
     if(svc==='enquiry'){
       const planVal=(document.getElementById('sr-plan').value||'');
-      if(!planVal){ alert('Please select the GPS model.'); if(btn){ btn.disabled=false; btn.textContent='📱 Send via WhatsApp'; } return; }
+      if(!planVal){ cxToast('⚠️ Please select the GPS model'); if(btn){ btn.disabled=false; btn.textContent='📱 Send via WhatsApp'; } return; }
       const parts=planVal.split('|'); const modelName=decodeURIComponent(parts[2]||'');
       let url=SITE_BASE+'/enquiry.php?name='+encodeURIComponent(name)+'&phone='+encodeURIComponent(phone);
       if(modelName) url+='&type='+encodeURIComponent(modelName);
@@ -452,7 +506,7 @@
 
     // Priced services — get plan price/gst from the dropdown, create a signed token.
     const planVal=(document.getElementById('sr-plan').value||'');
-    if(!planVal){ alert('Please select the service plan.'); if(btn){ btn.disabled=false; btn.textContent='📱 Send via WhatsApp'; } return; }
+    if(!planVal){ cxToast('⚠️ Please select the service plan'); if(btn){ btn.disabled=false; btn.textContent='📱 Send via WhatsApp'; } return; }
     const parts=planVal.split('|'); const price=parseFloat(parts[0])||0; const gst=parseInt(parts[1])||0;
     const meta={
       'troubleshoot':   { file:'troubleshoot.php',   label:'GPS Troubleshoot',        line:'to request a GPS troubleshoot check for your vehicle' },
