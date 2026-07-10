@@ -379,7 +379,8 @@
   async function srServiceChange(){
     const svc=document.getElementById('sr-service').value;
     const planGroup=document.getElementById('sr-plan-group');
-    if(SR_PRICED.indexOf(svc)===-1){ planGroup.style.display='none'; return; }
+    // New Installation shows GPS models; priced services show service plans. Both use the plan dropdown.
+    if(svc!=='enquiry' && SR_PRICED.indexOf(svc)===-1){ planGroup.style.display='none'; return; }
     planGroup.style.display='';
     await srLoadPlans();
   }
@@ -391,9 +392,12 @@
       const r=await api('pl_get_public').catch(()=>({}));
       _srPlans=(r&&r.items)?r.items:[];
     }
-    // re-adding uses Renewal plans; the other services use Service-category plans.
+    // re-adding uses Renewal plans; enquiry uses GPS models; other services use Service plans.
     let items;
-    if(svc==='re-adding'){
+    if(svc==='enquiry'){
+      items=_srPlans.filter(function(i){ const c=(i.category||'').toLowerCase(); return c==='gps tracker'||c==='gps device'; });
+      if(!items.length){ sel.innerHTML='<option value="">No GPS models in Price List yet</option>'; return; }
+    } else if(svc==='re-adding'){
       items=_srPlans.filter(function(i){ return (i.category||'').toLowerCase()==='renewal'; });
     } else {
       items=_srPlans.filter(function(i){ return (i.category||'').toLowerCase()==='service'; });
@@ -401,11 +405,11 @@
       const kw = {
         'troubleshoot':   ['troubleshoot','offline'],
         'vehicle-change': ['vehicle to vehicle','vehicle change','v2v'],
-        'gps-remove':     ['only remove','remove','removal']
+        'gps-remove':     ['gps remove','only remove','remove','removal']
       }[svc] || [];
       if(kw.length){
         const match = items.filter(function(i){ const n=(i.product_name||'').toLowerCase(); return kw.some(function(k){ return n.indexOf(k)!==-1; }); });
-        if(match.length) items = match; // if no specific match, fall back to all service items
+        if(match.length) items = match;
       }
     }
     if(!items.length){ sel.innerHTML='<option value="">No plans set by office yet — ask office to add them in Price List</option>'; return; }
@@ -414,7 +418,8 @@
     function opt(it){
       const incl=parseFloat(it.price_incl_gst||0);
       const gst = parseFloat(it.gst_percent||0)>0 ? 1 : 0;
-      return '<option value="'+incl+'|'+gst+'">'+esc(it.product_name)+' — ₹'+incl.toLocaleString('en-IN')+'</option>';
+      // value = price|gst|name  (name used for enquiry model pre-selection)
+      return '<option value="'+incl+'|'+gst+'|'+encodeURIComponent(it.product_name||'')+'">'+esc(it.product_name)+' — ₹'+incl.toLocaleString('en-IN')+'</option>';
     }
     let html='';
     if(noGst.length)  html+='<optgroup label="No GST">'+noGst.map(opt).join('')+'</optgroup>';
@@ -431,9 +436,13 @@
     const btn=document.getElementById('sr-send-btn');
     if(btn){ btn.disabled=true; btn.textContent='…'; }
 
-    // New installation enquiry — public link, no price/token.
+    // New installation enquiry — sender picks the GPS model; lock it into the link.
     if(svc==='enquiry'){
+      const planVal=(document.getElementById('sr-plan').value||'');
+      if(!planVal){ alert('Please select the GPS model.'); if(btn){ btn.disabled=false; btn.textContent='📱 Send via WhatsApp'; } return; }
+      const parts=planVal.split('|'); const modelName=decodeURIComponent(parts[2]||'');
       let url=SITE_BASE+'/enquiry.php?name='+encodeURIComponent(name)+'&phone='+encodeURIComponent(phone);
+      if(modelName) url+='&type='+encodeURIComponent(modelName);
       if(email) url+='&email='+encodeURIComponent(email);
       const msg=encodeURIComponent('Hello '+name+'!\n\nThank you for your interest in BharatGPS Tracker.\n\nPlease fill your details to book your GPS installation:\n\n'+url+'\n\nThe form takes 2 minutes. Our team will contact you to schedule.\n\nFor help call: 9849849824');
       window.open('https://wa.me/91'+phone+'?text='+msg,'_blank');
