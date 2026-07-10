@@ -458,15 +458,20 @@ if($action === 'assign_device'){
 
 // ── SEARCH EXPIRY — list devices by expiry date range across servers (License dashboard) ──
 if($action === 'search_expiry'){
+    // Use India timezone so "today/yesterday/tomorrow" match the local calendar day.
+    // (Server default is often UTC, which shifts the day for devices expiring near midnight.)
+    date_default_timezone_set('Asia/Kolkata');
     $date_from = trim($_GET['date_from'] ?? '');
     $date_to   = trim($_GET['date_to'] ?? '');
     $filter    = trim($_GET['filter'] ?? 'range'); // range|expired|expiring30|expiring90|all
     $reqIds    = array_filter(array_map('intval', explode(',', trim($_GET['servers'] ?? '1,2,3'))));
     if(!$reqIds) $reqIds = [1,2,3];
 
-    $today = date('Y-m-d'); $todayTs = strtotime($today);
-    $fromTs = $date_from ? strtotime($date_from) : false;
-    $toTs   = $date_to   ? strtotime($date_to)   : false;
+    // Work with pure calendar dates (midnight IST) so day math is exact and boundary-safe.
+    $today   = date('Y-m-d');
+    $todayD  = new DateTime($today.' 00:00:00');
+    $fromTs = $date_from ? strtotime($date_from.' 00:00:00') : false;
+    $toTs   = $date_to   ? strtotime($date_to.' 23:59:59')   : false;
     $out = [];
 
     foreach($reqIds as $sid){
@@ -484,10 +489,13 @@ if($action === 'search_expiry'){
                     if(!empty($dd[$ef]) && $dd[$ef]!=='0000-00-00' && substr($dd[$ef],0,10)!=='0000-00-00'){ $expiry=substr($dd[$ef],0,10); break; }
                 }
                 if(!$expiry) continue;
-                $expiryTs = strtotime($expiry);
-                $daysLeft = (int)(($expiryTs - $todayTs)/86400);
+                // Exact calendar-day difference (expiry date at midnight vs today at midnight).
+                $expiryTs = strtotime($expiry.' 00:00:00');
+                $expiryD  = new DateTime($expiry.' 00:00:00');
+                $diff = (int)$todayD->diff($expiryD)->format('%r%a'); // signed number of days
+                $daysLeft = $diff; // >0 future, 0 today, <0 past
                 $include = false;
-                if($filter==='expired')                $include = ($expiryTs < $todayTs);
+                if($filter==='expired')                $include = ($daysLeft < 0);
                 elseif($filter==='expired_today')      $include = ($daysLeft === 0);
                 elseif($filter==='expired_yesterday')  $include = ($daysLeft === -1);
                 elseif($filter==='expired_week_ago')   $include = ($daysLeft <= -1 && $daysLeft >= -7);
