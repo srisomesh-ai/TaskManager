@@ -469,6 +469,22 @@
 
   <div class="toast" id="toast"></div>
 
+  <!-- Custom confirm dialog (replaces ugly native confirm that showed the site URL) -->
+  <div id="cx-overlay" style="display:none;position:fixed;inset:0;background:rgba(15,30,40,.55);z-index:5000;align-items:center;justify-content:center;padding:24px;backdrop-filter:blur(2px)">
+    <div style="background:#fff;border-radius:18px;max-width:360px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,.28);overflow:hidden;animation:cxPop .18s ease">
+      <div style="padding:22px 22px 8px;text-align:center">
+        <div id="cx-icon" style="font-size:34px;margin-bottom:8px">❓</div>
+        <div id="cx-title" style="font-size:17px;font-weight:800;color:#1a2b33;margin-bottom:6px">Are you sure?</div>
+        <div id="cx-msg" style="font-size:13.5px;color:#5b6b73;line-height:1.55;white-space:pre-line"></div>
+      </div>
+      <div style="display:flex;border-top:1px solid #eef1f3;margin-top:14px">
+        <button id="cx-cancel" style="flex:1;padding:15px;border:none;background:#fff;color:#8a9aa2;font-weight:700;font-size:15px;cursor:pointer;border-right:1px solid #eef1f3">Cancel</button>
+        <button id="cx-ok" style="flex:1;padding:15px;border:none;background:#fff;color:#16a34a;font-weight:800;font-size:15px;cursor:pointer">OK</button>
+      </div>
+    </div>
+  </div>
+  <style>@keyframes cxPop{from{transform:scale(.92);opacity:0}to{transform:scale(1);opacity:1}}</style>
+
 <script>
   const API='../api/index.php';
   const authToken=localStorage.getItem('bgps_tech_token')||'';
@@ -492,6 +508,25 @@
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
   let _toastT=null;
   function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(_toastT);_toastT=setTimeout(()=>t.classList.remove('show'),3000);}
+  // Custom confirm dialog (replaces native confirm which showed the raw site URL).
+  function cxConfirm(opts){
+    opts = (typeof opts==='string') ? {message:opts} : (opts||{});
+    return new Promise(function(resolve){
+      const ov=document.getElementById('cx-overlay');
+      document.getElementById('cx-icon').textContent = opts.icon || '❓';
+      document.getElementById('cx-title').textContent = opts.title || 'Please confirm';
+      document.getElementById('cx-msg').textContent = opts.message || '';
+      const ok=document.getElementById('cx-ok'), cancel=document.getElementById('cx-cancel');
+      ok.textContent = opts.okText || 'OK';
+      cancel.textContent = opts.cancelText || 'Cancel';
+      ok.style.color = opts.danger ? '#dc2626' : '#16a34a';
+      ov.style.display='flex';
+      function done(v){ ov.style.display='none'; ok.onclick=null; cancel.onclick=null; ov.onclick=null; resolve(v); }
+      ok.onclick=function(){ done(true); };
+      cancel.onclick=function(){ done(false); };
+      ov.onclick=function(e){ if(e.target===ov) done(false); };
+    });
+  }
 
   // Post-submit appreciation (matches web app). Redirects to dashboard on dismiss.
   function showTechAppreciation(){
@@ -525,7 +560,7 @@
   function tdWhatsApp(){
     if(!_curTask)return;
     const p=String(_curTask.contact_number||'').replace(/\D/g,'');
-    if(!p){alert('No phone number.');return;}
+    if(!p){toast('No phone number.');return;}
     window.open('https://wa.me/91'+p+'?text='+encodeURIComponent('Hello '+(_curTask.customer_name||'')+', this is BharatGPS technician.'),'_blank');
   }
 
@@ -867,7 +902,7 @@
       const msg=encodeURIComponent('Hello! Our BharatGPS technician is on the way. Please tap this link and share your location so we can reach you quickly:\n\n'+r.link);
       window.open('https://wa.me/'+(phone?'91'+phone:'')+'?text='+msg,'_blank');
       toast('📍 Location link sent. Waiting for customer…'); pollLocation(0);
-    } else { alert('Could not create location link. Please try again.'); if(btn)btn.style.opacity='1'; }
+    } else { toast('Could not create location link. Please try again.'); if(btn)btn.style.opacity='1'; }
   }
   function pollLocation(n){ if(n>40)return; setTimeout(async()=>{const s=await api('check_customer_location',{id:_curTask.id});if(s&&s.has_location){toast('✅ Customer shared their location!');renderActionArea();}else pollLocation(n+1);},3000); }
   function openMapsNavigation(lat,lng){
@@ -897,11 +932,11 @@
     try{ toast('📍 Capturing your arrival…'); const pos=await getPos();
       const r=await apiPost('save_trip_reached',{id:_curTask.id,lat:pos.lat,lng:pos.lng});
       if(r&&r.success) toast('✅ Arrival recorded · '+(r.trip_km||0)+' km, '+(r.trip_minutes||0)+' min'); renderActionArea();
-    }catch(e){ alert(e.message||'Could not record arrival.'); if(btn)btn.style.opacity='1'; }
+    }catch(e){ toast(e.message||'Could not record arrival.'); if(btn)btn.style.opacity='1'; }
   }
 
   async function skipLocation(){
-    const ok=confirm('Skip location sharing?\n\nUse this only when the customer won\'t share their location and has given directions over the phone.\n\nThis will move the task to the next step without recording GPS distance.');
+    const ok=await cxConfirm({title:'Skip location sharing?', icon:'\U0001F4CD', message:'Use this only when the customer won\'t share their location and has given directions over the phone.\n\nThis moves the task to the next step without recording GPS distance.', okText:'Skip', danger:true});
     if(!ok) return;
     toast('⏭️ Skipping location…');
     // Mark reached without coords so the flow advances to consent/attend
@@ -954,7 +989,7 @@
   async function submitUpdate(){
     if(_tuSubmitting)return;
     const discussed=document.getElementById('tu-discussed').value.trim();
-    if(!discussed){ alert('Please describe what happened.'); document.getElementById('tu-discussed').focus(); return; }
+    if(!discussed){ toast('Please describe what happened.'); document.getElementById('tu-discussed').focus(); return; }
     const parts=['📞 '+discussed];
     if(_tuSel && _tuSel.resp!=='Other') parts.push('Customer: '+_tuSel.resp);
     if(_tuSel && _tuSel.next) parts.push('Next step: '+_tuSel.next);
@@ -965,8 +1000,8 @@
     try{
       const res=await apiPost('update_task',body);
       if(res && res.success){ toast('✅ Update saved'); closeUpdate(); setTimeout(load,400); }
-      else alert(res.error||'Update failed. Please try again.');
-    }catch(e){ alert('Connection error. Please try again.'); }
+      else toast(res.error||'Update failed. Please try again.');
+    }catch(e){ toast('Connection error. Please try again.'); }
     finally{ _tuSubmitting=false; btn.textContent='💾 Save Update'; btn.disabled=false; }
   }
 
@@ -977,7 +1012,7 @@
   // Skip consent — ONLY for existing-customer jobs (V2V / Troubleshoot). Shifts responsibility to the technician.
   async function skipConsent(){
     const t=_curTask;
-    const ok=confirm('⚠️ Skip customer consent?\n\nSkip consent is ONLY for EXISTING customers.\n\nBy skipping, you take FULL RESPONSIBILITY for any issues that occur from proceeding without the customer\'s confirmation.\n\n• Tap OK to SKIP consent and proceed\n• Tap Cancel to continue with consent');
+    const ok=await cxConfirm({title:'Skip customer consent?', icon:'⚠️', message:'Skip consent is ONLY for EXISTING customers.\n\nBy skipping, you take FULL RESPONSIBILITY for any issues that occur from proceeding without the customer\'s confirmation.', okText:'Skip consent', cancelText:'Keep consent', danger:true});
     if(!ok) return;
     const btn=document.getElementById('loc-btn'); if(btn)btn.style.opacity='.6';
     toast('⏭️ Skipping consent…');
@@ -989,13 +1024,13 @@
       renderActionArea();
     } else {
       if(btn)btn.style.opacity='1';
-      alert((res&&res.error)||'Could not skip consent. Please try again.');
+      toast((res&&res.error)||'Could not skip consent. Please try again.');
     }
   }
 
   async function handleAttend(){
     const t=_curTask;
-    const ok=confirm('Ready for Installation?\n\nCustomer: '+(t.customer_name||'')+'\nJob: '+(t.device_details||'GPS Installation')+(t.location?'\nLocation: '+t.location:'')+'\n\nThis will send a consent & payment confirmation request to the customer.\n\nAre you at the location and ready to proceed?');
+    const ok=await cxConfirm({title:'Ready for Installation?', icon:'\U0001F527', message:'Customer: '+(t.customer_name||'')+'\nJob: '+(t.device_details||'GPS Installation')+(t.location?'\nLocation: '+t.location:'')+'\n\nThis sends a consent & payment confirmation request to the customer. Are you at the location and ready?', okText:'Yes, proceed'});
     if(!ok) return;
     // already consented?
     const check=await api('check_consent',{id:t.id});
@@ -1018,7 +1053,7 @@
       renderActionArea();
     } else {
       if(btn)btn.style.opacity='1';
-      alert('Could not send consent request. Please try again.');
+      toast('Could not send consent request. Please try again.');
     }
   }
 
@@ -1175,7 +1210,7 @@
 
   async function doSearchIMEI(idx,onlyServer){
     const imei=(document.getElementById('iimei-'+idx)?.value||'').trim();
-    if(!imei){ alert('Please enter an IMEI number.'); return; }
+    if(!imei){ toast('Please enter an IMEI number.'); return; }
     const btn=document.getElementById('isearch-'+idx), res=document.getElementById('ires-'+idx);
     if(btn){btn.textContent='…';btn.disabled=true;}
     let sp='';
@@ -1251,11 +1286,11 @@
     const serverId=g('iserverid'),imei=g('iimeih');
     const name=(g('iname')||'').trim(), plate=(g('iplate')||'').trim().toUpperCase(), vtype=g('ivtype');
     const owner=(g('iowner')||'').trim(), inst=g('iinst'), exp=g('iexp'), notes=(g('inotes')||'').trim(), iconId=g('iiconid');
-    if(!plate){ alert('Vehicle number / plate is required.'); return; }
-    if(!/^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}$/.test(plate)){ alert('Vehicle number must be AB01CD1234 (2 letters, 2 digits, 2 letters, 4 digits).'); return; }
-    if(!name){ alert('Name on server is required.'); return; }
-    if(!inst){ alert('Installation date is required.'); return; }
-    if(!iconId){ alert('Please select a vehicle icon.'); return; }
+    if(!plate){ toast('Vehicle number / plate is required.'); return; }
+    if(!/^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}$/.test(plate)){ toast('Vehicle number must be AB01CD1234 (2 letters, 2 digits, 2 letters, 4 digits).'); return; }
+    if(!name){ toast('Name on server is required.'); return; }
+    if(!inst){ toast('Installation date is required.'); return; }
+    if(!iconId){ toast('Please select a vehicle icon.'); return; }
     const serverNames=['','Server 1 — bharatgps.com','Server 2 — bharatgps.in','Server 3 — bharatgps.school','Server 4 — bharatgps.org'];
     const row=(k,v)=>'<tr><td style="color:var(--text3);padding:3px 0;width:42%">'+k+'</td><td style="font-weight:700">'+esc(v)+'</td></tr>';
     const rev=document.getElementById('ireview-'+idx);
@@ -1324,8 +1359,8 @@
         await apiPost('update_task',{id:_curTask.id,remark}).catch(()=>{});
         toast(_v2vMode?'✅ Vehicle changed on GPS server':'✅ Device '+idx+' pushed to GPS server');
         renderInstall();
-      } else { if(btn){btn.textContent='✅ Confirm & Push';btn.disabled=false;} alert('❌ GPS Server error: '+(data.error||'Unknown error')); }
-    }catch(e){ if(btn){btn.textContent='✅ Confirm & Push';btn.disabled=false;} alert('Error: '+e.message); }
+      } else { if(btn){btn.textContent='✅ Confirm & Push';btn.disabled=false;} toast('❌ GPS Server error: '+(data.error||'Unknown error')); }
+    }catch(e){ if(btn){btn.textContent='✅ Confirm & Push';btn.disabled=false;} toast('Error: '+e.message); }
   }
 
   async function finishInstall(){
@@ -1342,7 +1377,7 @@
   async function finishPartial(installedCount){
     const n = parseInt(installedCount)||0;
     if(n < 1){ toast('Install at least one device first'); return; }
-    if(!confirm('Finish this task with '+n+' installed device(s)?\n\nUse this when the remaining vehicle(s) are not available. The task will bill only the '+n+' installed device(s), and you can give access & collect payment now. This cannot be undone.')) return;
+    if(!await cxConfirm({title:'Finish with '+n+' device(s)?', icon:'\U0001F4E6', message:'Use this when the remaining vehicle(s) are not available. The task will bill only the '+n+' installed device(s), and you can give access & collect payment now. This cannot be undone.', okText:'Finish'})) return;
     toast('⏳ Updating…');
     await apiPost('update_task',{id:_curTask.id,device_qty:n,remark:'🚗 Remaining vehicle(s) not available — task finished with '+n+' installed device(s). Quantity reduced to '+n+'.'}).catch(()=>({}));
     const res=await api('get_task',{id:taskId}); const t=res.task||res;
@@ -1435,23 +1470,23 @@
     const amount=parseFloat(document.getElementById('pay-amount').value||0);
     const mode=document.getElementById('pay-mode').value;
     const notes=document.getElementById('pay-notes').value.trim();
-    if(!amount||amount<=0){ alert('⚠️ No payment collected. Collect at least a partial payment to proceed. If the customer refuses, escalate to your manager.'); return; }
-    if(!mode){ alert('Please select payment mode.'); return; }
+    if(!amount||amount<=0){ toast('⚠️ No payment collected. Collect at least a partial payment to proceed. If the customer refuses, escalate to your manager.'); return; }
+    if(!mode){ toast('Please select payment mode.'); return; }
     const price=parseFloat(t.price_to_collect||0), prev=parseFloat(t.amount_collected||0);
     const total=prev+amount, bal=price-total, isFullyPaid=bal<=PM_ROUND_TOLERANCE;
     const directModes=['Cash','UPI','Bank Transfer','Cheque'];
     const mismatch=directModes.includes(_payAgreed)&&_payAgreed&&_payAgreed!==mode;
-    if(mode==='Cash'&&mismatch&&!document.getElementById('pay-cash-reason').value){ alert('Please select the reason for cash payment.'); return; }
-    if(mode==='Cheque'&&!document.getElementById('pay-cheque-no').value.trim()){ alert('Please enter the cheque number.'); return; }
+    if(mode==='Cash'&&mismatch&&!document.getElementById('pay-cash-reason').value){ toast('Please select the reason for cash payment.'); return; }
+    if(mode==='Cheque'&&!document.getElementById('pay-cheque-no').value.trim()){ toast('Please enter the cheque number.'); return; }
     // Feature #4: non-cash payment requires a screenshot
     const nonCash=['UPI','Bank Transfer','Cheque'].includes(mode);
     const shotFile=document.getElementById('pay-shot').files[0];
-    if(nonCash && !shotFile){ alert('📸 Please upload the payment screenshot. It is required for '+mode+' payments.'); return; }
+    if(nonCash && !shotFile){ toast('📸 Please upload the payment screenshot. It is required for '+mode+' payments.'); return; }
     let balReason='',balDate='';
     if(!isFullyPaid&&bal>0){
       balReason=document.getElementById('pay-balance-reason').value; balDate=document.getElementById('pay-balance-date').value;
-      if(!balReason){ alert('Please select the reason for balance pending.'); return; }
-      if(!balDate){ alert('Please enter when you will collect the balance.'); return; }
+      if(!balReason){ toast('Please select the reason for balance pending.'); return; }
+      if(!balDate){ toast('Please enter when you will collect the balance.'); return; }
     }
     const btn=document.getElementById('pay-save'); btn.textContent='Saving…'; btn.disabled=true;
     const cashReason=document.getElementById('pay-cash-reason').value;
@@ -1475,9 +1510,9 @@
         fd.append('task_id',t.id); fd.append('doc_type','payment_screenshot'); fd.append('file',shotFile);
         const ur=await fetch(API+'?action=upload_document',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd});
         const ud=await ur.json();
-        if(!ud||!ud.success){ btn.textContent='💰 Save Payment'; btn.disabled=false; alert('Screenshot upload failed. Please try again.'); return; }
+        if(!ud||!ud.success){ btn.textContent='💰 Save Payment'; btn.disabled=false; toast('Screenshot upload failed. Please try again.'); return; }
         body.payment_verify_status='pending';
-      }catch(e){ btn.textContent='💰 Save Payment'; btn.disabled=false; alert('Screenshot upload failed. Check your connection and try again.'); return; }
+      }catch(e){ btn.textContent='💰 Save Payment'; btn.disabled=false; toast('Screenshot upload failed. Check your connection and try again.'); return; }
     }
     const res=await apiPost('update_task',body);
     btn.textContent='💰 Save Payment'; btn.disabled=false;
@@ -1497,7 +1532,7 @@
       }
       toast('✅ Payment saved'); closePayment(); setTimeout(load,400);
     }
-    else alert(res.error||'Save failed. Please try again.');
+    else toast(res.error||'Save failed. Please try again.');
   }
 
 
@@ -1542,10 +1577,10 @@
 
   // Non-cash: submit the completed task for approval directly
   async function submitForApproval(){
-    if(!confirm('Submit this task for approval?\n\nInstallation and payment are complete.')) return;
+    if(!await cxConfirm({title:'Submit for approval?', icon:'\u2705', message:'Installation and payment are complete.', okText:'Submit'})) return;
     const res=await apiPost('update_task',{id:_curTask.id,task_status:'Awaiting Approval',remark:'✅ Installation & payment complete — submitted for approval'});
     if(res&&res.success){ try{localStorage.removeItem('ts_done_'+_curTask.id);localStorage.removeItem('rm_done_'+_curTask.id);}catch(e){} showTechAppreciation(); }
-    else alert((res&&res.error)||'Submit failed. Please try again.');
+    else toast((res&&res.error)||'Submit failed. Please try again.');
   }
 
 
@@ -1610,7 +1645,7 @@
   // ═══════════════ DEMO FLOW (matches web proceedForDemo + openJobOutcome demo) ═══════════════
   function proceedForDemo(){
     const t=_curTask;
-    alert('🎉 Great! All set.\n\n'+(t.customer_name||'The customer')+' has confirmed. You can now go ahead with the demonstration.\n\nOnce the demo is complete, tap the green button again to submit the demo report.');
+    toast('🎉 Great! All set.\n\n'+(t.customer_name||'The customer')+' has confirmed. You can now go ahead with the demonstration.\n\nOnce the demo is complete, tap the green button again to submit the demo report.');
     localStorage.setItem('demo_proceeded_'+t.id,'1');
     renderActionArea();
   }
