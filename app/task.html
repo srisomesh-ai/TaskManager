@@ -405,30 +405,46 @@
       <div class="r" id="v2-ref"></div>
     </div>
     <div class="sheet-bd">
-      <div class="tu-lbl">IMEI / GPS Serial No *</div>
-      <input class="inst-in" id="v2-imei" placeholder="IMEI or serial" style="margin-bottom:12px">
-      <div class="tu-lbl">New Vehicle Number *</div>
-      <input class="inst-in" id="v2-newveh" placeholder="e.g. AP31AB1234" style="text-transform:uppercase;margin-bottom:12px">
-      <div class="tu-lbl">New Vehicle Type</div>
-      <select class="inst-in" id="v2-vtype" style="margin-bottom:12px">
-        <option value="">Select…</option>
-        <option>Car</option><option>Truck</option><option>Bus</option><option>Auto</option>
-        <option>Bike</option><option>JCB</option><option>Tractor</option><option>Van</option>
-        <option>Mini Truck</option><option>Other</option>
-      </select>
-      <div class="tu-lbl">Transfer confirmed? *</div>
-      <select class="inst-in" id="v2-done" style="margin-bottom:12px">
-        <option value="">Select…</option>
-        <option value="yes">✅ Yes</option>
-        <option value="no">❌ No</option>
-      </select>
-      <div class="tu-lbl">Remarks</div>
-      <textarea class="inst-in" id="v2-remarks" rows="2" placeholder="Optional"></textarea>
+      <!-- Step 1: find the device on the server -->
+      <div id="v2-search-step">
+        <div class="tu-lbl">IMEI / GPS Serial No *</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <input class="inst-in" id="v2-imei" placeholder="IMEI or serial" style="flex:1;margin:0">
+          <button class="btn btn-save" id="v2-searchbtn" onclick="v2Search()" style="width:auto;padding:0 16px">🔍 Search</button>
+        </div>
+        <div id="v2-search-res" style="font-size:12px;margin-bottom:6px"></div>
+      </div>
+
+      <!-- Step 2: confirmed device + new vehicle details -->
+      <div id="v2-form-step" style="display:none">
+        <div id="v2-cur" style="background:var(--surface2,#F3F6F5);border:1.5px solid var(--border);border-radius:10px;padding:12px;font-size:12px;line-height:1.7;margin-bottom:14px"></div>
+
+        <div class="tu-lbl">New Vehicle Number *</div>
+        <input class="inst-in" id="v2-newveh" placeholder="e.g. AP31AB1234" style="text-transform:uppercase;margin-bottom:12px">
+
+        <div class="tu-lbl">New Vehicle Type</div>
+        <select class="inst-in" id="v2-vtype" style="margin-bottom:12px">
+          <option value="">Select…</option>
+          <option>Car</option><option>Truck</option><option>Bus</option><option>Auto</option>
+          <option>Bike</option><option>JCB</option><option>Tractor</option><option>Van</option>
+          <option>Mini Truck</option><option>Other</option>
+        </select>
+
+        <div class="tu-lbl">New Owner Name (optional)</div>
+        <input class="inst-in" id="v2-owner" placeholder="Leave blank to keep same" style="margin-bottom:12px">
+
+        <div class="tu-lbl">Remarks</div>
+        <textarea class="inst-in" id="v2-remarks" rows="2" placeholder="Optional"></textarea>
+      </div>
+
       <div id="v2-err" style="display:none;color:var(--red);font-size:13px;font-weight:700;margin-top:10px"></div>
+      <!-- hidden captured server refs -->
+      <input type="hidden" id="v2-serverid"><input type="hidden" id="v2-deviceid">
+      <input type="hidden" id="v2-servername"><input type="hidden" id="v2-oldplate">
     </div>
     <div class="sheet-ft">
       <button class="btn btn-cancel" onclick="closeV2V()">Cancel</button>
-      <button class="btn btn-save" id="v2-save" onclick="submitV2V()">✅ Submit &amp; Close Task</button>
+      <button class="btn btn-save" id="v2-save" onclick="submitV2V()" style="display:none">✅ Update Server &amp; Close</button>
     </div>
   </div>
 
@@ -1534,37 +1550,95 @@
     } else { err.textContent='❌ '+((res&&res.error)||'Save failed — please try again'); err.style.display=''; }
   }
 
-  // ═══════════════ V2V TRANSFER (matches web openJobOutcome v2v) ═══════════════
+  // ═══════════════ V2V TRANSFER (searches device, pushes new vehicle to GPS server) ═══════════════
   function openV2V(){
     const t=_curTask;
     document.getElementById('v2-ref').textContent=(t.task_id||'')+' · '+(t.customer_name||'');
     document.getElementById('v2-imei').value=t.gps_serial_no||'';
-    document.getElementById('v2-newveh').value='';
+    ['v2-newveh','v2-owner','v2-remarks','v2-serverid','v2-deviceid','v2-servername','v2-oldplate'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
     document.getElementById('v2-vtype').value='';
-    document.getElementById('v2-done').value='';
-    document.getElementById('v2-remarks').value='';
+    document.getElementById('v2-search-res').innerHTML='';
+    document.getElementById('v2-search-step').style.display='';
+    document.getElementById('v2-form-step').style.display='none';
+    document.getElementById('v2-save').style.display='none';
     document.getElementById('v2-err').style.display='none';
     document.getElementById('v2-ov').classList.add('open');
     document.getElementById('v2-sheet').classList.add('open');
   }
   function closeV2V(){ document.getElementById('v2-ov').classList.remove('open'); document.getElementById('v2-sheet').classList.remove('open'); }
 
+  async function v2Search(){
+    const imei=(document.getElementById('v2-imei').value||'').trim();
+    const res=document.getElementById('v2-search-res');
+    if(!imei){ res.innerHTML='<span style="color:var(--red)">Enter the IMEI / serial first.</span>'; return; }
+    const btn=document.getElementById('v2-searchbtn'); btn.textContent='…'; btn.disabled=true;
+    res.innerHTML='<span style="color:var(--text3)">🔍 Searching servers…</span>';
+    try{
+      const r=await fetch(GPS_PROXY+'?action=find&keyword='+encodeURIComponent(imei),{headers:{'X-Auth-Token':authToken}});
+      const data=await r.json();
+      btn.textContent='🔍 Search'; btn.disabled=false;
+      if(!data.success){ res.innerHTML='<span style="color:var(--red)">❌ '+esc(data.error||'Search failed')+'</span>'; return; }
+      if(!data.devices||!data.devices.length){ res.innerHTML='<span style="color:var(--red)">❌ No device found with this IMEI on any server.</span>'; return; }
+      if(data.devices.length===1){ v2Load(data.devices[0]); }
+      else{
+        window._v2sr=data.devices;
+        res.innerHTML='<div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:6px">'+data.devices.length+' found — tap to select:</div>'+
+          data.devices.map((d,i)=>'<div onclick="v2Load(window._v2sr['+i+'])" style="padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;margin-bottom:6px;font-size:12px;cursor:pointer"><strong>'+esc(d.name||'–')+'</strong><br>IMEI: '+esc(d.device_data?.imei||'–')+' · '+esc(d._server_name||'–')+'</div>').join('');
+      }
+    }catch(e){ btn.textContent='🔍 Search'; btn.disabled=false; res.innerHTML='<span style="color:var(--red)">❌ '+esc(e.message)+'</span>'; }
+  }
+
+  function v2Load(device){
+    const dd=device.device_data||{};
+    document.getElementById('v2-serverid').value=device._server_id||'';
+    document.getElementById('v2-deviceid').value=dd.id||device.id||'';
+    document.getElementById('v2-servername').value=device._server_name||'';
+    document.getElementById('v2-oldplate').value=dd.plate_number||'';
+    document.getElementById('v2-cur').innerHTML=
+      '<strong style="color:var(--accent2,#137272)">📡 Device found — current vehicle</strong><br>'+
+      'Name: <strong>'+esc(device.name||'–')+'</strong><br>'+
+      'Old Plate: <strong>'+esc(dd.plate_number||'–')+'</strong><br>'+
+      'Owner: <strong>'+esc(dd.object_owner||'–')+'</strong><br>'+
+      'Server: <strong>'+esc(device._server_name||'–')+'</strong>';
+    // default new owner to existing owner (editable)
+    const ow=document.getElementById('v2-owner'); if(ow&&!ow.value) ow.placeholder=(dd.object_owner?('Keep: '+dd.object_owner):'Leave blank to keep same');
+    document.getElementById('v2-search-step').style.display='none';
+    document.getElementById('v2-form-step').style.display='';
+    document.getElementById('v2-save').style.display='';
+  }
+
   async function submitV2V(){
     const err=document.getElementById('v2-err'); err.style.display='none';
-    const imei=document.getElementById('v2-imei').value.trim();
+    const serverId=document.getElementById('v2-serverid').value;
+    const deviceId=document.getElementById('v2-deviceid').value;
+    const imei=(document.getElementById('v2-imei').value||'').trim();
     const newveh=document.getElementById('v2-newveh').value.trim().toUpperCase();
-    const done=document.getElementById('v2-done').value;
-    if(!imei){ err.textContent='⚠️ Enter the IMEI / GPS serial'; err.style.display=''; return; }
-    if(!newveh){ err.textContent='⚠️ Enter the new vehicle number'; err.style.display=''; return; }
-    if(!done){ err.textContent='⚠️ Select whether the transfer is confirmed'; err.style.display=''; return; }
-    const fields={'IMEI':imei,'New Vehicle No':newveh,'New Vehicle Type':document.getElementById('v2-vtype').value,'Transfer Done':done,'Remarks':document.getElementById('v2-remarks').value.trim()};
-    const btn=document.getElementById('v2-save'); btn.textContent='⏳ Submitting…'; btn.disabled=true;
-    const res=await apiPost('save_job_outcome',{task_id:_curTask.id,job_type:'v2v',summary:'🚗 V2V Transfer Report',fields,removed_serial:'',close_task:true});
-    btn.textContent='✅ Submit & Close Task'; btn.disabled=false;
-    if(res && res.success){
-      closeV2V();
-      showTechAppreciation();
-    } else { err.textContent='❌ '+((res&&res.error)||'Save failed — please try again'); err.style.display=''; }
+    const vtype=document.getElementById('v2-vtype').value;
+    const newOwner=document.getElementById('v2-owner').value.trim();
+    const oldPlate=document.getElementById('v2-oldplate').value;
+    const remarks=document.getElementById('v2-remarks').value.trim();
+    if(!serverId||!deviceId){ err.textContent='⚠️ Search and select the device first.'; err.style.display=''; return; }
+    if(!newveh){ err.textContent='⚠️ Enter the new vehicle number.'; err.style.display=''; return; }
+    if(!/^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}$/.test(newveh)){ err.textContent='⚠️ Vehicle number must be like AP31AB1234.'; err.style.display=''; return; }
+    const btn=document.getElementById('v2-save'); btn.textContent='⏳ Updating server…'; btn.disabled=true;
+    try{
+      // 1) Push the vehicle change to the GPS server (edit_device)
+      const fd=new FormData();
+      fd.append('server_id',serverId); fd.append('device_id',deviceId);
+      fd.append('name',newveh); fd.append('plate_number',newveh);
+      if(newOwner) fd.append('object_owner',newOwner);
+      fd.append('additional_notes','V2V transfer'+(vtype?(' | Vehicle Type: '+vtype):'')+(oldPlate?(' | Moved from '+oldPlate):''));
+      fd.append('comment','Vehicle changed via BharatGPS TaskManager — Task '+(_curTask.task_id||''));
+      const ur=await fetch(GPS_PROXY+'?action=update',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd});
+      const ud=await ur.json();
+      if(!ud||!ud.success){ btn.textContent='✅ Update Server & Close'; btn.disabled=false; err.textContent='❌ Server update failed: '+((ud&&ud.error)||'unknown'); err.style.display=''; return; }
+      // 2) Save the report + close the task
+      const fields={'IMEI':imei,'Old Vehicle':oldPlate||'–','New Vehicle No':newveh,'New Vehicle Type':vtype||'–','New Owner':newOwner||'(unchanged)','Server':document.getElementById('v2-servername').value,'Remarks':remarks};
+      const res=await apiPost('save_job_outcome',{task_id:_curTask.id,job_type:'v2v',summary:'🚗 V2V Transfer Report',fields,removed_serial:'',close_task:true});
+      btn.textContent='✅ Update Server & Close'; btn.disabled=false;
+      if(res && res.success){ closeV2V(); showTechAppreciation(); }
+      else { err.textContent='❌ '+((res&&res.error)||'Report save failed — but server was updated. Try submitting again.'); err.style.display=''; }
+    }catch(e){ btn.textContent='✅ Update Server & Close'; btn.disabled=false; err.textContent='❌ '+e.message; err.style.display=''; }
   }
 
 
