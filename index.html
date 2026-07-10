@@ -6102,26 +6102,33 @@ async function checkDiscountBudget(){
   const amount = _currentDiscountAmount();
   if(!box) return;
   if(!approver || amount<=0){ box.style.display='none'; window._discBudgetOk=true; checkTaskFormReady(); return; }
-  box.style.display=''; box.style.color='var(--text3)'; box.textContent='Checking '+approver+' budget…';
+  // Check quietly in the background; only surface a message when the limit is finished or nearly finished.
   clearTimeout(_discBudgetTimer);
   _discBudgetTimer = setTimeout(async()=>{
     const r = await api('discount_check',{},'POST',{approver_name:approver, amount:amount}).catch(()=>({}));
     if(!r || !r.success){ box.style.display='none'; window._discBudgetOk=true; checkTaskFormReady(); return; }
     const info = r.info||{};
-    if(info.limit_set===false || !info.limited && info.weekly===undefined){
-      // No budget configured for this approver → unlimited
-      box.style.color='var(--text3)'; box.textContent='ℹ️ No weekly discount limit set for '+approver+'.';
-      window._discBudgetOk=true;
-    } else if(r.allowed){
-      const rem = Math.max(0,(info.remaining||0) - amount);
-      box.style.color='var(--green)';
-      box.textContent='✅ '+approver+': ₹'+(info.used_7d||0).toLocaleString('en-IN')+' used this week · ₹'+(info.remaining||0).toLocaleString('en-IN')+' left (₹'+rem.toLocaleString('en-IN')+' after this).';
-      window._discBudgetOk=true;
-    } else {
-      box.style.color='var(--red)';
-      box.textContent='⛔ '+(r.reason||'Over weekly discount limit');
-      window._discBudgetOk=false;
+    // No limit set for this approver, or allowed with room to spare → show NOTHING.
+    if(info.limit_set===false || info.weekly===undefined){
+      box.style.display='none'; window._discBudgetOk=true; checkTaskFormReady(); return;
     }
+    if(!r.allowed){
+      // Over the limit → hard block message (no full-budget numbers, just that it is finished).
+      box.style.display=''; box.style.color='var(--red)';
+      box.textContent='⛔ Discount limit for '+approver+' is finished for now — this discount cannot be approved under this name.';
+      window._discBudgetOk=false;
+      checkTaskFormReady(); return;
+    }
+    // Allowed. Only warn if this discount would (almost) exhaust the remaining budget.
+    const remainingAfter = (info.remaining||0) - amount;
+    if(remainingAfter <= 0.001){
+      box.style.display=''; box.style.color='#b26a00';
+      box.textContent='⚠️ This uses up the remaining discount limit for '+approver+'. No further discount can be given under this name until it frees up.';
+    } else {
+      // Comfortably within budget → say nothing.
+      box.style.display='none';
+    }
+    window._discBudgetOk=true;
     checkTaskFormReady();
   }, 350);
 }
