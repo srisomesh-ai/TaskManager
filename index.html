@@ -2156,6 +2156,15 @@ function renderActivityLog(activities){
   const el = document.getElementById('td-activity');
   if(!el) return;
 
+  // Find an uploaded payment screenshot (or any image) for this task, to link from the payment line
+  const _t = (typeof _detailTask!=='undefined' && _detailTask) ? _detailTask : null;
+  let _shotUrl = '';
+  if(_t && _t.documents && _t.documents.length){
+    const shot = _t.documents.find(d=>d.doc_type==='payment_screenshot')
+              || _t.documents.find(d=>/\.(jpg|jpeg|png|webp|gif|heic)$/i.test(d.filename||''));
+    if(shot) _shotUrl = 'https://salmon-goldfish-110661.hostingersite.com/uploads/task_'+_t.id+'/'+shot.filename;
+  }
+
   if(!activities || !activities.length){
     el.innerHTML = `
       <div style="text-align:center;padding:20px 0;color:var(--text3)">
@@ -2194,6 +2203,12 @@ function renderActivityLog(activities){
       `).join('');
     } else {
       remarkHtml = `<div style="font-size:13px;font-weight:600;color:var(--text)">${remark}</div>`;
+    }
+
+    // If this activity line is about a payment and we have a screenshot, add a View link
+    const isPaymentLine = /payment (collected|received)/i.test(remark) || type==='payment';
+    if(isPaymentLine && _shotUrl){
+      remarkHtml += `<a href="${_shotUrl}" target="_blank" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;background:var(--accent2,#2563eb);color:#fff;font-size:12px;font-weight:700;padding:6px 12px;border-radius:6px;text-decoration:none">👁️ View Payment Screenshot</a>`;
     }
 
     // Email sent indicator for remark entries
