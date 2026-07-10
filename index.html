@@ -1155,6 +1155,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
 
           <!-- TECH ACTION PANEL (shown to assigned tech) -->
           <div id="td-tech-actions" style="display:none;padding:16px 20px;border-bottom:1px solid var(--border);background:var(--surface)"></div>
+          <div id="td-review" style="display:none;padding:14px 20px;border-bottom:1px solid var(--border)"></div>
 
           <!-- TASK INFO GRID -->
           <div style="padding:16px 20px;border-bottom:1px solid var(--border);background:var(--surface)">
@@ -3659,6 +3660,7 @@ function openTaskDetail(id){ viewTask(id); }async function viewTask(id){
     return;
   }
   _detailTask = t;
+  try { renderReviewPanel(t); } catch(e){}
   // Track a change-signature and start auto-refresh so updates appear without reopening
   window._detailLastSig = [t.task_status, t.amount_collected, t.cash_deposit_status, t.workflow_state,
                            (t.device_installs||[]).length, t.last_tech_activity, t.updated_at].join('|');
@@ -4717,6 +4719,75 @@ async function verifyDeposit(taskId, action){
   } else {
     alert(res.error || 'Failed');
   }
+}
+
+// ── Admin review panel: customer dispute + non-cash payment screenshot ──
+function renderReviewPanel(t){
+  const box = document.getElementById('td-review');
+  if(!box) return;
+  if(!isAdmin){ box.style.display='none'; box.innerHTML=''; return; }
+  let html = '';
+
+  // 1) Customer dispute pending review
+  if((t.dispute_status||'') === 'pending'){
+    const disputeRemark = (t.activities||[]).filter(a=>a.activity_type==='customer_dispute').slice(-1)[0];
+    const dtxt = disputeRemark ? String(disputeRemark.remark||'').replace(/^🚨\s*CUSTOMER DISPUTE:\s*/i,'') : 'Customer raised a dispute.';
+    html += `<div style="background:#fdecea;border:1.5px solid #e74c3c;border-radius:10px;padding:13px 15px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#c0392b;margin-bottom:6px">🚨 Customer Report — needs review</div>
+      <div style="font-size:13px;color:#5a1e18;line-height:1.5;margin-bottom:10px">${escHtml(dtxt)}</div>
+      <div style="font-size:12px;color:#7a3e00;margin-bottom:10px">If valid, the technician loses <strong>50 coins</strong>. If not, dismiss with no penalty.</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="resolveDispute(${t.id},'valid')" class="ts-btn" style="background:#e74c3c;color:#fff;flex:1">✔️ Valid (−50 coins)</button>
+        <button onclick="resolveDispute(${t.id},'invalid')" class="ts-btn" style="background:var(--surface2);color:var(--text2);border:1.5px solid var(--border);flex:1">✖️ Dismiss</button>
+      </div>
+    </div>`;
+  }
+
+  // 2) Non-cash payment screenshot verification
+  const payMode = String(t.payment_mode||'').toLowerCase();
+  const nonCash = ['upi','bank transfer','cheque'].includes(payMode);
+  const collected = parseFloat(t.amount_collected||0);
+  if(nonCash && collected > 0){
+    const vs = t.payment_verify_status || 'pending';
+    const shot = (t.documents||[]).find(d=>d.doc_type==='payment_screenshot');
+    const shotUrl = shot ? ('https://salmon-goldfish-110661.hostingersite.com/uploads/task_'+t.id+'/'+shot.filename) : '';
+    let badge = vs==='verified' ? '<span style="color:var(--green);font-weight:800">✅ Verified</span>'
+              : vs==='rejected' ? '<span style="color:var(--red);font-weight:800">❌ Rejected</span>'
+              : '<span style="color:var(--saffron);font-weight:800">⏳ Pending verification</span>';
+    html += `<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;padding:13px 15px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--accent2);margin-bottom:6px">📸 ${escHtml(t.payment_mode)} Payment Proof — ${badge}</div>
+      ${shotUrl ? `<a href="${shotUrl}" target="_blank"><img src="${shotUrl}" style="max-width:100%;max-height:220px;border-radius:8px;border:1px solid var(--border);margin-bottom:10px" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<div style=\\'font-size:12px;color:var(--red)\\'>Could not load image. <a href=&quot;${shotUrl}&quot; target=_blank>Open in new tab</a></div>')"></a>` : '<div style="font-size:13px;color:var(--red);margin-bottom:10px">⚠️ No screenshot uploaded.</div>'}
+      ${vs!=='verified' ? `<div style="display:flex;gap:8px">
+        <button onclick="verifyPayment(${t.id},'verified')" class="ts-btn" style="background:var(--green);color:#fff;flex:2">✅ Verify Payment</button>
+        <button onclick="verifyPayment(${t.id},'rejected')" class="ts-btn" style="background:var(--red-bg,#fdecea);color:var(--red);border:1.5px solid var(--red);flex:1">❌ Reject</button>
+      </div>` : '<div style="font-size:12px;color:var(--green)">Payment proof verified — task can be closed.</div>'}
+    </div>`;
+  }
+
+  box.innerHTML = html;
+  box.style.display = html ? 'block' : 'none';
+}
+
+async function resolveDispute(taskId, verdict){
+  const msg = verdict==='valid'
+    ? 'Confirm this customer report is VALID?\n\nThe technician will lose 50 coins.'
+    : 'Dismiss this customer report?\n\nNo penalty will be applied.';
+  if(!confirm(msg)) return;
+  const res = await api('resolve_dispute',{},'POST',{task_id:taskId, verdict}).catch(()=>({}));
+  if(res.success){
+    if(typeof showToast==='function') showToast(verdict==='valid'?'✔️ Marked valid — 50 coins deducted':'✖️ Dispute dismissed');
+    viewTask(taskId);
+  } else { alert(res.error||'Failed'); }
+}
+
+async function verifyPayment(taskId, verdict){
+  const msg = verdict==='verified' ? 'Verify this payment screenshot as genuine?' : 'Reject this payment screenshot? The technician will need to re-upload.';
+  if(!confirm(msg)) return;
+  const res = await api('verify_payment',{},'POST',{task_id:taskId, verdict}).catch(()=>({}));
+  if(res.success){
+    if(typeof showToast==='function') showToast(verdict==='verified'?'✅ Payment verified':'❌ Payment rejected');
+    viewTask(taskId);
+  } else { alert(res.error||'Failed'); }
 }
 
 async function adminApproveTask(taskId){
