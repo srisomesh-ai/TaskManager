@@ -107,6 +107,9 @@ function _readdingEnsureTable($pdo){
         imei VARCHAR(50) NOT NULL,
         vin VARCHAR(100),
         sim VARCHAR(50),
+        plate_number VARCHAR(100),
+        registration_number VARCHAR(100),
+        object_owner VARCHAR(190),
         server_id INT NOT NULL,
         requested_by INT,
         requested_by_name VARCHAR(190),
@@ -118,6 +121,10 @@ function _readdingEnsureTable($pdo){
         cancelled_at DATETIME NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    // Upgrade older tables that predate the new fields
+    try { $pdo->exec("ALTER TABLE readding_requests ADD COLUMN plate_number VARCHAR(100) NULL"); } catch(Exception $e){}
+    try { $pdo->exec("ALTER TABLE readding_requests ADD COLUMN registration_number VARCHAR(100) NULL"); } catch(Exception $e){}
+    try { $pdo->exec("ALTER TABLE readding_requests ADD COLUMN object_owner VARCHAR(190) NULL"); } catch(Exception $e){}
 }
 
 function bs_type_for_task($deviceDetails){
@@ -3522,14 +3529,20 @@ case 'dev_unassign':
 case 'readding_submit':
     try {
         _readdingEnsureTable($pdo);
-        $name = trim($body['name'] ?? '');
-        $imei = preg_replace('/\D/','', $body['imei'] ?? '');
+        $name  = trim($body['name'] ?? '');
+        $plate = trim($body['plate_number'] ?? '');
+        $vin   = trim($body['vin'] ?? '');
+        $reg   = trim($body['registration_number'] ?? '');
+        $owner = trim($body['object_owner'] ?? '');
+        $imei  = preg_replace('/\D/','', $body['imei'] ?? '');
         $server_id = intval($body['server_id'] ?? 0);
-        if(!$name || !$imei || !$server_id){ echo json_encode(['error'=>'Name, IMEI and server are required']); break; }
+        if(!$name || !$plate || !$vin || !$reg || !$owner || !$imei || !$server_id){
+            echo json_encode(['error'=>'All fields are required']); break;
+        }
         $ref = 'RA'.date('YmdHis').rand(10,99);
-        $pdo->prepare("INSERT INTO readding_requests (ref,status,name,model,imei,vin,sim,server_id,requested_by,requested_by_name,requested_role)
-            VALUES (?,'pending',?,?,?,?,?,?,?,?,?)")
-            ->execute([$ref,$name,trim($body['model']??''),$imei,trim($body['vin']??''),trim($body['sim']??''),$server_id,$userId,$cu['name']??'',$userRole]);
+        $pdo->prepare("INSERT INTO readding_requests (ref,status,name,imei,vin,plate_number,registration_number,object_owner,server_id,requested_by,requested_by_name,requested_role)
+            VALUES (?,'pending',?,?,?,?,?,?,?,?,?,?)")
+            ->execute([$ref,$name,$imei,$vin,$plate,$reg,$owner,$server_id,$userId,$cu['name']??'',$userRole]);
         echo json_encode(['success'=>true,'ref'=>$ref,'id'=>$pdo->lastInsertId()]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
