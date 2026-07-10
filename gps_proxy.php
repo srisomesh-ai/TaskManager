@@ -258,13 +258,20 @@ if($action === 'add_device'){
     $imei = trim($_POST['imei'] ?? '');
     if(!$name || !$imei){ echo json_encode(['success'=>false,'error'=>'Name and IMEI required']); exit; }
 
+    $plate = trim($_POST['plate_number'] ?? '');
+    $reg   = trim($_POST['registration_number'] ?? '');
+    $owner = trim($_POST['object_owner'] ?? '');
+    $vin   = trim($_POST['vin'] ?? '');
+
     $fields = [
         'user_api_hash'       => $srv['hash'],
         'lang'                => 'en',
         'name'                => $name,
         'imei'                => $imei,
-        'vin'                 => trim($_POST['vin'] ?? ''),
-        'sim_number'          => trim($_POST['sim'] ?? ''),
+        'vin'                 => $vin,
+        'plate_number'        => $plate,
+        'registration_number' => $reg,
+        'object_owner'        => $owner,
         'device_model'        => trim($_POST['model'] ?? ''),
         'fuel_measurement_id' => 1,
         'tail_length'         => 10,
@@ -278,6 +285,18 @@ if($action === 'add_device'){
     $status = $json['status'] ?? $json['success'] ?? null;
     if($status == 1 || $status === true){
         $device_id = $json['id'] ?? ($json['device_id'] ?? ($json['data']['id'] ?? null));
+        // Ensure plate_number / registration_number / object_owner are set (some servers only accept these via edit_device)
+        if($device_id && ($plate!=='' || $reg!=='' || $owner!=='' || $vin!=='')){
+            do_post($srv['base'].'/edit_device?lang=en&user_api_hash='.rawurlencode($srv['hash']), [
+                'id'                  => strval($device_id),
+                'lang'                => 'en',
+                'name'                => $name,
+                'plate_number'        => $plate,
+                'registration_number' => $reg,
+                'object_owner'        => $owner,
+                'vin'                 => $vin,
+            ]);
+        }
         echo json_encode(['success'=>true,'device_id'=>$device_id,'server'=>$srv['name']]);
     } else {
         echo json_encode(['success'=>false,'error'=>parse_gps_err($json,$result['raw'])]);
