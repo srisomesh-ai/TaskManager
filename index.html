@@ -6817,7 +6817,13 @@ function syncPlAuth(){
 function syncBsAuth(){
   const iframe = document.getElementById('bs-iframe');
   if(!iframe) return;
-  iframe.src = 'balance-sheet.html?token=' + encodeURIComponent(authToken||'');
+  // Load the iframe only once. Re-setting src on every visit reloads the whole
+  // page and causes a blank flash. If the token changed, reload; otherwise leave it.
+  const wantSrc = 'balance-sheet.html?token=' + encodeURIComponent(authToken||'');
+  if(iframe.dataset.loadedToken !== (authToken||'')){
+    iframe.src = wantSrc;
+    iframe.dataset.loadedToken = (authToken||'');
+  }
 }
 
 function syncAdminAuth(){
