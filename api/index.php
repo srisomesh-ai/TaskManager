@@ -670,6 +670,7 @@ case 'update_task':
     $id = intval($body['id'] ?? 0);
     $ex = $pdo->prepare("SELECT * FROM tasks WHERE id=?"); $ex->execute([$id]); $existing=$ex->fetch();
     if (!$existing) { echo json_encode(['error'=>'Not found']); break; }
+    if (array_key_exists('payment_verify_status',$body)) { try { $pdo->exec("ALTER TABLE tasks ADD COLUMN payment_verify_status VARCHAR(20) DEFAULT NULL"); } catch(Exception $e){} }
     $fields = ['task_status','payment_status','amount_collected','payment_mode','device_details','general_notes','reminder_date','customer_requested_delay','is_outstation','payment_reminder_date','is_urgent','star_rating',
                // Balance sheet linkage fields
                'gps_serial_no','name_on_server','server_name','invoice_no','payment_received_on','payment_transaction_details','gst_amount','pending_reason','discount_reason','discount_incharge','profile',
@@ -677,6 +678,8 @@ case 'update_task':
                'outstation_location','outstation_travel_paid_by','outstation_customer_travel_amount','outstation_claim_cap','outstation_claim_submitted','outstation_claim_status',
                // Cash deposit tracking
                'cash_deposit_status',
+               // Feature #4: non-cash payment verification
+               'payment_verify_status',
                // Consent reset (when vehicle unavailable after consent)
                'consent_token','customer_consent_at','customer_consent_name','customer_consent_mobile'];
     if (in_array($userRole,['admin','assigner'])) $fields=array_merge($fields,['customer_name','contact_number','email','location','lead_type','device_qty','price_to_collect','assigned_to','vehicle_number']);
@@ -941,6 +944,13 @@ case 'approve_task':
             ? 'Cannot close — cash deposit submitted by technician but not yet verified by admin. Please verify the deposit first.'
             : 'Cannot close — technician collected ₹'.number_format(floatval($t['amount_collected']),0).' cash but has not submitted the deposit yet.';
         echo json_encode(['error'=>$msg]);
+        break;
+    }
+    // Feature #4: hard block if NON-CASH payment collected but screenshot not verified by admin
+    try { $pdo->exec("ALTER TABLE tasks ADD COLUMN payment_verify_status VARCHAR(20) DEFAULT NULL"); } catch(Exception $e){}
+    $nonCashModes = ['upi','bank transfer','cheque'];
+    if (in_array($payMode, $nonCashModes) && $collected > 0 && ($t['payment_verify_status']??'') !== 'verified') {
+        echo json_encode(['error'=>'Cannot close — '.strtoupper($t['payment_mode']).' payment screenshot not yet verified by admin. Please verify the payment proof first.']);
         break;
     }
     // Close the task
@@ -1274,6 +1284,24 @@ case 'get_disputes':
                            WHERE t.dispute_status='pending' ORDER BY t.updated_at DESC");
         $st->execute();
         echo json_encode(['success'=>true,'disputes'=>$st->fetchAll()]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// ---- ADMIN: verify (or reject) a non-cash payment screenshot ----
+case 'verify_payment':
+    if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
+    $id = intval($body['task_id'] ?? $body['id'] ?? 0);
+    $verdict = trim($body['verdict'] ?? 'verified'); // 'verified' or 'rejected'
+    if (!$id) { echo json_encode(['error'=>'Missing task_id']); break; }
+    try {
+        try { $pdo->exec("ALTER TABLE tasks ADD COLUMN payment_verify_status VARCHAR(20) DEFAULT NULL"); } catch(Exception $e){}
+        $newStatus = $verdict==='rejected' ? 'rejected' : 'verified';
+        $pdo->prepare("UPDATE tasks SET payment_verify_status=? WHERE id=?")->execute([$newStatus,$id]);
+        $note = $newStatus==='verified'
+            ? '✅ Payment screenshot verified by admin.'
+            : '❌ Payment screenshot rejected by admin — please re-collect proof.';
+        $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")->execute([$id,$userId,$note]);
+        echo json_encode(['success'=>true,'payment_verify_status'=>$newStatus]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
