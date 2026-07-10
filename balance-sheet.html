@@ -520,7 +520,7 @@ function renderTable(){
   document.getElementById('bs-pg-num').textContent=curPage;
   const tbody=document.getElementById('bs-tbody');
   if(!slice.length){ tbody.innerHTML='<tr><td colspan="18" style="text-align:center;padding:32px;color:var(--text3)">No records found</td></tr>'; return; }
-  const isAdmin=true; // all task manager users can edit their own
+  const isAdmin = (window._bsRole==='admin'); // only admin can delete balance sheet entries
   tbody.innerHTML=slice.map((e,i)=>{
     const n=(curPage-1)*PAGE+i+1;
     const chk=selectedIds.has(e.id)?'checked':'';
@@ -540,7 +540,7 @@ function renderTable(){
       <td>
         <button class="act-btn" onclick="viewEntry(${e.id})" title="View">👁</button>
         <button class="act-btn" onclick="editEntry(${e.id})" title="Edit">✏️</button>
-        <button class="act-btn" onclick="delEntry(${e.id})" title="Delete">🗑️</button>
+        ${isAdmin?`<button class="act-btn" onclick="delEntry(${e.id})" title="Delete">🗑️</button>`:''}
         <button class="act-btn" onclick="waEntry(${e.id})" title="WhatsApp">📱</button>
       </td>
     </tr>`;
@@ -643,8 +643,11 @@ function closeEditModal(){ document.getElementById('bs-edit-ov').classList.remov
 
 // ── DELETE ──────────────────────────────────────────
 async function delEntry(id){
+  if(window._bsRole!=='admin'){ toast('⛔ Only admin can delete entries'); return; }
   const e=allEntries.find(x=>+x.id===+id);
-  if(!confirm(`Delete entry for "${e?.name_on_server||id}"?`)) return;
+  const code = prompt('Enter admin passcode to delete "'+(e?.name_on_server||id)+'":');
+  if(code===null) return;
+  if(code.trim()!=='532842'){ toast('❌ Wrong passcode — delete cancelled'); return; }
   const res=await bsApi('bs_delete_entry',{},'POST',{id}).catch(()=>({}));
   if(res.success){ toast('🗑️ Deleted'); loadEntries(); }
   else toast('❌ '+(res.error||'Delete failed'));
@@ -848,11 +851,16 @@ function toast(msg){
 }
 
 // ── INIT ─────────────────────────────────────────────
+window._bsRole = null;
 setToday();
-loadEntries();
-// Note: balance sheet stays in sync via the update_task hook in api/index.php.
-// The manual "Resync" button can be used if a one-time correction is ever needed.
-// (Auto-resync on load was removed — it caused the table to blank/reload on open.)
+// Fetch the current user's role first so admin-only controls (delete) render correctly.
+(async()=>{
+  try {
+    const me = await bsApi('me').catch(()=>({}));
+    window._bsRole = (me && me.user && me.user.role) ? me.user.role : null;
+  } catch(e){ window._bsRole = null; }
+  loadEntries();
+})();
 </script>
 </body>
 </html>
