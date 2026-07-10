@@ -6502,19 +6502,18 @@ async function loadRenewalBadge(){
   }catch(e){}
 }
 async function loadRenewalsPage(){
-  // Always (re)load Price List renewal items when opening the page.
+  // Always (re)load renewal items from the Price List (category = Renewal). Admin edits reflect here.
   let pl = await api('pl_get_public').catch(()=>({}));
   let items = ((pl&&pl.items)||[]).filter(function(i){ return (i.category||'').toLowerCase()==='renewal'; });
-  // If there are no proper GPS Renewal plans, seed them (admin/assigner/manager).
-  const hasPlans = items.some(function(i){ return /GPS Renewal/i.test(i.product_name||''); });
-  if(!hasPlans && currentUser && ['admin','assigner','manager'].includes(currentUser.role)){
+  // Only if there are NO renewal items at all, offer to create the standard plans.
+  if(!items.length && currentUser && ['admin','assigner','manager'].includes(currentUser.role)){
     const seed = await api('pl_seed_renewals',{},'POST',{}).catch(function(e){ return {error:String(e)}; });
-    if(seed && seed.error){ showToast('⚠️ Could not create renewal plans: '+seed.error+' — deploy the latest API or add plans in Price List'); }
+    if(seed && seed.error){ showToast('⚠️ Could not create renewal plans: '+seed.error); }
     pl = await api('pl_get_public').catch(()=>({}));
     items = ((pl&&pl.items)||[]).filter(function(i){ return (i.category||'').toLowerCase()==='renewal'; });
   }
   _rnwRenewalItems = items;
-  if(!_rnwRenewalItems.length){ showToast('⚠️ No renewal plans found. Add "GPS Renewal ..." items (category Renewal) in Price List, or deploy the latest API.'); }
+  if(!_rnwRenewalItems.length){ showToast('⚠️ No renewal plans in Price List. Add items with Category = "Renewal" (e.g. "GPS Renewal 1 Year"), or deploy the latest API.'); }
   rnwTab('search');
   loadRenewalRequests();
   loadRenewalBadge();
@@ -6558,9 +6557,9 @@ async function rnwFetch(){
   rnwRenderDevices();
 }
 function _rnwRenewOptions(){
-  // Build grouped <option>s: BGT (No GST) and SBGT (With GST). value = months|amount|gst|name
+  // Options come from the Price List (category = Renewal). Admin edits prices there; they reflect here.
   if(!_rnwRenewalItems.length){
-    return '<option value="">⚠ Plans not loaded — reload page</option>';
+    return '<option value="">⚠ No renewal plans in Price List</option>';
   }
   function optFor(it){
     const nm=(it.product_name||'').toLowerCase();
@@ -6574,15 +6573,15 @@ function _rnwRenewOptions(){
     const incl = parseFloat(it.price_incl_gst||0);
     const excl = parseFloat(it.price_excl_gst||0);
     const gst = Math.max(0, incl-excl);
-    const per = (months>=12 && months%12===0) ? ((months/12)+' Year'+((months/12)>1?'s':'')) : (months+' Months');
-    // Show a clean label: "3 Months — ₹350" (name carries the profile marker in value)
-    return '<option value="'+months+'|'+incl+'|'+gst.toFixed(2)+'|'+escHtml(it.product_name)+'">'+per+' — ₹'+incl.toLocaleString('en-IN')+'</option>';
+    // Label = the actual Price List product name + its price, so it's always clear.
+    return '<option value="'+months+'|'+incl+'|'+gst.toFixed(2)+'|'+escHtml(it.product_name)+'">'+escHtml(it.product_name)+' — ₹'+incl.toLocaleString('en-IN')+'</option>';
   }
-  const bgt  = _rnwRenewalItems.filter(function(i){ return /\(BGT\)/i.test(i.product_name||'') || (parseFloat(i.gst_percent||0)===0 && !/SBGT/i.test(i.product_name||'')); });
+  // Group by GST: SBGT/with-GST vs BGT/no-GST. Old-style items (e.g. "Annual Renewal") fall by their GST%.
   const sbgt = _rnwRenewalItems.filter(function(i){ return /SBGT/i.test(i.product_name||'') || parseFloat(i.gst_percent||0)>0; });
+  const bgt  = _rnwRenewalItems.filter(function(i){ return !(/SBGT/i.test(i.product_name||'') || parseFloat(i.gst_percent||0)>0); });
   let html='';
-  if(bgt.length)  html += '<optgroup label="BGT — No GST">'+bgt.map(optFor).join('')+'</optgroup>';
-  if(sbgt.length) html += '<optgroup label="SBGT — With GST (18%)">'+sbgt.map(optFor).join('')+'</optgroup>';
+  if(bgt.length)  html += '<optgroup label="No GST (BGT)">'+bgt.map(optFor).join('')+'</optgroup>';
+  if(sbgt.length) html += '<optgroup label="With GST 18% (SBGT)">'+sbgt.map(optFor).join('')+'</optgroup>';
   if(!html) html = _rnwRenewalItems.map(optFor).join('');
   return html;
 }
