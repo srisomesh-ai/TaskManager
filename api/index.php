@@ -91,14 +91,20 @@ function _ensureCoinLedger($pdo){
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 }
 // Award (or deduct) coins. event_key makes it idempotent — same key won't double-award.
-// Balance sheet category: Installation -> 'sales' (hardware sale); everything else -> 'license' (service/renewal)
+// Balance sheet category:
+//   License  -> known service/renewal job types (troubleshoot, offline, demo, remove, re-adding, v2v/vehicle change)
+//   Sales    -> everything else = a new device installation (hardware sale)
+// NOTE: a normal installation task does NOT store the word "install" in device_details
+// (it holds the device model, or is blank). The app itself treats any device_details that
+// is not a known service type as an installation. We mirror that here.
 function bs_type_for_task($deviceDetails){
     $j = strtolower(trim($deviceDetails ?? ''));
-    // Only a fresh installation counts as a Sale. Re-adding, troubleshoot, V2V, remove, reading/demo = License.
-    if (($j === 'installation' || strpos($j,'install') !== false) && strpos($j,'re-add') === false && strpos($j,'readd') === false) {
-        return 'sales';
+    $serviceKeywords = ['troubleshoot','offline','demo','demonstration','remove','re-add','readd','re add','vehicle change','v2v','vehicle to vehicle','renewal','renew'];
+    foreach ($serviceKeywords as $kw) {
+        if (strpos($j, $kw) !== false) return 'license';
     }
-    return 'license';
+    // Not a recognised service job -> it is a new installation -> Sales
+    return 'sales';
 }
 
 function award_coins($pdo, $userId, $coins, $reason, $taskId = null, $eventKey = null, $pushTitle = null, $pushBody = null){
