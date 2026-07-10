@@ -558,6 +558,18 @@ function toggleSel(id,cb){ cb.checked?selectedIds.add(id):selectedIds.delete(id)
 }
 
 // ── VIEW ────────────────────────────────────────────
+function _bsShot(v){
+  v=(v||'').toString().trim();
+  if(!v) return '–';
+  // If it looks like an uploaded image path, render a clickable thumbnail; else plain text (UTR etc.)
+  if(/uploads\/.*\.(jpg|jpeg|png|gif|webp)$/i.test(v) || /^uploads\/renewals\//i.test(v)){
+    var url = v.charAt(0)==='/' ? v : ('../'+v.replace(/^\.?\//,''));
+    // balance-sheet.html sits at repo root, uploads is also at root
+    url = v.replace(/^\.?\//,'');
+    return '<a href="'+url+'" target="_blank" style="color:#2563eb;font-weight:700">📎 View screenshot</a> <a href="'+url+'" target="_blank"><img src="'+url+'" style="max-width:120px;max-height:90px;border-radius:6px;border:1px solid #ddd;vertical-align:middle;margin-left:6px"></a>';
+  }
+  return v;
+}
 function viewEntry(id){
   const e=allEntries.find(x=>+x.id===+id); if(!e) return;
   const rows=[['Type',e.type],['Date',e.date],['Task No',e.task_id||e.task_no],['Invoice',e.invoice_no],
@@ -568,7 +580,7 @@ function viewEntry(id){
     ['Received','₹'+parseFloat(e.payment_received||0).toLocaleString('en-IN')],
     ['Pending','₹'+parseFloat(e.pending_payment||0).toLocaleString('en-IN')],
     ['Mode',e.payment_mode],['Status',e.payment_status],
-    ['Received On',e.payment_received_on||'–'],['Transaction',e.payment_transaction_details||'–'],
+    ['Received On',e.payment_received_on||'–'],['Payment Screenshot',_bsShot(e.payment_transaction_details)],
     ['Pending Reason',e.pending_reason||'–'],['Discount',e.discount_given?'₹'+e.discount_given:'–'],
     ['Discount Reason',e.discount_reason||'–'],['Discount Incharge',e.discount_incharge||'–'],
     ['Technician',e.technician_name||'–'],['Location',e.location||'–'],
