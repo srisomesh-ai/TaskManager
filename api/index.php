@@ -2205,8 +2205,27 @@ case 'send_location_request':
     $ts = $pdo->prepare("SELECT t.*, u.name as tech_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?");
     $ts->execute([$id]); $tr = $ts->fetch();
     if(!$tr){ echo json_encode(['error'=>'Task not found']); break; }
-    $locTok = bin2hex(random_bytes(20));
-    $pdo->prepare("UPDATE tasks SET loc_token=?, cust_loc_at=NULL, cust_loc_lat=NULL, cust_loc_lng=NULL WHERE id=?")->execute([$locTok, $id]);
+    // Ensure a column to remember when the token was issued (for a real, truthful expiry)
+    try { $pdo->exec("ALTER TABLE tasks ADD COLUMN loc_token_at DATETIME DEFAULT NULL"); } catch(Exception $e){}
+    // REUSE the existing token if it is still valid and the customer has NOT yet shared location.
+    // This keeps every email/WhatsApp link for this task pointing at the SAME working link, so
+    // re-sending (or the customer opening an earlier email) never shows "expired".
+    $reuse = false;
+    if(!empty($tr['loc_token']) && empty($tr['cust_loc_at'])){
+        $issuedAt = !empty($tr['loc_token_at']) ? strtotime($tr['loc_token_at']) : 0;
+        if($issuedAt && (time() - $issuedAt) < 24*3600){ // still fresh (< 24h)
+            $locTok = $tr['loc_token'];
+            $reuse = true;
+        }
+    }
+    if(!$reuse){
+        $locTok = bin2hex(random_bytes(20));
+        // New token: reset the share state and stamp issue time. Do NOT wipe an existing shared location on mere resend.
+        $pdo->prepare("UPDATE tasks SET loc_token=?, loc_token_at=NOW(), cust_loc_at=NULL, cust_loc_lat=NULL, cust_loc_lng=NULL WHERE id=?")->execute([$locTok, $id]);
+    } else {
+        // Reusing: just refresh the issue time so the link stays valid another window
+        $pdo->prepare("UPDATE tasks SET loc_token_at=NOW() WHERE id=?")->execute([$id]);
+    }
     // email (optional) + return link for WhatsApp
     $link = 'https://salmon-goldfish-110661.hostingersite.com/loc.php?t='.$locTok;
     $sent = false;
@@ -2219,7 +2238,7 @@ case 'send_location_request':
                . '<p style="font-size:14px;color:#333">Dear '.htmlspecialchars($tr['customer_name']).',</p>'
                . '<p style="font-size:13.5px;color:#555;line-height:1.6">Our technician is on the way for your GPS service. Please tap below to share your exact location so they can reach you quickly.</p>'
                . '<p style="text-align:center;margin:18px 0"><a href="'.$link.'" style="background:#1f5fd6;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px">📍 Share My Location</a></p>'
-               . '<p style="font-size:11px;color:#999">Valid for 6 hours.</p></div></div>';
+               . '<p style="font-size:11px;color:#999">This link is unique to your service request. If you have trouble, please contact our technician.</p></div></div>';
             sendMail($tr['email'], $tr['customer_name'], 'BharatGPS — Please share your location', $b);
             $sent = true;
         }
