@@ -1103,6 +1103,14 @@ case 'approve_task':
     $hrs=(time()-strtotime($t['created_at']))/3600;
     $stars=$hrs<=12?5:($hrs<=24?4:($hrs<=48?3:($hrs<=72?2:1)));
     $pdo->prepare("UPDATE tasks SET star_rating=? WHERE id=? AND (star_rating IS NULL OR star_rating=0)")->execute([$stars,$id]);
+    // On-time coins safety net: if the task was created & completed within 24h, credit the
+    // technician here too (idempotent via submit24_ key, so it won't double-award if the
+    // Awaiting-Approval step already gave them). Covers tasks that skipped that step.
+    try {
+        if (!empty($t['assigned_to']) && !empty($t['created_at']) && $hrs <= 24) {
+            award_coins($pdo, intval($t['assigned_to']), 50, 'On-time submission (within 24h)', $id, 'submit24_'.$id, '🎉 Congratulations! +50 coins', 'Task completed within 24 hours. Great work — keep it up!');
+        }
+    } catch(Exception $e) { error_log('coin close24 error: '.$e->getMessage()); }
     // Update BS entry if exists — mark payment as received by company
     if ($t['bs_entry_id']) {
         $pdo->prepare("UPDATE balance_sheet_entries SET payment_status='paid',payment_received=?,pending_payment=0,payment_received_on=CURDATE() WHERE id=?")->execute([$collected,$t['bs_entry_id']]);
