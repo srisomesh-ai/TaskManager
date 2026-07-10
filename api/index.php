@@ -2843,14 +2843,18 @@ case 'pl_seed_renewals':
     if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Admin only']); break; }
     try {
         $pdo->exec("CREATE TABLE IF NOT EXISTS price_list (id INT AUTO_INCREMENT PRIMARY KEY, product_name VARCHAR(200) NOT NULL, category VARCHAR(100) NOT NULL DEFAULT 'GPS Device', server_name VARCHAR(100) DEFAULT NULL, description TEXT DEFAULT NULL, buying_price DECIMAL(10,2) NOT NULL DEFAULT 0, price_excl_gst DECIMAL(10,2) NOT NULL DEFAULT 0, gst_percent DECIMAL(5,2) NOT NULL DEFAULT 18, price_incl_gst DECIMAL(10,2) NOT NULL DEFAULT 0, is_active TINYINT(1) NOT NULL DEFAULT 1, has_stock TINYINT(1) NOT NULL DEFAULT 0, sort_order INT NOT NULL DEFAULT 0, created_by VARCHAR(100) DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-        // name, months, base(excl), gst%  — placeholder amounts, editable later
+        // name, months, base(excl), gst%  — real prices from BharatGPS app (BGT flat, SBGT +18% GST)
         $plans = [
-            ['GPS Renewal 3 Months (BGT)',  3,  400, 0],
-            ['GPS Renewal 6 Months (BGT)',  6,  700, 0],
-            ['GPS Renewal 1 Year (BGT)',    12, 1200, 0],
-            ['GPS Renewal 3 Months (SBGT)', 3,  400, 18],
-            ['GPS Renewal 6 Months (SBGT)', 6,  700, 18],
-            ['GPS Renewal 1 Year (SBGT)',   12, 1200, 18],
+            ['GPS Renewal 3 Months (BGT)',  3,   350, 0],
+            ['GPS Renewal 6 Months (BGT)',  6,   700, 0],
+            ['GPS Renewal 1 Year (BGT)',    12,  1200, 0],
+            ['GPS Renewal 2 Years (BGT)',   24,  2400, 0],
+            ['GPS Renewal 4 Years (BGT)',   48,  4800, 0],
+            ['GPS Renewal 3 Months (SBGT)', 3,   350, 18],
+            ['GPS Renewal 6 Months (SBGT)', 6,   700, 18],
+            ['GPS Renewal 1 Year (SBGT)',   12,  1200, 18],
+            ['GPS Renewal 2 Years (SBGT)',  24,  2400, 18],
+            ['GPS Renewal 4 Years (SBGT)',  48,  4800, 18],
         ];
         $chk = $pdo->prepare("SELECT COUNT(*) FROM price_list WHERE product_name=?");
         $ins = $pdo->prepare("INSERT INTO price_list (product_name,category,server_name,description,buying_price,price_excl_gst,gst_percent,price_incl_gst,has_stock,is_active,created_by,sort_order) VALUES (?,?,?,?,0,?,?,?,0,1,?,?)");
@@ -3733,13 +3737,13 @@ case 'renewal_request':
         $months    = intval($body['months'] ?? 12);
         $curExpiry = trim($body['current_expiry'] ?? '');
         if(!$server_id || !$device_id){ echo json_encode(['error'=>'Missing device info']); break; }
-        if(!in_array($months,[3,6,12])){ echo json_encode(['error'=>'Invalid renewal period']); break; }
+        if(!in_array($months,[3,6,12,24,48])){ echo json_encode(['error'=>'Invalid renewal period']); break; }
         $screenshot = trim($body['payment_screenshot'] ?? '');
         if($screenshot===''){ echo json_encode(['error'=>'Payment screenshot is required before sending for approval']); break; }
         // Compute new expiry from current expiry (or today if missing)
         $base = ($curExpiry && $curExpiry!=='0000-00-00') ? $curExpiry : date('Y-m-d');
         $newExpiry = date('Y-m-d', strtotime('+'.$months.' months', strtotime($base)));
-        $label = $months===12 ? '1 Year' : ($months.' Months');
+        $label = ($months>=12 && $months%12===0) ? (($months/12).' Year'.(($months/12)>1?'s':'')) : ($months.' Months');
         // Amount from Price List item (client sends the chosen price_item id/name + amount)
         $amount = floatval($body['amount'] ?? 0);
         $gst    = floatval($body['gst'] ?? 0);
