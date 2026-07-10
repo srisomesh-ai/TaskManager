@@ -844,15 +844,9 @@ function toast(msg){
 // ── INIT ─────────────────────────────────────────────
 setToday();
 loadEntries();
-
-// One-time sync on load to correct any existing data
-// After this, BS stays in sync via update_task hook in api/index.php
-setTimeout(async()=>{
-  try {
-    const res = await bsApi('bs_resync_all',{},'POST',{}).catch(()=>({}));
-    if(res.success && res.updated > 0) loadEntries();
-  } catch(e){}
-}, 2000);
+// Note: balance sheet stays in sync via the update_task hook in api/index.php.
+// The manual "Resync" button can be used if a one-time correction is ever needed.
+// (Auto-resync on load was removed — it caused the table to blank/reload on open.)
 </script>
 </body>
 </html>
