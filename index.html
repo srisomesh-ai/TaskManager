@@ -1059,10 +1059,19 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
           <div class="card" style="margin-bottom:14px">
             <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
               <div><label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">Quick filter</label>
-                <select id="rnw-filter" class="form-input" style="width:180px" onchange="rnwOnFilterChange()">
-                  <option value="expiring30">Expiring in 30 days</option>
-                  <option value="expiring90">Expiring in 90 days</option>
-                  <option value="expired">Already expired</option>
+                <select id="rnw-filter" class="form-input" style="width:200px" onchange="rnwOnFilterChange()">
+                  <optgroup label="Expiring soon">
+                    <option value="expiring_tomorrow">Expiring tomorrow</option>
+                    <option value="expiring_next_week">Expiring next week (7 days)</option>
+                    <option value="expiring30" selected>Expiring in 30 days</option>
+                    <option value="expiring90">Expiring in 90 days</option>
+                  </optgroup>
+                  <optgroup label="Expired">
+                    <option value="expired_today">Expired today</option>
+                    <option value="expired_yesterday">Expired yesterday</option>
+                    <option value="expired_week_ago">Expired in last week</option>
+                    <option value="expired">All expired</option>
+                  </optgroup>
                   <option value="range">Custom date range</option>
                 </select>
               </div>
@@ -6566,11 +6575,21 @@ function rnwRenderDevices(){
       + '<td style="padding:9px 12px;font-size:12px">'+escHtml(d.plate)+'<br><span style="color:var(--text3);font-size:11px">'+escHtml(d.owner)+'</span></td>'
       + '<td style="padding:9px 12px;font-size:12px;color:var(--text2)">'+escHtml(_RNW_SRV[d.server_id]||('S'+d.server_id))+'</td>'
       + '<td style="padding:9px 12px;font-size:12px;color:'+stColor+';font-weight:700">'+escHtml(d.expiry)+'<br><span style="font-size:11px;font-weight:600">'+dl+'</span></td>'
-      + '<td style="padding:9px 12px"><div style="display:flex;gap:6px;align-items:center">'
-        + '<select id="rnw-sel-'+realIdx+'" class="form-input" style="width:auto;font-size:12px;padding:5px 8px">'+_rnwRenewOptions()+'</select>'
-        + '<button class="ra-btn ra-approve" onclick="requestRenewal('+realIdx+',this)">🔄 Renew</button></div></td>'
+      + '<td style="padding:9px 12px"><div style="display:flex;flex-direction:column;gap:6px;min-width:230px">'
+        + '<div style="display:flex;gap:6px;align-items:center">'
+          + '<select id="rnw-sel-'+realIdx+'" class="form-input" style="width:auto;font-size:12px;padding:5px 8px">'+_rnwRenewOptions()+'</select>'
+          + '<button class="ra-btn ra-approve" onclick="requestRenewal('+realIdx+',this)">🔄 Renew</button></div>'
+        + '<label style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:5px;cursor:pointer">📎 Payment screenshot (required): '
+          + '<input type="file" id="rnw-shot-'+realIdx+'" accept="image/*" style="font-size:11px" onchange="rnwShotPicked('+realIdx+')"></label>'
+        + '<span id="rnw-shot-status-'+realIdx+'" style="font-size:11px;color:var(--text3)"></span>'
+      + '</div></td>'
     + '</tr>';
   }).join('');
+}
+function rnwShotPicked(idx){
+  const inp=document.getElementById('rnw-shot-'+idx);
+  const st=document.getElementById('rnw-shot-status-'+idx);
+  if(inp && inp.files && inp.files[0] && st){ st.textContent='✅ '+inp.files[0].name; st.style.color='var(--green)'; }
 }
 async function requestRenewal(idx, btn){
   const d=_rnwDevices[idx]; if(!d) return;
@@ -6578,12 +6597,25 @@ async function requestRenewal(idx, btn){
   const parts=(sel?sel.value:'12|0|0|Renewal').split('|');
   const months=parseInt(parts[0])||12, amount=parseFloat(parts[1])||0, gst=parseFloat(parts[2])||0, itemName=parts[3]||'Renewal';
   const label = months===12?'1 Year':(months+' Months');
+  const shotInp=document.getElementById('rnw-shot-'+idx);
+  if(!shotInp || !shotInp.files || !shotInp.files[0]){ showToast('⚠️ Attach the payment screenshot first'); return; }
   if(!confirm('Request renewal of "'+d.name+'" for '+label+(amount>0?(' (₹'+amount.toLocaleString('en-IN')+')'):'')+'?\n\nThis will be sent to admin for approval.')) return;
-  if(btn){ btn.disabled=true; btn.textContent='…'; }
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Uploading…'; }
+  // 1) Upload the payment screenshot
+  let shotPath='';
+  try{
+    const fd=new FormData(); fd.append('file', shotInp.files[0]);
+    const up=await fetch(API+'?action=renewal_upload_screenshot',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd}).then(x=>x.json()).catch(()=>({}));
+    if(!up || !up.success || !up.path){ showToast('❌ Screenshot upload failed'); if(btn){ btn.disabled=false; btn.textContent='🔄 Renew'; } return; }
+    shotPath=up.path;
+  }catch(e){ showToast('❌ Screenshot upload failed'); if(btn){ btn.disabled=false; btn.textContent='🔄 Renew'; } return; }
+  // 2) Submit the renewal request with the screenshot path
+  if(btn) btn.textContent='…';
   const r=await api('renewal_request',{},'POST',{
     server_id:d.server_id, server_name:_RNW_SRV[d.server_id]||('Server '+d.server_id),
     device_id:d.id, device_name:d.name, imei:d.imei, plate:d.plate, owner:d.owner,
-    current_expiry:d.expiry, months:months, price_item:itemName, amount:amount, gst:gst
+    current_expiry:d.expiry, months:months, price_item:itemName, amount:amount, gst:gst,
+    payment_screenshot:shotPath
   });
   if(r&&r.success){
     showToast('✅ Renewal requested — new expiry '+r.new_expiry+' · sent for approval');
