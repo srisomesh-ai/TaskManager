@@ -144,7 +144,7 @@ function _discountCheck($pdo, $approver, $amount, $excludeTaskId=null){
     $remaining = round($weekly - $used, 2);
     $info = ['limit_set'=>true,'monthly'=>$monthly,'weekly'=>$weekly,'used_7d'=>$used,'remaining'=>$remaining];
     if(($used + $amount) > $weekly + 0.001){
-        $reason = $approver.' has only ₹'.number_format(max(0,$remaining),0).' discount left this week (weekly cap ₹'.number_format($weekly,0).', already used ₹'.number_format($used,0).' in the last 7 days). Cannot give ₹'.number_format($amount,0).'.';
+        $reason = 'Discount limit for '.$approver.' is finished for now — this discount cannot be approved under this name. Please choose another approver or a smaller amount.';
         return [false, $reason, $info];
     }
     return [true, '', $info];
