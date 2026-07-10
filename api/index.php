@@ -97,6 +97,36 @@ function _ensureCoinLedger($pdo){
 // NOTE: a normal installation task does NOT store the word "install" in device_details
 // (it holds the device model, or is blank). The app itself treats any device_details that
 // is not a known service type as an installation. We mirror that here.
+function _renewalEnsureTable($pdo){
+    $pdo->exec("CREATE TABLE IF NOT EXISTS renewal_requests (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        ref VARCHAR(30),
+        status VARCHAR(20) DEFAULT 'pending',
+        server_id INT NOT NULL,
+        server_name VARCHAR(100),
+        device_id VARCHAR(40) NOT NULL,
+        device_name VARCHAR(190),
+        imei VARCHAR(50),
+        plate VARCHAR(100),
+        owner VARCHAR(190),
+        current_expiry DATE NULL,
+        months INT DEFAULT 12,
+        label VARCHAR(40),
+        new_expiry DATE NULL,
+        price_item VARCHAR(190),
+        amount DECIMAL(10,2) DEFAULT 0,
+        gst DECIMAL(10,2) DEFAULT 0,
+        requested_by INT,
+        requested_by_name VARCHAR(190),
+        requested_role VARCHAR(30),
+        requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        approved_by VARCHAR(190),
+        approved_at DATETIME NULL,
+        notes TEXT,
+        bs_entry_id INT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+}
+
 function _readdingEnsureTable($pdo){
     $pdo->exec("CREATE TABLE IF NOT EXISTS readding_requests (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -3634,6 +3664,140 @@ case 'readding_cancel':
         if($r['status']!=='pending'){ echo json_encode(['error'=>'Already '.$r['status']]); break; }
         $pdo->prepare("UPDATE readding_requests SET status='cancelled', cancelled_by=?, cancelled_at=NOW() WHERE id=?")
             ->execute([$cu['name']??'Admin', $id]);
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// ═══════════════════════════════════════════════════════════════════
+// LICENSE / RENEWAL — manager/assigner raise renewal request; admin approves
+// (approve extends expiry on GPS server via gps_proxy, creates license balance
+//  sheet entry from Price List amount, and emails the customer)
+// ═══════════════════════════════════════════════════════════════════
+case 'renewal_request':
+    // Manager or assigner (not technician) raises a renewal request
+    try {
+        if(!in_array($userRole,['admin','assigner','manager'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+        _renewalEnsureTable($pdo);
+        $server_id = intval($body['server_id'] ?? 0);
+        $device_id = trim($body['device_id'] ?? '');
+        $months    = intval($body['months'] ?? 12);
+        $curExpiry = trim($body['current_expiry'] ?? '');
+        if(!$server_id || !$device_id){ echo json_encode(['error'=>'Missing device info']); break; }
+        if(!in_array($months,[3,6,12])){ echo json_encode(['error'=>'Invalid renewal period']); break; }
+        // Compute new expiry from current expiry (or today if missing)
+        $base = ($curExpiry && $curExpiry!=='0000-00-00') ? $curExpiry : date('Y-m-d');
+        $newExpiry = date('Y-m-d', strtotime('+'.$months.' months', strtotime($base)));
+        $label = $months===12 ? '1 Year' : ($months.' Months');
+        // Amount from Price List item (client sends the chosen price_item id/name + amount)
+        $amount = floatval($body['amount'] ?? 0);
+        $gst    = floatval($body['gst'] ?? 0);
+        $ref = 'RNW'.date('YmdHis').rand(10,99);
+        $pdo->prepare("INSERT INTO renewal_requests
+            (ref,status,server_id,server_name,device_id,device_name,imei,plate,owner,current_expiry,months,label,new_expiry,price_item,amount,gst,requested_by,requested_by_name,requested_role)
+            VALUES (?,'pending',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+            ->execute([$ref,$server_id,trim($body['server_name']??''),$device_id,trim($body['device_name']??''),
+                       trim($body['imei']??''),trim($body['plate']??''),trim($body['owner']??''),
+                       ($curExpiry && $curExpiry!=='0000-00-00')?$curExpiry:null,$months,$label,$newExpiry,
+                       trim($body['price_item']??''),$amount,$gst,$userId,$cu['name']??'',$userRole]);
+        echo json_encode(['success'=>true,'ref'=>$ref,'new_expiry'=>$newExpiry,'id'=>$pdo->lastInsertId()]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'renewal_list':
+    try {
+        if(!in_array($userRole,['admin','assigner','manager'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+        _renewalEnsureTable($pdo);
+        $status = trim($body['status'] ?? $_GET['status'] ?? '');
+        $sql = "SELECT * FROM renewal_requests"; $params=[];
+        if($status!==''){ $sql .= " WHERE status=?"; $params[]=$status; }
+        $sql .= " ORDER BY requested_at DESC LIMIT 500";
+        $st = $pdo->prepare($sql); $st->execute($params);
+        echo json_encode(['success'=>true,'requests'=>$st->fetchAll()]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'renewal_count':
+    try {
+        _renewalEnsureTable($pdo);
+        $n = intval($pdo->query("SELECT COUNT(*) FROM renewal_requests WHERE status='pending'")->fetchColumn());
+        echo json_encode(['success'=>true,'count'=>$n]);
+    } catch(Exception $e){ echo json_encode(['success'=>true,'count'=>0]); }
+    break;
+
+case 'renewal_approve':
+    // Admin ONLY. Client has already extended expiry on the server via gps_proxy renew_device
+    // and passes back {id, customer_email}. We record approval, create the balance sheet entry,
+    // and email the customer.
+    try {
+        if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Only admin can approve renewals']); break; }
+        _renewalEnsureTable($pdo);
+        $id = intval($body['id'] ?? 0);
+        $customerEmail = trim($body['customer_email'] ?? '');
+        $st = $pdo->prepare("SELECT * FROM renewal_requests WHERE id=?"); $st->execute([$id]);
+        $r = $st->fetch();
+        if(!$r){ echo json_encode(['error'=>'Request not found']); break; }
+        if($r['status']!=='pending'){ echo json_encode(['error'=>'Request already '.$r['status']]); break; }
+
+        $pdo->prepare("UPDATE renewal_requests SET status='approved', approved_by=?, approved_at=NOW() WHERE id=?")
+            ->execute([$cu['name']??'Admin', $id]);
+
+        // Create a LICENSE-type balance sheet entry (only if an amount was set)
+        $bsId = null;
+        $amount = floatval($r['amount'] ?? 0);
+        if($amount > 0){
+            try {
+                $pdo->exec("CREATE TABLE IF NOT EXISTS balance_sheet_entries (id INT AUTO_INCREMENT PRIMARY KEY, type VARCHAR(20) DEFAULT 'sales', profile VARCHAR(10) DEFAULT 'BGPT', task_id VARCHAR(20) NULL, task_db_id INT NULL, date DATE NOT NULL, invoice_no VARCHAR(50), gps_serial_no VARCHAR(100), customer_type VARCHAR(50), name_on_server TEXT, server_name VARCHAR(50), device_model VARCHAR(100), service_type VARCHAR(100), license_plan VARCHAR(100), qty DECIMAL(10,2) DEFAULT 1, unit_price DECIMAL(10,2) DEFAULT 0, gst DECIMAL(10,2) DEFAULT 0, total_price DECIMAL(10,2) DEFAULT 0, payment_status VARCHAR(50), payment_received DECIMAL(10,2) DEFAULT 0, pending_payment DECIMAL(10,2) DEFAULT 0, payment_mode VARCHAR(50), payment_received_on DATE NULL, payment_transaction_details TEXT, pending_reason VARCHAR(100), discount_given DECIMAL(10,2) DEFAULT 0, discount_reason TEXT, discount_incharge VARCHAR(100), payment_reminder_date DATE NULL, technician_name VARCHAR(100), location VARCHAR(200), remarks TEXT, created_by_code VARCHAR(50), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            } catch(Exception $e){}
+            $gst = floatval($r['gst'] ?? 0);
+            $pdo->prepare("INSERT INTO balance_sheet_entries
+                (type,profile,date,gps_serial_no,name_on_server,server_name,device_model,service_type,license_plan,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,remarks,created_by_code)
+                VALUES ('license','BGPT',CURDATE(),?,?,?,?,?,?,1,?,?,?,'paid',?,0,?,?)")
+                ->execute([
+                    $r['imei'] ?: null, $r['owner'] ?: $r['device_name'], $r['server_name'],
+                    'Renewal', 'Renewal', $r['label'],
+                    $amount - $gst, $gst, $amount, $amount,
+                    'Renewal '.$r['label'].' — '.$r['device_name'].' ('.$r['plate'].') new expiry '.$r['new_expiry'],
+                    $cu['name'] ?? 'admin'
+                ]);
+            $bsId = $pdo->lastInsertId();
+            if($bsId){ $pdo->prepare("UPDATE renewal_requests SET bs_entry_id=? WHERE id=?")->execute([$bsId,$id]); }
+        }
+
+        // Email the customer (best-effort)
+        $emailed = false;
+        if($customerEmail && filter_var($customerEmail, FILTER_VALIDATE_EMAIL)){
+            try {
+                require_once __DIR__.'/mailer.php';
+                $subject = 'GPS Tracker Renewed Successfully — BharatGPS';
+                $html = '<p>Hi,</p><p>Greetings from BharatGPS Tracker. Thank you for your payment — we truly appreciate your trust.</p>'
+                      . '<p>We are happy to inform you that your GPS tracker subscription has been <b>successfully renewed</b>.</p>'
+                      . '<table cellpadding="6" style="border-collapse:collapse">'
+                      . '<tr><td><b>Next Expiry Date</b></td><td>'.htmlspecialchars($r['new_expiry']).'</td></tr>'
+                      . '<tr><td><b>Device</b></td><td>'.htmlspecialchars($r['device_name']).'</td></tr>'
+                      . (($r['plate'] && $r['plate']!=='—')?('<tr><td><b>Vehicle</b></td><td>'.htmlspecialchars($r['plate']).'</td></tr>'):'')
+                      . '</table>'
+                      . '<p>Your device is now active and will continue tracking without interruption.</p>'
+                      . '<p>For any assistance: support@bharatgps.com · +91 93818 74178</p>'
+                      . '<p>Warm regards,<br>Team BharatGPS</p>';
+                $emailed = @sendMail($customerEmail, $r['owner'] ?: 'Customer', $subject, $html);
+            } catch(Exception $e){ $emailed = false; }
+        }
+
+        echo json_encode(['success'=>true,'bs_entry'=>$bsId?true:false,'emailed'=>$emailed?true:false,'customer_email'=>$customerEmail?:null]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'renewal_reject':
+    try {
+        if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Only admin can reject renewals']); break; }
+        _renewalEnsureTable($pdo);
+        $id = intval($body['id'] ?? 0);
+        $st = $pdo->prepare("SELECT status FROM renewal_requests WHERE id=?"); $st->execute([$id]);
+        $r = $st->fetch();
+        if(!$r){ echo json_encode(['error'=>'Not found']); break; }
+        if($r['status']!=='pending'){ echo json_encode(['error'=>'Already '.$r['status']]); break; }
+        $pdo->prepare("UPDATE renewal_requests SET status='rejected', approved_by=?, approved_at=NOW(), notes=? WHERE id=?")
+            ->execute([$cu['name']??'Admin', trim($body['notes']??''), $id]);
         echo json_encode(['success'=>true]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
