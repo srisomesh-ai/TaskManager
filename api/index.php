@@ -91,6 +91,16 @@ function _ensureCoinLedger($pdo){
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 }
 // Award (or deduct) coins. event_key makes it idempotent — same key won't double-award.
+// Balance sheet category: Installation -> 'sales' (hardware sale); everything else -> 'license' (service/renewal)
+function bs_type_for_task($deviceDetails){
+    $j = strtolower(trim($deviceDetails ?? ''));
+    // Only a fresh installation counts as a Sale. Re-adding, troubleshoot, V2V, remove, reading/demo = License.
+    if (($j === 'installation' || strpos($j,'install') !== false) && strpos($j,'re-add') === false && strpos($j,'readd') === false) {
+        return 'sales';
+    }
+    return 'license';
+}
+
 function award_coins($pdo, $userId, $coins, $reason, $taskId = null, $eventKey = null, $pushTitle = null, $pushBody = null){
     try {
         if (!$userId) return false;
@@ -211,8 +221,8 @@ function _bsSyncInstalls($pdo, $cuName){
                 ->execute([$allSerials?:null,$allNames?:null,$serverName,$billQty,$unit2,$billTotal,$recv2,$pend2,$pStatus,intval($t2['bs_entry_id'])]);
             $updated++;
         } else {
-            $pdo->prepare("INSERT INTO balance_sheet_entries (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,name_on_server,server_name,device_model,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_mode,technician_name,location,remarks,created_by_code) VALUES ('sales',?,?,?,CURDATE(),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-                ->execute([$profile2,$t2['task_id'],$tid,$allSerials?:null,$t2['lead_type']??null,$allNames?:null,$serverName,$t2['device_details']??null,$billQty,$unit2,floatval($t2['gst_amount']??0),$billTotal,$pStatus,$recv2,$pend2,$t2['payment_mode']??null,$t2['tech_name']??null,$t2['location']??null,$t2['general_notes']??null,$cuName??'system']);
+            $pdo->prepare("INSERT INTO balance_sheet_entries (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,name_on_server,server_name,device_model,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_mode,technician_name,location,remarks,created_by_code) VALUES (?,?,?,?,CURDATE(),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+                ->execute([bs_type_for_task($t2['device_details']??''),$profile2,$t2['task_id'],$tid,$allSerials?:null,$t2['lead_type']??null,$allNames?:null,$serverName,$t2['device_details']??null,$billQty,$unit2,floatval($t2['gst_amount']??0),$billTotal,$pStatus,$recv2,$pend2,$t2['payment_mode']??null,$t2['tech_name']??null,$t2['location']??null,$t2['general_notes']??null,$cuName??'system']);
             $bsId=$pdo->lastInsertId();
             if($bsId){ $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$bsId,$tid]); }
             $created++;
@@ -938,8 +948,8 @@ case 'update_task':
                 $bpend=max(0,$btotal-$brecv);
                 $bpayStatus=$brecv>=$btotal&&$btotal>0?'With Technician — Collected':'With Technician — Pending';
                 $bprofile=!empty($btask['profile'])?$btask['profile']:'BGPT';
-                $pdo->prepare("INSERT INTO balance_sheet_entries (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,name_on_server,server_name,device_model,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_mode,technician_name,location,remarks,created_by_code) VALUES ('sales',?,?,?,CURDATE(),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-                    ->execute([$bprofile,$btask['task_id'],$id,$btask['gps_serial_no']??null,$btask['lead_type']??null,$btask['name_on_server']??null,$btask['server_name']??null,$btask['device_details']??null,$bqty,$bunit,floatval($btask['gst_amount']??0),$btotal,$bpayStatus,$brecv,$bpend,$btask['payment_mode']??null,$btask['tech_name']??null,$btask['location']??null,$btask['general_notes']??null,$cu['name']]);
+                $pdo->prepare("INSERT INTO balance_sheet_entries (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,name_on_server,server_name,device_model,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_mode,technician_name,location,remarks,created_by_code) VALUES (?,?,?,?,CURDATE(),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+                    ->execute([bs_type_for_task($btask['device_details']??''),$bprofile,$btask['task_id'],$id,$btask['gps_serial_no']??null,$btask['lead_type']??null,$btask['name_on_server']??null,$btask['server_name']??null,$btask['device_details']??null,$bqty,$bunit,floatval($btask['gst_amount']??0),$btotal,$bpayStatus,$brecv,$bpend,$btask['payment_mode']??null,$btask['tech_name']??null,$btask['location']??null,$btask['general_notes']??null,$cu['name']]);
                 $bsId=$pdo->lastInsertId();
                 $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$bsId,$id]);
             }
@@ -1036,8 +1046,8 @@ case 'approve_task':
             $qty2=floatval($t['device_qty']??1); $total2=floatval($t['price_to_collect']??0);
             $unit2=$qty2>0?$total2/$qty2:$total2;
             $taskProfile=!empty($t['profile'])?$t['profile']:'BGPT';
-            $pdo->prepare("INSERT INTO balance_sheet_entries (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,name_on_server,server_name,device_model,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_mode,technician_name,location,remarks,created_by_code,payment_received_on) VALUES ('sales',?,?,?,CURDATE(),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURDATE())")
-                ->execute([$taskProfile,$t['task_id'],$id,$t['gps_serial_no']??null,$t['lead_type']??null,$t['name_on_server']??null,$t['server_name']??null,$t['device_details']??null,$qty2,$unit2,floatval($t['gst_amount']??0),$total2,'paid',$collected,0,$t['payment_mode']??null,$t['tech_name']??null,$t['location']??null,$t['general_notes']??null,$cu['name']]);
+            $pdo->prepare("INSERT INTO balance_sheet_entries (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,name_on_server,server_name,device_model,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_mode,technician_name,location,remarks,created_by_code,payment_received_on) VALUES (?,?,?,?,CURDATE(),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURDATE())")
+                ->execute([bs_type_for_task($t['device_details']??''),$taskProfile,$t['task_id'],$id,$t['gps_serial_no']??null,$t['lead_type']??null,$t['name_on_server']??null,$t['server_name']??null,$t['device_details']??null,$qty2,$unit2,floatval($t['gst_amount']??0),$total2,'paid',$collected,0,$t['payment_mode']??null,$t['tech_name']??null,$t['location']??null,$t['general_notes']??null,$cu['name']]);
             $bsId=$pdo->lastInsertId();
             $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$bsId,$id]);
         } catch(Exception $e) { error_log('BS close error: '.$e->getMessage()); }
@@ -1461,13 +1471,15 @@ case 'save_device_install':
                         ]);
                 } else {
                     // CREATE the task entry on first install
+                    $bsType2 = bs_type_for_task($t2['device_details']??'');
                     $pdo->prepare("INSERT INTO balance_sheet_entries
                         (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,
                          name_on_server,server_name,device_model,qty,unit_price,gst,total_price,
                          payment_status,payment_received,pending_payment,payment_mode,
                          technician_name,location,remarks,created_by_code)
-                        VALUES ('sales',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
                         ->execute([
+                            $bsType2,
                             $profile2, $t2['task_id'], $tid,
                             date('Y-m-d'),
                             $allSerials ?: null,
@@ -1544,8 +1556,8 @@ case 'bs_backfill_installs':
                     ->execute([$allSerials?:null,$allNames?:null,$serverName,$billQty,$unit2,$billTotal,$recv2,$pend2,$pStatus,intval($t2['bs_entry_id'])]);
                 $updated++;
             } else {
-                $pdo->prepare("INSERT INTO balance_sheet_entries (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,name_on_server,server_name,device_model,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_mode,technician_name,location,remarks,created_by_code) VALUES ('sales',?,?,?,CURDATE(),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-                    ->execute([$profile2,$t2['task_id'],$tid,$allSerials?:null,$t2['lead_type']??null,$allNames?:null,$serverName,$t2['device_details']??null,$billQty,$unit2,floatval($t2['gst_amount']??0),$billTotal,$pStatus,$recv2,$pend2,$t2['payment_mode']??null,$t2['tech_name']??null,$t2['location']??null,$t2['general_notes']??null,$cu['name']??'system']);
+                $pdo->prepare("INSERT INTO balance_sheet_entries (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,name_on_server,server_name,device_model,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_mode,technician_name,location,remarks,created_by_code) VALUES (?,?,?,?,CURDATE(),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+                    ->execute([bs_type_for_task($t2['device_details']??''),$profile2,$t2['task_id'],$tid,$allSerials?:null,$t2['lead_type']??null,$allNames?:null,$serverName,$t2['device_details']??null,$billQty,$unit2,floatval($t2['gst_amount']??0),$billTotal,$pStatus,$recv2,$pend2,$t2['payment_mode']??null,$t2['tech_name']??null,$t2['location']??null,$t2['general_notes']??null,$cu['name']??'system']);
                 $bsId=$pdo->lastInsertId();
                 if($bsId){ $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$bsId,$tid]); }
                 $created++;
@@ -1691,8 +1703,9 @@ case 'bs_from_task':
          payment_received_on,payment_transaction_details,
          pending_reason,discount_reason,discount_incharge,payment_reminder_date,
          technician_name,location,remarks,created_by_code)
-        VALUES ('sales',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
         ->execute([
+            bs_type_for_task($t['device_details']??''),
             $profile, $t['task_id'], $taskDbId,
             $t['closed_at']?date('Y-m-d',strtotime($t['closed_at'])):date('Y-m-d'),
             $t['gps_serial_no']??null,
@@ -1718,7 +1731,7 @@ case 'bs_resync_all':
     if ($userRole !== 'admin') { http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
     try {
         // Get all BS entries that are linked to a task
-        $rows = $pdo->query("SELECT b.id, b.task_db_id, t.price_to_collect, t.amount_collected, t.payment_mode, t.task_status
+        $rows = $pdo->query("SELECT b.id, b.task_db_id, t.price_to_collect, t.amount_collected, t.payment_mode, t.task_status, t.device_details
             FROM balance_sheet_entries b
             JOIN tasks t ON b.task_db_id = t.id
             WHERE b.task_db_id IS NOT NULL")->fetchAll();
@@ -1731,11 +1744,12 @@ case 'bs_resync_all':
             if ($total <= 0 || $recv <= 0)  $ps = 'pending';
             elseif ($recv >= $total - 15)   $ps = 'paid';
             else                             $ps = 'partially_paid';
+            $bsType = bs_type_for_task($r['device_details']??'');
             $pdo->prepare("UPDATE balance_sheet_entries SET
                 payment_received=?, pending_payment=?, payment_status=?,
-                payment_mode=?, total_price=?, updated_at=NOW()
+                payment_mode=?, total_price=?, type=?, updated_at=NOW()
                 WHERE id=?")
-                ->execute([$recv, $pend, $ps, $r['payment_mode'], $total, $r['id']]);
+                ->execute([$recv, $pend, $ps, $r['payment_mode'], $total, $bsType, $r['id']]);
             $count++;
         }
         echo json_encode(['success'=>true, 'updated'=>$count]);
