@@ -1001,7 +1001,6 @@ case 'update_task':
             error_log('Update email error: ' . $e->getMessage());
         }
     }
-    break;
     // Create BS entry when technician submits (Awaiting Approval) — shows installation done, payment with tech
     if (isset($body['task_status']) && $body['task_status']==='Awaiting Approval' && $existing['task_status']!=='Awaiting Approval') {
         try {
