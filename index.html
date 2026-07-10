@@ -1114,6 +1114,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
         <div id="rnw-approve-view" style="display:none">
           <div class="card" style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
             <button class="card-btn" onclick="loadRenewalsPage()">🔄 Refresh</button>
+            <button class="card-btn" onclick="repairRenewalBs(this)" style="background:#fff8e6;color:#7a5c00;border:1px solid #e0a800">🛠️ Fix balance sheet</button>
             <button class="card-btn renewal-admin-only" onclick="fixMissingRenewalBs(this)" style="background:#fff8e6;color:#7a5c00;border:1px solid #e0a800">🧾 Fix missing balance-sheet entries</button>
             <select id="rnw-status-filter" onchange="renderRenewalRequests()" class="form-input" style="width:160px">
               <option value="pending">Pending</option>
@@ -6710,6 +6711,14 @@ async function approveRenewal(id, btn){
     if(btn){ btn.disabled=false; btn.textContent='✅ Approve'; }
     loadRenewalRequests();
   }
+}
+async function repairRenewalBs(btn){
+  if(!confirm('Fix balance sheet entries for all approved renewals?\n\nThis corrects the profile (BGT/SBGT) and creates any missing renewal entries.')) return;
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Fixing…'; }
+  const r = await api('renewal_bs_repair',{},'POST',{});
+  if(btn){ btn.disabled=false; btn.textContent='🛠️ Fix balance sheet'; }
+  if(r && r.success){ showToast('✅ Balance sheet fixed — '+(r.fixed||0)+' corrected, '+(r.created||0)+' created'); }
+  else { showToast('❌ '+((r&&r.error)||'Could not fix')); }
 }
 async function rejectRenewal(id, btn){
   const notes=prompt('Reason for rejection (optional):','');
