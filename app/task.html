@@ -812,8 +812,16 @@
             hint='✅ '+cName+' agreed — remove the device, then record the removal'+(rmPrice>0?' &amp; collect ₹'+rmPrice.toLocaleString('en-IN'):'')+'.'+trip; hintCls='hint-done';
           }
         } else {
-          btn='<button class="act-btn act-green" id="loc-btn" onclick="openInstallSoon()"><div class="ico">✅</div><div class="l">Proceed!</div><div class="s">'+cName+' confirmed</div></button>';
-          hint='✅ '+cName+' agreed to T&amp;C and payment — tap Proceed to install'+trip; hintCls='hint-done';
+          const doneSoFar=installs.length;
+          if(doneSoFar>=1){
+            // Partial: some devices installed, more remain. Let tech continue OR finish with installed.
+            btn='<button class="act-btn act-green" id="loc-btn" onclick="openInstallSoon()"><div class="ico">🔧</div><div class="l">Continue Installation</div><div class="s">'+doneSoFar+' of '+qty+' installed</div></button>'+
+              '<button class="act-btn" style="background:#fff;color:var(--saffron);border:1.5px solid var(--saffron);margin-top:8px" onclick="finishPartial('+doneSoFar+')"><div class="ico">🚗</div><div class="l">Vehicle not available — finish with '+doneSoFar+'</div><div class="s">Give access &amp; collect payment</div></button>';
+            hint='🔧 '+doneSoFar+' of '+qty+' device(s) installed. Install the rest, or if the remaining vehicle(s) are not available, finish with what is installed.'+trip; hintCls='hint-blue';
+          } else {
+            btn='<button class="act-btn act-green" id="loc-btn" onclick="openInstallSoon()"><div class="ico">✅</div><div class="l">Proceed!</div><div class="s">'+cName+' confirmed</div></button>';
+            hint='✅ '+cName+' agreed to T&amp;C and payment — tap Proceed to install'+trip; hintCls='hint-done';
+          }
         }
       } else if(_consentSent){
         btn='<button class="act-btn" id="loc-btn" style="background:var(--saffron)" onclick="resendConsent()"><div class="ico">⏳</div><div class="l">Waiting…</div><div class="s">Tap to resend consent</div></button>';
@@ -1092,7 +1100,8 @@
     const pushedCount=Object.keys(_instSaved).filter(k=>_instSaved[k]&&_instSaved[k].pushed).length;
     if(saved && saved.pushed){
       bd.innerHTML='<div class="dev-done">✅ Device '+idx+' installed — '+esc(saved.name||'')+' · '+esc(saved.plate||'')+'<br>IMEI '+esc(saved.imei||'')+'</div>'+
-        (idx<_instQty?'<button class="inst-btn b-push" onclick="gotoInstDev('+(idx+1)+')">Next Device →</button>':
+        (idx<_instQty?('<button class="inst-btn b-push" onclick="gotoInstDev('+(idx+1)+')">Next Device →</button>'+
+          '<button class="inst-btn" style="background:#fff;color:var(--saffron);border:1.5px solid var(--saffron);margin-top:8px" onclick="finishPartial('+pushedCount+')">🚗 Remaining vehicle not available — finish with '+pushedCount+' installed</button>'):
           '<div class="inst-card"><div style="font-weight:800;color:var(--green);margin-bottom:6px">🎉 All '+_instQty+' device(s) installed!</div><div style="font-size:13px;color:var(--text2)">Now give the customer access to the device on their GPS account, then collect payment.</div></div>'+
           '<button class="inst-btn b-push" style="background:var(--accent2)" onclick="closeInstall();openAssign()">👤 Give Customer Access</button>'+
           '<button class="inst-btn" style="background:var(--surface2);color:var(--text2);border:1.5px solid var(--border);margin-top:8px" onclick="finishInstall()">Skip → Back to Task</button>');
@@ -1325,6 +1334,23 @@
     const res=await api('get_task',{id:taskId}); const t=res.task||res;
     if(t&&t.id){ _curTask=t; toast('✅ Installation saved'); }
     load();
+  }
+
+  // Partial completion — remaining vehicles not available.
+  // Reduce the task device_qty to what was actually installed so the flow can proceed
+  // to give-access + payment for the installed devices (billing already counts only installed).
+  async function finishPartial(installedCount){
+    const n = parseInt(installedCount)||0;
+    if(n < 1){ toast('Install at least one device first'); return; }
+    if(!confirm('Finish this task with '+n+' installed device(s)?\n\nUse this when the remaining vehicle(s) are not available. The task will bill only the '+n+' installed device(s), and you can give access & collect payment now. This cannot be undone.')) return;
+    toast('⏳ Updating…');
+    await apiPost('update_task',{id:_curTask.id,device_qty:n,remark:'🚗 Remaining vehicle(s) not available — task finished with '+n+' installed device(s). Quantity reduced to '+n+'.'}).catch(()=>({}));
+    const res=await api('get_task',{id:taskId}); const t=res.task||res;
+    if(t&&t.id){ _curTask=t; }
+    closeInstall();
+    toast('✅ Proceeding with '+n+' device(s) — give access & collect payment');
+    await load();
+    openAssign();
   }
 
 
