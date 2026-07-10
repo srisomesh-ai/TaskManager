@@ -3929,13 +3929,20 @@ case 'renewal_bs_repair':
             if(strpos($planName,'SBGT')!==false)   $prof='SBGT';
             elseif(strpos($planName,'BGT')!==false) $prof='BGPT';
             else                                    $prof=($gstAmt>0)?'SBGT':'BGPT';
+            // Does the linked balance-sheet row actually exist? (bs_entry_id can be stale/deleted)
+            $entryExists = false;
             if(!empty($r['bs_entry_id'])){
-                // Correct the profile / amount of the existing entry
-                $pdo->prepare("UPDATE balance_sheet_entries SET profile=?, type='license', total_price=?, unit_price=?, gst=?, payment_received=? WHERE id=?")
-                    ->execute([$prof, $amount, $amount-$gstAmt, $gstAmt, $amount, intval($r['bs_entry_id'])]);
+                $chk = $pdo->prepare("SELECT id FROM balance_sheet_entries WHERE id=?");
+                $chk->execute([intval($r['bs_entry_id'])]);
+                $entryExists = (bool)$chk->fetchColumn();
+            }
+            if($entryExists){
+                // Correct the profile / amount / screenshot of the existing entry
+                $pdo->prepare("UPDATE balance_sheet_entries SET profile=?, type='license', service_type='Renewal', license_plan=?, total_price=?, unit_price=?, gst=?, payment_status='paid', payment_received=?, pending_payment=0, payment_transaction_details=COALESCE(payment_transaction_details,?) WHERE id=?")
+                    ->execute([$prof, $r['label'], $amount, $amount-$gstAmt, $gstAmt, $amount, $r['payment_screenshot']?:null, intval($r['bs_entry_id'])]);
                 $fixed++;
             } else {
-                // Create the missing entry
+                // No real entry (missing or stale link) → create it
                 $pdo->prepare("INSERT INTO balance_sheet_entries
                     (type,profile,date,gps_serial_no,name_on_server,server_name,device_model,service_type,license_plan,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_transaction_details,remarks,created_by_code)
                     VALUES ('license',?,COALESCE(?,CURDATE()),?,?,?,?,?,?,1,?,?,?,'paid',?,0,?,?,?)")
