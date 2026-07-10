@@ -1114,8 +1114,6 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
         <div id="rnw-approve-view" style="display:none">
           <div class="card" style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
             <button class="card-btn" onclick="loadRenewalsPage()">🔄 Refresh</button>
-            <button class="card-btn" onclick="repairRenewalBs(this)" style="background:#fff8e6;color:#7a5c00;border:1px solid #e0a800">🛠️ Fix balance sheet</button>
-            <button class="card-btn renewal-admin-only" onclick="fixMissingRenewalBs(this)" style="background:#fff8e6;color:#7a5c00;border:1px solid #e0a800">🧾 Fix missing balance-sheet entries</button>
             <select id="rnw-status-filter" onchange="renderRenewalRequests()" class="form-input" style="width:160px">
               <option value="pending">Pending</option>
               <option value="approved">Approved</option>
