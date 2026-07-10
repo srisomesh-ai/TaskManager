@@ -1237,6 +1237,46 @@ case 'get_earnings':
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
+// ---- ADMIN: resolve a customer dispute (valid = deduct 50 coins from technician) ----
+case 'resolve_dispute':
+    if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
+    $id = intval($body['task_id'] ?? $body['id'] ?? 0);
+    $verdict = trim($body['verdict'] ?? ''); // 'valid' or 'invalid'
+    if (!$id || !in_array($verdict,['valid','invalid'])) { echo json_encode(['error'=>'Need task_id and verdict (valid/invalid)']); break; }
+    try {
+        try { $pdo->exec("ALTER TABLE tasks ADD COLUMN dispute_status VARCHAR(20) DEFAULT NULL"); } catch(Exception $e){}
+        $tq=$pdo->prepare("SELECT id,assigned_to,dispute_status FROM tasks WHERE id=?"); $tq->execute([$id]); $t=$tq->fetch();
+        if (!$t) { echo json_encode(['error'=>'Task not found']); break; }
+        if ($verdict==='valid') {
+            if ($t['assigned_to']) {
+                award_coins($pdo, intval($t['assigned_to']), -50, 'Customer report confirmed valid by admin', $id, 'dispute50_'.$id);
+            }
+            $pdo->prepare("UPDATE tasks SET dispute_status='confirmed' WHERE id=?")->execute([$id]);
+            $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")
+                ->execute([$id,$userId,'⚠️ Customer report confirmed valid — 50 coins deducted from technician.']);
+        } else {
+            $pdo->prepare("UPDATE tasks SET dispute_status='dismissed' WHERE id=?")->execute([$id]);
+            $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")
+                ->execute([$id,$userId,'Customer report reviewed and dismissed — no penalty.']);
+        }
+        echo json_encode(['success'=>true,'dispute_status'=>$verdict==='valid'?'confirmed':'dismissed']);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// ---- ADMIN: list tasks with pending disputes ----
+case 'get_disputes':
+    if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
+    try {
+        try { $pdo->exec("ALTER TABLE tasks ADD COLUMN dispute_status VARCHAR(20) DEFAULT NULL"); } catch(Exception $e){}
+        $st=$pdo->prepare("SELECT t.id,t.task_id,t.customer_name,t.dispute_status,u.name AS tech_name,
+                           (SELECT a.remark FROM task_activities a WHERE a.task_id=t.id AND a.activity_type='customer_dispute' ORDER BY a.created_at DESC LIMIT 1) AS dispute_remark
+                           FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id
+                           WHERE t.dispute_status='pending' ORDER BY t.updated_at DESC");
+        $st->execute();
+        echo json_encode(['success'=>true,'disputes'=>$st->fetchAll()]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'save_device_install':
     $tid = intval($body['task_id']??0);
     $idx = intval($body['device_index']??1);
