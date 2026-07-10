@@ -15,84 +15,57 @@ if (($_GET['key'] ?? '') !== $cronKey) {
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/mailer.php';
+require_once __DIR__ . '/fcm_send.php';
 
 $pdo = getDB();
 $log = [];
 $now = new DateTime('now', new DateTimeZone('Asia/Kolkata'));
 
 // ============================================================
-// JOB 1: Technician reminder — assigned but not opened in 1hr
+// JOB 1: Push nudges for tasks assigned but NOT OPENED — at ~10, 30, 60 min
+// Runs every 10 min. Fires each milestone once (guarded by activity log).
 // ============================================================
+try { $pdo->exec("ALTER TABLE tasks ADD COLUMN opened_at DATETIME DEFAULT NULL"); } catch(Exception $e){}
+
 $unopen = $pdo->query("
-    SELECT t.*, u.name AS tech_name, u.email AS tech_email, u.phone AS tech_phone,
-           cb.name AS manager_name, cb.email AS manager_email
+    SELECT t.*, u.name AS tech_name,
+           TIMESTAMPDIFF(MINUTE, t.created_at, NOW()) AS mins_since
     FROM tasks t
-    LEFT JOIN users u  ON t.assigned_to = u.id
-    LEFT JOIN users cb ON t.created_by  = cb.id
+    LEFT JOIN users u ON t.assigned_to = u.id
     WHERE t.task_status = 'Open'
       AND t.assigned_to IS NOT NULL
-      AND t.created_at <= DATE_SUB(NOW(), INTERVAL 1 HOUR)
+      AND t.opened_at IS NULL
+      AND t.created_at <= DATE_SUB(NOW(), INTERVAL 9 MINUTE)
       AND t.created_at >= DATE_SUB(NOW(), INTERVAL 25 HOUR)
-      AND NOT EXISTS (
-          SELECT 1 FROM task_activities ta
-          WHERE ta.task_id = t.id
-            AND ta.activity_type IN ('remark','status_change')
-            AND ta.user_id = t.assigned_to
-      )
 ")->fetchAll();
 
 foreach ($unopen as $task) {
-    // Send reminder to technician
-    if ($task['tech_email']) {
-        $content = '
-        <div class="greeting">Hi ' . htmlspecialchars($task['tech_name']) . ',</div>
-        <p style="font-size:14px;color:#c0392b;font-weight:700;margin-bottom:14px">⚠️ You have an unattended task assigned over 1 hour ago.</p>
-        <div class="details">
-            <div class="row"><div class="label">Task ID</div><div class="value blue">' . $task['task_id'] . '</div></div>
-            <div class="row"><div class="label">Customer</div><div class="value">' . htmlspecialchars($task['customer_name']) . '</div></div>
-            <div class="row"><div class="label">Contact</div><div class="value highlight"><a href="tel:' . $task['contact_number'] . '" style="color:#1a3a6b">' . $task['contact_number'] . '</a></div></div>
-            <div class="row"><div class="label">Location</div><div class="value">' . htmlspecialchars($task['location'] ?? '–') . '</div></div>
-            <div class="row"><div class="label">GPS Type</div><div class="value">' . htmlspecialchars($task['device_details'] ?? 'Engine Status') . '</div></div>
-            <div class="row"><div class="label">Assigned At</div><div class="value">' . $task['created_at'] . '</div></div>
-        </div>
-        <p style="font-size:14px;color:#c0392b;margin-top:14px;font-weight:700">Please call the customer immediately and update the task.</p>
-        <p style="font-size:13px;color:#4a5568;margin-top:8px">Log in to the task manager to update your progress.</p>';
+    $mins = intval($task['mins_since']);
+    // Pick the highest milestone reached
+    $milestone = 0;
+    if ($mins >= 60) $milestone = 60;
+    elseif ($mins >= 30) $milestone = 30;
+    elseif ($mins >= 10) $milestone = 10;
+    if ($milestone === 0) continue;
 
-        sendMail(
-            $task['tech_email'],
-            $task['tech_name'],
-            '⚠️ REMINDER: Unattended Task – ' . $task['task_id'],
-            emailTemplate($content)
-        );
-        $log[] = "Reminder sent to tech: {$task['tech_name']} for {$task['task_id']}";
+    // Fire each milestone only once
+    $guard = $pdo->prepare("SELECT 1 FROM task_activities WHERE task_id=? AND activity_type='system' AND remark LIKE ? LIMIT 1");
+    $guard->execute([$task['id'], '%unopened push '.$milestone.'m%']);
+    if ($guard->fetch()) continue;
+
+    $label = $milestone >= 60 ? '1 hour' : ($milestone.' minutes');
+    $title = '⏰ Task waiting — '.$label;
+    $bodyMsg = ($task['customer_name'] ?? 'A customer').' · '.($task['device_details'] ?? 'GPS task').' — not opened yet. Tap to attend before the customer is lost.';
+    if (!empty($task['assigned_to'])) {
+        fcm_send_to_user($pdo, intval($task['assigned_to']), $title, $bodyMsg, [
+            'type'    => 'task_reminder',
+            'task_id' => (string)$task['id'],
+            'url'     => 'task.html?id='.$task['id'],
+        ]);
     }
-
-    // Also notify manager
-    if ($task['manager_email'] && $task['manager_email'] !== $task['tech_email']) {
-        $content = '
-        <div class="greeting">Hi ' . htmlspecialchars($task['manager_name']) . ',</div>
-        <p style="font-size:14px;color:#c0392b;font-weight:700;margin-bottom:14px">⚠️ Task not attended by technician for over 1 hour.</p>
-        <div class="details">
-            <div class="row"><div class="label">Task ID</div><div class="value blue">' . $task['task_id'] . '</div></div>
-            <div class="row"><div class="label">Customer</div><div class="value">' . htmlspecialchars($task['customer_name']) . '</div></div>
-            <div class="row"><div class="label">Technician</div><div class="value" style="color:#c0392b;font-weight:700">' . htmlspecialchars($task['tech_name']) . '</div></div>
-            <div class="row"><div class="label">Contact</div><div class="value">' . $task['contact_number'] . '</div></div>
-            <div class="row"><div class="label">Assigned At</div><div class="value">' . $task['created_at'] . '</div></div>
-        </div>
-        <p style="font-size:14px;color:#c0392b;margin-top:14px">Please follow up with ' . htmlspecialchars($task['tech_name']) . ' immediately.</p>';
-
-        sendMail(
-            $task['manager_email'],
-            $task['manager_name'],
-            '⚠️ Unattended Task Alert – ' . $task['task_id'] . ' | ' . $task['tech_name'],
-            emailTemplate($content)
-        );
-        $log[] = "Alert sent to manager: {$task['manager_name']} for {$task['task_id']}";
-    }
-
-    // Log reminder in activity
     $pdo->prepare("INSERT INTO task_activities (task_id, user_id, remark, activity_type) VALUES (?, 1, ?, 'system')")
-        ->execute([$task['id'], "⏰ Reminder sent: technician {$task['tech_name']} has not opened task after 1 hour"]);
+        ->execute([$task['id'], "⏰ Reminder: unopened push {$milestone}m sent to {$task['tech_name']}"]);
+    $log[] = "Unopened push {$milestone}m → {$task['tech_name']} for {$task['task_id']}";
 }
 
 // ============================================================
@@ -218,6 +191,13 @@ foreach ($followUps as $task) {
             ]);
         $log[] = "Follow-up reminder → {$task['tech_name']} for {$task['task_id']} (open {$diffDays}d)";
     }
+    // Push notification for the follow-up (payment/reminder date reached)
+    if (!empty($task['assigned_to'])) {
+        fcm_send_to_user($pdo, intval($task['assigned_to']),
+            '🔔 Follow-up due today',
+            ($task['customer_name'] ?? 'Customer').' · '.($task['device_details'] ?? 'task').' — scheduled follow-up today. Tap to act.',
+            ['type'=>'task_reminder','task_id'=>(string)$task['id'],'url'=>'task.html?id='.$task['id']]);
+    }
 }
 
 // ============================================================
@@ -305,6 +285,13 @@ foreach($unpaidTasks as $task){
 
         $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,1,?,'system')")
             ->execute([$task['id'], "⏰ T+1h payment reminder sent to technician and customer"]);
+        // Push notification to technician for pending payment
+        if(!empty($task['assigned_to'])){
+            fcm_send_to_user($pdo, intval($task['assigned_to']),
+                '💳 Payment pending',
+                ($task['customer_name'] ?? 'Customer').' — ₹'.$price.' not collected yet. Tap to collect.',
+                ['type'=>'task_reminder','task_id'=>(string)$task['id'],'url'=>'task.html?id='.$task['id']]);
+        }
         // Mark urgent
         $pdo->prepare("UPDATE tasks SET is_urgent=1 WHERE id=?")->execute([$task['id']]);
         $log[] = "T+1h payment reminder → {$task['task_id']}";
