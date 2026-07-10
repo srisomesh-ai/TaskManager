@@ -2224,22 +2224,22 @@ case 'send_consent':
     $cToken = bin2hex(random_bytes(24));
     $pdo->prepare("UPDATE tasks SET consent_token=?, customer_consent_at=NULL WHERE id=?")->execute([$cToken, $id]);
     $taskRow['consent_token'] = $cToken;
+    $consentLink = 'https://salmon-goldfish-110661.hostingersite.com/consent.php?token=' . urlencode($cToken);
 
     // Send email to customer
     $sent = false;
     try {
         require_once __DIR__.'/mailer.php';
         if(!empty($taskRow['email'])){
-            sendConsentRequest($taskRow, $taskRow['tech_name'] ?? 'BharatGPS Team');
-            $sent = true;
+            $sent = sendConsentRequest($taskRow, $taskRow['tech_name'] ?? 'BharatGPS Team');
         }
     } catch(Exception $e){ error_log('Consent email: '.$e->getMessage()); }
 
     // Log in activity
     $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'system')")
-        ->execute([$id, $userId, "📩 Consent request sent to customer" . ($sent ? " via email" : " (no email on file)")]);
+        ->execute([$id, $userId, "📩 Consent request " . ($sent ? "emailed to customer" : (!empty($taskRow['email']) ? "could NOT be emailed (delivery failed)" : "sent (no email on file)"))]);
 
-    echo json_encode(['success'=>true, 'email_sent'=>$sent, 'has_email'=>!empty($taskRow['email'])]);
+    echo json_encode(['success'=>true, 'email_sent'=>$sent, 'has_email'=>!empty($taskRow['email']), 'consent_link'=>$consentLink]);
     break;
 
 // ============================================================
