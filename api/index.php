@@ -3994,28 +3994,45 @@ case 'coin_diagnose':
 
 case 'coin_backfill_24h':
     // Admin: award the 50 within-24h coins for any past task that qualified but never got them.
-    // Qualifies = has an assigned technician, reached Awaiting Approval / Completed, and the first
-    // submission happened within 24h of creation. Idempotent via event_key.
+    // "Submitted/closed within 24h of creation." Uses the best available timestamp:
+    // activity-log submit time -> closed_at -> cash_submitted_at -> updated_at. Idempotent.
     try {
         if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Admin only']); break; }
         _ensureCoinLedger($pdo);
-        $tasks = $pdo->query("SELECT id,task_id,assigned_to,created_at FROM tasks WHERE assigned_to IS NOT NULL AND task_status IN ('Awaiting Approval','Completed','Closed')")->fetchAll();
-        $awarded=0; $skipped=0;
+        // Make sure timestamp columns exist (older DBs)
+        try { $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS closed_at DATETIME DEFAULT NULL"); } catch(Exception $e){}
+        $tasks = $pdo->query("SELECT id,task_id,assigned_to,created_at,closed_at,cash_submitted_at,updated_at,task_status
+                              FROM tasks
+                              WHERE assigned_to IS NOT NULL
+                                AND task_status IN ('Awaiting Approval','Completed','Closed')")->fetchAll();
+        $awarded=0; $skipped=0; $noTime=0; $tooLate=0; $already=0;
         foreach($tasks as $t){
             if(empty($t['created_at']) || !$t['assigned_to']){ $skipped++; continue; }
-            // First submission time from activities
-            $sub = $pdo->prepare("SELECT MIN(created_at) FROM task_activities WHERE task_id=? AND (remark LIKE '%Awaiting Approval%' OR remark LIKE '%submitted%' OR activity_type='status_change')");
-            $sub->execute([$t['id']]); $subAt=$sub->fetchColumn();
-            if(!$subAt){ $skipped++; continue; }
-            $hrs=(strtotime($subAt)-strtotime($t['created_at']))/3600;
-            if($hrs<0 || $hrs>24){ $skipped++; continue; }
+            // Already credited?
             $before = $pdo->prepare("SELECT COUNT(*) FROM coin_ledger WHERE event_key=?");
             $before->execute(['submit24_'.$t['id']]);
-            if(intval($before->fetchColumn())>0){ $skipped++; continue; }
+            if(intval($before->fetchColumn())>0){ $already++; $skipped++; continue; }
+            // Determine the completion/submission time — first match wins
+            $doneAt = null;
+            $sub = $pdo->prepare("SELECT MIN(created_at) FROM task_activities WHERE task_id=? AND (remark LIKE '%Awaiting Approval%' OR remark LIKE '%submitted for approval%' OR remark LIKE '%payment complete%' OR remark LIKE '%payment collected%')");
+            $sub->execute([$t['id']]); $subAt=$sub->fetchColumn();
+            if($subAt) $doneAt = $subAt;
+            elseif(!empty($t['closed_at']))         $doneAt = $t['closed_at'];
+            elseif(!empty($t['cash_submitted_at'])) $doneAt = $t['cash_submitted_at'];
+            elseif(!empty($t['updated_at']))        $doneAt = $t['updated_at'];
+            if(!$doneAt){ $noTime++; $skipped++; continue; }
+            $hrs=(strtotime($doneAt)-strtotime($t['created_at']))/3600;
+            if($hrs < 0 || $hrs > 24){ $tooLate++; $skipped++; continue; }
             award_coins($pdo, intval($t['assigned_to']), 50, 'On-time submission (within 24h)', $t['id'], 'submit24_'.$t['id'], '🎉 +50 coins', 'On-time submission bonus credited.');
             $awarded++;
         }
-        echo json_encode(['success'=>true,'awarded'=>$awarded,'skipped'=>$skipped,'checked'=>count($tasks)]);
+        echo json_encode([
+            'success'=>true,
+            'awarded'=>$awarded,
+            'skipped'=>$skipped,
+            'checked'=>count($tasks),
+            'breakdown'=>['already_had_coins'=>$already,'no_timestamp'=>$noTime,'over_24h'=>$tooLate],
+        ]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
