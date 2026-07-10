@@ -2209,6 +2209,23 @@ function renderActivityLog(activities){
     const isPaymentLine = /payment (collected|received)/i.test(remark) || type==='payment';
     if(isPaymentLine && _shotUrl){
       remarkHtml += `<a href="${_shotUrl}" target="_blank" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;background:var(--accent2,#2563eb);color:#fff;font-size:12px;font-weight:700;padding:6px 12px;border-radius:6px;text-decoration:none">👁️ View Payment Screenshot</a>`;
+      // Verify / Reject buttons — only for admins, only while not yet verified
+      const _vs = _t ? (_t.payment_verify_status||'pending') : '';
+      const _payMode = _t ? String(_t.payment_mode||'').toLowerCase() : '';
+      const _nonCash = ['upi','bank transfer','cheque'].includes(_payMode);
+      if((typeof isAdmin!=='undefined' && isAdmin) && _nonCash && _t){
+        if(_vs==='verified'){
+          remarkHtml += `<div style="margin-top:8px;font-size:12px;font-weight:700;color:var(--green)">✅ Payment verified — you can now Approve &amp; Close.</div>`;
+        } else if(_vs==='rejected'){
+          remarkHtml += `<div style="margin-top:8px;font-size:12px;font-weight:700;color:var(--red)">❌ Payment proof rejected — technician must re-upload.</div>`;
+        } else {
+          remarkHtml += `<div style="display:flex;gap:8px;margin-top:8px">
+            <button onclick="verifyPayment(${_t.id},'verified')" style="background:var(--green);color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">✅ Verify Payment</button>
+            <button onclick="verifyPayment(${_t.id},'rejected')" style="background:#fdecea;color:var(--red);border:1.5px solid var(--red);border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">❌ Reject</button>
+          </div>
+          <div style="margin-top:5px;font-size:11px;color:var(--text3)">Verify the payment to unlock Approve &amp; Close.</div>`;
+        }
+      }
     }
 
     // Email sent indicator for remark entries
