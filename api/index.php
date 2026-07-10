@@ -3963,6 +3963,63 @@ case 'renewal_fix_missing_bs':
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
+case 'coin_diagnose':
+    // Admin: check why a task did/didn't award the 24h submission coins.
+    try {
+        if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+        _ensureCoinLedger($pdo);
+        $tid = intval($body['id'] ?? $_GET['id'] ?? 0);
+        if(!$tid){ echo json_encode(['error'=>'Task id required']); break; }
+        $t = $pdo->prepare("SELECT id,task_id,assigned_to,created_at,task_status FROM tasks WHERE id=?");
+        $t->execute([$tid]); $tr=$t->fetch();
+        if(!$tr){ echo json_encode(['error'=>'Task not found']); break; }
+        // Was it ever submitted? find first time it hit Awaiting Approval (activity) or use updated
+        $sub = $pdo->prepare("SELECT MIN(created_at) FROM task_activities WHERE task_id=? AND (remark LIKE '%Awaiting Approval%' OR activity_type='status_change')");
+        $sub->execute([$tid]); $subAt = $sub->fetchColumn();
+        $ledger = $pdo->prepare("SELECT coins,reason,created_at FROM coin_ledger WHERE task_id=? AND event_key=?");
+        $ledger->execute([$tid,'submit24_'.$tid]); $coinRow=$ledger->fetch();
+        $hrs = (!empty($tr['created_at']) && $subAt) ? round((strtotime($subAt)-strtotime($tr['created_at']))/3600,1) : null;
+        echo json_encode([
+            'success'=>true,
+            'task'=>$tr['task_id'],
+            'assigned_to'=>$tr['assigned_to'],
+            'created_at'=>$tr['created_at'],
+            'submitted_at'=>$subAt,
+            'hours_to_submit'=>$hrs,
+            'within_24h'=>($hrs!==null && $hrs<=24),
+            'coins_awarded'=>$coinRow?intval($coinRow['coins']):0,
+            'has_coin_entry'=>$coinRow?true:false,
+        ]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'coin_backfill_24h':
+    // Admin: award the 50 within-24h coins for any past task that qualified but never got them.
+    // Qualifies = has an assigned technician, reached Awaiting Approval / Completed, and the first
+    // submission happened within 24h of creation. Idempotent via event_key.
+    try {
+        if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Admin only']); break; }
+        _ensureCoinLedger($pdo);
+        $tasks = $pdo->query("SELECT id,task_id,assigned_to,created_at FROM tasks WHERE assigned_to IS NOT NULL AND task_status IN ('Awaiting Approval','Completed','Closed')")->fetchAll();
+        $awarded=0; $skipped=0;
+        foreach($tasks as $t){
+            if(empty($t['created_at']) || !$t['assigned_to']){ $skipped++; continue; }
+            // First submission time from activities
+            $sub = $pdo->prepare("SELECT MIN(created_at) FROM task_activities WHERE task_id=? AND (remark LIKE '%Awaiting Approval%' OR remark LIKE '%submitted%' OR activity_type='status_change')");
+            $sub->execute([$t['id']]); $subAt=$sub->fetchColumn();
+            if(!$subAt){ $skipped++; continue; }
+            $hrs=(strtotime($subAt)-strtotime($t['created_at']))/3600;
+            if($hrs<0 || $hrs>24){ $skipped++; continue; }
+            $before = $pdo->prepare("SELECT COUNT(*) FROM coin_ledger WHERE event_key=?");
+            $before->execute(['submit24_'.$t['id']]);
+            if(intval($before->fetchColumn())>0){ $skipped++; continue; }
+            award_coins($pdo, intval($t['assigned_to']), 50, 'On-time submission (within 24h)', $t['id'], 'submit24_'.$t['id'], '🎉 +50 coins', 'On-time submission bonus credited.');
+            $awarded++;
+        }
+        echo json_encode(['success'=>true,'awarded'=>$awarded,'skipped'=>$skipped,'checked'=>count($tasks)]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 default:
     http_response_code(404);
     echo json_encode(['error'=>'Unknown action: '.$action]);
