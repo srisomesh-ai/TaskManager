@@ -2202,6 +2202,36 @@ case 'save_trip_reached':
     break;
 
 // ============================================================
+// SKIP CONSENT — existing-customer jobs only (V2V / Troubleshoot)
+// Technician takes responsibility; marks consent as given so flow proceeds
+// ============================================================
+case 'skip_consent':
+    $id = intval($body['id'] ?? 0);
+    if(!$id){ echo json_encode(['error'=>'Task ID required']); break; }
+    try {
+        try { $pdo->prepare("ALTER TABLE tasks ADD COLUMN customer_consent_at DATETIME DEFAULT NULL")->execute(); } catch(Exception $e){}
+        try { $pdo->prepare("ALTER TABLE tasks ADD COLUMN customer_consent_name VARCHAR(200) DEFAULT NULL")->execute(); } catch(Exception $e){}
+        $tr = $pdo->prepare("SELECT t.*, u.name as tech_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?");
+        $tr->execute([$id]); $trow = $tr->fetch();
+        if(!$trow){ echo json_encode(['error'=>'Task not found']); break; }
+        // Restrict to existing-customer job types
+        $jl = strtolower($trow['device_details'] ?? '');
+        $allowed = (strpos($jl,'vehicle to vehicle')!==false || strpos($jl,'v2v')!==false || strpos($jl,'troubleshoot')!==false || strpos($jl,'offline')!==false);
+        if(!$allowed){ echo json_encode(['error'=>'Skip consent is only allowed for V2V and Troubleshoot tasks']); break; }
+        // Only the assigned technician (or admin/assigner) may skip
+        if(intval($trow['assigned_to']) !== $userId && !in_array($userRole,['admin','assigner'])){
+            echo json_encode(['error'=>'Not authorized']); break;
+        }
+        $techName = $trow['tech_name'] ?? 'Technician';
+        $pdo->prepare("UPDATE tasks SET customer_consent_at=NOW(), customer_consent_name=?, consent_token='USED' WHERE id=?")
+            ->execute(['Consent skipped by technician', $id]);
+        $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'system')")
+            ->execute([$id, $userId, "⏭️ Consent SKIPPED by {$techName} (existing customer) — technician takes responsibility for proceeding without customer confirmation."]);
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// ============================================================
 // SEND CONSENT REQUEST
 // Generates consent_token, sends email to customer
 // ============================================================
