@@ -4774,6 +4774,23 @@ function renderReviewPanel(t){
     </div>`;
   }
 
+  // 3) ALL uploaded files on this task — always show a View button for each (fallback so nothing is hidden)
+  const docs = (t.documents||[]);
+  if(docs.length){
+    let filesHtml = '<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;padding:13px 15px;margin-bottom:12px">'
+      + '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--accent2);margin-bottom:8px">\ud83d\udcce Uploaded Files ('+docs.length+')</div>';
+    docs.forEach(d=>{
+      const url = 'https://salmon-goldfish-110661.hostingersite.com/uploads/task_'+t.id+'/'+d.filename;
+      const label = (d.doc_type==='payment_screenshot'?'\ud83d\udcf8 Payment screenshot':'\ud83d\udcc4 '+escHtml(d.doc_type||'file'));
+      filesHtml += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--border)">'
+        + '<div style="font-size:12.5px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+label+'<br><span style="font-size:11px;color:var(--text3)">'+escHtml(d.original_name||d.filename)+'</span></div>'
+        + '<button onclick="window.open(\''+url+'\',\'_blank\')" class="ts-btn" style="background:var(--accent2);color:#fff;flex-shrink:0;padding:6px 14px">\ud83d\udc41\ufe0f View</button>'
+        + '</div>';
+    });
+    filesHtml += '</div>';
+    html += filesHtml;
+  }
+
   box.innerHTML = html;
   box.style.display = html ? 'block' : 'none';
 }
