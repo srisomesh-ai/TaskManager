@@ -670,11 +670,31 @@
       // location complete
       let trip=''; if(loc&&loc.trip_km!=null) trip=' · 🚗 '+loc.trip_km+' km, '+loc.trip_minutes+' min';
 
-      // SPECIAL JOB: Troubleshoot / Offline — no install/payment, just a report → close
+      // SPECIAL JOB: Troubleshoot / Offline — report, then collect payment (if any) → close
       const jobLower=(t.device_details||'').toLowerCase();
       if(jobLower.includes('troubleshoot')||jobLower.includes('offline')){
-        btn='<button class="act-btn act-primary" id="loc-btn" onclick="openTroubleshoot()"><div class="ico">🔧</div><div class="l">Troubleshoot Report</div><div class="s">Log the fix &amp; close task</div></button>';
-        hint='🔧 On site'+trip+' — complete the troubleshoot report to close this task.'; hintCls='hint-done';
+        const tsPrice=parseFloat(t.price_to_collect||0), tsColl=parseFloat(t.amount_collected||0);
+        const tsPayDone=tsColl>=tsPrice-15 || tsPrice<=0;
+        const tsReportDone=localStorage.getItem('ts_done_'+t.id)==='1';
+        const tsCashPending=(t.cash_deposit_status==='pending');
+
+        if(tsReportDone && !tsPayDone){
+          // Report done, payment still due → collect payment
+          btn='<button class="act-btn" id="loc-btn" style="background:var(--green)" onclick="openPaymentSoon()"><div class="ico">💰</div><div class="l">Collect Payment</div><div class="s">₹'+(tsPrice-tsColl).toLocaleString('en-IN')+' to collect</div></button>';
+          hint='🔧 Troubleshoot done — collect payment to finish.'; hintCls='hint-done';
+        } else if(tsReportDone && tsColl>0 && tsCashPending){
+          // Cash collected but not deposited → deposit then submit
+          btn='<button class="act-btn" id="loc-btn" style="background:var(--saffron)" onclick="openCashDeposit()"><div class="ico">🏦</div><div class="l">Confirm Cash Deposit</div><div class="s">Deposit cash &amp; submit</div></button>';
+          hint='🏦 Cash deposit pending — deposit &amp; confirm within 24h to submit.'; hintCls='hint-amber';
+        } else if(tsReportDone && tsPayDone){
+          // Report done + paid → submit for approval
+          btn='<button class="act-btn act-primary" id="loc-btn" onclick="submitForApproval()"><div class="ico">✅</div><div class="l">Submit Task</div><div class="s">Fixed &amp; paid</div></button>';
+          hint='✅ Troubleshoot done'+(tsPrice>0?' &amp; payment collected':'')+' — submit for approval.'; hintCls='hint-done';
+        } else {
+          // Report not yet done
+          btn='<button class="act-btn act-primary" id="loc-btn" onclick="openTroubleshoot()"><div class="ico">🔧</div><div class="l">Troubleshoot Report</div><div class="s">'+(tsPrice>0?'Log the fix, then collect payment':'Log the fix &amp; close task')+'</div></button>';
+          hint='🔧 On site'+trip+' — complete the troubleshoot report'+(tsPrice>0?', then collect ₹'+tsPrice.toLocaleString('en-IN'):' to close this task')+'.'; hintCls='hint-done';
+        }
         area.innerHTML='<div class="act-two"><button class="upd-btn" onclick="openUpdate()"><div class="ico">📞</div><div class="l">Update</div><div class="s">Call log &amp; next step</div></button>'+btn+'</div><div class="act-hint '+hintCls+'">'+hint+'</div>';
         return;
       }
@@ -1416,7 +1436,7 @@
   async function submitForApproval(){
     if(!confirm('Submit this task for approval?\n\nInstallation and payment are complete.')) return;
     const res=await apiPost('update_task',{id:_curTask.id,task_status:'Awaiting Approval',remark:'✅ Installation & payment complete — submitted for approval'});
-    if(res&&res.success){ showTechAppreciation(); }
+    if(res&&res.success){ try{localStorage.removeItem('ts_done_'+_curTask.id);}catch(e){} showTechAppreciation(); }
     else alert((res&&res.error)||'Submit failed. Please try again.');
   }
 
@@ -1457,11 +1477,22 @@
       'Remarks':document.getElementById('ts-remarks').value.trim()
     };
     const btn=document.getElementById('ts-save'); btn.textContent='⏳ Submitting…'; btn.disabled=true;
-    const res=await apiPost('save_job_outcome',{task_id:_curTask.id,job_type:'troubleshoot',summary:'🔧 Troubleshoot Report',fields,removed_serial:'',close_task:true});
-    btn.textContent='✅ Submit & Close Task'; btn.disabled=false;
+    const price=parseFloat(_curTask.price_to_collect||0), coll=parseFloat(_curTask.amount_collected||0);
+    const paymentDue = price>0 && coll < price-15;
+    // If payment is due, save the report but keep the task open so payment can be collected.
+    const res=await apiPost('save_job_outcome',{task_id:_curTask.id,job_type:'troubleshoot',summary:'🔧 Troubleshoot Report',fields,removed_serial:'',close_task:!paymentDue});
+    btn.textContent='✅ Submit'; btn.disabled=false;
     if(res && res.success){
       closeTroubleshoot();
-      showTechAppreciation();
+      if(paymentDue){
+        // mark the report as done so the flow shows Collect Payment next
+        localStorage.setItem('ts_done_'+_curTask.id,'1');
+        toast('✅ Report saved — now collect payment');
+        await load();
+        renderActionArea();
+      } else {
+        showTechAppreciation();
+      }
     } else {
       err.textContent='❌ '+((res&&res.error)||'Save failed — please try again'); err.style.display='';
     }
