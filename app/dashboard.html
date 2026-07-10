@@ -168,6 +168,17 @@
     </div>
   </div>
 
+  <div style="padding:10px 14px 0">
+    <div class="dev-open-card" onclick="location.href='readding.html'">
+      <div class="doc-ic">🔌</div>
+      <div class="doc-main">
+        <div class="doc-n">Re-Adding <span id="ra-pending-badge" style="display:none;background:#e74c3c;color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:800;margin-left:4px"></span></div>
+        <div class="doc-l">Request a device re-add · admin approves &amp; pushes to server</div>
+      </div>
+      <div class="doc-arrow">›</div>
+    </div>
+  </div>
+
   <div class="sec"><h2>📋 My Tasks</h2></div>
   <div class="chips" id="chips">
     <div class="chip on" data-f="active" onclick="setFilter(this)">🔵 Active</div>
@@ -289,6 +300,15 @@
     render();
     loadDevices();
     loadCoins();
+    loadReaddingBadge();
+  }
+  async function loadReaddingBadge(){
+    try{
+      const d=await api('readding_list',{status:'pending'});
+      const n=(d&&d.requests)?d.requests.length:0;
+      const b=document.getElementById('ra-pending-badge');
+      if(b){ if(n>0){ b.textContent=n+' pending'; b.style.display=''; } else b.style.display='none'; }
+    }catch(e){}
   }
   load();
 </script>
