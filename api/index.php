@@ -3599,6 +3599,26 @@ case 'readding_approve':
         if($r['status']!=='pending'){ echo json_encode(['error'=>'Request already '.$r['status']]); break; }
         $pdo->prepare("UPDATE readding_requests SET status='approved', device_id=?, approved_by=?, approved_at=NOW() WHERE id=?")
             ->execute([$device_id ?: null, $cu['name']??'Admin', $id]);
+
+        // Also drop the device into the requesting technician's stock so it appears in their
+        // device list and they can use it for the adding/installation process.
+        try {
+            _devEnsureTables($pdo);
+            $imei = _devNorm($r['imei'] ?? '');
+            $techId = intval($r['requested_by'] ?? 0);
+            if($imei !== '' && $techId){
+                // Resolve canonical technician name from users
+                $techName = trim($r['requested_by_name'] ?? '');
+                $u = $pdo->prepare("SELECT name FROM users WHERE id=?"); $u->execute([$techId]); $urow=$u->fetch();
+                if($urow){ $techName = $urow['name']; }
+                $srvName = ['1'=>'bharatgps.com','2'=>'bharatgps.in','3'=>'bharatgps.school','4'=>'bharatgps.org'][strval($r['server_id'])] ?? ('Server '.$r['server_id']);
+                $pdo->prepare("INSERT INTO device_assignments (imei,device_name,model,server,technician,technician_id,status,assigned_by)
+                    VALUES (?,?,?,?,?,?, 'with_tech', ?)
+                    ON DUPLICATE KEY UPDATE device_name=VALUES(device_name),server=VALUES(server),technician=VALUES(technician),technician_id=VALUES(technician_id),status='with_tech',assigned_by=VALUES(assigned_by),assigned_at=NOW()")
+                    ->execute([$imei, substr($r['name']??'',0,190), '', substr($srvName,0,60), substr($techName,0,120), $techId, substr(($cu['name']??'Admin').' (re-adding)',0,120)]);
+            }
+        } catch(Exception $e){ /* assignment is best-effort; approval already recorded */ }
+
         echo json_encode(['success'=>true]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
