@@ -1187,7 +1187,7 @@ function dsParseDevice(d){
   model = String(model||'').trim();
   var m = name.match(/^\s*(\d+)\s*[-–—]\s*(.+)$/);
   var status='installed', tech='';
-  if(m){ var a=m[2].trim(); if(a.toLowerCase()==='office'){status='office';} else {status='tech'; tech=a;} }
+  if(m){ var a=m[2].trim(); if(/^office\b/i.test(a) || a.toLowerCase()==='office'){status='office';} else {status='tech'; tech=a;} }
   return { imei:String(imei), device_name:name, device_id:String(devId), model:model, status:status, technician:tech };
 }
 
@@ -1209,12 +1209,24 @@ function dsPullAndSave(){
     }).catch(function(e){ return {srv:s,ok:false,msg:String(e.message).slice(0,50),devices:[]}; });
   });
   Promise.all(jobs).then(function(results){
-    var merged=[];
+    var merged=[]; var skipped=[]; var officeLike=[];
     var html = results.map(function(r){
-      r.devices.forEach(function(dev){ var p=dsParseDevice(dev); p.server=r.srv.name; if(p.status!=='installed') merged.push(p); });
+      r.devices.forEach(function(dev){
+        var p=dsParseDevice(dev); p.server=r.srv.name;
+        // Flag any name that MENTIONS office but was NOT classified as office — helps spot naming issues
+        if(p.status!=='office' && /office/i.test(p.device_name||'')){ officeLike.push(p.device_name+'  →  read as: '+p.status+(p.technician?(' ('+p.technician+')'):'')); }
+        if(p.status!=='installed') merged.push(p); else skipped.push(p.device_name);
+      });
       var c=r.ok?'#0E7C4A':'#c0392b'; var ic=r.ok?'✓':'✗';
       return '<div style="padding:3px 0;color:'+c+';font-weight:600">'+ic+' '+esc(r.srv.name)+' — '+esc(r.msg)+'</div>';
     }).join('');
+    // If any office-named devices were misread, show them so you can see the exact naming
+    if(officeLike.length){
+      html += '<div style="margin-top:10px;padding:10px;border:1.5px solid #e0a800;border-radius:8px;background:#fff8e6;font-size:12px;color:#7a5c00">'+
+        '<b>⚠️ '+officeLike.length+' device(s) have "office" in the name but were NOT counted as office stock.</b> Check the exact naming below (must be like <b>1234-Office</b>):<br>'+
+        officeLike.slice(0,40).map(function(x){return '• '+esc(x);}).join('<br>')+
+        (officeLike.length>40?('<br>… and '+(officeLike.length-40)+' more'):'')+'</div>';
+    }
     st.innerHTML = html;
     btn.disabled=false; btn.textContent='🔄 Pull All Servers & Save';
     if(!merged.length){ showToast('❌ No devices pulled — check server status'); return; }
