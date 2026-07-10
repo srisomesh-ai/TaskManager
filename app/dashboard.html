@@ -192,6 +192,60 @@
 
   <div class="list" id="list"><div class="loading"><span class="spin"></span>Loading your tasks…</div></div>
 
+  <!-- Floating Send Request button -->
+  <button id="sr-fab" onclick="srOpen()" style="position:fixed;right:18px;bottom:22px;z-index:900;background:#25D366;color:#fff;border:none;border-radius:30px;padding:14px 20px;font-size:14px;font-weight:800;box-shadow:0 8px 24px rgba(37,211,102,.45);cursor:pointer;display:flex;align-items:center;gap:8px">📲 Send Request</button>
+
+  <!-- Send Request modal (technician) -->
+  <div id="sr-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:flex-end;justify-content:center" onclick="srClose()">
+    <div onclick="event.stopPropagation()" style="background:#fff;border-radius:16px 16px 0 0;width:100%;max-width:520px;max-height:92vh;overflow-y:auto;box-shadow:0 -8px 40px rgba(0,0,0,.3)">
+      <div style="padding:16px 18px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:#fff">
+        <div>
+          <div style="font-size:16px;font-weight:800">📲 Send Request to Customer</div>
+          <div style="font-size:12px;color:#888">Customer fills the form → office assigns the task</div>
+        </div>
+        <button onclick="srClose()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#888">✕</button>
+      </div>
+      <div style="padding:18px">
+        <div style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;display:block;margin-bottom:6px">Which request?</label>
+          <select id="sr-service" onchange="srServiceChange()" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px">
+            <option value="enquiry">🆕 New GPS Installation (enquiry)</option>
+            <option value="troubleshoot">🔧 GPS Troubleshoot</option>
+            <option value="vehicle-change">🔁 Vehicle to Vehicle Change</option>
+            <option value="gps-remove">🗑️ GPS Removal</option>
+            <option value="re-adding">🔄 GPS Re-Activation (Re-Adding)</option>
+          </select>
+        </div>
+
+        <div id="sr-plan-group" style="margin-bottom:14px;display:none">
+          <label style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;display:block;margin-bottom:6px">Service Plan (price set by office)</label>
+          <select id="sr-plan" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px">
+            <option value="">Loading plans…</option>
+          </select>
+          <div style="font-size:11px;color:#888;margin-top:5px">Pick the correct plan — GST or non-GST. You cannot change the price.</div>
+        </div>
+
+        <div style="margin-bottom:12px">
+          <label style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;display:block;margin-bottom:5px">Customer Name *</label>
+          <input type="text" id="sr-name" placeholder="e.g. Ramesh Kumar" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px">
+        </div>
+        <div style="margin-bottom:12px">
+          <label style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;display:block;margin-bottom:5px">Mobile Number *</label>
+          <input type="tel" id="sr-phone" placeholder="10-digit mobile number" maxlength="10" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px">
+        </div>
+        <div style="margin-bottom:16px">
+          <label style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;display:block;margin-bottom:5px">Email (optional)</label>
+          <input type="email" id="sr-email" placeholder="customer@email.com" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px">
+        </div>
+
+        <div style="display:flex;gap:10px">
+          <button onclick="srClose()" style="flex:1;padding:12px;border:1px solid #ddd;background:#fff;border-radius:8px;font-weight:700;cursor:pointer">Cancel</button>
+          <button id="sr-send-btn" onclick="srSend()" style="flex:2;padding:12px;border:none;background:#25D366;color:#fff;border-radius:8px;font-weight:800;font-size:14px;cursor:pointer">📱 Send via WhatsApp</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 <script>
   const API='../api/index.php';
   let authToken=localStorage.getItem('bgps_tech_token')||'';
@@ -311,6 +365,96 @@
     }catch(e){}
   }
   load();
+
+  // ── Send Request (technician) ─────────────────────────────
+  // Base site URL (parent of /app/) where the public service forms live.
+  const SITE_BASE = location.origin + location.pathname.replace(/\/app\/[^/]*$/, '');
+  let _srPlans = [];
+  function srOpen(){
+    document.getElementById('sr-overlay').style.display='flex';
+    srServiceChange();
+  }
+  function srClose(){ document.getElementById('sr-overlay').style.display='none'; }
+  const SR_PRICED = ['troubleshoot','vehicle-change','gps-remove','re-adding'];
+  async function srServiceChange(){
+    const svc=document.getElementById('sr-service').value;
+    const planGroup=document.getElementById('sr-plan-group');
+    if(SR_PRICED.indexOf(svc)===-1){ planGroup.style.display='none'; return; }
+    planGroup.style.display='';
+    await srLoadPlans();
+  }
+  async function srLoadPlans(){
+    const sel=document.getElementById('sr-plan');
+    const svc=document.getElementById('sr-service').value;
+    sel.innerHTML='<option value="">Loading plans…</option>';
+    if(!_srPlans.length){
+      const r=await api('pl_get_public').catch(()=>({}));
+      _srPlans=(r&&r.items)?r.items:[];
+    }
+    // re-adding uses Renewal plans; the other services use Service-category plans.
+    let items;
+    if(svc==='re-adding'){
+      items=_srPlans.filter(function(i){ return (i.category||'').toLowerCase()==='renewal'; });
+    } else {
+      items=_srPlans.filter(function(i){ return (i.category||'').toLowerCase()==='service'; });
+    }
+    if(!items.length){ sel.innerHTML='<option value="">No plans set by office yet — ask office to add them in Price List</option>'; return; }
+    const withGst=items.filter(function(i){ return parseFloat(i.gst_percent||0)>0 || /SBGT/i.test(i.product_name||''); });
+    const noGst  =items.filter(function(i){ return !(parseFloat(i.gst_percent||0)>0 || /SBGT/i.test(i.product_name||'')); });
+    function opt(it){
+      const incl=parseFloat(it.price_incl_gst||0);
+      const gst = parseFloat(it.gst_percent||0)>0 ? 1 : 0;
+      return '<option value="'+incl+'|'+gst+'">'+esc(it.product_name)+' — ₹'+incl.toLocaleString('en-IN')+'</option>';
+    }
+    let html='';
+    if(noGst.length)  html+='<optgroup label="No GST">'+noGst.map(opt).join('')+'</optgroup>';
+    if(withGst.length)html+='<optgroup label="With GST (18%)">'+withGst.map(opt).join('')+'</optgroup>';
+    sel.innerHTML=html||items.map(opt).join('');
+  }
+  async function srSend(){
+    const svc=document.getElementById('sr-service').value;
+    const name=(document.getElementById('sr-name').value||'').trim();
+    const phone=(document.getElementById('sr-phone').value||'').replace(/\D/g,'');
+    const email=(document.getElementById('sr-email').value||'').trim();
+    if(!name){ alert('Please enter the customer name.'); return; }
+    if(!phone || phone.length<10){ alert('Please enter a valid 10-digit mobile number.'); return; }
+    const btn=document.getElementById('sr-send-btn');
+    if(btn){ btn.disabled=true; btn.textContent='…'; }
+
+    // New installation enquiry — public link, no price/token.
+    if(svc==='enquiry'){
+      let url=SITE_BASE+'/enquiry.php?name='+encodeURIComponent(name)+'&phone='+encodeURIComponent(phone);
+      if(email) url+='&email='+encodeURIComponent(email);
+      const msg=encodeURIComponent('Hello '+name+'!\n\nThank you for your interest in BharatGPS Tracker.\n\nPlease fill your details to book your GPS installation:\n\n'+url+'\n\nThe form takes 2 minutes. Our team will contact you to schedule.\n\nFor help call: 9849849824');
+      window.open('https://wa.me/91'+phone+'?text='+msg,'_blank');
+      srClose(); if(btn){ btn.disabled=false; btn.textContent='📱 Send via WhatsApp'; }
+      return;
+    }
+
+    // Priced services — get plan price/gst from the dropdown, create a signed token.
+    const planVal=(document.getElementById('sr-plan').value||'');
+    if(!planVal){ alert('Please select the service plan.'); if(btn){ btn.disabled=false; btn.textContent='📱 Send via WhatsApp'; } return; }
+    const parts=planVal.split('|'); const price=parseFloat(parts[0])||0; const gst=parseInt(parts[1])||0;
+    const meta={
+      'troubleshoot':   { file:'troubleshoot.php',   label:'GPS Troubleshoot',        line:'to request a GPS troubleshoot check for your vehicle' },
+      'vehicle-change': { file:'vehicle-change.php', label:'Vehicle to Vehicle Change',line:'to move your GPS device to a new vehicle' },
+      'gps-remove':     { file:'gps-remove.php',     label:'GPS Removal',              line:'to request removal of your GPS device' },
+      're-adding':      { file:'re-adding.php',      label:'GPS Re-Activation',        line:'to renew and re-activate your expired GPS device' },
+    }[svc];
+    let url=SITE_BASE+'/'+meta.file+'?p='+encodeURIComponent(phone);
+    try{
+      const r=await api2('make_req_link',{type:svc, price:price, gst:gst});
+      if(r&&r.token){ url+='&t='+encodeURIComponent(r.token); }
+    }catch(e){}
+    const msg=encodeURIComponent('Hello '+name+'!\n\nThis is BharatGPS Tracker.\n\nPlease fill this short form '+meta.line+':\n\n'+url+'\n\nThis link is valid for 6 hours and can be used once.\n\nFor help call: 9849849824');
+    window.open('https://wa.me/91'+phone+'?text='+msg,'_blank');
+    srClose(); if(btn){ btn.disabled=false; btn.textContent='📱 Send via WhatsApp'; }
+  }
+  // POST helper (the existing api() is GET-only)
+  async function api2(action, body){
+    const r=await fetch(API+'?action='+action,{method:'POST',headers:{'Content-Type':'application/json','X-Auth-Token':authToken},body:JSON.stringify(body||{})});
+    return r.json();
+  }
 </script>
 </body>
 </html>
