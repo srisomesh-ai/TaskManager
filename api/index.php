@@ -1214,7 +1214,9 @@ case 'erase_all_tasks':
 // ---- UPLOAD DOCUMENT ----
 case 'upload_document':
     $tid=intval($body['task_id']??$_POST['task_id']??0);
-    $dtype=trim($body['doc_type']??$_POST['doc_type']??'other');
+    $dtype=trim($body['doc_type']??$_POST['doc_type']??'');
+    // Empty string should not slip through — default a payment upload to payment_screenshot
+    if($dtype===''){ $dtype='payment_screenshot'; }
     if (!$tid||!isset($_FILES['file'])) { echo json_encode(['error'=>'Missing file']); break; }
     $dir=__DIR__.'/../uploads/task_'.$tid.'/'; if(!is_dir($dir)) mkdir($dir,0755,true);
     $fn=time().'_'.preg_replace('/[^a-zA-Z0-9._-]/','_',$_FILES['file']['name']);
