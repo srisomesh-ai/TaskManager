@@ -662,7 +662,7 @@
     area.innerHTML='<div style="color:var(--text3);font-size:12px;padding:14px 0;text-align:center">Checking…</div>';
     const loc=await api('check_customer_location',{id:t.id});
 
-    let btn='', hint='', hintCls='', _showSkipLoc=false;
+    let btn='', hint='', hintCls='', _showSkipLoc=false, _showSkipConsent=false;
     const _skipped = _locSkippedFor && String(_locSkippedFor)===String(t.id);
     if(!loc || loc.reached || _skipped){
       // location complete
@@ -741,17 +741,13 @@
       } else if(_consentSent){
         btn='<button class="act-btn" id="loc-btn" style="background:var(--saffron)" onclick="resendConsent()"><div class="ico">⏳</div><div class="l">Waiting…</div><div class="s">Tap to resend consent</div></button>';
         const jlw=(t.device_details||'').toLowerCase();
-        if(jlw.includes('vehicle to vehicle')||jlw.includes('v2v')||jlw.includes('troubleshoot')||jlw.includes('offline')){
-          btn+='<div style="text-align:center;margin-top:10px"><a onclick="skipConsent()" style="color:var(--accent2,#137272);font-size:12.5px;font-weight:700;text-decoration:underline;cursor:pointer">Existing customer? Skip consent &amp; proceed →</a></div>';
-        }
+        if(jlw.includes('vehicle to vehicle')||jlw.includes('v2v')||jlw.includes('troubleshoot')||jlw.includes('offline')) _showSkipConsent=true;
         hint='⏳ Consent sent — waiting for customer to confirm T&amp;C &amp; payment. This updates automatically.'; hintCls='hint-amber';
         startConsentPoll(t.id);
       } else {
         btn='<button class="act-btn act-primary" id="loc-btn" onclick="handleAttend()"><div class="ico">🔧</div><div class="l">Attend</div><div class="s">Send consent to customer</div></button>';
         const jln=(t.device_details||'').toLowerCase();
-        if(jln.includes('vehicle to vehicle')||jln.includes('v2v')||jln.includes('troubleshoot')||jln.includes('offline')){
-          btn+='<div style="text-align:center;margin-top:10px"><a onclick="skipConsent()" style="color:var(--accent2,#137272);font-size:12.5px;font-weight:700;text-decoration:underline;cursor:pointer">Existing customer? Skip consent &amp; proceed →</a></div>';
-        }
+        if(jln.includes('vehicle to vehicle')||jln.includes('v2v')||jln.includes('troubleshoot')||jln.includes('offline')) _showSkipConsent=true;
         hint='✅ Location complete'+trip+' — tap Attend to send the consent &amp; payment request'; hintCls='hint-done';
       }
     } else if(!loc.has_location){
@@ -773,6 +769,7 @@
         '<button class="upd-btn" onclick="openUpdate()"><div class="ico">📞</div><div class="l">Update</div><div class="s">Call log &amp; next step</div></button>'+
         btn+
       '</div>'+
+      (_showSkipConsent?'<div style="text-align:center;margin-top:12px"><a href="#" onclick="skipConsent();return false;" style="display:inline-block;font-size:13px;color:var(--accent2,#137272);font-weight:800;text-decoration:underline">⏭️ Existing customer? Skip consent &amp; proceed →</a></div>':'')+
       '<div class="act-hint '+hintCls+'">'+hint+'</div>'+
       (_showSkipLoc?'<div style="text-align:center;margin-top:10px"><a href="#" onclick="skipLocation();return false;" style="font-size:12.5px;color:var(--text3);text-decoration:underline;font-weight:600">Customer won\'t share location? Skip &amp; continue →</a></div>':'');
   }
