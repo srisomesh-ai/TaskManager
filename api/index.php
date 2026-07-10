@@ -97,6 +97,29 @@ function _ensureCoinLedger($pdo){
 // NOTE: a normal installation task does NOT store the word "install" in device_details
 // (it holds the device model, or is blank). The app itself treats any device_details that
 // is not a known service type as an installation. We mirror that here.
+function _readdingEnsureTable($pdo){
+    $pdo->exec("CREATE TABLE IF NOT EXISTS readding_requests (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        ref VARCHAR(30),
+        status VARCHAR(20) DEFAULT 'pending',
+        name VARCHAR(190) NOT NULL,
+        model VARCHAR(100),
+        imei VARCHAR(50) NOT NULL,
+        vin VARCHAR(100),
+        sim VARCHAR(50),
+        server_id INT NOT NULL,
+        requested_by INT,
+        requested_by_name VARCHAR(190),
+        requested_role VARCHAR(30),
+        device_id VARCHAR(50),
+        approved_by VARCHAR(190),
+        approved_at DATETIME NULL,
+        cancelled_by VARCHAR(190),
+        cancelled_at DATETIME NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+}
+
 function bs_type_for_task($deviceDetails){
     $j = strtolower(trim($deviceDetails ?? ''));
     $serviceKeywords = ['troubleshoot','offline','demo','demonstration','remove','re-add','readd','re add','vehicle change','v2v','vehicle to vehicle','renewal','renew'];
@@ -3489,6 +3512,96 @@ case 'dev_unassign':
         $del = $pdo->prepare("DELETE FROM device_assignments WHERE imei=?");
         $n=0; foreach($imeis as $raw){ $imei=_devNorm($raw); if($imei===''){continue;} $del->execute([$imei]); $n+=$del->rowCount(); }
         echo json_encode(['success'=>true,'removed'=>$n]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// ═══════════════════════════════════════════════════════════════════
+// RE-ADDING — technician requests device re-add; admin/assigner approves
+// (approval pushes device to GPS server; done client-side via gps_proxy add_device)
+// ═══════════════════════════════════════════════════════════════════
+case 'readding_submit':
+    try {
+        _readdingEnsureTable($pdo);
+        $name = trim($body['name'] ?? '');
+        $imei = preg_replace('/\D/','', $body['imei'] ?? '');
+        $server_id = intval($body['server_id'] ?? 0);
+        if(!$name || !$imei || !$server_id){ echo json_encode(['error'=>'Name, IMEI and server are required']); break; }
+        $ref = 'RA'.date('YmdHis').rand(10,99);
+        $pdo->prepare("INSERT INTO readding_requests (ref,status,name,model,imei,vin,sim,server_id,requested_by,requested_by_name,requested_role)
+            VALUES (?,'pending',?,?,?,?,?,?,?,?,?)")
+            ->execute([$ref,$name,trim($body['model']??''),$imei,trim($body['vin']??''),trim($body['sim']??''),$server_id,$userId,$cu['name']??'',$userRole]);
+        echo json_encode(['success'=>true,'ref'=>$ref,'id'=>$pdo->lastInsertId()]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'readding_list':
+    try {
+        _readdingEnsureTable($pdo);
+        $status = trim($body['status'] ?? $_GET['status'] ?? '');
+        $params = [];
+        $sql = "SELECT * FROM readding_requests";
+        $where = [];
+        // Technicians see only their own requests; admin/assigner see all
+        if($userRole === 'technician'){ $where[]="requested_by=?"; $params[]=$userId; }
+        if($status!==''){ $where[]="status=?"; $params[]=$status; }
+        if($where) $sql .= " WHERE ".implode(' AND ',$where);
+        $sql .= " ORDER BY created_at DESC LIMIT 300";
+        $st = $pdo->prepare($sql); $st->execute($params);
+        echo json_encode(['success'=>true,'requests'=>$st->fetchAll()]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'readding_count':
+    try {
+        _readdingEnsureTable($pdo);
+        $n = intval($pdo->query("SELECT COUNT(*) FROM readding_requests WHERE status='pending'")->fetchColumn());
+        echo json_encode(['success'=>true,'count'=>$n]);
+    } catch(Exception $e){ echo json_encode(['success'=>true,'count'=>0]); }
+    break;
+
+case 'readding_get':
+    // fetch one request (used by approval UI to get device fields to push)
+    try {
+        _readdingEnsureTable($pdo);
+        if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+        $id = intval($body['id'] ?? $_GET['id'] ?? 0);
+        $st = $pdo->prepare("SELECT * FROM readding_requests WHERE id=?"); $st->execute([$id]);
+        $r = $st->fetch();
+        if(!$r){ echo json_encode(['error'=>'Not found']); break; }
+        echo json_encode(['success'=>true,'request'=>$r]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'readding_approve':
+    // Admin/assigner marks approved AFTER the device was pushed client-side via gps_proxy.
+    // Client sends {id, device_id}. We record it.
+    try {
+        if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+        _readdingEnsureTable($pdo);
+        $id = intval($body['id'] ?? 0);
+        $device_id = trim($body['device_id'] ?? '');
+        $st = $pdo->prepare("SELECT * FROM readding_requests WHERE id=?"); $st->execute([$id]);
+        $r = $st->fetch();
+        if(!$r){ echo json_encode(['error'=>'Request not found']); break; }
+        if($r['status']!=='pending'){ echo json_encode(['error'=>'Request already '.$r['status']]); break; }
+        $pdo->prepare("UPDATE readding_requests SET status='approved', device_id=?, approved_by=?, approved_at=NOW() WHERE id=?")
+            ->execute([$device_id ?: null, $cu['name']??'Admin', $id]);
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'readding_cancel':
+    try {
+        if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+        _readdingEnsureTable($pdo);
+        $id = intval($body['id'] ?? 0);
+        $st = $pdo->prepare("SELECT * FROM readding_requests WHERE id=?"); $st->execute([$id]);
+        $r = $st->fetch();
+        if(!$r){ echo json_encode(['error'=>'Not found']); break; }
+        if($r['status']!=='pending'){ echo json_encode(['error'=>'Already '.$r['status']]); break; }
+        $pdo->prepare("UPDATE readding_requests SET status='cancelled', cancelled_by=?, cancelled_at=NOW() WHERE id=?")
+            ->execute([$cu['name']??'Admin', $id]);
+        echo json_encode(['success'=>true]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
