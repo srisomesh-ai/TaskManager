@@ -2292,8 +2292,18 @@ case 'save_trip_start':
 case 'save_trip_reached':
     $id = intval($body['id'] ?? 0);
     $la = floatval($body['lat'] ?? 0); $lo = floatval($body['lng'] ?? 0);
-    if(!$id || !$la){ echo json_encode(['error'=>'Missing data']); break; }
+    $skipped = !empty($body['skipped']);
+    if(!$id){ echo json_encode(['error'=>'Missing data']); break; }
+    if(!$skipped && !$la){ echo json_encode(['error'=>'Missing data']); break; }
     _ensureTripColumns($pdo);
+    if($skipped && !$la){
+        // Location skipped (customer would not share) — stamp reached with 0 distance so the flow advances and stays advanced on reload
+        $pdo->prepare("UPDATE tasks SET trip_reach_at=NOW(), trip_km=0, trip_minutes=0 WHERE id=?")->execute([$id]);
+        $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'system')")
+            ->execute([$id, $userId, "⏭️ Location skipped — customer did not share location; directions taken over phone"]);
+        echo json_encode(['success'=>true, 'skipped'=>true, 'trip_km'=>0, 'trip_minutes'=>0]);
+        break;
+    }
     $r = $pdo->prepare("SELECT trip_start_lat, trip_start_lng, trip_start_at FROM tasks WHERE id=?");
     $r->execute([$id]); $rr = $r->fetch();
     $km = 0; $mins = 0;
