@@ -2923,6 +2923,39 @@ case 'mark_demo_lost':
 
 // ── PRICE LIST API (admin only) ──────────────────────────────────────
 
+case 'pl_seed_services':
+    // Seed the service job types into the Price List (Service category), BGT (no GST) + SBGT (18% GST).
+    // Prices are starting defaults — office edits them in the Price List afterwards.
+    if(!in_array($userRole,['admin','assigner','manager'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS price_list (id INT AUTO_INCREMENT PRIMARY KEY, product_name VARCHAR(200) NOT NULL, category VARCHAR(100) NOT NULL DEFAULT 'GPS Device', server_name VARCHAR(100) DEFAULT NULL, description TEXT DEFAULT NULL, buying_price DECIMAL(10,2) NOT NULL DEFAULT 0, price_excl_gst DECIMAL(10,2) NOT NULL DEFAULT 0, gst_percent DECIMAL(5,2) NOT NULL DEFAULT 18, price_incl_gst DECIMAL(10,2) NOT NULL DEFAULT 0, is_active TINYINT(1) NOT NULL DEFAULT 1, has_stock TINYINT(1) NOT NULL DEFAULT 0, sort_order INT NOT NULL DEFAULT 0, created_by VARCHAR(100) DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        // name, base(excl) default
+        $svcs = [
+            ['Troubleshoot/Offline',       300],
+            ['Vehicle to Vehicle Change',  600],
+            ['Only Remove',                  0],
+            ['Demonstration',                0],
+        ];
+        // For each service create a BGT (0% GST) and an SBGT (18% GST) row.
+        $chk = $pdo->prepare("SELECT COUNT(*) FROM price_list WHERE product_name=?");
+        $ins = $pdo->prepare("INSERT INTO price_list (product_name,category,server_name,description,buying_price,price_excl_gst,gst_percent,price_incl_gst,has_stock,is_active,created_by,sort_order) VALUES (?,?,?,?,0,?,?,?,0,1,?,?)");
+        $added = 0; $so = 20;
+        foreach($svcs as $s){
+            foreach([['(BGT)',0],['(SBGT)',18]] as $variant){
+                $nm = $s[0].' '.$variant[0];
+                $chk->execute([$nm]);
+                if(intval($chk->fetchColumn())>0) continue;
+                $excl = $s[1]; $gst = $variant[1];
+                $incl = round($excl * (1 + $gst/100), 2);
+                $desc = 'Service — '.($gst>0?'with 18% GST (SBGT)':'no GST (BGT)');
+                $ins->execute([$nm,'Service','BharatGPS Server',$desc,$excl,$gst,$incl,($cu['name']??'System'),$so++]);
+                $added++;
+            }
+        }
+        echo json_encode(['success'=>true,'added'=>$added,'note'=>$added?('Added '.$added.' service plan(s). Edit prices in the Price List.'):'All service plans already exist.']);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'pl_seed_renewals':
     // Add the renewal plans in BGT (non-GST) and SBGT (18% GST) profiles.
     // Real prices from the app. Skips any that already exist by name.
