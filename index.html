@@ -397,6 +397,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
       <div class="nav-item admin-only" onclick="window.open('inventory.html','_blank')"><span class="nav-icon">📦</span> Inventory</div>
       <div class="nav-sec admin-only">Admin</div>
       <div class="nav-item super-admin-only" id="nav-price-list" onclick="showPage('price-list')"><span class="nav-icon">💲</span> Price List</div>
+      <div class="nav-item super-admin-only" id="nav-discount-budgets" onclick="showPage('discount-budgets')"><span class="nav-icon">🏷️</span> Discount Budgets</div>
       <div class="nav-item super-admin-only" id="nav-purchases" onclick="showPage('purchases')"><span class="nav-icon">🛒</span> Purchases</div>
       <div class="nav-item super-admin-only" id="nav-blacklist" onclick="showPage('blacklist')"><span class="nav-icon">🚫</span> Blacklist</div>
       <div class="nav-item super-admin-only" id="nav-admin" onclick="showPage('admin')"><span class="nav-icon">⚙️</span> Admin Panel</div>
@@ -709,7 +710,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
                   </div>
                   <div class="form-group" style="margin-bottom:0">
                     <label style="font-size:11px">Approved By *</label>
-                    <select id="fm-discount-approver" onchange="checkTaskFormReady()" style="width:100%;padding:8px 10px;border:1.5px solid var(--amber);border-radius:6px;font-size:13px;outline:none">
+                    <select id="fm-discount-approver" onchange="checkTaskFormReady();checkDiscountBudget()" style="width:100%;padding:8px 10px;border:1.5px solid var(--amber);border-radius:6px;font-size:13px;outline:none">
                       <option value="">Select approver</option>
                       <option value="Raghavendra Manoj">Raghavendra Manoj</option>
                       <option value="Gummidi Lohita">Gummidi Lohita</option>
@@ -718,6 +719,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
                       <option value="Sri Mam">Sri Mam</option>
                     </select>
                   </div>
+                  <div id="fm-discount-budget" style="font-size:12px;font-weight:700;margin-top:8px;display:none"></div>
                 </div>
               </div>
               <div id="fm-payment-section" style="background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:12px 14px">
@@ -1252,6 +1254,27 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
         <iframe id="pur-iframe" src="about:blank"
           style="flex:1;width:100%;border:none;min-height:calc(100vh - 54px)">
         </iframe>
+      </div>
+
+      <div class="page" id="page-discount-budgets">
+        <div class="pg-head" style="margin-bottom:6px">
+          <div><div class="pg-title">🏷️ Discount Budgets</div>
+          <div class="pg-sub">Set a monthly discount limit per approver. Weekly cap = monthly ÷ 4, checked over a rolling 7 days. Leave blank/0 for no limit.</div></div>
+          <button class="card-btn" onclick="loadDiscountBudgets()">🔄 Refresh</button>
+        </div>
+        <div class="card" style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr style="background:var(--surface2);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)">
+              <th style="padding:10px 12px;text-align:left">Approver</th>
+              <th style="padding:10px 12px;text-align:right">Monthly Limit (₹)</th>
+              <th style="padding:10px 12px;text-align:right">Weekly Cap (₹)</th>
+              <th style="padding:10px 12px;text-align:right">Used (last 7 days)</th>
+              <th style="padding:10px 12px;text-align:right">Remaining this week</th>
+              <th style="padding:10px 12px;text-align:center">Action</th>
+            </tr></thead>
+            <tbody id="db-tbody"><tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text3)">Loading…</td></tr></tbody>
+          </table>
+        </div>
       </div>
 
       <div class="page" id="page-admin" style="padding:0;flex-direction:column">
@@ -1901,6 +1924,7 @@ function showPage(name, opts={}){
     'blacklist':     syncBlacklistAuth,
      'price-list':    syncPlAuth,
      'purchases':     syncPurAuth,
+     'discount-budgets': loadDiscountBudgets,
   };
   if(loaders[name]) loaders[name]();
 }
@@ -6053,13 +6077,53 @@ function checkTaskFormReady(){
     discOk = !!(discReason && discApprover);
   }
 
-  const ready = !!(customer && contact && job && payMode && discOk);
+  const ready = !!(customer && contact && job && payMode && discOk && (window._discBudgetOk !== false));
   const btn   = document.getElementById('task-save-btn');
   if(btn){
     btn.disabled    = !ready;
     btn.style.opacity    = ready ? '1'    : '0.4';
     btn.style.cursor     = ready ? 'pointer' : 'not-allowed';
   }
+}
+
+// Live discount-budget check: is the selected approver within their weekly cap for this amount?
+let _discBudgetTimer = null;
+window._discBudgetOk = true;
+function _currentDiscountAmount(){
+  const stdPrice     = parseFloat(document.getElementById('fm-price')?.value||0);
+  const collectPrice = parseFloat(document.getElementById('fm-price-collect')?.value||0);
+  const qty          = parseInt(document.getElementById('fm-qty')?.value||1)||1;
+  if(stdPrice>0 && collectPrice>0 && collectPrice < stdPrice - 0.5){ return Math.max(0,(stdPrice-collectPrice)*qty); }
+  return 0;
+}
+async function checkDiscountBudget(){
+  const box = document.getElementById('fm-discount-budget');
+  const approver = document.getElementById('fm-discount-approver')?.value||'';
+  const amount = _currentDiscountAmount();
+  if(!box) return;
+  if(!approver || amount<=0){ box.style.display='none'; window._discBudgetOk=true; checkTaskFormReady(); return; }
+  box.style.display=''; box.style.color='var(--text3)'; box.textContent='Checking '+approver+' budget…';
+  clearTimeout(_discBudgetTimer);
+  _discBudgetTimer = setTimeout(async()=>{
+    const r = await api('discount_check',{},'POST',{approver_name:approver, amount:amount}).catch(()=>({}));
+    if(!r || !r.success){ box.style.display='none'; window._discBudgetOk=true; checkTaskFormReady(); return; }
+    const info = r.info||{};
+    if(info.limit_set===false || !info.limited && info.weekly===undefined){
+      // No budget configured for this approver → unlimited
+      box.style.color='var(--text3)'; box.textContent='ℹ️ No weekly discount limit set for '+approver+'.';
+      window._discBudgetOk=true;
+    } else if(r.allowed){
+      const rem = Math.max(0,(info.remaining||0) - amount);
+      box.style.color='var(--green)';
+      box.textContent='✅ '+approver+': ₹'+(info.used_7d||0).toLocaleString('en-IN')+' used this week · ₹'+(info.remaining||0).toLocaleString('en-IN')+' left (₹'+rem.toLocaleString('en-IN')+' after this).';
+      window._discBudgetOk=true;
+    } else {
+      box.style.color='var(--red)';
+      box.textContent='⛔ '+(r.reason||'Over weekly discount limit');
+      window._discBudgetOk=false;
+    }
+    checkTaskFormReady();
+  }, 350);
 }
 
 // Called when price-to-collect changes — check for discount
@@ -6084,6 +6148,7 @@ function onPriceCollectChange(){
     if(discSection) discSection.style.display = 'none';
   }
   checkTaskFormReady();
+  checkDiscountBudget();
 }
 
 // Mark a task as viewed — clears UPDATED badge without opening it
@@ -6500,6 +6565,41 @@ async function loadRenewalBadge(){
     const ac = document.getElementById('rnw-approve-count');
     if(ac){ if(n>0){ ac.textContent=n; ac.style.display=''; } else ac.style.display='none'; }
   }catch(e){}
+}
+async function loadDiscountBudgets(){
+  const tbody=document.getElementById('db-tbody');
+  if(!tbody) return;
+  tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text3)">Loading…</td></tr>';
+  const r=await api('discount_budget_list').catch(()=>({}));
+  const rows=(r&&r.budgets)?r.budgets:[];
+  if(!rows.length){ tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text3)">No approvers.</td></tr>'; return; }
+  const isAdmin = (currentUser&&currentUser.role==='admin');
+  tbody.innerHTML=rows.map(function(b){
+    const monthly = (b.monthly_limit!=null && b.monthly_limit>0) ? b.monthly_limit : '';
+    const weekly  = (b.weekly_cap!=null) ? ('₹'+Number(b.weekly_cap).toLocaleString('en-IN')) : '<span style="color:var(--text3)">— no limit —</span>';
+    const used    = '₹'+Number(b.used_7d||0).toLocaleString('en-IN');
+    const rem     = (b.remaining!=null) ? (Number(b.remaining)<=0?'<span style="color:var(--red);font-weight:700">₹0 (full)</span>':('<span style="color:var(--green);font-weight:700">₹'+Number(b.remaining).toLocaleString('en-IN')+'</span>')) : '<span style="color:var(--text3)">unlimited</span>';
+    const inp = isAdmin
+      ? '<input type="number" id="db-inp-'+_dbKey(b.approver_name)+'" value="'+monthly+'" placeholder="0 = no limit" style="width:120px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;text-align:right">'
+      : (monthly?('₹'+Number(monthly).toLocaleString('en-IN')):'<span style="color:var(--text3)">no limit</span>');
+    const act = isAdmin ? '<button class="ra-btn ra-approve" onclick="saveDiscountBudget(\''+b.approver_name.replace(/'/g,"\\'")+'\')">Save</button>' : '';
+    return '<tr style="border-bottom:1px solid var(--border)">'
+      + '<td style="padding:10px 12px;font-weight:700">'+escHtml(b.approver_name)+'</td>'
+      + '<td style="padding:10px 12px;text-align:right">'+inp+'</td>'
+      + '<td style="padding:10px 12px;text-align:right">'+weekly+'</td>'
+      + '<td style="padding:10px 12px;text-align:right">'+used+'</td>'
+      + '<td style="padding:10px 12px;text-align:right">'+rem+'</td>'
+      + '<td style="padding:10px 12px;text-align:center">'+act+'</td>'
+    + '</tr>';
+  }).join('');
+}
+function _dbKey(name){ return name.replace(/[^a-zA-Z0-9]/g,'_'); }
+async function saveDiscountBudget(name){
+  const inp=document.getElementById('db-inp-'+_dbKey(name));
+  const val=parseFloat((inp&&inp.value)||0)||0;
+  const r=await api('discount_budget_set',{},'POST',{approver_name:name, monthly_limit:val});
+  if(r&&r.success){ showToast(val>0?('✅ '+name+' set to ₹'+val.toLocaleString('en-IN')+'/month (₹'+Math.round(val/4).toLocaleString('en-IN')+'/week)'):('✅ Limit removed for '+name)); loadDiscountBudgets(); }
+  else showToast('❌ '+((r&&r.error)||'Could not save'));
 }
 async function loadRenewalsPage(){
   // Always (re)load renewal items from the Price List (category = Renewal). Admin edits reflect here.
