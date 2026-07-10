@@ -882,6 +882,17 @@ case 'update_task':
                 $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$bsId,$id]);
             }
         } catch(Exception $e) { error_log('BS awaiting error: '.$e->getMessage()); }
+
+        // ── Feature #2: 50 coins if technician submits within 24h of task creation ──
+        try {
+            $ct=$pdo->prepare("SELECT assigned_to, created_at FROM tasks WHERE id=?"); $ct->execute([$id]); $ctr=$ct->fetch();
+            if ($ctr && $ctr['assigned_to'] && !empty($ctr['created_at'])) {
+                $hrs=(time()-strtotime($ctr['created_at']))/3600;
+                if ($hrs <= 24) {
+                    award_coins($pdo, intval($ctr['assigned_to']), 50, 'On-time submission (within 24h)', $id, 'submit24_'.$id);
+                }
+            }
+        } catch(Exception $e) { error_log('coin submit24 error: '.$e->getMessage()); }
     }
     break;
 
@@ -2352,6 +2363,17 @@ case 'confirm_cash_deposit':
         ]);
     $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'remark')")
         ->execute([$id, $userId, "💰 Cash deposit submitted — Method: {$depositMethod}. Awaiting admin verification."]);
+
+    // ── Feature #2: 50 coins if submitted (via cash flow) within 24h of creation ──
+    try {
+        if (!empty($td['created_at']) && $td['assigned_to']) {
+            $hrs=(time()-strtotime($td['created_at']))/3600;
+            if ($hrs <= 24) {
+                award_coins($pdo, intval($td['assigned_to']), 50, 'On-time submission (within 24h)', $id, 'submit24_'.$id);
+            }
+        }
+    } catch(Exception $e) { error_log('coin submit24 cash error: '.$e->getMessage()); }
+
     echo json_encode(['success'=>true,'message'=>'Cash deposit submitted — admin will verify.']);
     break;
 
