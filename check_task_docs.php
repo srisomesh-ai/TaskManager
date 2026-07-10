@@ -29,6 +29,11 @@ echo "Payment verify status: " . ($t['payment_verify_status'] ?? '(none)') . "\n
 echo "Cash deposit status: " . ($t['cash_deposit_status'] ?? '(none)') . "\n";
 echo str_repeat('-', 40) . "\n";
 
+// Self-heal ALL tasks: any document with a blank doc_type is a payment screenshot (only type app uploads)
+$globalFix = $pdo->query("UPDATE task_documents SET doc_type='payment_screenshot' WHERE doc_type IS NULL OR doc_type=''");
+$gfCount = $globalFix ? $globalFix->rowCount() : 0;
+if ($gfCount > 0) echo "GLOBAL REPAIR: fixed {$gfCount} document(s) across all tasks with blank doc_type -> payment_screenshot\n";
+
 // Documents
 $d = $pdo->prepare("SELECT * FROM task_documents WHERE task_id=?");
 $d->execute([$t['id']]);
