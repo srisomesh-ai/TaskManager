@@ -1294,8 +1294,20 @@
       fd.append('additional_notes',notes+(vtype?' | Vehicle Type: '+vtype:''));
       fd.append('comment',(_v2vMode?'Vehicle changed (V2V) via BharatGPS TaskManager — Task ':'Installed via BharatGPS TaskManager — Task ')+(_curTask.task_id||''));
       const r=await fetch(GPS_PROXY+'?action=update',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd});
-      const data=await r.json();
-      if(data.success){
+      const raw=await r.text();
+      let data={};
+      try{ data=raw?JSON.parse(raw):{}; }catch(e){ data={}; }
+      // Empty / non-JSON response usually means the server took long but the write went through.
+      // Verify by re-checking the device on the server by IMEI before deciding.
+      let ok=!!data.success;
+      if(!ok && !raw.trim()){
+        try{
+          const chk=await fetch(GPS_PROXY+'?action=find&keyword='+encodeURIComponent(String(imei).replace(/\D/g,'')),{headers:{'X-Auth-Token':authToken}}).then(x=>x.text());
+          const cj=chk?JSON.parse(chk):{};
+          if(cj&&cj.devices&&cj.devices.length){ ok=true; }
+        }catch(e){}
+      }
+      if(ok){
         _instSaved[idx]={pushed:true,server_id:serverId,device_id:deviceId,imei,name,server_name:'Server '+serverId,plate,vtype,inst,exp};
         await apiPost('save_device_install',{task_id:_curTask.id,device_index:idx,vehicle_number:plate,vehicle_type:vtype||'',gps_serial_no:imei,name_on_server:name,server_name:'Server '+serverId,server_id:serverId,device_id:deviceId,remarks:notes||(_v2vMode?'Vehicle changed on server':'GPS device added to server')}).catch(()=>{});
         const lbl=SERVER_LABELS[parseInt(serverId)||0]||('Server '+serverId);
