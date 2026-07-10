@@ -574,6 +574,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
           <button class="ts-btn ts-btn-secondary" onclick="clearTaskFilters()">✕ Clear</button>
           <div class="ts-spacer"></div>
           <button class="ts-btn ts-btn-green admin-only" onclick="exportTasksCSV()">⬇ Export CSV</button>
+          <button class="ts-btn ts-btn-secondary super-admin-only" onclick="backfillCoins(this)" title="Award missing on-time (within 24h) coins for past tasks">🪙 Backfill coins</button>
         </div>
 
         <!-- TABLE -->
@@ -6711,6 +6712,14 @@ async function approveRenewal(id, btn){
     if(btn){ btn.disabled=false; btn.textContent='✅ Approve'; }
     loadRenewalRequests();
   }
+}
+async function backfillCoins(btn){
+  if(!confirm('Award the 50 on-time coins for past tasks that were submitted within 24h of creation but never got them?\n\nThis is safe to run multiple times — it will not double-award.')) return;
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Working…'; }
+  const r = await api('coin_backfill_24h',{},'POST',{});
+  if(btn){ btn.disabled=false; btn.textContent='🪙 Backfill coins'; }
+  if(r && r.success){ showToast('✅ Coins backfilled — awarded '+(r.awarded||0)+', skipped '+(r.skipped||0)+' (checked '+(r.checked||0)+')'); }
+  else { showToast('❌ '+((r&&r.error)||'Backfill failed')); }
 }
 async function repairRenewalBs(btn){
   if(!confirm('Fix balance sheet entries for all approved renewals?\n\nThis corrects the profile (BGT/SBGT) and creates any missing renewal entries.')) return;
