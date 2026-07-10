@@ -789,10 +789,18 @@
         }
       } else if(_consentSent){
         btn='<button class="act-btn" id="loc-btn" style="background:var(--saffron)" onclick="resendConsent()"><div class="ico">⏳</div><div class="l">Waiting…</div><div class="s">Tap to resend consent</div></button>';
+        const jlw=(t.device_details||'').toLowerCase();
+        if(jlw.includes('vehicle to vehicle')||jlw.includes('v2v')||jlw.includes('troubleshoot')||jlw.includes('offline')){
+          btn+='<div style="text-align:center;margin-top:10px"><a onclick="skipConsent()" style="color:var(--accent2,#137272);font-size:12.5px;font-weight:700;text-decoration:underline;cursor:pointer">Existing customer? Skip consent &amp; proceed →</a></div>';
+        }
         hint='⏳ Consent sent — waiting for customer to confirm T&amp;C &amp; payment. This updates automatically.'; hintCls='hint-amber';
         startConsentPoll(t.id);
       } else {
         btn='<button class="act-btn act-primary" id="loc-btn" onclick="handleAttend()"><div class="ico">🔧</div><div class="l">Attend</div><div class="s">Send consent to customer</div></button>';
+        const jln=(t.device_details||'').toLowerCase();
+        if(jln.includes('vehicle to vehicle')||jln.includes('v2v')||jln.includes('troubleshoot')||jln.includes('offline')){
+          btn+='<div style="text-align:center;margin-top:10px"><a onclick="skipConsent()" style="color:var(--accent2,#137272);font-size:12.5px;font-weight:700;text-decoration:underline;cursor:pointer">Existing customer? Skip consent &amp; proceed →</a></div>';
+        }
         hint='✅ Location complete'+trip+' — tap Attend to send the consent &amp; payment request'; hintCls='hint-done';
       }
     } else if(!loc.has_location){
@@ -932,6 +940,25 @@
 
   // ═══════════════ CONSENT STEP (matches web) ═══════════════
   let _consentSent=false, _consentPoll=null;
+
+  // Skip consent — ONLY for existing-customer jobs (V2V / Troubleshoot). Shifts responsibility to the technician.
+  async function skipConsent(){
+    const t=_curTask;
+    const ok=confirm('⚠️ Skip customer consent?\n\nSkip consent is ONLY for EXISTING customers.\n\nBy skipping, you take FULL RESPONSIBILITY for any issues that occur from proceeding without the customer\'s confirmation.\n\n• Tap OK to SKIP consent and proceed\n• Tap Cancel to continue with consent');
+    if(!ok) return;
+    const btn=document.getElementById('loc-btn'); if(btn)btn.style.opacity='.6';
+    toast('⏭️ Skipping consent…');
+    const res=await apiPost('skip_consent',{id:t.id});
+    if(res && res.success){
+      toast('✅ Consent skipped — you may proceed');
+      // reload task so the flow advances to the V2V/troubleshoot action
+      await load();
+      renderActionArea();
+    } else {
+      if(btn)btn.style.opacity='1';
+      alert((res&&res.error)||'Could not skip consent. Please try again.');
+    }
+  }
 
   async function handleAttend(){
     const t=_curTask;
