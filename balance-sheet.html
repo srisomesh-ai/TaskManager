@@ -467,6 +467,12 @@ function getFiltered(){
   });
 }
 
+function qtyFmt(v){
+  // Show clean integers (1 not 1.00) but keep decimals when meaningful (1.5).
+  const n=parseFloat(v);
+  if(isNaN(n)) return '–';
+  return (n%1===0) ? String(n) : String(n);
+}
 function bsServerNames(raw){
   const full = (raw||'').trim();
   if(!full) return '–';
@@ -525,7 +531,7 @@ function renderTable(){
       <td>${n}</td><td>${e.date||'–'}</td><td>${tp}</td>
       <td>${e.task_id||e.task_no||'–'}</td><td>${e.invoice_no||'–'}</td>
       <td style="max-width:160px">${bsServerNames(e.name_on_server)}</td>
-      <td>${e.server_name||'–'}</td><td>${e.device_model||e.service_type||'–'}</td><td>${e.qty||'–'}</td>
+      <td>${e.server_name||'–'}</td><td>${e.device_model||e.service_type||'–'}</td><td>${qtyFmt(e.qty)}</td>
       <td style="font-weight:700">₹${parseFloat(e.total_price||0).toLocaleString('en-IN')}</td>
       <td style="color:${(+e.pending_payment||0)>0?'var(--red)':'var(--green)'};font-weight:700">₹${parseFloat(e.pending_payment||0).toLocaleString('en-IN')}</td>
       <td style="color:var(--green);font-weight:700">₹${parseFloat(e.payment_received||0).toLocaleString('en-IN')}</td>
@@ -574,7 +580,7 @@ function viewEntry(id){
   const e=allEntries.find(x=>+x.id===+id); if(!e) return;
   const rows=[['Type',e.type],['Date',e.date],['Task No',e.task_id||e.task_no],['Invoice',e.invoice_no],
     ['Name on Server',e.name_on_server],['Server',e.server_name],['Model/Service',e.device_model||e.service_type],
-    ['Qty',e.qty],['Unit Price',e.unit_price?'₹'+parseFloat(e.unit_price).toLocaleString('en-IN'):'–'],
+    ['Qty',qtyFmt(e.qty)],['Unit Price',e.unit_price?'₹'+parseFloat(e.unit_price).toLocaleString('en-IN'):'–'],
     ['GST',e.gst?'₹'+parseFloat(e.gst).toLocaleString('en-IN'):'–'],
     ['Total','₹'+parseFloat(e.total_price||0).toLocaleString('en-IN')],
     ['Received','₹'+parseFloat(e.payment_received||0).toLocaleString('en-IN')],
