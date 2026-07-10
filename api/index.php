@@ -12,6 +12,7 @@ header('Access-Control-Allow-Headers: Content-Type, X-Auth-Token');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
 
 require_once __DIR__ . '/db.php';
+@require_once __DIR__ . '/fcm_send.php';
 
 $action = $_GET['action'] ?? '';
 $method = $_SERVER['REQUEST_METHOD'];
@@ -77,16 +78,34 @@ function _ensureCoinLedger($pdo){
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 }
 // Award (or deduct) coins. event_key makes it idempotent — same key won't double-award.
-function award_coins($pdo, $userId, $coins, $reason, $taskId = null, $eventKey = null){
+function award_coins($pdo, $userId, $coins, $reason, $taskId = null, $eventKey = null, $pushTitle = null, $pushBody = null){
     try {
         if (!$userId) return false;
         _ensureCoinLedger($pdo);
+        $inserted = false;
         if ($eventKey) {
             $st = $pdo->prepare("INSERT IGNORE INTO coin_ledger (user_id,task_id,coins,reason,event_key) VALUES (?,?,?,?,?)");
             $st->execute([$userId, $taskId, $coins, $reason, $eventKey]);
+            $inserted = $st->rowCount() > 0;
         } else {
             $st = $pdo->prepare("INSERT INTO coin_ledger (user_id,task_id,coins,reason) VALUES (?,?,?,?)");
             $st->execute([$userId, $taskId, $coins, $reason]);
+            $inserted = true;
+        }
+        // Send a push alert only when coins were actually awarded (not a duplicate/idempotent skip)
+        if ($inserted && function_exists('fcm_send_to_user')) {
+            if ($pushTitle === null) {
+                $pushTitle = $coins >= 0 ? ('🎉 +'.$coins.' coins!') : ('⚠️ '.$coins.' coins');
+            }
+            if ($pushBody === null) $pushBody = $reason;
+            try {
+                fcm_send_to_user($pdo, $userId, $pushTitle, $pushBody, [
+                    'type'    => 'coins',
+                    'coins'   => (string)$coins,
+                    'task_id' => (string)($taskId ?? ''),
+                    'url'     => 'earnings.html',
+                ]);
+            } catch(Exception $e){}
         }
         return true;
     } catch(Exception $e){ error_log('award_coins: '.$e->getMessage()); return false; }
@@ -671,6 +690,11 @@ case 'update_task':
     $ex = $pdo->prepare("SELECT * FROM tasks WHERE id=?"); $ex->execute([$id]); $existing=$ex->fetch();
     if (!$existing) { echo json_encode(['error'=>'Not found']); break; }
     if (array_key_exists('payment_verify_status',$body)) { try { $pdo->exec("ALTER TABLE tasks ADD COLUMN payment_verify_status VARCHAR(20) DEFAULT NULL"); } catch(Exception $e){} }
+    // Stamp when cash first goes pending (start of the 24h deposit clock)
+    if (($body['cash_deposit_status'] ?? '') === 'pending' && ($existing['cash_deposit_status'] ?? '') !== 'pending') {
+        try { $pdo->exec("ALTER TABLE tasks ADD COLUMN cash_pending_at DATETIME DEFAULT NULL"); } catch(Exception $e){}
+        try { $pdo->prepare("UPDATE tasks SET cash_pending_at=NOW() WHERE id=? AND cash_pending_at IS NULL")->execute([$id]); } catch(Exception $e){}
+    }
     $fields = ['task_status','payment_status','amount_collected','payment_mode','device_details','general_notes','reminder_date','customer_requested_delay','is_outstation','payment_reminder_date','is_urgent','star_rating',
                // Balance sheet linkage fields
                'gps_serial_no','name_on_server','server_name','invoice_no','payment_received_on','payment_transaction_details','gst_amount','pending_reason','discount_reason','discount_incharge','profile',
@@ -892,7 +916,7 @@ case 'update_task':
             if ($ctr && $ctr['assigned_to'] && !empty($ctr['created_at'])) {
                 $hrs=(time()-strtotime($ctr['created_at']))/3600;
                 if ($hrs <= 24) {
-                    award_coins($pdo, intval($ctr['assigned_to']), 50, 'On-time submission (within 24h)', $id, 'submit24_'.$id);
+                    award_coins($pdo, intval($ctr['assigned_to']), 50, 'On-time submission (within 24h)', $id, 'submit24_'.$id, '🎉 Congratulations! +50 coins', 'Task submitted within 24 hours. Great work — keep it up!');
                 }
             }
         } catch(Exception $e) { error_log('coin submit24 error: '.$e->getMessage()); }
@@ -1272,7 +1296,7 @@ case 'resolve_dispute':
         if (!$t) { echo json_encode(['error'=>'Task not found']); break; }
         if ($verdict==='valid') {
             if ($t['assigned_to']) {
-                award_coins($pdo, intval($t['assigned_to']), -50, 'Customer report confirmed valid by admin', $id, 'dispute50_'.$id);
+                award_coins($pdo, intval($t['assigned_to']), -50, 'Customer report confirmed valid by admin', $id, 'dispute50_'.$id, '😔 -50 coins — customer complaint', 'A customer report against your task was confirmed. Please ensure quality to avoid this.');
             }
             $pdo->prepare("UPDATE tasks SET dispute_status='confirmed' WHERE id=?")->execute([$id]);
             $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")
@@ -2480,7 +2504,7 @@ case 'confirm_cash_deposit':
         if (!empty($td['created_at']) && $td['assigned_to']) {
             $hrs=(time()-strtotime($td['created_at']))/3600;
             if ($hrs <= 24) {
-                award_coins($pdo, intval($td['assigned_to']), 50, 'On-time submission (within 24h)', $id, 'submit24_'.$id);
+                award_coins($pdo, intval($td['assigned_to']), 50, 'On-time submission (within 24h)', $id, 'submit24_'.$id, '🎉 Congratulations! +50 coins', 'Task submitted within 24 hours. Great work — keep it up!');
             }
         }
     } catch(Exception $e) { error_log('coin submit24 cash error: '.$e->getMessage()); }
