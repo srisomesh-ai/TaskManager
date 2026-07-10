@@ -492,6 +492,35 @@
   let _toastT=null;
   function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(_toastT);_toastT=setTimeout(()=>t.classList.remove('show'),3000);}
 
+  // Post-submit appreciation (matches web app). Redirects to dashboard on dismiss.
+  function showTechAppreciation(){
+    const msgs=[
+      {t:'Great job! 🎉',s:'Task completed successfully. Thank you for your effort — keep going, and stay safe!'},
+      {t:'Well done! 👏',s:'Another one done right. Your hard work matters. On to the next — and finish on time!'},
+      {t:'Awesome work! 🌟',s:'Task closed successfully. Keep up the great effort and stay safe out there!'},
+      {t:'You did it! 🚀',s:'Thanks for the solid work. Move on to the next task — you have got this!'},
+      {t:'Superb! 💪',s:'Job completed. We appreciate your dedication. Keep going and complete the next one on time!'},
+    ];
+    const m=msgs[Math.floor(Math.random()*msgs.length)];
+    const old=document.getElementById('tech-appr-overlay'); if(old) old.remove();
+    let done=false;
+    const go=()=>{ if(done) return; done=true; const e=document.getElementById('tech-appr-overlay'); if(e) e.remove(); location.href='dashboard.html'; };
+    const ov=document.createElement('div');
+    ov.id='tech-appr-overlay';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:3000;display:flex;align-items:center;justify-content:center;padding:24px';
+    ov.innerHTML=
+      '<div style="background:#fff;border-radius:18px;max-width:340px;width:100%;padding:28px 22px;text-align:center;box-shadow:0 14px 44px rgba(0,0,0,.28)">'
+      +'<div style="font-size:48px;margin-bottom:8px">✅</div>'
+      +'<div style="font-size:20px;font-weight:800;color:var(--green,#27AE60);margin-bottom:8px">'+m.t+'</div>'
+      +'<div style="font-size:13.5px;color:var(--text2,#475569);line-height:1.6;margin-bottom:20px">'+m.s+'</div>'
+      +'<button id="appr-next" style="width:100%;padding:13px;background:var(--green,#27AE60);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer">Next Task →</button>'
+      +'</div>';
+    document.body.appendChild(ov);
+    document.getElementById('appr-next').addEventListener('click',go);
+    ov.addEventListener('click',function(e){ if(e.target===ov) go(); });
+    setTimeout(go,6000);
+  }
+
   function tdWhatsApp(){
     if(!_curTask)return;
     const p=String(_curTask.contact_number||'').replace(/\D/g,'');
@@ -1373,7 +1402,7 @@
     const payload={id:_curTask.id,deposit_method:_cdMethod,handover_to:document.getElementById('cd-person').value||'',deposit_ref:document.getElementById('cd-refno').value||'',remarks:document.getElementById('cd-remarks').value||''};
     const res=await apiPost('confirm_cash_deposit',payload);
     btn.textContent='✅ Confirm & Submit'; btn.disabled=false;
-    if(res&&res.success){ closeCashDeposit(); toast('✅ Cash deposit confirmed — task submitted for approval'); setTimeout(()=>location.href='dashboard.html',1200); }
+    if(res&&res.success){ closeCashDeposit(); showTechAppreciation(); }
     else { err.textContent='❌ '+((res&&res.error)||'Failed — please try again'); err.style.display=''; }
   }
 
@@ -1381,7 +1410,7 @@
   async function submitForApproval(){
     if(!confirm('Submit this task for approval?\n\nInstallation and payment are complete.')) return;
     const res=await apiPost('update_task',{id:_curTask.id,task_status:'Awaiting Approval',remark:'✅ Installation & payment complete — submitted for approval'});
-    if(res&&res.success){ toast('✅ Submitted for approval'); setTimeout(()=>location.href='dashboard.html',1200); }
+    if(res&&res.success){ showTechAppreciation(); }
     else alert((res&&res.error)||'Submit failed. Please try again.');
   }
 
@@ -1426,8 +1455,7 @@
     btn.textContent='✅ Submit & Close Task'; btn.disabled=false;
     if(res && res.success){
       closeTroubleshoot();
-      toast('✅ Troubleshoot report saved — task sent for approval');
-      setTimeout(()=>location.href='dashboard.html',1200);
+      showTechAppreciation();
     } else {
       err.textContent='❌ '+((res&&res.error)||'Save failed — please try again'); err.style.display='';
     }
@@ -1502,8 +1530,7 @@
     if(res && res.success){
       localStorage.removeItem('demo_proceeded_'+_curTask.id);
       closeDemo();
-      toast('✅ Demo report saved — task sent for approval');
-      setTimeout(()=>location.href='dashboard.html',1200);
+      showTechAppreciation();
     } else { err.textContent='❌ '+((res&&res.error)||'Save failed — please try again'); err.style.display=''; }
   }
 
@@ -1536,8 +1563,7 @@
     btn.textContent='✅ Submit & Close Task'; btn.disabled=false;
     if(res && res.success){
       closeV2V();
-      toast('✅ Transfer recorded — task sent for approval');
-      setTimeout(()=>location.href='dashboard.html',1200);
+      showTechAppreciation();
     } else { err.textContent='❌ '+((res&&res.error)||'Save failed — please try again'); err.style.display=''; }
   }
 
