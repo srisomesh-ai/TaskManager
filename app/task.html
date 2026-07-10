@@ -74,9 +74,9 @@
   .upd-btn .l{font-size:14px;font-weight:800;color:var(--accent)}
   .upd-btn .s{font-size:11px;color:var(--text3);margin-top:3px}
   /* Update modal (bottom sheet) */
-  .sheet-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:none}
+  .sheet-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:400;display:none}
   .sheet-ov.open{display:block}
-  .sheet{position:fixed;left:0;right:0;bottom:0;z-index:201;background:var(--surface);border-radius:20px 20px 0 0;
+  .sheet{position:fixed;left:0;right:0;bottom:0;z-index:401;background:var(--surface);border-radius:20px 20px 0 0;
     max-height:92vh;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .28s cubic-bezier(.4,0,.2,1)}
   .sheet.open{transform:translateY(0)}
   .sheet-hd{padding:16px 18px 10px;border-bottom:1px solid var(--border);flex-shrink:0}
@@ -1094,7 +1094,7 @@
       bd.innerHTML='<div class="dev-done">✅ Device '+idx+' installed — '+esc(saved.name||'')+' · '+esc(saved.plate||'')+'<br>IMEI '+esc(saved.imei||'')+'</div>'+
         (idx<_instQty?'<button class="inst-btn b-push" onclick="gotoInstDev('+(idx+1)+')">Next Device →</button>':
           '<div class="inst-card"><div style="font-weight:800;color:var(--green);margin-bottom:6px">🎉 All '+_instQty+' device(s) installed!</div><div style="font-size:13px;color:var(--text2)">Now give the customer access to the device on their GPS account, then collect payment.</div></div>'+
-          '<button class="inst-btn b-push" style="background:var(--accent2)" onclick="openAssign()">👤 Give Customer Access</button>'+
+          '<button class="inst-btn b-push" style="background:var(--accent2)" onclick="closeInstall();openAssign()">👤 Give Customer Access</button>'+
           '<button class="inst-btn" style="background:var(--surface2);color:var(--text2);border:1.5px solid var(--border);margin-top:8px" onclick="finishInstall()">Skip → Back to Task</button>');
       return;
     }
