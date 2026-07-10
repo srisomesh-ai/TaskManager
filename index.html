@@ -1034,8 +1034,8 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
           <table style="width:100%;border-collapse:collapse">
             <thead><tr style="background:var(--surface2);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)">
               <th style="padding:10px 12px;text-align:left;font-weight:700">Device</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700">Vehicle / Customer</th>
               <th style="padding:10px 12px;text-align:left;font-weight:700">IMEI</th>
-              <th style="padding:10px 12px;text-align:left;font-weight:700">Model</th>
               <th style="padding:10px 12px;text-align:left;font-weight:700">Server</th>
               <th style="padding:10px 12px;text-align:left;font-weight:700">Requested by</th>
               <th style="padding:10px 12px;text-align:left;font-weight:700">When</th>
@@ -6271,8 +6271,8 @@ function renderReadding(){
     }
     return `<tr style="border-bottom:1px solid var(--border)">
       <td style="padding:9px 12px;font-weight:700">${escHtml(r.name)}</td>
-      <td style="padding:9px 12px;font-family:monospace;font-size:12px">${escHtml(r.imei)}${r.vin?('<br><span style=\"color:var(--text3);font-size:11px\">VIN '+escHtml(r.vin)+'</span>'):''}</td>
-      <td style="padding:9px 12px;font-size:12px">${escHtml(r.model||'—')}${r.sim?('<br><span style=\"color:var(--text3);font-size:11px\">SIM '+escHtml(r.sim)+'</span>'):''}</td>
+      <td style="padding:9px 12px;font-size:12px">${escHtml(r.plate_number||'—')}${r.object_owner?('<br><span style=\"color:var(--text3);font-size:11px\">'+escHtml(r.object_owner)+'</span>'):''}</td>
+      <td style="padding:9px 12px;font-family:monospace;font-size:12px">${escHtml(r.imei)}${r.vin?('<br><span style=\"color:var(--text3);font-size:11px\">VIN '+escHtml(r.vin)+'</span>'):''}${r.registration_number?('<br><span style=\"color:var(--text3);font-size:11px\">M '+escHtml(r.registration_number)+'</span>'):''}</td>
       <td style="padding:9px 12px;font-size:12px;color:var(--text2)">${escHtml(_RA_SRV[r.server_id]||('Server '+r.server_id))}</td>
       <td style="padding:9px 12px;font-size:12px;color:var(--text2)">${escHtml(r.requested_by_name||'—')}<br><span style="font-size:10px;color:var(--text3);text-transform:capitalize">${escHtml(r.requested_role||'')}</span></td>
       <td style="padding:9px 12px;font-size:11px;color:var(--text3)">${escHtml(when)}</td>
@@ -6292,8 +6292,9 @@ async function approveReadding(id, btn){
     fd.append('name', row.name);
     fd.append('imei', row.imei);
     fd.append('vin', row.vin||'');
-    fd.append('sim', row.sim||'');
-    fd.append('model', row.model||'');
+    fd.append('plate_number', row.plate_number||'');
+    fd.append('registration_number', row.registration_number||'');
+    fd.append('object_owner', row.object_owner||'');
     const pr = await fetch('gps_proxy.php?action=add_device',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd}).then(x=>x.json()).catch(()=>({}));
     if(!pr || !pr.success){
       showToast('❌ Push failed: '+((pr&&pr.error)||'server error'));
