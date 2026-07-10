@@ -50,6 +50,12 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
         $pdo->prepare("UPDATE tasks SET feedback_token='USED' WHERE id=?")
             ->execute([$task['id']]);
 
+        // Flag a pending dispute for admin review (only real disputes, not reschedules)
+        if(!$isRes){
+            try { $pdo->exec("ALTER TABLE tasks ADD COLUMN dispute_status VARCHAR(20) DEFAULT NULL"); } catch(Exception $e){}
+            try { $pdo->prepare("UPDATE tasks SET dispute_status='pending' WHERE id=?")->execute([$task['id']]); } catch(Exception $e){}
+        }
+
         // Send email via direct SMTP
         $subject = $isRes ? '🔄 Reschedule Request — '.$task['task_id'] : '🚨 Customer Dispute — '.$task['task_id'];
         $accent  = $isRes ? '#0E5C5C' : '#c0392b';
