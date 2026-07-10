@@ -56,6 +56,63 @@ function sendMail(string $toEmail, string $toName, string $subject, string $html
     }
 }
 
+// Send an HTML email with ONE file attachment (used for PDF quotations).
+// $attachData = raw file bytes; $attachName = filename shown to recipient; $attachMime = e.g. application/pdf
+function sendMailWithAttachment(string $toEmail, string $toName, string $subject, string $htmlBody,
+                                string $attachData, string $attachName, string $attachMime = 'application/pdf'): bool {
+    if (!$toEmail || !filter_var($toEmail, FILTER_VALIDATE_EMAIL)) return false;
+    try {
+        $socket = fsockopen(MAIL_HOST, MAIL_PORT, $errno, $errstr, 15);
+        if (!$socket) throw new Exception("Connect failed: $errstr ($errno)");
+        stream_set_timeout($socket, 20);
+        smtpRead($socket);
+        smtpCmd($socket, "EHLO bharatgps.com");
+        smtpCmd($socket, "STARTTLS");
+        stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
+        smtpCmd($socket, "EHLO bharatgps.com");
+        smtpCmd($socket, "AUTH LOGIN");
+        smtpCmd($socket, base64_encode(MAIL_USER));
+        smtpCmd($socket, base64_encode(MAIL_PASS));
+        smtpCmd($socket, "MAIL FROM: <" . MAIL_FROM . ">");
+        smtpCmd($socket, "RCPT TO: <$toEmail>");
+        smtpCmd($socket, "DATA");
+
+        $boundary = 'bgps_' . md5(uniqid((string)mt_rand(), true));
+        $encoded  = chunk_split(base64_encode($attachData));
+        $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', $attachName);
+
+        $msg = "From: " . MAIL_FROM_NAME . " <" . MAIL_FROM . ">\r\n"
+             . "To: " . $toName . " <" . $toEmail . ">\r\n"
+             . "Reply-To: " . MAIL_REPLY_TO . "\r\n"
+             . "Subject: =?UTF-8?B?" . base64_encode($subject) . "?=\r\n"
+             . "MIME-Version: 1.0\r\n"
+             . "Content-Type: multipart/mixed; boundary=\"$boundary\"\r\n"
+             . "X-Mailer: BharatGPS/1.0\r\n"
+             . "\r\n"
+             . "--$boundary\r\n"
+             . "Content-Type: text/html; charset=UTF-8\r\n"
+             . "Content-Transfer-Encoding: 8bit\r\n"
+             . "\r\n"
+             . $htmlBody . "\r\n"
+             . "--$boundary\r\n"
+             . "Content-Type: $attachMime; name=\"$safeName\"\r\n"
+             . "Content-Transfer-Encoding: base64\r\n"
+             . "Content-Disposition: attachment; filename=\"$safeName\"\r\n"
+             . "\r\n"
+             . $encoded . "\r\n"
+             . "--$boundary--\r\n"
+             . "\r\n.";
+
+        $response = smtpCmd($socket, $msg);
+        smtpCmd($socket, "QUIT");
+        fclose($socket);
+        return (substr(trim($response), 0, 1) === '2');
+    } catch (Exception $e) {
+        error_log("BharatGPS Mailer (attachment) Error: " . $e->getMessage());
+        return false;
+    }
+}
+
 function smtpCmd($socket, $cmd): string {
     fwrite($socket, $cmd . "\r\n");
     return smtpRead($socket);
