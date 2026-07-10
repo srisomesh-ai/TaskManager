@@ -4297,6 +4297,82 @@ case 'discount_check':
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
-default:
+case 'quotation_create':
+    // Admin/Manager/Assigner: create a follow-up task AND email the PDF quotation to the customer.
+    // The PDF is generated in the browser and sent here as base64 (pdf_base64).
+    try {
+        if(!in_array($userRole,['admin','assigner','manager'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized to send quotations']); break; }
+        $custName = trim($body['customer_name'] ?? '');
+        $custEmail= trim($body['email'] ?? '');
+        $custPhone= trim($body['contact_number'] ?? '');
+        if($custName===''){ echo json_encode(['error'=>'Customer name required']); break; }
+        if(!$custEmail || !filter_var($custEmail, FILTER_VALIDATE_EMAIL)){ echo json_encode(['error'=>'Valid customer email required to send the quotation']); break; }
+        $items    = $body['items'] ?? [];            // [{name,qty,unit_price,gst_percent,line_total}]
+        $grand    = floatval($body['grand_total'] ?? 0);
+        $notes    = trim($body['notes'] ?? '');
+        $followDate = trim($body['follow_up_date'] ?? '');
+        $quoteNo  = trim($body['quote_no'] ?? ('QT-'.date('Ymd-His')));
+        $pdfB64   = $body['pdf_base64'] ?? '';
+
+        // Ensure quotations table
+        $pdo->exec("CREATE TABLE IF NOT EXISTS quotations (
+            id INT AUTO_INCREMENT PRIMARY KEY, quote_no VARCHAR(50), task_db_id INT NULL, task_id VARCHAR(20) NULL,
+            customer_name VARCHAR(200), email VARCHAR(200), contact_number VARCHAR(30),
+            items_json TEXT, grand_total DECIMAL(10,2) DEFAULT 0, notes TEXT,
+            emailed TINYINT(1) DEFAULT 0, created_by VARCHAR(100),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        // 1) Create the follow-up task (lead_type = Quotation) so it can never be skipped.
+        $year = date('Y');
+        $maxRow = $pdo->query("SELECT MAX(CAST(SUBSTRING(task_id, 9) AS UNSIGNED)) AS maxnum FROM tasks WHERE task_id LIKE 'ID-$year-%'")->fetch();
+        $nextNum = intval($maxRow['maxnum'] ?? 0) + 1;
+        $taskId = "ID-$year-".str_pad($nextNum,4,'0',STR_PAD_LEFT);
+        for($i=0;$i<20;$i++){ $ex=$pdo->prepare("SELECT 1 FROM tasks WHERE task_id=? LIMIT 1"); $ex->execute([$taskId]); if(!$ex->fetch()) break; $nextNum++; $taskId="ID-$year-".str_pad($nextNum,4,'0',STR_PAD_LEFT); }
+        $itemSummary = '';
+        foreach((array)$items as $it){ $itemSummary .= ($itemSummary?', ':'').trim($it['name']??'').' x'.intval($it['qty']??1); }
+        $reminder = $followDate ?: date('Y-m-d', strtotime('+2 days'));
+        $notesFull = 'QUOTATION '.$quoteNo.' sent'."\n".'Items: '.$itemSummary."\n".'Total: Rs.'.number_format($grand,2).($notes?("\nNote: ".$notes):'');
+        $pdo->prepare("INSERT INTO tasks (task_id,customer_name,contact_number,email,lead_type,task_status,general_notes,reminder_date,created_by,device_details)
+                       VALUES (?,?,?,?,?, 'Open', ?, ?, ?, ?)")
+            ->execute([$taskId,$custName,$custPhone,$custEmail,'Quotation',$notesFull,$reminder,($cu['name']??'staff'),$itemSummary]);
+        $taskDbId = $pdo->lastInsertId();
+
+        // 2) Store the quotation record
+        $pdo->prepare("INSERT INTO quotations (quote_no,task_db_id,task_id,customer_name,email,contact_number,items_json,grand_total,notes,created_by)
+                       VALUES (?,?,?,?,?,?,?,?,?,?)")
+            ->execute([$quoteNo,$taskDbId,$taskId,$custName,$custEmail,$custPhone,json_encode($items),$grand,$notes,($cu['name']??'staff')]);
+        $quoteId = $pdo->lastInsertId();
+
+        // 3) Email the PDF quotation to the customer
+        $emailed = false;
+        if($pdfB64){
+            $pdfRaw = base64_decode(preg_replace('#^data:application/pdf;base64,#','',$pdfB64), true);
+            if($pdfRaw !== false){
+                require_once __DIR__.'/mailer.php';
+                $subject = 'Quotation '.$quoteNo.' — BharatGPS Tracker';
+                $html = '<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;line-height:1.6">'
+                      . '<p>Dear '.htmlspecialchars($custName).',</p>'
+                      . '<p>Thank you for your interest in BharatGPS Tracker. Please find your quotation <b>'.htmlspecialchars($quoteNo).'</b> attached as a PDF.</p>'
+                      . '<p><b>Total: Rs. '.number_format($grand,2).'</b></p>'
+                      . ($notes?('<p>'.nl2br(htmlspecialchars($notes)).'</p>'):'')
+                      . '<p>For any questions, reply to this email or call 9849849824.</p>'
+                      . '<p>Warm regards,<br>BharatGPS Tracker</p></div>';
+                $emailed = sendMailWithAttachment($custEmail, $custName, $subject, $html, $pdfRaw, $quoteNo.'.pdf', 'application/pdf');
+                if($emailed){ $pdo->prepare("UPDATE quotations SET emailed=1 WHERE id=?")->execute([$quoteId]); }
+            }
+        }
+        echo json_encode(['success'=>true,'task_id'=>$taskId,'task_db_id'=>$taskDbId,'quote_no'=>$quoteNo,'emailed'=>$emailed]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
-}
+
+case 'quotation_list':
+    try {
+        if(!in_array($userRole,['admin','assigner','manager'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+        $pdo->exec("CREATE TABLE IF NOT EXISTS quotations (id INT AUTO_INCREMENT PRIMARY KEY, quote_no VARCHAR(50), task_db_id INT NULL, task_id VARCHAR(20) NULL, customer_name VARCHAR(200), email VARCHAR(200), contact_number VARCHAR(30), items_json TEXT, grand_total DECIMAL(10,2) DEFAULT 0, notes TEXT, emailed TINYINT(1) DEFAULT 0, created_by VARCHAR(100), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $rows = $pdo->query("SELECT * FROM quotations ORDER BY created_at DESC LIMIT 300")->fetchAll();
+        echo json_encode(['success'=>true,'quotations'=>$rows]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+default:
