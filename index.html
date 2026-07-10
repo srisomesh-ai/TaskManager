@@ -6526,7 +6526,7 @@ function rnwTab(which){
     ts.style.background = which==='search'?'var(--accent2)':''; ts.style.color = which==='search'?'#fff':'';
     ta.style.background = which==='approve'?'var(--accent2)':''; ta.style.color = which==='approve'?'#fff':'';
   }
-  if(which==='approve') renderRenewalRequests();
+  if(which==='approve') loadRenewalRequests();
 }
 function rnwOnFilterChange(){
   const isRange = document.getElementById('rnw-filter').value==='range';
@@ -6655,8 +6655,13 @@ async function requestRenewal(idx, btn){
   } else { showToast('❌ '+((r&&r.error)||'Could not request')); if(btn){ btn.disabled=false; btn.textContent='🔄 Renew'; } }
 }
 async function loadRenewalRequests(){
-  const d = await api('renewal_list').catch(()=>({}));
+  const d = await api('renewal_list').catch(function(e){ return {error:String(e)}; });
+  if(d && d.error){ showToast('❌ Could not load renewals: '+d.error); }
   _rnwRequests = (d&&d.requests)?d.requests:[];
+  if(d && d.success && (!d.requests || !d.requests.length)){
+    // list came back empty but a pending badge may show — surface the mismatch
+    console.log('renewal_list returned', d);
+  }
   renderRenewalRequests();
 }
 async function loadRenewalsPageRefresh(){ return loadRenewalRequests(); }
