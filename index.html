@@ -6714,12 +6714,23 @@ async function approveRenewal(id, btn){
   }
 }
 async function backfillCoins(btn){
-  if(!confirm('Award the 50 on-time coins for past tasks that were submitted within 24h of creation but never got them?\n\nThis is safe to run multiple times — it will not double-award.')) return;
+  if(!confirm('Award the 50 on-time coins for past tasks that were completed within 24h of creation but never got them?\n\nThis is safe to run multiple times — it will not double-award.')) return;
   if(btn){ btn.disabled=true; btn.textContent='⏳ Working…'; }
   const r = await api('coin_backfill_24h',{},'POST',{});
   if(btn){ btn.disabled=false; btn.textContent='🪙 Backfill coins'; }
-  if(r && r.success){ showToast('✅ Coins backfilled — awarded '+(r.awarded||0)+', skipped '+(r.skipped||0)+' (checked '+(r.checked||0)+')'); }
-  else { showToast('❌ '+((r&&r.error)||'Backfill failed')); }
+  if(r && r.success){
+    const b = r.breakdown || {};
+    alert('🪙 Coin backfill complete\n\n'
+      + '✅ Awarded: '+(r.awarded||0)+' task(s)\n'
+      + '⏭️ Skipped: '+(r.skipped||0)+'\n'
+      + '🔍 Checked: '+(r.checked||0)+' completed task(s)\n\n'
+      + 'Skipped breakdown:\n'
+      + '  • Already had coins: '+(b.already_had_coins||0)+'\n'
+      + '  • No timestamp found: '+(b.no_timestamp||0)+'\n'
+      + '  • Took over 24h: '+(b.over_24h||0)+'\n\n'
+      + ((r.awarded>0)?'The technician(s) should now see coins after refreshing My Earnings.':'No new coins awarded — see breakdown above for why.'));
+  }
+  else { alert('❌ Backfill failed: '+((r&&r.error)||'unknown error')); }
 }
 async function repairRenewalBs(btn){
   if(!confirm('Fix balance sheet entries for all approved renewals?\n\nThis corrects the profile (BGT/SBGT) and creates any missing renewal entries.')) return;
