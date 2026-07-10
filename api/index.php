@@ -97,6 +97,58 @@ function _ensureCoinLedger($pdo){
 // NOTE: a normal installation task does NOT store the word "install" in device_details
 // (it holds the device model, or is blank). The app itself treats any device_details that
 // is not a known service type as an installation. We mirror that here.
+function _discountBudgetEnsureTable($pdo){
+    $pdo->exec("CREATE TABLE IF NOT EXISTS discount_budgets (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        approver_name VARCHAR(100) NOT NULL UNIQUE,
+        monthly_limit DECIMAL(10,2) NOT NULL DEFAULT 0,
+        updated_by VARCHAR(100) DEFAULT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+}
+// Sum of discounts given under an approver's name in the last 7 days (rolling window).
+// Optionally exclude a specific task id (so editing a task does not count its own old value twice).
+function _discountUsed7d($pdo, $approver, $excludeTaskId=null){
+    if($approver===null || $approver==='') return 0.0;
+    $sql = "SELECT COALESCE(SUM(discount_given),0) FROM tasks
+            WHERE discount_incharge = ? AND COALESCE(discount_given,0) > 0
+            AND created_at >= (NOW() - INTERVAL 7 DAY)";
+    $params = [$approver];
+    if($excludeTaskId){ $sql .= " AND id <> ?"; $params[] = intval($excludeTaskId); }
+    $st = $pdo->prepare($sql); $st->execute($params);
+    return floatval($st->fetchColumn());
+}
+// Returns the monthly limit for an approver, or null if none set (null = unlimited).
+function _discountMonthlyLimit($pdo, $approver){
+    if($approver===null || $approver==='') return null;
+    try {
+        $st = $pdo->prepare("SELECT monthly_limit FROM discount_budgets WHERE approver_name=?");
+        $st->execute([$approver]);
+        $v = $st->fetchColumn();
+        if($v===false || $v===null) return null;
+        return floatval($v);
+    } catch(Exception $e){ return null; }
+}
+// Check whether $approver can give $amount now. Returns [allowed(bool), reason(string), info(array)].
+// Rule: weekly cap = monthly/4; block if (used last 7 days + new amount) > weekly cap.
+function _discountCheck($pdo, $approver, $amount, $excludeTaskId=null){
+    $amount = floatval($amount);
+    if($amount <= 0) return [true, '', []];
+    _discountBudgetEnsureTable($pdo);
+    $monthly = _discountMonthlyLimit($pdo, $approver);
+    if($monthly === null || $monthly <= 0){
+        return [true, '', ['limit_set'=>false]]; // no budget set => unlimited
+    }
+    $weekly = round($monthly / 4, 2);
+    $used   = _discountUsed7d($pdo, $approver, $excludeTaskId);
+    $remaining = round($weekly - $used, 2);
+    $info = ['limit_set'=>true,'monthly'=>$monthly,'weekly'=>$weekly,'used_7d'=>$used,'remaining'=>$remaining];
+    if(($used + $amount) > $weekly + 0.001){
+        $reason = $approver.' has only ₹'.number_format(max(0,$remaining),0).' discount left this week (weekly cap ₹'.number_format($weekly,0).', already used ₹'.number_format($used,0).' in the last 7 days). Cannot give ₹'.number_format($amount,0).'.';
+        return [false, $reason, $info];
+    }
+    return [true, '', $info];
+}
 function _renewalEnsureTable($pdo){
     $pdo->exec("CREATE TABLE IF NOT EXISTS renewal_requests (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -691,6 +743,14 @@ case 'create_task':
     try { $pdo->exec("ALTER TABLE tasks ADD COLUMN discount_incharge VARCHAR(100) DEFAULT NULL"); } catch(Exception $e){}
     try { $pdo->exec("ALTER TABLE tasks ADD COLUMN vehicle_number VARCHAR(50) DEFAULT NULL"); } catch(Exception $e){}
 
+    // Discount budget enforcement (hard block): approver's rolling-7-day discounts must stay within monthly/4.
+    $dcAmt = floatval($body['discount_given'] ?? 0);
+    $dcWho = trim($body['discount_incharge'] ?? '');
+    if($dcAmt > 0 && $dcWho !== ''){
+        list($dcOk, $dcReason) = _discountCheck($pdo, $dcWho, $dcAmt);
+        if(!$dcOk){ http_response_code(400); echo json_encode(['error'=>$dcReason, 'discount_blocked'=>true]); break; }
+    }
+
     try {
     $pdo->prepare("INSERT INTO tasks (task_id,customer_name,contact_number,email,location,lead_type,device_qty,price_to_collect,payment_mode,assigned_to,task_status,is_outstation,customer_requested_delay,is_urgent,general_notes,reminder_date,device_details,created_by,payment_reminder_date,profile,outstation_location,outstation_travel_paid_by,outstation_customer_travel_amount,outstation_claim_cap,discount_given,discount_reason,discount_incharge,feedback_token,vehicle_number)
         VALUES (?,?,?,?,?,?,?,?,?,?,'Open',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
@@ -802,6 +862,18 @@ case 'update_task':
     $id = intval($body['id'] ?? 0);
     $ex = $pdo->prepare("SELECT * FROM tasks WHERE id=?"); $ex->execute([$id]); $existing=$ex->fetch();
     if (!$existing) { echo json_encode(['error'=>'Not found']); break; }
+    // Discount budget enforcement on update: if a discount amount exists and the approver is being
+    // set/changed, re-check that approver's rolling-7-day budget (excluding this task's own value).
+    {
+        $dcAmt2 = array_key_exists('discount_given',$body) ? floatval($body['discount_given']) : floatval($existing['discount_given'] ?? 0);
+        $dcWho2 = array_key_exists('discount_incharge',$body) ? trim($body['discount_incharge']) : trim($existing['discount_incharge'] ?? '');
+        $whoChanged = array_key_exists('discount_incharge',$body) && trim($body['discount_incharge']) !== trim($existing['discount_incharge'] ?? '');
+        $amtChanged = array_key_exists('discount_given',$body) && floatval($body['discount_given']) !== floatval($existing['discount_given'] ?? 0);
+        if($dcAmt2 > 0 && $dcWho2 !== '' && ($whoChanged || $amtChanged)){
+            list($dcOk2, $dcReason2) = _discountCheck($pdo, $dcWho2, $dcAmt2, $id);
+            if(!$dcOk2){ http_response_code(400); echo json_encode(['error'=>$dcReason2, 'discount_blocked'=>true]); break; }
+        }
+    }
     if (array_key_exists('payment_verify_status',$body)) { try { $pdo->exec("ALTER TABLE tasks ADD COLUMN payment_verify_status VARCHAR(20) DEFAULT NULL"); } catch(Exception $e){} }
     // Stamp when cash first goes pending (start of the 24h deposit clock)
     if (($body['cash_deposit_status'] ?? '') === 'pending' && ($existing['cash_deposit_status'] ?? '') !== 'pending') {
@@ -4136,8 +4208,62 @@ case 'coin_backfill_24h':
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
+case 'discount_budget_list':
+    // List discount approvers with monthly limit + used (last 7 days) + weekly remaining.
+    try {
+        if(!in_array($userRole,['admin','assigner','manager'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+        _discountBudgetEnsureTable($pdo);
+        // The fixed approver list (matches the task form dropdown). Include any extra names already in the table.
+        $names = ['Raghavendra Manoj','Gummidi Lohita','Tanuja','Somesh','Sri Mam'];
+        try { foreach($pdo->query("SELECT approver_name FROM discount_budgets")->fetchAll(PDO::FETCH_COLUMN) as $n){ if(!in_array($n,$names)) $names[]=$n; } } catch(Exception $e){}
+        $out = [];
+        foreach($names as $nm){
+            $monthly = _discountMonthlyLimit($pdo, $nm);
+            $used = _discountUsed7d($pdo, $nm);
+            $weekly = ($monthly!==null && $monthly>0) ? round($monthly/4,2) : null;
+            $out[] = [
+                'approver_name'=>$nm,
+                'monthly_limit'=>$monthly,           // null => no limit (unlimited)
+                'weekly_cap'=>$weekly,
+                'used_7d'=>round($used,2),
+                'remaining'=>($weekly!==null)?round($weekly-$used,2):null,
+                'limited'=>($monthly!==null && $monthly>0)
+            ];
+        }
+        echo json_encode(['success'=>true,'budgets'=>$out]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'discount_budget_set':
+    // Admin sets/updates an approver's MONTHLY discount limit (0 or empty => remove limit / unlimited).
+    try {
+        if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Only admin can set discount budgets']); break; }
+        _discountBudgetEnsureTable($pdo);
+        $nm = trim($body['approver_name'] ?? '');
+        if($nm===''){ echo json_encode(['error'=>'Approver name required']); break; }
+        $lim = floatval($body['monthly_limit'] ?? 0);
+        if($lim <= 0){
+            $pdo->prepare("DELETE FROM discount_budgets WHERE approver_name=?")->execute([$nm]);
+            echo json_encode(['success'=>true,'removed'=>true]);
+        } else {
+            $pdo->prepare("INSERT INTO discount_budgets (approver_name,monthly_limit,updated_by) VALUES (?,?,?)
+                           ON DUPLICATE KEY UPDATE monthly_limit=VALUES(monthly_limit), updated_by=VALUES(updated_by)")
+                ->execute([$nm,$lim,$cu['name']??'admin']);
+            echo json_encode(['success'=>true,'monthly_limit'=>$lim,'weekly_cap'=>round($lim/4,2)]);
+        }
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'discount_check':
+    // Live check used by the task form: can this approver give this amount now?
+    try {
+        $nm  = trim($body['approver_name'] ?? $_GET['approver_name'] ?? '');
+        $amt = floatval($body['amount'] ?? $_GET['amount'] ?? 0);
+        list($ok, $reason, $info) = _discountCheck($pdo, $nm, $amt);
+        echo json_encode(['success'=>true,'allowed'=>$ok,'reason'=>$reason,'info'=>$info]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 default:
-    http_response_code(404);
-    echo json_encode(['error'=>'Unknown action: '.$action]);
     break;
 }
