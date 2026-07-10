@@ -307,6 +307,41 @@
     </div>
   </div>
 
+  <!-- REMOVE DEVICE bottom sheet -->
+  <div class="sheet-ov" id="rm-ov" onclick="closeRemove()"></div>
+  <div class="sheet" id="rm-sheet">
+    <div class="sheet-hd">
+      <div class="t">🔴 Remove GPS Device</div>
+      <div class="r" id="rm-ref"></div>
+    </div>
+    <div class="sheet-bd">
+      <div class="tu-lbl">GPS Serial / IMEI *</div>
+      <input class="inst-in" id="rm-serial" placeholder="Serial or IMEI" style="margin-bottom:12px">
+      <div class="tu-lbl">Reason for removal *</div>
+      <select class="inst-in" id="rm-reason" style="margin-bottom:12px">
+        <option value="">Select…</option>
+        <option>Customer request</option>
+        <option>Non-payment / service ended</option>
+        <option>Vehicle sold</option>
+        <option>Device faulty — taking back</option>
+        <option>Other</option>
+      </select>
+      <div class="tu-lbl">Device disposition *</div>
+      <select class="inst-in" id="rm-disp" style="margin-bottom:12px">
+        <option value="">Select…</option>
+        <option value="Returned to company">Returned to company / office</option>
+        <option value="Left with customer">Left with customer</option>
+      </select>
+      <div class="tu-lbl">Remarks</div>
+      <textarea class="inst-in" id="rm-remarks" rows="2" placeholder="Optional"></textarea>
+      <div id="rm-err" style="display:none;color:var(--red);font-size:13px;font-weight:700;margin-top:10px"></div>
+    </div>
+    <div class="sheet-ft">
+      <button class="btn btn-cancel" onclick="closeRemove()">Cancel</button>
+      <button class="btn btn-save" id="rm-save" onclick="submitRemove()">✅ Submit</button>
+    </div>
+  </div>
+
   <!-- TROUBLESHOOT REPORT bottom sheet -->
   <div class="sheet-ov" id="ts-ov" onclick="closeTroubleshoot()"></div>
   <div class="sheet" id="ts-sheet">
@@ -756,6 +791,24 @@
         } else if(jl.includes('vehicle to vehicle')||jl.includes('v2v')){
           btn='<button class="act-btn act-green" id="loc-btn" onclick="openV2V()"><div class="ico">🚗</div><div class="l">Record Transfer</div><div class="s">'+cName+' confirmed</div></button>';
           hint='✅ '+cName+' agreed — move the device to the new vehicle, then record the transfer to close.'+trip; hintCls='hint-done';
+        } else if(jl.includes('remove only')||jl.includes('only remove')||jl.includes('gps remove')||jl.includes('device removal')){
+          const rmPrice=parseFloat(t.price_to_collect||0), rmColl=parseFloat(t.amount_collected||0);
+          const rmPayDone=rmColl>=rmPrice-15 || rmPrice<=0;
+          const rmReportDone=localStorage.getItem('rm_done_'+t.id)==='1';
+          const rmCashPending=(t.cash_deposit_status==='pending');
+          if(rmReportDone && !rmPayDone){
+            btn='<button class="act-btn" id="loc-btn" style="background:var(--green)" onclick="openPaymentSoon()"><div class="ico">💰</div><div class="l">Collect Payment</div><div class="s">₹'+(rmPrice-rmColl).toLocaleString('en-IN')+' to collect</div></button>';
+            hint='🔴 Device removed — collect payment to finish.'; hintCls='hint-done';
+          } else if(rmReportDone && rmColl>0 && rmCashPending){
+            btn='<button class="act-btn" id="loc-btn" style="background:var(--saffron)" onclick="openCashDeposit()"><div class="ico">🏦</div><div class="l">Confirm Cash Deposit</div><div class="s">Deposit cash &amp; submit</div></button>';
+            hint='🏦 Cash deposit pending — deposit &amp; confirm within 24h to submit.'; hintCls='hint-amber';
+          } else if(rmReportDone && rmPayDone){
+            btn='<button class="act-btn act-primary" id="loc-btn" onclick="submitForApproval()"><div class="ico">✅</div><div class="l">Submit Task</div><div class="s">Removed'+(rmPrice>0?' &amp; paid':'')+'</div></button>';
+            hint='✅ Device removed'+(rmPrice>0?' &amp; payment collected':'')+' — submit for approval.'; hintCls='hint-done';
+          } else {
+            btn='<button class="act-btn act-green" id="loc-btn" onclick="openRemove()"><div class="ico">🔴</div><div class="l">Remove Device</div><div class="s">'+cName+' confirmed</div></button>';
+            hint='✅ '+cName+' agreed — remove the device, then record the removal'+(rmPrice>0?' &amp; collect ₹'+rmPrice.toLocaleString('en-IN'):'')+'.'+trip; hintCls='hint-done';
+          }
         } else {
           btn='<button class="act-btn act-green" id="loc-btn" onclick="openInstallSoon()"><div class="ico">✅</div><div class="l">Proceed!</div><div class="s">'+cName+' confirmed</div></button>';
           hint='✅ '+cName+' agreed to T&amp;C and payment — tap Proceed to install'+trip; hintCls='hint-done';
@@ -993,10 +1046,10 @@
   async function openInstall(){
     const t=_curTask;
     _v2vMode=false;
-    // route special jobs — troubleshoot/demo/v2v now have their own flows; only remove is desktop-only
+    // route special jobs — troubleshoot/demo/v2v/remove now have their own flows
     const job=(t.device_details||'').toLowerCase();
-    if(job.includes('remove only')||job.includes('only remove')){
-      alert('Device removal uses a different flow — please complete it on the desktop portal for now.');
+    if(job.includes('remove only')||job.includes('only remove')||job.includes('gps remove')||job.includes('device removal')){
+      openRemove();
       return;
     }
     _instQty=parseInt(t.device_qty||1)||1;
@@ -1436,7 +1489,7 @@
   async function submitForApproval(){
     if(!confirm('Submit this task for approval?\n\nInstallation and payment are complete.')) return;
     const res=await apiPost('update_task',{id:_curTask.id,task_status:'Awaiting Approval',remark:'✅ Installation & payment complete — submitted for approval'});
-    if(res&&res.success){ try{localStorage.removeItem('ts_done_'+_curTask.id);}catch(e){} showTechAppreciation(); }
+    if(res&&res.success){ try{localStorage.removeItem('ts_done_'+_curTask.id);localStorage.removeItem('rm_done_'+_curTask.id);}catch(e){} showTechAppreciation(); }
     else alert((res&&res.error)||'Submit failed. Please try again.');
   }
 
@@ -1568,6 +1621,47 @@
       localStorage.removeItem('demo_proceeded_'+_curTask.id);
       closeDemo();
       showTechAppreciation();
+    } else { err.textContent='❌ '+((res&&res.error)||'Save failed — please try again'); err.style.display=''; }
+  }
+
+  // ═══════════════ REMOVE DEVICE (report → payment if price → submit) ═══════════════
+  function openRemove(){
+    const t=_curTask;
+    document.getElementById('rm-ref').textContent=(t.task_id||'')+' · '+(t.customer_name||'');
+    document.getElementById('rm-serial').value=t.gps_serial_no||'';
+    document.getElementById('rm-reason').value='';
+    document.getElementById('rm-disp').value='';
+    document.getElementById('rm-remarks').value='';
+    document.getElementById('rm-err').style.display='none';
+    document.getElementById('rm-ov').classList.add('open');
+    document.getElementById('rm-sheet').classList.add('open');
+  }
+  function closeRemove(){ document.getElementById('rm-ov').classList.remove('open'); document.getElementById('rm-sheet').classList.remove('open'); }
+
+  async function submitRemove(){
+    const err=document.getElementById('rm-err'); err.style.display='none';
+    const serial=document.getElementById('rm-serial').value.trim();
+    const reason=document.getElementById('rm-reason').value;
+    const disp=document.getElementById('rm-disp').value;
+    if(!serial){ err.textContent='⚠️ Enter the GPS serial / IMEI'; err.style.display=''; return; }
+    if(!reason){ err.textContent='⚠️ Select the reason for removal'; err.style.display=''; return; }
+    if(!disp){ err.textContent='⚠️ Select what happened to the device'; err.style.display=''; return; }
+    const fields={'GPS Serial':serial,'Reason':reason,'Device':disp,'Remarks':document.getElementById('rm-remarks').value.trim()};
+    const btn=document.getElementById('rm-save'); btn.textContent='⏳ Submitting…'; btn.disabled=true;
+    const price=parseFloat(_curTask.price_to_collect||0), coll=parseFloat(_curTask.amount_collected||0);
+    const paymentDue = price>0 && coll < price-15;
+    const res=await apiPost('save_job_outcome',{task_id:_curTask.id,job_type:'remove',summary:'🔴 Device Removal Report',fields,removed_serial:serial,close_task:!paymentDue});
+    btn.textContent='✅ Submit'; btn.disabled=false;
+    if(res && res.success){
+      closeRemove();
+      if(paymentDue){
+        localStorage.setItem('rm_done_'+_curTask.id,'1');
+        toast('✅ Removal saved — now collect payment');
+        await load();
+        renderActionArea();
+      } else {
+        showTechAppreciation();
+      }
     } else { err.textContent='❌ '+((res&&res.error)||'Save failed — please try again'); err.style.display=''; }
   }
 
