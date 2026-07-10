@@ -1185,9 +1185,17 @@ function dsParseDevice(d){
   var model = d.device_model || d.model || d.device_type || d.deviceModel || '';
   if(!model && d.device_data){ model = d.device_data.model || d.device_data.device_model || ''; }
   model = String(model||'').trim();
-  var m = name.match(/^\s*(\d+)\s*[-–—]\s*(.+)$/);
+  // OFFICE STOCK RULE: if the device name contains the word "office" anywhere
+  // (e.g. "1234-Office", "Micro-Office-01", "MT-Office", "Office-4919", "Post office-6260",
+  //  "... OLD POST OFFICE"), it is office stock — highest priority.
   var status='installed', tech='';
-  if(m){ var a=m[2].trim(); if(/^office\b/i.test(a) || a.toLowerCase()==='office'){status='office';} else {status='tech'; tech=a;} }
+  if(/\boffice\b/i.test(name) || /office/i.test(name)){
+    status='office';
+  } else {
+    // Otherwise use the "<number> - <technician name>" pattern to detect a technician's stock.
+    var m = name.match(/^\s*(\d+)\s*[-–—]\s*(.+)$/);
+    if(m){ var a=m[2].trim(); status='tech'; tech=a; }
+  }
   return { imei:String(imei), device_name:name, device_id:String(devId), model:model, status:status, technician:tech };
 }
 
