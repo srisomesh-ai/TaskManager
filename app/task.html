@@ -710,7 +710,9 @@
       if(jobLower.includes('troubleshoot')||jobLower.includes('offline')){
         const tsPrice=parseFloat(t.price_to_collect||0), tsColl=parseFloat(t.amount_collected||0);
         const tsPayDone=tsColl>=tsPrice-15 || tsPrice<=0;
-        const tsReportDone=localStorage.getItem('ts_done_'+t.id)==='1';
+        // Report is "done" if the local flag is set, OR payment already collected, OR a troubleshoot report exists in activity
+        const tsActivityDone=(t.activities||[]).some(a=>String(a.remark||'').includes('Troubleshoot Report'));
+        const tsReportDone=localStorage.getItem('ts_done_'+t.id)==='1' || tsColl>0 || tsActivityDone;
         const tsCashPending=(t.cash_deposit_status==='pending');
 
         if(tsReportDone && !tsPayDone){
@@ -794,7 +796,7 @@
         } else if(jl.includes('remove only')||jl.includes('only remove')||jl.includes('gps remove')||jl.includes('device removal')){
           const rmPrice=parseFloat(t.price_to_collect||0), rmColl=parseFloat(t.amount_collected||0);
           const rmPayDone=rmColl>=rmPrice-15 || rmPrice<=0;
-          const rmReportDone=localStorage.getItem('rm_done_'+t.id)==='1';
+          const rmReportDone=localStorage.getItem('rm_done_'+t.id)==='1' || rmColl>0 || (t.activities||[]).some(a=>String(a.remark||'').includes('Removal Report'));
           const rmCashPending=(t.cash_deposit_status==='pending');
           if(rmReportDone && !rmPayDone){
             btn='<button class="act-btn" id="loc-btn" style="background:var(--green)" onclick="openPaymentSoon()"><div class="ico">💰</div><div class="l">Collect Payment</div><div class="s">₹'+(rmPrice-rmColl).toLocaleString('en-IN')+' to collect</div></button>';
@@ -1441,7 +1443,22 @@
     }
     const res=await apiPost('update_task',body);
     btn.textContent='💰 Save Payment'; btn.disabled=false;
-    if(res&&res.success){ toast('✅ Payment saved'); closePayment(); setTimeout(load,400); }
+    if(res&&res.success){
+      // For report-based jobs (troubleshoot/remove), once fully paid by non-cash there is no
+      // further step — auto-submit for approval so the task never gets stuck at "Tech Working".
+      const jl=(t.device_details||'').toLowerCase();
+      const isReportJob = jl.includes('troubleshoot')||jl.includes('offline')||jl.includes('remove only')||jl.includes('only remove')||jl.includes('gps remove')||jl.includes('device removal');
+      const cashNeedsDeposit = (mode==='Cash');
+      if(isReportJob && isFullyPaid && !cashNeedsDeposit){
+        closePayment();
+        const sres=await apiPost('update_task',{id:t.id,task_status:'Awaiting Approval',remark:'✅ Service complete & payment collected — submitted for approval'});
+        try{localStorage.removeItem('ts_done_'+t.id);localStorage.removeItem('rm_done_'+t.id);}catch(e){}
+        if(sres&&sres.success){ showTechAppreciation(); }
+        else { toast('✅ Payment saved'); setTimeout(load,400); }
+        return;
+      }
+      toast('✅ Payment saved'); closePayment(); setTimeout(load,400);
+    }
     else alert(res.error||'Save failed. Please try again.');
   }
 
