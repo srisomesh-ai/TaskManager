@@ -6280,6 +6280,20 @@ function renderReadding(){
     </tr>`;
   }).join('');
 }
+async function _raFetchJSON(url, opts, timeoutMs){
+  timeoutMs = timeoutMs || 25000;
+  const ctrl = new AbortController();
+  const timer = setTimeout(()=>ctrl.abort(), timeoutMs);
+  try{
+    const r = await fetch(url, Object.assign({}, opts, {signal:ctrl.signal}));
+    const raw = await r.text();
+    clearTimeout(timer);
+    try{ return raw ? JSON.parse(raw) : {}; }catch(e){ return {__empty:true}; }
+  }catch(e){
+    clearTimeout(timer);
+    return {__timeout:true};
+  }
+}
 async function approveReadding(id, btn){
   const row = _readdingRows.find(r=>String(r.id)===String(id));
   if(!row) return;
@@ -6295,45 +6309,54 @@ async function approveReadding(id, btn){
     fd.append('plate_number', row.plate_number||'');
     fd.append('registration_number', row.registration_number||'');
     fd.append('object_owner', row.object_owner||'');
-    const pr = await fetch('gps_proxy.php?action=add_device',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd}).then(x=>x.json()).catch(()=>({}));
-    if(!pr || !pr.success){
-      showToast('❌ Push failed: '+((pr&&pr.error)||'server error'));
+    let pr = await _raFetchJSON('gps_proxy.php?action=add_device',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd});
+    // If the push response came back empty/timed out, verify by IMEI before failing (the write may have gone through)
+    let deviceId = pr.device_id || '';
+    if(!pr.success && (pr.__empty || pr.__timeout)){
+      const chk = await _raFetchJSON('gps_proxy.php?action=find&keyword='+encodeURIComponent(String(row.imei).replace(/\D/g,'')),{headers:{'X-Auth-Token':authToken}});
+      if(chk && chk.devices && chk.devices.length){
+        pr = {success:true};
+        const dd = chk.devices[0].device_data||{};
+        deviceId = dd.id || chk.devices[0].id || '';
+      }
+    }
+    if(!pr.success){
+      showToast('❌ Push failed: '+(pr.error||(pr.__timeout?'server timeout — try again':'server error')));
       if(btn){ btn.disabled=false; btn.textContent='✅ Approve & Push'; }
       return;
     }
-    const deviceId = pr.device_id || '';
 
     // 2) Give access to support@bharatgps.com by default
     let accessMsg = '';
     if(btn) btn.textContent='⏳ Giving access…';
     try{
-      const SUPPORT_EMAIL = 'support@bharatgps.com';
-      const fu = await fetch('gps_proxy.php?action=find_user&server_id='+row.server_id+'&email='+encodeURIComponent(SUPPORT_EMAIL),{headers:{'X-Auth-Token':authToken}}).then(x=>x.json()).catch(()=>({}));
+      const fu = await _raFetchJSON('gps_proxy.php?action=find_user&server_id='+row.server_id+'&email='+encodeURIComponent('support@bharatgps.com'),{headers:{'X-Auth-Token':authToken}});
       const supportUserId = fu && fu.found && fu.user ? fu.user.id : null;
       if(supportUserId && deviceId){
         const afd = new FormData();
         afd.append('server_id', row.server_id);
         afd.append('device_id', deviceId);
         afd.append('user_id', supportUserId);
-        const asg = await fetch('gps_proxy.php?action=assign_device',{method:'POST',headers:{'X-Auth-Token':authToken},body:afd}).then(x=>x.json()).catch(()=>({}));
-        accessMsg = (asg && asg.success) ? ' · access given to support@bharatgps.com' : ' · ⚠️ could not give support access';
+        const asg = await _raFetchJSON('gps_proxy.php?action=assign_device',{method:'POST',headers:{'X-Auth-Token':authToken},body:afd});
+        accessMsg = (asg && asg.success) ? ' · support access ✅' : ' · ⚠️ support access failed';
       } else {
-        accessMsg = ' · ⚠️ support@bharatgps.com not found on server';
+        accessMsg = ' · ⚠️ support@bharatgps.com not found';
       }
-    }catch(e){ accessMsg = ' · ⚠️ access step failed'; }
+    }catch(e){ accessMsg = ' · ⚠️ access step skipped'; }
 
-    // 3) Record approval with device_id
+    // 3) Record approval + assign to requesting technician stock (server-side, always runs)
+    if(btn) btn.textContent='⏳ Finishing…';
     const ar = await api('readding_approve', {}, 'POST', {id:id, device_id:deviceId});
     if(ar && ar.success){
-      showToast('✅ Approved — pushed to '+((_RA_SRV[row.server_id])||'server')+accessMsg);
-      loadReaddingPage();
+      showToast('✅ Approved — pushed to '+((_RA_SRV[row.server_id])||'server')+accessMsg+' · added to technician stock');
     } else {
       showToast('⚠️ Pushed to server but could not record approval: '+((ar&&ar.error)||''));
-      loadReaddingPage();
     }
+    loadReaddingPage();
   }catch(e){
     showToast('❌ '+e.message);
     if(btn){ btn.disabled=false; btn.textContent='✅ Approve & Push'; }
+    loadReaddingPage();
   }
 }
 async function cancelReadding(id, btn){
