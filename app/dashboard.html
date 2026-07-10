@@ -397,6 +397,16 @@
       items=_srPlans.filter(function(i){ return (i.category||'').toLowerCase()==='renewal'; });
     } else {
       items=_srPlans.filter(function(i){ return (i.category||'').toLowerCase()==='service'; });
+      // Narrow to the plans that match the chosen service (by name keyword).
+      const kw = {
+        'troubleshoot':   ['troubleshoot','offline'],
+        'vehicle-change': ['vehicle to vehicle','vehicle change','v2v'],
+        'gps-remove':     ['only remove','remove','removal']
+      }[svc] || [];
+      if(kw.length){
+        const match = items.filter(function(i){ const n=(i.product_name||'').toLowerCase(); return kw.some(function(k){ return n.indexOf(k)!==-1; }); });
+        if(match.length) items = match; // if no specific match, fall back to all service items
+      }
     }
     if(!items.length){ sel.innerHTML='<option value="">No plans set by office yet — ask office to add them in Price List</option>'; return; }
     const withGst=items.filter(function(i){ return parseFloat(i.gst_percent||0)>0 || /SBGT/i.test(i.product_name||''); });
