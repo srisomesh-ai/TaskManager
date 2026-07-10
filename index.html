@@ -6735,9 +6735,21 @@ async function repairRenewalBs(btn){
   if(!confirm('Fix balance sheet entries for all approved renewals?\n\nThis corrects the profile (BGT/SBGT) and creates any missing renewal entries.')) return;
   if(btn){ btn.disabled=true; btn.textContent='⏳ Fixing…'; }
   const r = await api('renewal_bs_repair',{},'POST',{});
+  // Also pull a check report so we can see where each entry landed
+  const chk = await api('renewal_bs_check',{}).catch(()=>({}));
   if(btn){ btn.disabled=false; btn.textContent='🛠️ Fix balance sheet'; }
-  if(r && r.success){ showToast('✅ Balance sheet fixed — '+(r.fixed||0)+' corrected, '+(r.created||0)+' created'); }
-  else { showToast('❌ '+((r&&r.error)||'Could not fix')); }
+  if(r && r.success){
+    let msg = '✅ Balance sheet repair done\n\nCorrected: '+(r.fixed||0)+'\nCreated: '+(r.created||0)+'\n';
+    if(chk && chk.details && chk.details.length){
+      msg += '\nApproved renewals ('+chk.details.length+'):\n';
+      chk.details.slice(0,10).forEach(function(d){
+        msg += '• '+d.device+' → '+(d.bs_entry_found?('✅ in '+d.bs_profile+' profile, ₹'+d.bs_total+', '+d.bs_date):'❌ NO entry'+(d.orphan_match?(' (found '+d.orphan_match+')'):''))+'\n';
+      });
+      msg += '\n👉 In the balance sheet, switch the PROFILE selector (top) to the profile shown above (BGT = "Bharat GPS Tracker", SBGT = "SRIBHARAT...") and set date range to include today.';
+    }
+    alert(msg);
+  }
+  else { alert('❌ '+((r&&r.error)||'Could not fix')); }
 }
 async function rejectRenewal(id, btn){
   const notes=prompt('Reason for rejection (optional):','');
