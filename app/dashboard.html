@@ -90,6 +90,19 @@
   .task-age{font-size:11px;color:var(--text3)}
   .urgent-tag{background:#fee2e2;color:#b91c1c;font-size:10px;font-weight:800;padding:2px 8px;border-radius:12px;margin-left:6px}
 
+  /* New / unopened task — flashing highlight until the technician opens it */
+  .new-tag{background:var(--teal);color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:12px;margin-left:6px;animation:newBlink 1.1s ease-in-out infinite}
+  .task.new-task{border-left-color:var(--teal);animation:newGlow 1.4s ease-in-out infinite}
+  @keyframes newGlow{
+    0%,100%{box-shadow:0 2px 10px rgba(15,23,42,.06)}
+    50%{box-shadow:0 0 0 3px rgba(19,114,114,.28),0 6px 18px rgba(19,114,114,.22)}
+  }
+  @keyframes newBlink{0%,100%{opacity:1}50%{opacity:.4}}
+  @media (prefers-reduced-motion: reduce){
+    .task.new-task{animation:none;box-shadow:0 0 0 3px rgba(19,114,114,.28)}
+    .new-tag{animation:none}
+  }
+
   .empty{text-align:center;padding:50px 20px;color:var(--text3)}
   .empty .ico{font-size:44px;margin-bottom:10px}
   .loading{text-align:center;padding:40px;color:var(--text3);font-size:14px}
@@ -173,6 +186,16 @@
   let authToken=localStorage.getItem('bgps_tech_token')||'';
   let currentUser={}; try{currentUser=JSON.parse(localStorage.getItem('bgps_tech_user')||'{}');}catch(e){}
   let allTasks=[], filter='active';
+
+  // Track which tasks this technician has opened (per-device), so new/unopened tasks can flash.
+  const OPENED_KEY='bgps_opened_tasks';
+  function getOpened(){ try{ return new Set(JSON.parse(localStorage.getItem(OPENED_KEY)||'[]')); }catch(e){ return new Set(); } }
+  function markOpened(id){ try{ const s=getOpened(); s.add(String(id)); localStorage.setItem(OPENED_KEY, JSON.stringify([...s])); }catch(e){} }
+  function isUnopened(t){
+    const active=!['Closed','Cancelled'].includes(t.task_status);
+    return active && !getOpened().has(String(t.id));
+  }
+  function openTask(id){ markOpened(id); location.href='task.html?id='+id; }
   if(!authToken){ location.href='login.html'; }
 
   async function api(action,params={}){
@@ -214,10 +237,11 @@
     list.innerHTML=tasks.map(t=>{
       const h=['Open','In Progress','Task Pending'].includes(t.task_status)?ageHours(t.created_at):0;
       const urg=isUrgent(t), done=['Closed','Cancelled'].includes(t.task_status);
+      const isNew=isUnopened(t);
       const badge=STATUS[t.task_status]||'b-closed', price=parseFloat(t.price_to_collect||0);
-      return `<div class="task ${urg?'urgent':''} ${done?'done':''}" onclick="location.href='task.html?id=${t.id}'">
+      return `<div class="task ${urg?'urgent':''} ${done?'done':''} ${isNew?'new-task':''}" onclick="openTask('${t.id}')">
         <div class="task-top"><div>
-          <div class="task-id">${t.task_id||'—'}${urg?'<span class="urgent-tag">🚨 URGENT</span>':''}</div>
+          <div class="task-id">${t.task_id||'—'}${isNew?'<span class="new-tag">● NEW</span>':''}${urg?'<span class="urgent-tag">🚨 URGENT</span>':''}</div>
           <div class="task-cust">${esc(t.customer_name||'—')}</div></div>
           <span class="badge ${badge}">${t.task_status||'—'}</span></div>
         <div class="task-meta">📞 ${esc(t.contact_number||'—')}<br>📍 ${esc(t.location||'—')}<br>🔧 ${esc(t.device_details||t.lead_type||'—')}</div>
