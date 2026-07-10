@@ -4751,16 +4751,26 @@ function renderReviewPanel(t){
     const vs = t.payment_verify_status || 'pending';
     const shot = (t.documents||[]).find(d=>d.doc_type==='payment_screenshot');
     const shotUrl = shot ? ('https://salmon-goldfish-110661.hostingersite.com/uploads/task_'+t.id+'/'+shot.filename) : '';
-    let badge = vs==='verified' ? '<span style="color:var(--green);font-weight:800">✅ Verified</span>'
-              : vs==='rejected' ? '<span style="color:var(--red);font-weight:800">❌ Rejected</span>'
-              : '<span style="color:var(--saffron);font-weight:800">⏳ Pending verification</span>';
+    const isImg = shot && /\.(jpg|jpeg|png|webp|gif|heic)$/i.test(shot.filename||'');
+    let badge = vs==='verified' ? '<span style="color:var(--green);font-weight:800">\u2705 Verified</span>'
+              : vs==='rejected' ? '<span style="color:var(--red);font-weight:800">\u274c Rejected</span>'
+              : '<span style="color:var(--saffron);font-weight:800">\u23f3 Pending verification</span>';
     html += `<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;padding:13px 15px;margin-bottom:12px">
-      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--accent2);margin-bottom:6px">📸 ${escHtml(t.payment_mode)} Payment Proof — ${badge}</div>
-      ${shotUrl ? `<a href="${shotUrl}" target="_blank"><img src="${shotUrl}" style="max-width:100%;max-height:220px;border-radius:8px;border:1px solid var(--border);margin-bottom:10px" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<div style=\\'font-size:12px;color:var(--red)\\'>Could not load image. <a href=&quot;${shotUrl}&quot; target=_blank>Open in new tab</a></div>')"></a>` : '<div style="font-size:13px;color:var(--red);margin-bottom:10px">⚠️ No screenshot uploaded.</div>'}
-      ${vs!=='verified' ? `<div style="display:flex;gap:8px">
-        <button onclick="verifyPayment(${t.id},'verified')" class="ts-btn" style="background:var(--green);color:#fff;flex:2">✅ Verify Payment</button>
-        <button onclick="verifyPayment(${t.id},'rejected')" class="ts-btn" style="background:var(--red-bg,#fdecea);color:var(--red);border:1.5px solid var(--red);flex:1">❌ Reject</button>
-      </div>` : '<div style="font-size:12px;color:var(--green)">Payment proof verified — task can be closed.</div>'}
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--accent2);margin-bottom:8px">\ud83d\udcf8 ${escHtml(t.payment_mode)} Payment Proof \u2014 ${badge}</div>`;
+    if(shotUrl){
+      html += `<button onclick="window.open('${shotUrl}','_blank')" class="ts-btn" style="background:var(--accent2);color:#fff;width:100%;margin-bottom:10px">\ud83d\udc41\ufe0f View Payment Screenshot</button>`;
+      if(isImg){
+        html += `<a href="${shotUrl}" target="_blank"><img src="${shotUrl}" style="max-width:100%;max-height:240px;border-radius:8px;border:1px solid var(--border);margin-bottom:10px;display:block" onerror="this.style.display='none'"></a>`;
+      } else {
+        html += `<div style="font-size:12px;color:var(--text3);margin-bottom:10px">\ud83d\udcce ${escHtml(shot.original_name||shot.filename)}</div>`;
+      }
+    } else {
+      html += '<div style="font-size:13px;color:var(--red);margin-bottom:10px">\u26a0\ufe0f No screenshot uploaded by technician.</div>';
+    }
+    html += `${vs!=='verified' ? `<div style="display:flex;gap:8px">
+        <button onclick="verifyPayment(${t.id},'verified')" class="ts-btn" style="background:var(--green);color:#fff;flex:2">\u2705 Verify Payment</button>
+        <button onclick="verifyPayment(${t.id},'rejected')" class="ts-btn" style="background:var(--red-bg,#fdecea);color:var(--red);border:1.5px solid var(--red);flex:1">\u274c Reject</button>
+      </div>` : '<div style="font-size:12px;color:var(--green)">\u2705 Payment proof verified \u2014 task can be closed.</div>'}
     </div>`;
   }
 
