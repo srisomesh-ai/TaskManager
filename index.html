@@ -6502,19 +6502,19 @@ async function loadRenewalBadge(){
   }catch(e){}
 }
 async function loadRenewalsPage(){
-  // Load Price List renewal items; if none exist and user is admin, seed the standard plans once
-  if(!_rnwRenewalItems.length){
-    let pl = await api('pl_get_public').catch(()=>({}));
-    let items = ((pl&&pl.items)||[]).filter(function(i){ return (i.category||'').toLowerCase()==='renewal'; });
-    // Seed if no proper GPS Renewal plans yet (admin only)
-    const hasPlans = items.some(function(i){ return /GPS Renewal/i.test(i.product_name||''); });
-    if(!hasPlans && currentUser && ['admin','assigner','manager'].includes(currentUser.role)){
-      await api('pl_seed_renewals',{},'POST',{}).catch(()=>{});
-      pl = await api('pl_get_public').catch(()=>({}));
-      items = ((pl&&pl.items)||[]).filter(function(i){ return (i.category||'').toLowerCase()==='renewal'; });
-    }
-    _rnwRenewalItems = items;
+  // Always (re)load Price List renewal items when opening the page.
+  let pl = await api('pl_get_public').catch(()=>({}));
+  let items = ((pl&&pl.items)||[]).filter(function(i){ return (i.category||'').toLowerCase()==='renewal'; });
+  // If there are no proper GPS Renewal plans, seed them (admin/assigner/manager).
+  const hasPlans = items.some(function(i){ return /GPS Renewal/i.test(i.product_name||''); });
+  if(!hasPlans && currentUser && ['admin','assigner','manager'].includes(currentUser.role)){
+    const seed = await api('pl_seed_renewals',{},'POST',{}).catch(function(e){ return {error:String(e)}; });
+    if(seed && seed.error){ showToast('⚠️ Could not create renewal plans: '+seed.error+' — deploy the latest API or add plans in Price List'); }
+    pl = await api('pl_get_public').catch(()=>({}));
+    items = ((pl&&pl.items)||[]).filter(function(i){ return (i.category||'').toLowerCase()==='renewal'; });
   }
+  _rnwRenewalItems = items;
+  if(!_rnwRenewalItems.length){ showToast('⚠️ No renewal plans found. Add "GPS Renewal ..." items (category Renewal) in Price List, or deploy the latest API.'); }
   rnwTab('search');
   loadRenewalRequests();
   loadRenewalBadge();
@@ -6548,6 +6548,11 @@ async function rnwFetch(){
   const d = await _raFetchJSON(url, {headers:{'X-Auth-Token':authToken}}, 60000);
   if(btn){ btn.disabled=false; btn.textContent='🔍 Fetch Devices'; }
   if(!d || !d.success){ st.textContent='❌ '+((d&&d.error)||(d&&d.__timeout?'Timed out — try fewer servers':'Fetch failed')); return; }
+  // Safety: make sure renewal plans are loaded before we render the plan dropdowns.
+  if(!_rnwRenewalItems.length){
+    const pl = await api('pl_get_public').catch(()=>({}));
+    _rnwRenewalItems = ((pl&&pl.items)||[]).filter(function(i){ return (i.category||'').toLowerCase()==='renewal'; });
+  }
   _rnwDevices = d.devices||[];
   st.textContent='✅ '+_rnwDevices.length+' device(s) found';
   rnwRenderDevices();
