@@ -576,6 +576,8 @@
     const t=res.task||res;
     if(!t||!t.id){ document.getElementById('td-body').innerHTML='<div class="sec" style="color:var(--red)">Task not found.</div>'; return; }
     _curTask=t;
+    // Tell the server this task was opened (stops the unopened-task reminder nudges)
+    apiPost('mark_task_opened',{id:t.id}).catch(function(){});
     document.getElementById('td-task-id').textContent=t.task_id||'–';
     document.getElementById('td-customer').textContent=(t.customer_name||'–')+'  ·  '+(t.contact_number||'');
     document.getElementById('td-stepper').innerHTML=buildStepper(t);
