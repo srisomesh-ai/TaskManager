@@ -60,33 +60,15 @@ if ($token) {
     $LINK_VALID = true;
 }
 
-// GPS models — load LIVE from the Price List (GPS Tracker / GPS Device categories) so prices
-// always match what the office sets. Falls back to a default list if none are configured.
-$GPS_TYPES = [];
-try {
-    $mq = $pdo->query("SELECT product_name, price_incl_gst, price_excl_gst, gst_percent, description
-                       FROM price_list
-                       WHERE is_active=1 AND (LOWER(category)='gps tracker' OR LOWER(category)='gps device')
-                       ORDER BY sort_order, product_name");
-    foreach($mq->fetchAll() as $row){
-        $nm = $row['product_name'];
-        $GPS_TYPES[$nm] = [
-            'price' => floatval($row['price_incl_gst'] ?: $row['price_excl_gst']),
-            'desc'  => $row['description'] ?: 'GPS tracker'
-        ];
-    }
-} catch(Exception $e) { $GPS_TYPES = []; }
-if(empty($GPS_TYPES)){
-    $GPS_TYPES = [
-        'Engine Status'    => ['price'=>3500, 'desc'=>'Basic GPS tracking with engine monitoring'],
-        'Engine Cut'       => ['price'=>4500, 'desc'=>'GPS with remote engine cut feature'],
-        'Micro GPS'        => ['price'=>4000, 'desc'=>'Compact hidden GPS device'],
-        'Magnet GPS'       => ['price'=>5500, 'desc'=>'Portable magnetic GPS tracker'],
-        'MIC/SOS GPS'      => ['price'=>4500, 'desc'=>'GPS with microphone & SOS button'],
-        'VLTD'             => ['price'=>10500,'desc'=>'Vehicle Location Tracking Device (Govt. Approved)'],
-        'Re-Adding'        => ['price'=>1700, 'desc'=>'Re-registration of existing GPS device'],
-    ];
-}
+$GPS_TYPES = [
+    'Engine Status'    => ['price'=>3500, 'desc'=>'Basic GPS tracking with engine monitoring'],
+    'Engine Cut'       => ['price'=>4500, 'desc'=>'GPS with remote engine cut feature'],
+    'Micro GPS'        => ['price'=>4000, 'desc'=>'Compact hidden GPS device'],
+    'Magnet GPS'       => ['price'=>5500, 'desc'=>'Portable magnetic GPS tracker'],
+    'MIC/SOS GPS'      => ['price'=>4500, 'desc'=>'GPS with microphone & SOS button'],
+    'VLTD'             => ['price'=>10500,'desc'=>'Vehicle Location Tracking Device (Govt. Approved)'],
+    'Re-Adding'        => ['price'=>1700, 'desc'=>'Re-registration of existing GPS device'],
+];
 $SUPPORT_EMAIL = 'sales@bharatgps.com';
 $COMPANY_NAME  = 'Bharat GPS Tracker';
 $COMPANY_PHONE = '9849849824';
@@ -349,11 +331,9 @@ window.addEventListener('popstate', function(){ history.pushState(null, '', wind
   <div class="card">
     <h3>📡 Select GPS Type <span class="req">*</span></h3>
     <div class="gps-grid" id="gps-grid">
-      <?php
-      $PRESEL = $_POST['gps_type'] ?? $_GET['type'] ?? '';
-      foreach($GPS_TYPES as $type=>$info):
+      <?php foreach($GPS_TYPES as $type=>$info):
         $disc = $info['price'] - $DISCOUNT;
-        $sel  = ($PRESEL===$type) ? 'sel' : '';
+        $sel  = (($_POST['gps_type']??'')===$type) ? 'sel' : '';
       ?>
       <div class="gps-card <?= $sel ?>" onclick="selectGPS('<?= addslashes($type) ?>',<?= $info['price'] ?>)" id="gc-<?= md5($type) ?>">
         <div class="gps-name"><?= htmlspecialchars($type) ?></div>
@@ -444,11 +424,7 @@ GPS_MAP[<?= json_encode($type) ?>] = {price:<?= $info['price'] ?>, id:'gc-<?= md
 var DISCOUNT = <?= $DISCOUNT ?>;
 var qty = <?= intval($_POST['qty']??1) ?>;
 var selPrice = <?= floatval($_POST['price']??0) ?>;
-var selType  = <?= json_encode($_POST['gps_type'] ?? $_GET['type'] ?? '') ?>;
-// If the sender pre-selected a model, lock the price display to it on load.
-document.addEventListener('DOMContentLoaded', function(){
-  if(selType && GPS_MAP[selType]){ selectGPS(selType, GPS_MAP[selType].price); }
-});
+var selType  = <?= json_encode($_POST['gps_type']??'') ?>;
 
 function selectGPS(type, price) {
   selType = type; selPrice = price;
