@@ -123,8 +123,10 @@ function _renewalEnsureTable($pdo){
         approved_by VARCHAR(190),
         approved_at DATETIME NULL,
         notes TEXT,
+        payment_screenshot VARCHAR(255),
         bs_entry_id INT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    try { $pdo->exec("ALTER TABLE renewal_requests ADD COLUMN payment_screenshot VARCHAR(255) NULL"); } catch(Exception $e){}
 }
 
 function _readdingEnsureTable($pdo){
@@ -2835,6 +2837,38 @@ case 'mark_demo_lost':
 
 // ── PRICE LIST API (admin only) ──────────────────────────────────────
 
+case 'pl_seed_renewals':
+    // One-time: add the 3/6/12-month renewal plans in BGT (non-GST) and SBGT (18% GST) profiles.
+    // Prices are placeholders — edit them in the Price List page. Skips any that already exist by name.
+    if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Admin only']); break; }
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS price_list (id INT AUTO_INCREMENT PRIMARY KEY, product_name VARCHAR(200) NOT NULL, category VARCHAR(100) NOT NULL DEFAULT 'GPS Device', server_name VARCHAR(100) DEFAULT NULL, description TEXT DEFAULT NULL, buying_price DECIMAL(10,2) NOT NULL DEFAULT 0, price_excl_gst DECIMAL(10,2) NOT NULL DEFAULT 0, gst_percent DECIMAL(5,2) NOT NULL DEFAULT 18, price_incl_gst DECIMAL(10,2) NOT NULL DEFAULT 0, is_active TINYINT(1) NOT NULL DEFAULT 1, has_stock TINYINT(1) NOT NULL DEFAULT 0, sort_order INT NOT NULL DEFAULT 0, created_by VARCHAR(100) DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        // name, months, base(excl), gst%  — placeholder amounts, editable later
+        $plans = [
+            ['GPS Renewal 3 Months (BGT)',  3,  400, 0],
+            ['GPS Renewal 6 Months (BGT)',  6,  700, 0],
+            ['GPS Renewal 1 Year (BGT)',    12, 1200, 0],
+            ['GPS Renewal 3 Months (SBGT)', 3,  400, 18],
+            ['GPS Renewal 6 Months (SBGT)', 6,  700, 18],
+            ['GPS Renewal 1 Year (SBGT)',   12, 1200, 18],
+        ];
+        $chk = $pdo->prepare("SELECT COUNT(*) FROM price_list WHERE product_name=?");
+        $ins = $pdo->prepare("INSERT INTO price_list (product_name,category,server_name,description,buying_price,price_excl_gst,gst_percent,price_incl_gst,has_stock,is_active,created_by,sort_order) VALUES (?,?,?,?,0,?,?,?,0,1,?,?)");
+        $added = 0; $so = 50;
+        foreach($plans as $p){
+            $chk->execute([$p[0]]);
+            if(intval($chk->fetchColumn())>0) continue;
+            $excl = $p[2]; $gst = $p[3];
+            $incl = round($excl * (1 + $gst/100), 2);
+            $prof = strpos($p[0],'SBGT')!==false ? 'SBGT (with GST)' : 'BGT (non-GST)';
+            $desc = $p[1].'-month GPS subscription renewal — '.$prof;
+            $ins->execute([$p[0],'Renewal','BharatGPS Server',$desc,$excl,$gst,$incl,($cu['name']??'System'),$so++]);
+            $added++;
+        }
+        echo json_encode(['success'=>true,'added'=>$added,'note'=>$added?'Added '.$added.' renewal plan(s). Edit prices in the Price List page.':'All renewal plans already exist.']);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'pl_get':
     if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Admin only']); break; }
     try {
@@ -3673,6 +3707,22 @@ case 'readding_cancel':
 // (approve extends expiry on GPS server via gps_proxy, creates license balance
 //  sheet entry from Price List amount, and emails the customer)
 // ═══════════════════════════════════════════════════════════════════
+case 'renewal_upload_screenshot':
+    // Multipart upload of the payment screenshot BEFORE submitting a renewal request.
+    // Returns a stored path that the client passes into renewal_request.
+    try {
+        if(!in_array($userRole,['admin','assigner','manager'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+        if(!isset($_FILES['file'])){ echo json_encode(['error'=>'No file']); break; }
+        $dir = __DIR__.'/../uploads/renewals/'; if(!is_dir($dir)) mkdir($dir,0755,true);
+        $fn = time().'_'.rand(100,999).'_'.preg_replace('/[^a-zA-Z0-9._-]/','_',$_FILES['file']['name']);
+        if(move_uploaded_file($_FILES['file']['tmp_name'], $dir.$fn)){
+            echo json_encode(['success'=>true,'path'=>'uploads/renewals/'.$fn]);
+        } else {
+            echo json_encode(['error'=>'Upload failed']);
+        }
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'renewal_request':
     // Manager or assigner (not technician) raises a renewal request
     try {
@@ -3684,6 +3734,8 @@ case 'renewal_request':
         $curExpiry = trim($body['current_expiry'] ?? '');
         if(!$server_id || !$device_id){ echo json_encode(['error'=>'Missing device info']); break; }
         if(!in_array($months,[3,6,12])){ echo json_encode(['error'=>'Invalid renewal period']); break; }
+        $screenshot = trim($body['payment_screenshot'] ?? '');
+        if($screenshot===''){ echo json_encode(['error'=>'Payment screenshot is required before sending for approval']); break; }
         // Compute new expiry from current expiry (or today if missing)
         $base = ($curExpiry && $curExpiry!=='0000-00-00') ? $curExpiry : date('Y-m-d');
         $newExpiry = date('Y-m-d', strtotime('+'.$months.' months', strtotime($base)));
@@ -3693,12 +3745,12 @@ case 'renewal_request':
         $gst    = floatval($body['gst'] ?? 0);
         $ref = 'RNW'.date('YmdHis').rand(10,99);
         $pdo->prepare("INSERT INTO renewal_requests
-            (ref,status,server_id,server_name,device_id,device_name,imei,plate,owner,current_expiry,months,label,new_expiry,price_item,amount,gst,requested_by,requested_by_name,requested_role)
-            VALUES (?,'pending',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+            (ref,status,server_id,server_name,device_id,device_name,imei,plate,owner,current_expiry,months,label,new_expiry,price_item,amount,gst,requested_by,requested_by_name,requested_role,payment_screenshot)
+            VALUES (?,'pending',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
             ->execute([$ref,$server_id,trim($body['server_name']??''),$device_id,trim($body['device_name']??''),
                        trim($body['imei']??''),trim($body['plate']??''),trim($body['owner']??''),
                        ($curExpiry && $curExpiry!=='0000-00-00')?$curExpiry:null,$months,$label,$newExpiry,
-                       trim($body['price_item']??''),$amount,$gst,$userId,$cu['name']??'',$userRole]);
+                       trim($body['price_item']??''),$amount,$gst,$userId,$cu['name']??'',$userRole,$screenshot]);
         echo json_encode(['success'=>true,'ref'=>$ref,'new_expiry'=>$newExpiry,'id'=>$pdo->lastInsertId()]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
@@ -3750,12 +3802,13 @@ case 'renewal_approve':
             } catch(Exception $e){}
             $gst = floatval($r['gst'] ?? 0);
             $pdo->prepare("INSERT INTO balance_sheet_entries
-                (type,profile,date,gps_serial_no,name_on_server,server_name,device_model,service_type,license_plan,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,remarks,created_by_code)
-                VALUES ('license','BGPT',CURDATE(),?,?,?,?,?,?,1,?,?,?,'paid',?,0,?,?)")
+                (type,profile,date,gps_serial_no,name_on_server,server_name,device_model,service_type,license_plan,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_transaction_details,remarks,created_by_code)
+                VALUES ('license','BGPT',CURDATE(),?,?,?,?,?,?,1,?,?,?,'paid',?,0,?,?,?)")
                 ->execute([
                     $r['imei'] ?: null, $r['owner'] ?: $r['device_name'], $r['server_name'],
                     'Renewal', 'Renewal', $r['label'],
                     $amount - $gst, $gst, $amount, $amount,
+                    $r['payment_screenshot'] ?: null,
                     'Renewal '.$r['label'].' — '.$r['device_name'].' ('.$r['plate'].') new expiry '.$r['new_expiry'],
                     $cu['name'] ?? 'admin'
                 ]);
