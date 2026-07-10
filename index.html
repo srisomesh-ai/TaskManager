@@ -2214,7 +2214,8 @@ function renderActivityLog(activities){
       remarkHtml += `<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
         <a href="${_shotUrl}" target="_blank" style="display:inline-flex;align-items:center;gap:5px;background:var(--accent2,#2563eb);color:#fff;font-size:12px;font-weight:700;padding:7px 14px;border-radius:6px;text-decoration:none">👁️ View Screenshot</a>`;
       // Admin: one-tap Approve & Close right next to View (verifies payment automatically, then closes)
-      if((typeof isAdmin!=='undefined' && isAdmin) && _t && !_isClosed){
+      const _isAdmin = currentUser && ['admin','assigner'].includes(currentUser.role);
+      if(_isAdmin && _t && !_isClosed){
         remarkHtml += `<button onclick="approvePaymentAndClose(${_t.id})" style="display:inline-flex;align-items:center;gap:5px;background:var(--green);color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">✅ Approve &amp; Close</button>`;
         remarkHtml += `<button onclick="verifyPayment(${_t.id},'rejected')" style="display:inline-flex;align-items:center;gap:5px;background:#fdecea;color:var(--red);border:1.5px solid var(--red);border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">❌ Reject</button>`;
       }
