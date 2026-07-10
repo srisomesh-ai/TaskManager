@@ -244,13 +244,43 @@ if($action === 'update'){
 
     if($result['error']){ echo json_encode(['success'=>false,'error'=>'Connection error: '.$result['error']]); exit; }
 
+    exit;
+}
+
+// ── ADD DEVICE — push a new device to a server (used by Re-Adding approval) ──
+if($action === 'add_device'){
+    $server_id = intval($_POST['server_id'] ?? 0);
+    if(!$server_id){ echo json_encode(['success'=>false,'error'=>'Missing server_id']); exit; }
+    if(!isset($servers[$server_id])){ echo json_encode(['success'=>false,'error'=>'Invalid server']); exit; }
+    $srv = $servers[$server_id];
+
+    $name = trim($_POST['name'] ?? '');
+    $imei = trim($_POST['imei'] ?? '');
+    if(!$name || !$imei){ echo json_encode(['success'=>false,'error'=>'Name and IMEI required']); exit; }
+
+    $fields = [
+        'user_api_hash'       => $srv['hash'],
+        'lang'                => 'en',
+        'name'                => $name,
+        'imei'                => $imei,
+        'vin'                 => trim($_POST['vin'] ?? ''),
+        'sim_number'          => trim($_POST['sim'] ?? ''),
+        'device_model'        => trim($_POST['model'] ?? ''),
+        'fuel_measurement_id' => 1,
+        'tail_length'         => 10,
+        'min_moving_speed'    => 3,
+    ];
+
+    $result = do_post($srv['base'].'/add_device', $fields);
+    $json   = $result['json'];
+    if($result['error']){ echo json_encode(['success'=>false,'error'=>'Connection error: '.$result['error']]); exit; }
+
     $status = $json['status'] ?? $json['success'] ?? null;
     if($status == 1 || $status === true){
-        echo json_encode(['success'=>true,'message'=>'Device updated on '.$srv['name']]);
+        $device_id = $json['id'] ?? ($json['device_id'] ?? ($json['data']['id'] ?? null));
+        echo json_encode(['success'=>true,'device_id'=>$device_id,'server'=>$srv['name']]);
     } else {
-        $err = '';
-        if(isset($json['errors']) && is_array($json['errors'])) $err = implode(', ', array_values($json['errors']));
-        echo json_encode(['success'=>false,'error'=>$err ?: ('Server returned: '.($result['raw']??'unknown'))]);
+        echo json_encode(['success'=>false,'error'=>parse_gps_err($json,$result['raw'])]);
     }
     exit;
 }
