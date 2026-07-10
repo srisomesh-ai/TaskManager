@@ -6726,11 +6726,13 @@ async function approveRenewal(id, btn){
     } else {
       showToast('⚠️ Server updated but could not record: '+((ar&&ar.error)||''));
     }
-    loadRenewalsPage();
+    // Refresh ONLY the approvals list (stay on this tab — no full page reload, no stuck button).
+    await loadRenewalRequests();
+    loadRenewalBadge();
   }catch(e){
     showToast('❌ '+e.message);
     if(btn){ btn.disabled=false; btn.textContent='✅ Approve'; }
-    loadRenewalRequests();
+    await loadRenewalRequests();
   }
 }
 async function backfillCoins(btn){
@@ -6776,7 +6778,7 @@ async function deleteRenewal(id, btn){
   if(!confirm('Delete this renewal request AND its balance sheet entry?\n\nUse this for test/duplicate entries. This cannot be undone. (The device expiry on the server is NOT changed back.)')) return;
   if(btn){ btn.disabled=true; btn.textContent='…'; }
   const r = await api('renewal_delete',{},'POST',{id:id});
-  if(r && r.success){ showToast('🗑️ Renewal deleted'+(r.bs_deleted?' (balance sheet entry removed)':'')); loadRenewalsPage(); }
+  if(r && r.success){ showToast('🗑️ Renewal deleted'+(r.bs_deleted?' (balance sheet entry removed)':'')); await loadRenewalRequests(); loadRenewalBadge(); }
   else { showToast('❌ '+((r&&r.error)||'Could not delete')); if(btn){ btn.disabled=false; btn.textContent='🗑️ Delete'; } }
 }
 async function rejectRenewal(id, btn){
@@ -6784,7 +6786,7 @@ async function rejectRenewal(id, btn){
   if(notes===null) return;
   if(btn){ btn.disabled=true; btn.textContent='…'; }
   const r=await api('renewal_reject',{},'POST',{id:id, notes:notes||''});
-  if(r && r.success){ showToast('Renewal rejected'); loadRenewalsPage(); }
+  if(r && r.success){ showToast('Renewal rejected'); await loadRenewalRequests(); loadRenewalBadge(); }
   else { showToast('❌ '+((r&&r.error)||'Could not reject')); if(btn){ btn.disabled=false; btn.textContent='✖ Reject'; } }
 }
 async function fixMissingRenewalBs(btn){
