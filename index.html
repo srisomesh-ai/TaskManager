@@ -7220,10 +7220,6 @@ function openQuickTask(){
   if(typeof qtServiceChange === 'function') qtServiceChange();
   document.getElementById('quick-task-overlay').style.display = 'flex';
   setTimeout(()=>document.getElementById('qt-name').focus(), 100);
-  // Ensure the service job types exist in the Price List (one-time seed; admin/manager only).
-  if(currentUser && ['admin','assigner','manager'].includes(currentUser.role)){
-    api('pl_seed_services',{},'POST',{}).catch(()=>{});
-  }
 }
 
 function closeQuickTask(){
