@@ -3815,11 +3815,10 @@ case 'renewal_approve':
         $bsId = null;
         $amount = floatval($r['amount'] ?? 0);
         $gstAmt = floatval($r['gst'] ?? 0);
-        // Safety net: if the request came through with no amount (e.g. plan price not loaded at request time),
-        // recover the price from the Price List by the stored plan name so it still hits the balance sheet.
+        // Safety net 1: recover price from Price List by exact plan name.
         if($amount <= 0 && !empty($r['price_item'])){
             try {
-                $pl = $pdo->prepare("SELECT price_incl_gst, price_excl_gst FROM price_list WHERE product_name=? AND is_active=1 LIMIT 1");
+                $pl = $pdo->prepare("SELECT price_incl_gst, price_excl_gst FROM price_list WHERE product_name=? LIMIT 1");
                 $pl->execute([$r['price_item']]); $plr = $pl->fetch();
                 if($plr){
                     $amount = floatval($plr['price_incl_gst']);
@@ -3827,17 +3826,34 @@ case 'renewal_approve':
                 }
             } catch(Exception $e){}
         }
-        if($amount > 0){
+        // Safety net 2: fuzzy match by period + profile keyword if exact name failed.
+        if($amount <= 0){
+            try {
+                $mo = intval($r['months']);
+                $periodKey = ($mo>=12 && $mo%12===0) ? (($mo/12).' Year') : ($mo.' Month');
+                $profKey = (strpos(strtoupper($r['price_item']??''),'SBGT')!==false) ? 'SBGT' : 'BGT';
+                $pl2 = $pdo->prepare("SELECT price_incl_gst, price_excl_gst FROM price_list WHERE category='Renewal' AND product_name LIKE ? AND product_name LIKE ? LIMIT 1");
+                $pl2->execute(['%'.$periodKey.'%','%'.$profKey.'%']);
+                $plr2 = $pl2->fetch();
+                if($plr2){
+                    $amount = floatval($plr2['price_incl_gst']);
+                    $gstAmt = max(0, floatval($plr2['price_incl_gst']) - floatval($plr2['price_excl_gst']));
+                }
+            } catch(Exception $e){}
+        }
+        // Determine profile from the plan (SBGT -> SBGT company, BGT -> BGPT).
+        $planName = strtoupper($r['price_item'] ?? '');
+        if(strpos($planName,'SBGT') !== false)      $rnwProfile = 'SBGT';
+        elseif(strpos($planName,'BGT') !== false)    $rnwProfile = 'BGPT';
+        else                                         $rnwProfile = ($gstAmt > 0) ? 'SBGT' : 'BGPT';
+        // ALWAYS create the entry (even if amount is still 0) so it never silently disappears.
+        // If price is missing, flag it in the remark so it can be corrected in the balance sheet.
+        {
             try {
                 $pdo->exec("CREATE TABLE IF NOT EXISTS balance_sheet_entries (id INT AUTO_INCREMENT PRIMARY KEY, type VARCHAR(20) DEFAULT 'sales', profile VARCHAR(10) DEFAULT 'BGPT', task_id VARCHAR(20) NULL, task_db_id INT NULL, date DATE NOT NULL, invoice_no VARCHAR(50), gps_serial_no VARCHAR(100), customer_type VARCHAR(50), name_on_server TEXT, server_name VARCHAR(50), device_model VARCHAR(100), service_type VARCHAR(100), license_plan VARCHAR(100), qty DECIMAL(10,2) DEFAULT 1, unit_price DECIMAL(10,2) DEFAULT 0, gst DECIMAL(10,2) DEFAULT 0, total_price DECIMAL(10,2) DEFAULT 0, payment_status VARCHAR(50), payment_received DECIMAL(10,2) DEFAULT 0, pending_payment DECIMAL(10,2) DEFAULT 0, payment_mode VARCHAR(50), payment_received_on DATE NULL, payment_transaction_details TEXT, pending_reason VARCHAR(100), discount_given DECIMAL(10,2) DEFAULT 0, discount_reason TEXT, discount_incharge VARCHAR(100), payment_reminder_date DATE NULL, technician_name VARCHAR(100), location VARCHAR(200), remarks TEXT, created_by_code VARCHAR(50), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
             } catch(Exception $e){}
             $gst = $gstAmt;
-            // Profile: SBGT plan (with GST) -> SBGT company; BGT plan (non-GST) -> BGPT company.
-            // Detect from the plan name; fall back to GST presence.
-            $planName = strtoupper($r['price_item'] ?? '');
-            if(strpos($planName,'SBGT') !== false)      $rnwProfile = 'SBGT';
-            elseif(strpos($planName,'BGT') !== false)    $rnwProfile = 'BGPT';
-            else                                         $rnwProfile = ($gst > 0) ? 'SBGT' : 'BGPT';
+            $noteExtra = ($amount<=0) ? ' [PRICE MISSING — set the renewal plan price in Price List, then edit this entry]' : '';
             $pdo->prepare("INSERT INTO balance_sheet_entries
                 (type,profile,date,gps_serial_no,name_on_server,server_name,device_model,service_type,license_plan,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_transaction_details,remarks,created_by_code)
                 VALUES ('license',?,CURDATE(),?,?,?,?,?,?,1,?,?,?,'paid',?,0,?,?,?)")
@@ -3847,7 +3863,7 @@ case 'renewal_approve':
                     'Renewal', 'Renewal', $r['label'],
                     $amount - $gst, $gst, $amount, $amount,
                     $r['payment_screenshot'] ?: null,
-                    'Renewal '.$r['label'].' — '.$r['device_name'].' ('.$r['plate'].') new expiry '.$r['new_expiry'],
+                    'Renewal '.$r['label'].' — '.$r['device_name'].' ('.$r['plate'].') new expiry '.$r['new_expiry'].$noteExtra,
                     $cu['name'] ?? 'admin'
                 ]);
             $bsId = $pdo->lastInsertId();
@@ -3968,6 +3984,25 @@ case 'renewal_bs_repair':
             }
         }
         echo json_encode(['success'=>true,'fixed'=>$fixed,'created'=>$created]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'renewal_delete':
+    // Admin: delete a renewal request AND its linked balance-sheet entry (for test/cleanup).
+    try {
+        if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Only admin can delete renewals']); break; }
+        _renewalEnsureTable($pdo);
+        $id = intval($body['id'] ?? 0);
+        if(!$id){ echo json_encode(['error'=>'Renewal id required']); break; }
+        $st = $pdo->prepare("SELECT bs_entry_id FROM renewal_requests WHERE id=?"); $st->execute([$id]);
+        $r = $st->fetch();
+        if(!$r){ echo json_encode(['error'=>'Renewal not found']); break; }
+        $bsDeleted = false;
+        if(!empty($r['bs_entry_id'])){
+            try { $pdo->prepare("DELETE FROM balance_sheet_entries WHERE id=?")->execute([intval($r['bs_entry_id'])]); $bsDeleted = true; } catch(Exception $e){}
+        }
+        $pdo->prepare("DELETE FROM renewal_requests WHERE id=?")->execute([$id]);
+        echo json_encode(['success'=>true,'bs_deleted'=>$bsDeleted]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
