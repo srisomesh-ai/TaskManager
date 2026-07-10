@@ -3563,7 +3563,7 @@ case 'readding_get':
     // fetch one request (used by approval UI to get device fields to push)
     try {
         _readdingEnsureTable($pdo);
-        if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+        if(!in_array($userRole,['admin','assigner','manager'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
         $id = intval($body['id'] ?? $_GET['id'] ?? 0);
         $st = $pdo->prepare("SELECT * FROM readding_requests WHERE id=?"); $st->execute([$id]);
         $r = $st->fetch();
@@ -3576,7 +3576,7 @@ case 'readding_approve':
     // Admin/assigner marks approved AFTER the device was pushed client-side via gps_proxy.
     // Client sends {id, device_id}. We record it.
     try {
-        if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+        if(!in_array($userRole,['admin','assigner','manager'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
         _readdingEnsureTable($pdo);
         $id = intval($body['id'] ?? 0);
         $device_id = trim($body['device_id'] ?? '');
@@ -3592,7 +3592,7 @@ case 'readding_approve':
 
 case 'readding_cancel':
     try {
-        if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+        if(!in_array($userRole,['admin','assigner','manager'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
         _readdingEnsureTable($pdo);
         $id = intval($body['id'] ?? 0);
         $st = $pdo->prepare("SELECT * FROM readding_requests WHERE id=?"); $st->execute([$id]);
