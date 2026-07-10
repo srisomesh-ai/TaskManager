@@ -108,7 +108,7 @@ tr:hover td{background:#f7f9fc}
   <button class="bs-tab"        id="bstab-sales"    onclick="bsTab('sales')">➕ Sales Entry</button>
   <button class="bs-tab"        id="bstab-license"  onclick="bsTab('license')">🔄 License / Service</button>
   <div style="margin-left:auto;display:flex;align-items:center;padding:0 12px">
-    <select class="bs-profile-sel" id="bs-profile" onchange="loadEntries()"
+    <select class="bs-profile-sel" id="bs-profile" onchange="window._bsLoadAll=false;loadEntries()"
       style="padding:5px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-weight:700;color:var(--text);background:#fff;outline:none;cursor:pointer">
       <option value="BGPT">Bharat GPS Tracker</option>
       <option value="SBGT">SRIBHARAT GPS TRACKER PVT LTD</option>
@@ -124,14 +124,14 @@ tr:hover td{background:#f7f9fc}
       <input class="bs-tb-in" id="bs-search" placeholder="Name, task, serial…" oninput="renderTable()" style="min-width:160px">
     </div>
     <div class="bs-tb-grp"><span class="bs-tb-lbl">Month</span>
-      <select class="bs-tb-sel" id="bs-month" onchange="renderTable()">
+      <select class="bs-tb-sel" id="bs-month" onchange="bsMonthChange()">
         <option value="current">This Month</option>
         <option value="all">All Time</option>
         <option value="pending">Pending Only</option>
       </select>
     </div>
     <div class="bs-tb-grp"><span class="bs-tb-lbl">From</span>
-      <input type="date" class="bs-tb-in" id="bs-from" onchange="renderTable()">
+      <input type="date" class="bs-tb-in" id="bs-from" onchange="bsFromChange()">
     </div>
     <div class="bs-tb-grp"><span class="bs-tb-lbl">To</span>
       <input type="date" class="bs-tb-in" id="bs-to" onchange="renderTable()">
@@ -396,8 +396,18 @@ async function bsApi(action, params={}, method='GET', body=null){
   if(method==='GET') url += '&'+new URLSearchParams(params);
   const opts = {method, headers:{'X-Auth-Token': AUTH_TOKEN}};
   if(body){ opts.headers['Content-Type']='application/json'; opts.body=JSON.stringify(body); }
-  const r = await fetch(url, opts);
-  return r.json();
+  // Timeout so a slow/large request fails cleanly instead of hanging on a blank table.
+  const ctrl = new AbortController();
+  const timer = setTimeout(()=>ctrl.abort(), 45000);
+  opts.signal = ctrl.signal;
+  try {
+    const r = await fetch(url, opts);
+    clearTimeout(timer);
+    return await r.json();
+  } catch(e){
+    clearTimeout(timer);
+    return { error: (e && e.name==='AbortError') ? 'Timed out loading — try a shorter date range' : 'Network error loading balance sheet' };
+  }
 }
 
 const DEVICE_PRICES = {basic:3500,engine_status:3500,micro:3500,engine_cut:4500,engine_cut_with_mic:5000,vltd:9500,magnet:6000,engine_status_self:2500,engine_cut_self:3000,micro_nosim:2500,mic_sos:4499};
@@ -418,11 +428,39 @@ function bsTab(t){
 }
 
 // ── DATA ────────────────────────────────────────────
+// When the user asks for All Time or an older From date, fetch the full history once.
+async function bsMonthChange(){
+  const m = document.getElementById('bs-month').value;
+  if((m==='all' || m==='pending') && !window._bsLoadAll){
+    window._bsLoadAll = true;
+    await loadEntries();
+  }
+  renderTable();
+}
+async function bsFromChange(){
+  const from = document.getElementById('bs-from').value;
+  if(from && !window._bsLoadAll){
+    const d = new Date(); d.setDate(d.getDate()-120);
+    if(new Date(from) < d){ window._bsLoadAll = true; await loadEntries(); }
+  }
+  renderTable();
+}
 async function loadEntries(){
   document.getElementById('bs-tbody').innerHTML='<tr><td colspan="18" style="text-align:center;padding:32px;color:var(--text3)">Loading…</td></tr>';
   const profile = document.getElementById('bs-profile').value;
-  const res = await bsApi('bs_get_entries',{profile}).catch(()=>({}));
-  if(res.error){ toast('❌ '+res.error); return; }
+  // Fetch only recent entries by default so large profiles (BGPT) load fast and never blank.
+  // The "Load older" control fetches the full history when needed.
+  const params = { profile };
+  if(!window._bsLoadAll){
+    const d = new Date(); d.setDate(d.getDate() - 120); // last ~4 months
+    params.from = d.toISOString().slice(0,10);
+  }
+  const res = await bsApi('bs_get_entries', params).catch(()=>({}));
+  if(res.error){
+    toast('❌ '+res.error);
+    document.getElementById('bs-tbody').innerHTML='<tr><td colspan="18" style="text-align:center;padding:32px;color:var(--red)">'+res.error+'</td></tr>';
+    return;
+  }
   allEntries = res.entries||[];
   renderStats(res.stats||{});
   renderTable();
