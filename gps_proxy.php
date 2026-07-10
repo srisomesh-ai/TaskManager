@@ -456,4 +456,100 @@ if($action === 'assign_device'){
 }
 
 
+// ── SEARCH EXPIRY — list devices by expiry date range across servers (License dashboard) ──
+if($action === 'search_expiry'){
+    $date_from = trim($_GET['date_from'] ?? '');
+    $date_to   = trim($_GET['date_to'] ?? '');
+    $filter    = trim($_GET['filter'] ?? 'range'); // range|expired|expiring30|expiring90|all
+    $reqIds    = array_filter(array_map('intval', explode(',', trim($_GET['servers'] ?? '1,2,3'))));
+    if(!$reqIds) $reqIds = [1,2,3];
+
+    $today = date('Y-m-d'); $todayTs = strtotime($today);
+    $fromTs = $date_from ? strtotime($date_from) : false;
+    $toTs   = $date_to   ? strtotime($date_to)   : false;
+    $out = [];
+
+    foreach($reqIds as $sid){
+        if(!isset($servers[$sid])) continue;
+        $srv = $servers[$sid];
+        $r = do_get($srv['base'].'/get_devices?lang=en&user_api_hash='.rawurlencode($srv['hash']));
+        $data = $r['json'];
+        if(!is_array($data)) continue;
+        foreach($data as $group){
+            $items = isset($group['items']) ? $group['items'] : (isset($group['imei'])?[$group]:[]);
+            foreach($items as $d){
+                $dd = $d['device_data'] ?? [];
+                $expiry = '';
+                foreach(['expiration_date','sim_expiration_date','expire_date','expiry_date'] as $ef){
+                    if(!empty($dd[$ef]) && $dd[$ef]!=='0000-00-00' && substr($dd[$ef],0,10)!=='0000-00-00'){ $expiry=substr($dd[$ef],0,10); break; }
+                }
+                if(!$expiry) continue;
+                $expiryTs = strtotime($expiry);
+                $daysLeft = (int)(($expiryTs - $todayTs)/86400);
+                $include = false;
+                if($filter==='expired')          $include = ($expiryTs < $todayTs);
+                elseif($filter==='expiring30')    $include = ($daysLeft>=0 && $daysLeft<=30);
+                elseif($filter==='expiring90')    $include = ($daysLeft>=0 && $daysLeft<=90);
+                elseif($filter==='range'){
+                    if($fromTs && $toTs) $include = ($expiryTs>=$fromTs && $expiryTs<=$toTs);
+                    elseif($fromTs)      $include = ($expiryTs>=$fromTs);
+                    elseif($toTs)        $include = ($expiryTs<=$toTs);
+                    else                 $include = true;
+                } else $include = true;
+                if(!$include) continue;
+                $status = ($daysLeft<0)?'expired':(($daysLeft<=7)?'critical':(($daysLeft<=30)?'warning':(($daysLeft<=90)?'soon':'ok')));
+                $out[] = [
+                    'server_id'=>$sid, 'server_name'=>$srv['name'], 'server_tag'=>'S'.$sid,
+                    'id'=>$dd['id'] ?? ($d['id'] ?? null),
+                    'name'=>$d['name'] ?? '—',
+                    'imei'=>$dd['imei'] ?? '—',
+                    'plate'=>$dd['plate_number'] ?? '—',
+                    'reg'=>$dd['registration_number'] ?? '—',
+                    'owner'=>$dd['object_owner'] ?? '—',
+                    'expiry'=>$expiry, 'days_left'=>$daysLeft, 'status'=>$status,
+                ];
+            }
+        }
+    }
+    usort($out, function($a,$b){ return strcmp($a['expiry'],$b['expiry']); });
+    echo json_encode(['success'=>true,'total'=>count($out),'devices'=>$out,'today'=>$today]);
+    exit;
+}
+
+// ── RENEW DEVICE — extend expiry on server + return customer email (Renewal approve) ──
+if($action === 'renew_device'){
+    $server_id  = intval($_POST['server_id'] ?? 0);
+    $device_id  = intval($_POST['device_id'] ?? 0);
+    $new_expiry = trim($_POST['new_expiry'] ?? '');
+    if(!$server_id || !isset($servers[$server_id])){ echo json_encode(['success'=>false,'error'=>'Invalid server']); exit; }
+    if(!$device_id || !$new_expiry){ echo json_encode(['success'=>false,'error'=>'Missing device_id or new_expiry']); exit; }
+    $srv = $servers[$server_id];
+    $H = rawurlencode($srv['hash']);
+
+    // Update expiry on the server
+    $r = do_post($srv['base'].'/edit_device?lang=en&user_api_hash='.$H.'&device_id='.$device_id,
+        ['id'=>strval($device_id),'expiration_date'=>$new_expiry]);
+    $json = $r['json'];
+    if(!(is_array($json) && ($json['status'] ?? 0)==1)){
+        echo json_encode(['success'=>false,'error'=>parse_gps_err($json,$r['raw'])]); exit;
+    }
+
+    // Find the customer's email (device's assigned users, skipping admin/support)
+    $customerEmail = '';
+    $protected = ['admin@bharatgps.com','support@bharatgps.com'];
+    $ur = do_get($srv['base'].'/admin/device/'.$device_id.'/users?lang=en&user_api_hash='.$H.'&limit=50');
+    $uj = $ur['json']; $userList = [];
+    if(is_array($uj)){
+        if(isset($uj['data'])) $userList = $uj['data'];
+        elseif(isset($uj['items'])) $userList = $uj['items'];
+        elseif(isset($uj[0])) $userList = $uj;
+    }
+    foreach($userList as $u){
+        $em = strtolower(trim($u['email'] ?? ''));
+        if($em && !in_array($em,$protected)){ $customerEmail = $em; break; }
+    }
+    echo json_encode(['success'=>true,'new_expiry'=>$new_expiry,'customer_email'=>$customerEmail,'server'=>$srv['name']]);
+    exit;
+}
+
 echo json_encode(['success'=>false,'error'=>'Unknown action']);
