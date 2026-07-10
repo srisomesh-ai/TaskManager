@@ -487,9 +487,14 @@ if($action === 'search_expiry'){
                 $expiryTs = strtotime($expiry);
                 $daysLeft = (int)(($expiryTs - $todayTs)/86400);
                 $include = false;
-                if($filter==='expired')          $include = ($expiryTs < $todayTs);
-                elseif($filter==='expiring30')    $include = ($daysLeft>=0 && $daysLeft<=30);
-                elseif($filter==='expiring90')    $include = ($daysLeft>=0 && $daysLeft<=90);
+                if($filter==='expired')                $include = ($expiryTs < $todayTs);
+                elseif($filter==='expired_today')      $include = ($daysLeft === 0);
+                elseif($filter==='expired_yesterday')  $include = ($daysLeft === -1);
+                elseif($filter==='expired_week_ago')   $include = ($daysLeft <= -1 && $daysLeft >= -7);
+                elseif($filter==='expiring_tomorrow')  $include = ($daysLeft === 1);
+                elseif($filter==='expiring_next_week') $include = ($daysLeft >= 0 && $daysLeft <= 7);
+                elseif($filter==='expiring30')         $include = ($daysLeft>=0 && $daysLeft<=30);
+                elseif($filter==='expiring90')         $include = ($daysLeft>=0 && $daysLeft<=90);
                 elseif($filter==='range'){
                     if($fromTs && $toTs) $include = ($expiryTs>=$fromTs && $expiryTs<=$toTs);
                     elseif($fromTs)      $include = ($expiryTs>=$fromTs);
