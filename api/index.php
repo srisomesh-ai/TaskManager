@@ -1220,6 +1220,19 @@ case 'clear_fcm_token':
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
+// ---- MARK TASK OPENED (technician opened it — stops unopened reminders) ----
+case 'mark_task_opened':
+    $id = intval($body['id'] ?? $_GET['id'] ?? 0);
+    if(!$id){ echo json_encode(['error'=>'Task ID required']); break; }
+    try {
+        try { $pdo->exec("ALTER TABLE tasks ADD COLUMN opened_at DATETIME DEFAULT NULL"); } catch(Exception $e){}
+        // Only stamp the first open, and only by the assigned technician
+        $pdo->prepare("UPDATE tasks SET opened_at=NOW() WHERE id=? AND opened_at IS NULL AND (assigned_to=? OR ?=1)")
+            ->execute([$id, $userId, in_array($userRole,['admin','assigner'])?1:0]);
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 // ---- MY EARNINGS (technician coin ledger) ----
 case 'get_earnings':
     try {
