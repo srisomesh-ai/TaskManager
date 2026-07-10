@@ -375,6 +375,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
       <div class="nav-item" id="nav-my-tasks" onclick="showPage('my-tasks')"><span class="nav-icon">🙋</span> My Tasks <span class="nav-badge" id="my-tasks-nav-badge" style="display:none;background:var(--red);color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:10px;margin-left:4px">0</span></div>
       <div class="nav-item" id="nav-urgent" onclick="showPage('urgent')"><span class="nav-icon">🚨</span> Urgent Tasks <span class="nav-badge" id="urgent-badge">0</span></div>
       <div class="nav-item admin-only" id="nav-approvals" onclick="showPage('approvals')"><span class="nav-icon">✅</span> Approvals <span class="nav-badge" id="approval-badge">0</span></div>
+      <div class="nav-item readding-approver" id="nav-readding" onclick="showPage('readding')" style="display:none"><span class="nav-icon">🔌</span> Re-Adding <span class="nav-badge" id="readding-badge" style="display:none;background:var(--red);color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:10px;margin-left:4px">0</span></div>
       <div class="nav-sec">Reports</div>
       <div class="nav-item admin-only" id="nav-daily-report" onclick="showPage('daily-report')"><span class="nav-icon">📅</span> Daily Report</div>
       <div class="nav-item admin-only" id="nav-balance-sheet" onclick="showPage('balance-sheet')"><span class="nav-icon">💰</span> Balance Sheet</div>
@@ -1005,6 +1006,32 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
               <th style="padding:10px 12px;text-align:left;font-weight:700">View</th>
             </tr></thead>
             <tbody id="approvals-tbody"><tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text3)">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="page" id="page-readding">
+        <div class="pg-header"><div class="breadcrumb">Home / <b>Re-Adding</b></div><div class="pg-title">🔌 Re-Adding Requests</div><div class="pg-sub">Technician device re-add requests. Approving pushes the device to the GPS server.</div></div>
+        <div class="card" style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button class="card-btn" onclick="loadReaddingPage()">🔄 Refresh</button>
+          <select id="ra-filter" onchange="renderReadding()" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="cancelled">Cancelled</option>
+            <option value="">All</option>
+          </select>
+        </div>
+        <div class="card" style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr style="background:var(--surface2);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)">
+              <th style="padding:10px 12px;text-align:left;font-weight:700">Device</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700">IMEI</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700">Model</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700">Server</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700">Requested by</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700">When</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700">Status / Action</th>
+            </tr></thead>
+            <tbody id="readding-tbody"><tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text3)">Loading...</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -1737,6 +1764,11 @@ function showPage(name, opts={}){
     showToast('⛔ Access denied — Admin only');
     return;
   }
+  // Re-Adding page — admin/assigner/manager only
+  if(name==='readding' && !['admin','assigner','manager'].includes(currentUser?.role)){
+    showToast('⛔ Access denied');
+    return;
+  }
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   const page = document.getElementById('page-'+name);
@@ -1755,6 +1787,7 @@ function showPage(name, opts={}){
     'my-tasks':      loadMyTasks,
     urgent:          loadUrgentPage,
     approvals:       loadApprovalsPage,
+    readding:        loadReaddingPage,
     'daily-report':  loadDailyReport,
     'balance-sheet': syncBsAuth,
     'admin':         syncAdminAuth,
@@ -1790,6 +1823,10 @@ function startApp(){
   document.querySelectorAll('.admin-only').forEach(el=>el.style.display = isAdmin ? '' : 'none');
   // super-admin-only = admin ONLY (blacklist, admin panel)
   document.querySelectorAll('.super-admin-only').forEach(el=>el.style.display = isSuperAdmin ? '' : 'none');
+  // Re-Adding approvers = admin + assigner + manager
+  const isReaddingApprover = ['admin','assigner','manager'].includes(currentUser.role);
+  document.querySelectorAll('.readding-approver').forEach(el=>el.style.display = isReaddingApprover ? '' : 'none');
+  if(isReaddingApprover) loadReaddingBadge();
 
   // Hide Dashboard nav for technicians — they have My Tasks as home
   const dashNav = document.getElementById('nav-dashboard');
@@ -6179,6 +6216,100 @@ async function loadApprovalsPage(){
 }
 
 async function loadApprovals(){ return loadApprovalsPage(); }
+
+// ═══════════════ RE-ADDING (admin/assigner/manager) ═══════════════
+let _readdingRows = [];
+async function loadReaddingBadge(){
+  try{
+    const d = await api('readding_count');
+    const b = document.getElementById('readding-badge');
+    const n = (d&&d.count)?d.count:0;
+    if(b){ if(n>0){ b.textContent=n; b.style.display=''; } else b.style.display='none'; }
+  }catch(e){}
+}
+async function loadReaddingPage(){
+  const tbody = document.getElementById('readding-tbody');
+  if(tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading...</td></tr>';
+  const d = await api('readding_list').catch(()=>({}));
+  _readdingRows = (d && d.requests) ? d.requests : [];
+  renderReadding();
+  loadReaddingBadge();
+}
+const _RA_SRV = {1:'bharatgps.com',2:'bharatgps.in',3:'bharatgps.school',4:'bharatgps.org'};
+function renderReadding(){
+  const tbody = document.getElementById('readding-tbody');
+  if(!tbody) return;
+  const filter = (document.getElementById('ra-filter')||{}).value ?? 'pending';
+  let rows = _readdingRows.slice();
+  if(filter) rows = rows.filter(r => (r.status||'')===filter);
+  if(!rows.length){
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:48px;color:var(--text3)"><div style="font-size:36px;margin-bottom:10px">🔌</div><div style="font-size:14px;font-weight:700">No '+(filter||'')+' requests</div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r=>{
+    const st = r.status||'pending';
+    const when = (r.created_at||'').replace('T',' ').slice(0,16);
+    let action='';
+    if(st==='pending'){
+      action = `<button class="act-btn act-view" onclick="approveReadding(${r.id},this)" style="background:var(--green);color:#fff">✅ Approve &amp; Push</button>
+                <button class="act-btn act-view" onclick="cancelReadding(${r.id},this)" style="background:var(--red);color:#fff;margin-left:6px">✖ Cancel</button>`;
+    } else if(st==='approved'){
+      action = '<span style="color:var(--green);font-weight:700;font-size:12px">✅ Approved'+(r.device_id?(' · ID '+escHtml(r.device_id)):'')+'</span><br><span style="font-size:11px;color:var(--text3)">by '+escHtml(r.approved_by||'—')+'</span>';
+    } else {
+      action = '<span style="color:var(--red);font-weight:700;font-size:12px">✖ Cancelled</span><br><span style="font-size:11px;color:var(--text3)">by '+escHtml(r.cancelled_by||'—')+'</span>';
+    }
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:9px 12px;font-weight:700">${escHtml(r.name)}</td>
+      <td style="padding:9px 12px;font-family:monospace;font-size:12px">${escHtml(r.imei)}${r.vin?('<br><span style=\"color:var(--text3);font-size:11px\">VIN '+escHtml(r.vin)+'</span>'):''}</td>
+      <td style="padding:9px 12px;font-size:12px">${escHtml(r.model||'—')}${r.sim?('<br><span style=\"color:var(--text3);font-size:11px\">SIM '+escHtml(r.sim)+'</span>'):''}</td>
+      <td style="padding:9px 12px;font-size:12px;color:var(--text2)">${escHtml(_RA_SRV[r.server_id]||('Server '+r.server_id))}</td>
+      <td style="padding:9px 12px;font-size:12px;color:var(--text2)">${escHtml(r.requested_by_name||'—')}<br><span style="font-size:10px;color:var(--text3);text-transform:capitalize">${escHtml(r.requested_role||'')}</span></td>
+      <td style="padding:9px 12px;font-size:11px;color:var(--text3)">${escHtml(when)}</td>
+      <td style="padding:9px 12px">${action}</td>
+    </tr>`;
+  }).join('');
+}
+async function approveReadding(id, btn){
+  const row = _readdingRows.find(r=>String(r.id)===String(id));
+  if(!row) return;
+  if(!confirm('Approve and push "'+row.name+'" (IMEI '+row.imei+') to '+(_RA_SRV[row.server_id]||('Server '+row.server_id))+'?')) return;
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Pushing…'; }
+  try{
+    // 1) Push device to GPS server via gps_proxy
+    const fd = new FormData();
+    fd.append('server_id', row.server_id);
+    fd.append('name', row.name);
+    fd.append('imei', row.imei);
+    fd.append('vin', row.vin||'');
+    fd.append('sim', row.sim||'');
+    fd.append('model', row.model||'');
+    const pr = await fetch('gps_proxy.php?action=add_device',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd}).then(x=>x.json()).catch(()=>({}));
+    if(!pr || !pr.success){
+      showToast('❌ Push failed: '+((pr&&pr.error)||'server error'));
+      if(btn){ btn.disabled=false; btn.textContent='✅ Approve & Push'; }
+      return;
+    }
+    // 2) Record approval with device_id
+    const ar = await api('readding_approve', {}, 'POST', {id:id, device_id:pr.device_id||''});
+    if(ar && ar.success){
+      showToast('✅ Approved — device pushed to '+((_RA_SRV[row.server_id])||'server'));
+      loadReaddingPage();
+    } else {
+      showToast('⚠️ Pushed to server but could not record approval: '+((ar&&ar.error)||''));
+      loadReaddingPage();
+    }
+  }catch(e){
+    showToast('❌ '+e.message);
+    if(btn){ btn.disabled=false; btn.textContent='✅ Approve & Push'; }
+  }
+}
+async function cancelReadding(id, btn){
+  if(!confirm('Cancel this re-adding request?')) return;
+  if(btn){ btn.disabled=true; btn.textContent='…'; }
+  const r = await api('readding_cancel', {}, 'POST', {id:id});
+  if(r && r.success){ showToast('Request cancelled'); loadReaddingPage(); }
+  else { showToast('❌ '+((r&&r.error)||'Could not cancel')); if(btn){ btn.disabled=false; btn.textContent='✖ Cancel'; } }
+}
 
 // ── Load GPS device options from Item Master (stock_items) ──────────────
 async function loadJobTypeItems(){
