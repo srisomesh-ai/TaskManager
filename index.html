@@ -648,7 +648,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
                 <div class="form-group" id="fm-profile-group">
                   <label>Company Profile</label>
                   <select id="fm-profile" onchange="updateModalGST()">
-                    <option value="BGPT">BGT — No GST</option>
+                    <option value="BGPT">BGPT — No GST</option>
                     <option value="SBGT">SBGT — With 18% GST</option>
                   </select>
                 </div>
@@ -2831,7 +2831,7 @@ function selectPayMode(mode){
 
   // BGPT hard block: deferred > 7 days not allowed
   if(isDeferred && profile==='BGPT' && days > 7){
-    alert('🚫 Under BGT profile, payment delay cannot exceed 7 days.\n\nFor delays beyond 7 days, the profile must be changed to SBGT and a written email or Purchase Order copy from the customer is required.');
+    alert('🚫 Under BGPT profile, payment delay cannot exceed 7 days.\n\nFor delays beyond 7 days, the profile must be changed to SBGT and a written email or Purchase Order copy from the customer is required.');
     return;
   }
 
@@ -3260,7 +3260,7 @@ function setModalJobPrice(job){
   if(base !== undefined && base > 0){
     if(priceEl)   priceEl.value   = base; // Standard price — locked
     if(collectEl) collectEl.value = base; // Default collect = standard
-    if(hintEl)    hintEl.textContent = '(standard BGT price — excl. GST)';
+    if(hintEl)    hintEl.textContent = '(standard BGPT price — excl. GST)';
     updateModalGST();
     if(document.getElementById('fm-discount-section'))
       document.getElementById('fm-discount-section').style.display = 'none';
@@ -3948,7 +3948,7 @@ function openTaskDetail(id){ viewTask(id); }async function viewTask(id){
     ['🔧 Job Type',       t.device_details || '–'],
     ['📍 Location',       t.location || '–'],
     ['📊 Lead Type',      t.lead_type || '–'],
-    ['🏢 Profile',        (t.profile==='BGPT'?'BGT':(t.profile||'BGT'))],
+    ['🏢 Profile',        t.profile || 'BGPT'],
     ['📅 Created',        (t.created_at||'').slice(0,10) || '–'],
     ['⏰ Reminder',       t.reminder_date || '–'],
     ['🔢 Device Qty',     t.device_qty || 1],
