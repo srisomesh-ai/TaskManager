@@ -1114,6 +1114,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
         <div id="rnw-approve-view" style="display:none">
           <div class="card" style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
             <button class="card-btn" onclick="loadRenewalsPage()">🔄 Refresh</button>
+            <button class="card-btn renewal-admin-only" onclick="fixMissingRenewalBs(this)" style="background:#fff8e6;color:#7a5c00;border:1px solid #e0a800">🧾 Fix missing balance-sheet entries</button>
             <select id="rnw-status-filter" onchange="renderRenewalRequests()" class="form-input" style="width:160px">
               <option value="pending">Pending</option>
               <option value="approved">Approved</option>
@@ -1936,6 +1937,7 @@ function startApp(){
   // License/Renewals — manager + assigner + admin
   const isRenewalStaff = ['admin','assigner','manager'].includes(currentUser.role);
   document.querySelectorAll('.renewal-staff').forEach(el=>el.style.display = isRenewalStaff ? '' : 'none');
+  document.querySelectorAll('.renewal-admin-only').forEach(el=>el.style.display = (currentUser.role==='admin') ? '' : 'none');
   if(isRenewalStaff) loadRenewalBadge();
 
   // Hide Dashboard nav for technicians — they have My Tasks as home
@@ -6506,7 +6508,7 @@ async function loadRenewalsPage(){
     let items = ((pl&&pl.items)||[]).filter(function(i){ return (i.category||'').toLowerCase()==='renewal'; });
     // Seed if no proper GPS Renewal plans yet (admin only)
     const hasPlans = items.some(function(i){ return /GPS Renewal/i.test(i.product_name||''); });
-    if(!hasPlans && currentUser && currentUser.role==='admin'){
+    if(!hasPlans && currentUser && ['admin','assigner','manager'].includes(currentUser.role)){
       await api('pl_seed_renewals',{},'POST',{}).catch(()=>{});
       pl = await api('pl_get_public').catch(()=>({}));
       items = ((pl&&pl.items)||[]).filter(function(i){ return (i.category||'').toLowerCase()==='renewal'; });
@@ -6610,6 +6612,7 @@ async function requestRenewal(idx, btn){
   const parts=(sel?sel.value:'12|0|0|Renewal').split('|');
   const months=parseInt(parts[0])||12, amount=parseFloat(parts[1])||0, gst=parseFloat(parts[2])||0, itemName=parts[3]||'Renewal';
   const label = months===12?'1 Year':(months+' Months');
+  if(amount<=0){ showToast('⚠️ Renewal price is 0 — reload the page so plans load, or set the price in Price List'); return; }
   const shotInp=document.getElementById('rnw-shot-'+idx);
   if(!shotInp || !shotInp.files || !shotInp.files[0]){ showToast('⚠️ Attach the payment screenshot first'); return; }
   if(!confirm('Request renewal of "'+d.name+'" for '+label+(amount>0?(' (₹'+amount.toLocaleString('en-IN')+')'):'')+'?\n\nThis will be sent to admin for approval.')) return;
@@ -6715,6 +6718,14 @@ async function rejectRenewal(id, btn){
   const r=await api('renewal_reject',{},'POST',{id:id, notes:notes||''});
   if(r && r.success){ showToast('Renewal rejected'); loadRenewalsPage(); }
   else { showToast('❌ '+((r&&r.error)||'Could not reject')); if(btn){ btn.disabled=false; btn.textContent='✖ Reject'; } }
+}
+async function fixMissingRenewalBs(btn){
+  if(!confirm('Create balance-sheet entries for any approved renewals that are missing one? Prices are recovered from the Price List.')) return;
+  if(btn){ btn.disabled=true; btn.textContent='Fixing…'; }
+  const r=await api('renewal_fix_missing_bs',{},'POST',{});
+  if(btn){ btn.disabled=false; btn.textContent='🧾 Fix missing balance-sheet entries'; }
+  if(r && r.success){ showToast('✅ Fixed '+(r.fixed||0)+' entry(ies) — check the Balance Sheet'); }
+  else { showToast('❌ '+((r&&r.error)||'Could not fix')); }
 }
 if(!window._rnwBadgeTimer){
   window._rnwBadgeTimer = setInterval(function(){
