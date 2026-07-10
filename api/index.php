@@ -3818,10 +3818,17 @@ case 'renewal_approve':
                 $pdo->exec("CREATE TABLE IF NOT EXISTS balance_sheet_entries (id INT AUTO_INCREMENT PRIMARY KEY, type VARCHAR(20) DEFAULT 'sales', profile VARCHAR(10) DEFAULT 'BGPT', task_id VARCHAR(20) NULL, task_db_id INT NULL, date DATE NOT NULL, invoice_no VARCHAR(50), gps_serial_no VARCHAR(100), customer_type VARCHAR(50), name_on_server TEXT, server_name VARCHAR(50), device_model VARCHAR(100), service_type VARCHAR(100), license_plan VARCHAR(100), qty DECIMAL(10,2) DEFAULT 1, unit_price DECIMAL(10,2) DEFAULT 0, gst DECIMAL(10,2) DEFAULT 0, total_price DECIMAL(10,2) DEFAULT 0, payment_status VARCHAR(50), payment_received DECIMAL(10,2) DEFAULT 0, pending_payment DECIMAL(10,2) DEFAULT 0, payment_mode VARCHAR(50), payment_received_on DATE NULL, payment_transaction_details TEXT, pending_reason VARCHAR(100), discount_given DECIMAL(10,2) DEFAULT 0, discount_reason TEXT, discount_incharge VARCHAR(100), payment_reminder_date DATE NULL, technician_name VARCHAR(100), location VARCHAR(200), remarks TEXT, created_by_code VARCHAR(50), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
             } catch(Exception $e){}
             $gst = $gstAmt;
+            // Profile: SBGT plan (with GST) -> SBGT company; BGT plan (non-GST) -> BGPT company.
+            // Detect from the plan name; fall back to GST presence.
+            $planName = strtoupper($r['price_item'] ?? '');
+            if(strpos($planName,'SBGT') !== false)      $rnwProfile = 'SBGT';
+            elseif(strpos($planName,'BGT') !== false)    $rnwProfile = 'BGPT';
+            else                                         $rnwProfile = ($gst > 0) ? 'SBGT' : 'BGPT';
             $pdo->prepare("INSERT INTO balance_sheet_entries
                 (type,profile,date,gps_serial_no,name_on_server,server_name,device_model,service_type,license_plan,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_transaction_details,remarks,created_by_code)
-                VALUES ('license','BGPT',CURDATE(),?,?,?,?,?,?,1,?,?,?,'paid',?,0,?,?,?)")
+                VALUES ('license',?,CURDATE(),?,?,?,?,?,?,1,?,?,?,'paid',?,0,?,?,?)")
                 ->execute([
+                    $rnwProfile,
                     $r['imei'] ?: null, $r['owner'] ?: $r['device_name'], $r['server_name'],
                     'Renewal', 'Renewal', $r['label'],
                     $amount - $gst, $gst, $amount, $amount,
@@ -3854,6 +3861,55 @@ case 'renewal_approve':
         }
 
         echo json_encode(['success'=>true,'bs_entry'=>$bsId?true:false,'emailed'=>$emailed?true:false,'customer_email'=>$customerEmail?:null]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'renewal_bs_repair':
+    // Admin: fix balance-sheet entries for already-approved renewals — correct the profile
+    // (SBGT plan -> SBGT company) and create any missing entries.
+    try {
+        if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Admin only']); break; }
+        _renewalEnsureTable($pdo);
+        $rows = $pdo->query("SELECT * FROM renewal_requests WHERE status='approved'")->fetchAll();
+        $fixed = 0; $created = 0;
+        foreach($rows as $r){
+            $amount = floatval($r['amount'] ?? 0);
+            $gstAmt = floatval($r['gst'] ?? 0);
+            if($amount <= 0 && !empty($r['price_item'])){
+                $pl = $pdo->prepare("SELECT price_incl_gst, price_excl_gst FROM price_list WHERE product_name=? LIMIT 1");
+                $pl->execute([$r['price_item']]); $plr = $pl->fetch();
+                if($plr){ $amount = floatval($plr['price_incl_gst']); $gstAmt = max(0, floatval($plr['price_incl_gst'])-floatval($plr['price_excl_gst'])); }
+            }
+            if($amount <= 0) continue;
+            $planName = strtoupper($r['price_item'] ?? '');
+            if(strpos($planName,'SBGT')!==false)   $prof='SBGT';
+            elseif(strpos($planName,'BGT')!==false) $prof='BGPT';
+            else                                    $prof=($gstAmt>0)?'SBGT':'BGPT';
+            if(!empty($r['bs_entry_id'])){
+                // Correct the profile / amount of the existing entry
+                $pdo->prepare("UPDATE balance_sheet_entries SET profile=?, type='license', total_price=?, unit_price=?, gst=?, payment_received=? WHERE id=?")
+                    ->execute([$prof, $amount, $amount-$gstAmt, $gstAmt, $amount, intval($r['bs_entry_id'])]);
+                $fixed++;
+            } else {
+                // Create the missing entry
+                $pdo->prepare("INSERT INTO balance_sheet_entries
+                    (type,profile,date,gps_serial_no,name_on_server,server_name,device_model,service_type,license_plan,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_transaction_details,remarks,created_by_code)
+                    VALUES ('license',?,COALESCE(?,CURDATE()),?,?,?,?,?,?,1,?,?,?,'paid',?,0,?,?,?)")
+                    ->execute([
+                        $prof, ($r['approved_at']?substr($r['approved_at'],0,10):null),
+                        $r['imei']?:null, $r['owner']?:$r['device_name'], $r['server_name'],
+                        'Renewal','Renewal',$r['label'],
+                        $amount-$gstAmt, $gstAmt, $amount, $amount,
+                        $r['payment_screenshot']?:null,
+                        'Renewal '.$r['label'].' — '.$r['device_name'].' ('.$r['plate'].') new expiry '.$r['new_expiry'],
+                        $cu['name']??'admin'
+                    ]);
+                $newId=$pdo->lastInsertId();
+                if($newId){ $pdo->prepare("UPDATE renewal_requests SET bs_entry_id=? WHERE id=?")->execute([$newId,$r['id']]); }
+                $created++;
+            }
+        }
+        echo json_encode(['success'=>true,'fixed'=>$fixed,'created'=>$created]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
