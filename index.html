@@ -6684,11 +6684,9 @@ function renderRenewalRequests(){
         action='<span class="ra-pill" style="background:#fef3c7;color:#92600a">⏳ Pending admin approval</span>';
       }
     } else if(st==='approved'){
-      action='<div><span class="ra-pill ok">✅ Approved</span><div style="font-size:11px;color:var(--text3);margin-top:3px">by '+escHtml(r.approved_by||'—')+'</div>'
-        + (canApprove?'<button class="ra-btn ra-reject" style="margin-top:6px" onclick="deleteRenewal('+r.id+',this)">🗑️ Delete</button>':'')+'</div>';
+      action='<div><span class="ra-pill ok">✅ Approved</span><div style="font-size:11px;color:var(--text3);margin-top:3px">by '+escHtml(r.approved_by||'—')+'</div></div>';
     } else {
-      action='<div><span class="ra-pill no">✖ Rejected</span><div style="font-size:11px;color:var(--text3);margin-top:3px">by '+escHtml(r.approved_by||'—')+'</div>'
-        + (canApprove?'<button class="ra-btn ra-reject" style="margin-top:6px" onclick="deleteRenewal('+r.id+',this)">🗑️ Delete</button>':'')+'</div>';
+      action='<div><span class="ra-pill no">✖ Rejected</span><div style="font-size:11px;color:var(--text3);margin-top:3px">by '+escHtml(r.approved_by||'—')+'</div></div>';
     }
     const amt=parseFloat(r.amount||0);
     return '<tr style="border-bottom:1px solid var(--border)">'
