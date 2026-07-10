@@ -4749,7 +4749,8 @@ function renderReviewPanel(t){
   const collected = parseFloat(t.amount_collected||0);
   if(nonCash && collected > 0){
     const vs = t.payment_verify_status || 'pending';
-    const shot = (t.documents||[]).find(d=>d.doc_type==='payment_screenshot');
+    const shot = (t.documents||[]).find(d=>d.doc_type==='payment_screenshot')
+              || (t.documents||[]).find(d=>/\.(jpg|jpeg|png|webp|gif|heic)$/i.test(d.filename||''));
     const shotUrl = shot ? ('https://salmon-goldfish-110661.hostingersite.com/uploads/task_'+t.id+'/'+shot.filename) : '';
     const isImg = shot && /\.(jpg|jpeg|png|webp|gif|heic)$/i.test(shot.filename||'');
     let badge = vs==='verified' ? '<span style="color:var(--green);font-weight:800">\u2705 Verified</span>'
