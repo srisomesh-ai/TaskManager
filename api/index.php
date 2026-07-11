@@ -2939,17 +2939,16 @@ case 'cash_pending_summary':
             if ($row['overdue']) $byTech[$tid]['overdue'] = true;
         }
         unset($row);
-        // Manual balance-sheet entries linked to a technician with pending cash (no task behind them).
-        // These are the old manually-entered rows: cash mode, has pending amount, technician_id set,
-        // and NOT already linked to a task (task_db_id empty) to avoid double counting.
+        // Manual balance-sheet entries linked to a technician with a pending amount.
+        // These are old manually-entered rows. We count ANY pending amount tied to a technician
+        // (payment mode is often blank on manual rows), as long as it is not already a task entry.
         try {
             $mq = $pdo->query("SELECT b.id, b.task_id, b.name_on_server AS customer_name,
-                        b.pending_payment, b.date,
+                        b.pending_payment, b.date, b.payment_mode,
                         u.id AS tech_id, u.name AS tech_name, u.phone AS tech_phone,
                         DATEDIFF(NOW(), b.date) AS age_days
                      FROM balance_sheet_entries b JOIN users u ON b.technician_id=u.id
-                     WHERE LOWER(COALESCE(b.payment_mode,''))='cash'
-                       AND COALESCE(b.pending_payment,0) > 0
+                     WHERE COALESCE(b.pending_payment,0) > 0
                        AND (b.task_db_id IS NULL OR b.task_db_id=0)
                      ORDER BY b.date ASC");
             $ments = $mq->fetchAll(PDO::FETCH_ASSOC);
@@ -3001,7 +3000,7 @@ case 'remind_cash_deposit':
             // Add manual balance-sheet pending cash for this technician
             try {
                 $rm = $pdo->prepare("SELECT COALESCE(SUM(pending_payment),0) amt, COUNT(*) c, MIN(date) oldest
-                        FROM balance_sheet_entries WHERE technician_id=? AND LOWER(COALESCE(payment_mode,''))='cash'
+                        FROM balance_sheet_entries WHERE technician_id=?
                           AND COALESCE(pending_payment,0)>0 AND (task_db_id IS NULL OR task_db_id=0)");
                 $rm->execute([$techId]); $aggM=$rm->fetch(PDO::FETCH_ASSOC);
                 $amt += floatval($aggM['amt']); $cnt += intval($aggM['c']);
