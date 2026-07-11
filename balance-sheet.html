@@ -462,8 +462,24 @@ async function loadEntries(){
     return;
   }
   allEntries = res.entries||[];
-  renderStats(res.stats||{});
-  renderTable();
+  renderTable();   // computes & renders stats from the filtered entries
+}
+
+function computeStats(entries){
+  // Build the same stat shape as the server, but from the CURRENTLY FILTERED entries,
+  // so the dashboard cards always match the filtered table result.
+  let devices_sold=0, license_count=0, total_sales=0, total_license=0, payment_received=0, pending_payment=0;
+  (entries||[]).forEach(e=>{
+    const qty=parseFloat(e.qty||0)||0;
+    const total=parseFloat(e.total_price||0)||0;
+    const recv=parseFloat(e.payment_received||0)||0;
+    const pend=parseFloat(e.pending_payment||0)||0;
+    if(e.type==='sales'){ devices_sold+=qty; total_sales+=total; }
+    else { license_count+=qty; total_license+=total; }
+    payment_received+=recv;
+    pending_payment+=pend;
+  });
+  return {devices_sold,license_count,total_sales,total_license,payment_received,pending_payment};
 }
 
 function renderStats(s){
@@ -549,6 +565,7 @@ function bsShowNames(el, listStr){
 
 function renderTable(){
   const filtered=getFiltered();
+  renderStats(computeStats(filtered));   // dashboard cards reflect the filtered result
   const total=filtered.length, pages=Math.max(1,Math.ceil(total/PAGE));
   if(curPage>pages) curPage=pages;
   const slice=filtered.slice((curPage-1)*PAGE, curPage*PAGE);
