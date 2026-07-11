@@ -2240,7 +2240,7 @@ case 'exp_update_entry':
     break;
 
 case 'exp_delete_entry':
-    if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    if ($userRole !== 'admin') { http_response_code(403); echo json_encode(['error'=>'Only admin can delete expenses']); break; }
     try {
         _ensureExpensesTable($pdo);
         $id = intval($body['id'] ?? 0);
