@@ -562,11 +562,47 @@ if($action === 'renew_device'){
         elseif(isset($uj['items'])) $userList = $uj['items'];
         elseif(isset($uj[0])) $userList = $uj;
     }
+    $supportHasAccess = false;
     foreach($userList as $u){
         $em = strtolower(trim($u['email'] ?? ''));
-        if($em && !in_array($em,$protected)){ $customerEmail = $em; break; }
+        if($em === 'support@bharatgps.com') $supportHasAccess = true;
+        if($em && !in_array($em,$protected) && $customerEmail===''){ $customerEmail = $em; }
     }
-    echo json_encode(['success'=>true,'new_expiry'=>$new_expiry,'customer_email'=>$customerEmail,'server'=>$srv['name']]);
+
+    // ── Give support@bharatgps.com access to this device (so support can view/manage it) ──
+    // Only if not already assigned. We look up the support user_id on this server, then assign.
+    $supportAssigned = $supportHasAccess;
+    if(!$supportHasAccess){
+        $SUPPORT_EMAIL = 'support@bharatgps.com';
+        $supportUserId = 0;
+        // Look up the support account's user_id on this server
+        $sr = do_get($srv['base'].'/admin/clients?search_phrase='.rawurlencode($SUPPORT_EMAIL).'&limit=10&lang=en&user_api_hash='.$H);
+        $sj = $sr['json']; $clients = [];
+        if(is_array($sj)){
+            if(isset($sj['data'])) $clients = $sj['data'];
+            elseif(isset($sj['items'])) $clients = $sj['items'];
+            elseif(isset($sj[0])) $clients = $sj;
+        }
+        foreach($clients as $c){
+            if(strcasecmp(trim($c['email']??''), $SUPPORT_EMAIL) === 0){ $supportUserId = intval($c['id'] ?? 0); break; }
+        }
+        if($supportUserId){
+            // POST /admin/device/{device_id}/user  → assign device to support account
+            $ar = do_post($srv['base'].'/admin/device/'.$device_id.'/user?lang=en&user_api_hash='.$H,
+                ['user_id'=>strval($supportUserId)]);
+            $aj = $ar['json'];
+            if(($aj['status'] ?? null) == 1){ $supportAssigned = true; }
+            else {
+                // Fallback via edit_device
+                $ar2 = do_post($srv['base'].'/edit_device?lang=en&user_api_hash='.$H,
+                    ['id'=>strval($device_id),'user_id'=>strval($supportUserId)]);
+                $aj2 = $ar2['json'];
+                if(($aj2['status'] ?? null) == 1){ $supportAssigned = true; }
+            }
+        }
+    }
+
+    echo json_encode(['success'=>true,'new_expiry'=>$new_expiry,'customer_email'=>$customerEmail,'server'=>$srv['name'],'support_access'=>$supportAssigned]);
     exit;
 }
 
