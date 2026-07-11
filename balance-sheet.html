@@ -226,7 +226,7 @@ tr:hover td{background:#f7f9fc}
         <div class="fg"><label>Unit Price *</label><input type="number" id="s-uprice" step="0.01" onchange="calcSales()" required></div>
         <div class="fg" id="s-gst-grp" style="display:none"><label>GST (18%)</label><input type="number" id="s-gst" readonly></div>
         <div class="fg"><label>Total Price</label><input type="number" id="s-total" readonly></div>
-        <div class="fg"><label>Technician</label><input type="text" id="s-tech" placeholder="Name"></div>
+        <div class="fg"><label>Technician</label><select id="s-tech" class="bs-tech-sel"><option value="">— Select —</option></select></div>
         <div class="fg"><label>Location</label><input type="text" id="s-loc" placeholder="Location"></div>
         <div class="fg span2"><label>Name on Server *</label>
           <div class="names-list" id="s-names">
@@ -319,7 +319,7 @@ tr:hover td{background:#f7f9fc}
         <div class="fg"><label>Unit Price</label><input type="number" id="l-uprice" step="0.01" onchange="calcLic()" placeholder="Auto-filled"></div>
         <div class="fg" id="l-gst-grp" style="display:none"><label>GST (18%)</label><input type="number" id="l-gst" readonly></div>
         <div class="fg"><label>Total Price</label><input type="number" id="l-total" readonly></div>
-        <div class="fg"><label>Technician</label><input type="text" id="l-tech" placeholder="Name"></div>
+        <div class="fg"><label>Technician</label><select id="l-tech" class="bs-tech-sel"><option value="">— Select —</option></select></div>
         <div class="fg"><label>Location</label><input type="text" id="l-loc" placeholder="Location"></div>
         <div class="fg span2"><label>Name on Server *</label>
           <div class="names-list" id="l-names">
@@ -727,6 +727,12 @@ function editEntry(id){
   ];
   document.getElementById('bs-edit-body').innerHTML=`
     <div class="bs-fg" style="margin-bottom:14px">
+      <div class="fg"><label>Technician (link for pending tracking)</label>
+        <select id="ef-technician_id">
+          <option value="">— Select —</option>
+          ${(window._bsTechs||[]).map(u=>`<option value="${u.id}" ${String(e.technician_id)===String(u.id)?'selected':''}>${String(u.name||'').replace(/</g,'&lt;')}</option>`).join('')}
+        </select>
+      </div>
       ${fields.map(f=>`<div class="fg"><label>${f.label}</label>
         ${f.type==='select'
           ?`<select id="ef-${f.id}"><option value="">–</option>${f.opts.map(o=>`<option value="${o}" ${e[f.id]===o?'selected':''}>${o}</option>`).join('')}</select>`
@@ -745,6 +751,13 @@ async function saveEdit(id){
                 'discount_given','discount_reason','discount_incharge','remarks'];
   const updates={};
   fields.forEach(f=>{ const v=document.getElementById('ef-'+f)?.value; updates[f]=v||null; });
+  // Technician link (id + display name)
+  const tsel=document.getElementById('ef-technician_id');
+  if(tsel){
+    updates.technician_id = tsel.value||null;
+    const u=(window._bsTechs||[]).find(x=>String(x.id)===String(tsel.value));
+    if(u) updates.technician_name = u.name;
+  }
   const res=await bsApi('bs_update_entry',{},'POST',{id,...updates}).catch(()=>({}));
   if(res.success){ closeEditModal(); toast('✅ Entry updated'); loadEntries(); }
   else toast('❌ '+(res.error||'Update failed'));
@@ -849,7 +862,8 @@ async function submitSales(e){
     payment_received_on:v('s-precon')||null, payment_transaction_details:v('s-ptxn'),
     pending_reason:v('s-preason'), payment_reminder_date:v('s-preminder')||null,
     discount_given:parseFloat(v('s-disc'))||0, discount_reason:v('s-dreason'),
-    discount_incharge:v('s-dincharge'), technician_name:v('s-tech'),
+    discount_incharge:v('s-dincharge'),
+    technician_id:v('s-tech')||null, technician_name:techName('s-tech'),
     location:v('s-loc'), remarks:v('s-remarks'),
   };
   const res=await bsApi('bs_add_entry',{},'POST',body).catch(()=>({}));
@@ -915,7 +929,8 @@ async function submitLicense(e){
     pending_payment:parseFloat(v('l-pend'))||0, payment_mode:v('l-pmode'),
     payment_received_on:v('l-precon')||null, payment_transaction_details:v('l-ptxn'),
     pending_reason:v('l-preason'), payment_reminder_date:v('l-preminder')||null,
-    discount_given:parseFloat(v('l-disc'))||0, technician_name:v('l-tech'),
+    discount_given:parseFloat(v('l-disc'))||0,
+    technician_id:v('l-tech')||null, technician_name:techName('l-tech'),
     location:v('l-loc'), remarks:v('l-remarks'),
   };
   const res=await bsApi('bs_add_entry',{},'POST',body).catch(()=>({}));
@@ -969,8 +984,25 @@ setToday();
     const me = await bsApi('me').catch(()=>({}));
     window._bsRole = (me && me.user && me.user.role) ? me.user.role : null;
   } catch(e){ window._bsRole = null; }
+  loadTechnicians();
   loadEntries();
 })();
+
+// Populate technician dropdowns from real technician accounts
+window._bsTechs = [];
+async function loadTechnicians(){
+  const res = await bsApi('get_users', {role:'technician'}).catch(()=>({}));
+  window._bsTechs = (res && res.users) ? res.users : [];
+  const opts = '<option value="">— Select —</option>' +
+    window._bsTechs.map(u=>'<option value="'+u.id+'">'+String(u.name||'').replace(/</g,'&lt;')+'</option>').join('');
+  ['s-tech','l-tech'].forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML=opts; });
+}
+// Get the technician display name for a selected dropdown id
+function techName(selId){
+  const el=document.getElementById(selId); if(!el||!el.value) return '';
+  const u=(window._bsTechs||[]).find(x=>String(x.id)===String(el.value));
+  return u ? (u.name||'') : (el.options[el.selectedIndex]?el.options[el.selectedIndex].text:'');
+}
 </script>
 </body>
 </html>
