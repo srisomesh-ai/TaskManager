@@ -913,6 +913,41 @@ case 'update_task':
     $id = intval($body['id'] ?? 0);
     $ex = $pdo->prepare("SELECT * FROM tasks WHERE id=?"); $ex->execute([$id]); $existing=$ex->fetch();
     if (!$existing) { echo json_encode(['error'=>'Not found']); break; }
+    // ── CASH DEPOSIT LOCK ──────────────────────────────────────────────
+    // A technician who is holding cash undeposited for more than 4 days is blocked from
+    // COLLECTING payment or CLOSING new tasks until they deposit. They can still open/install.
+    if (!in_array($userRole,['admin','assigner'])) {
+        $isCollectOrClose = array_key_exists('amount_collected',$body)
+            || (($body['task_status']??'')==='Closed')
+            || (($body['cash_deposit_status']??'')==='pending' && ($existing['cash_deposit_status']??'')!=='pending');
+        if ($isCollectOrClose) {
+            try {
+                $lockChk = $pdo->prepare("SELECT COUNT(*) c, COALESCE(SUM(amount_collected),0) amt, MIN(cash_pending_at) oldest
+                    FROM tasks
+                    WHERE assigned_to=? AND id<>?
+                      AND LOWER(payment_mode)='cash'
+                      AND cash_deposit_status='pending'
+                      AND cash_pending_at IS NOT NULL
+                      AND cash_pending_at < (NOW() - INTERVAL 4 DAY)");
+                $lockChk->execute([$existing['assigned_to'], $id]);
+                $lk = $lockChk->fetch();
+                if ($lk && intval($lk['c'])>0) {
+                    $days = 0;
+                    try { $days = (int)floor((time()-strtotime($lk['oldest']))/86400); } catch(Exception $e){}
+                    http_response_code(423);
+                    echo json_encode([
+                        'error'=>'Cash deposit overdue',
+                        'cash_locked'=>true,
+                        'pending_amount'=>floatval($lk['amt']),
+                        'pending_tasks'=>intval($lk['c']),
+                        'oldest_days'=>$days,
+                        'message'=>'You have ₹'.number_format(floatval($lk['amt'])).' cash pending deposit for '.$days.' days across '.intval($lk['c']).' task(s). Please deposit it before collecting or closing new tasks.'
+                    ]);
+                    break;
+                }
+            } catch(Exception $e){ /* never block on a check error */ }
+        }
+    }
     // Discount budget enforcement on update: if a discount amount exists and the approver is being
     // set/changed, re-check that approver's rolling-7-day budget (excluding this task's own value).
     {
@@ -2866,6 +2901,79 @@ case 'office_task_action':
     } else {
         echo json_encode(['error'=>'Unknown action']);
     }
+    break;
+
+// ── ADMIN: Cash pending-deposit summary (per technician + per task) ──
+case 'cash_pending_summary':
+    if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        $LOCK_DAYS = 4;
+        // Per-task pending cash (collected, cash mode, not yet deposited)
+        $q = $pdo->query("SELECT t.id, t.task_id, t.customer_name, t.amount_collected, t.cash_pending_at,
+                    u.id AS tech_id, u.name AS tech_name, u.phone AS tech_phone,
+                    TIMESTAMPDIFF(HOUR, t.cash_pending_at, NOW()) AS age_hours
+                 FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id
+                 WHERE LOWER(t.payment_mode)='cash'
+                   AND t.cash_deposit_status='pending'
+                   AND COALESCE(t.amount_collected,0) > 0
+                 ORDER BY t.cash_pending_at ASC");
+        $tasks = $q->fetchAll(PDO::FETCH_ASSOC);
+        $byTech = [];
+        foreach ($tasks as &$row) {
+            $ageH = intval($row['age_hours']??0);
+            $row['age_days'] = intval(floor($ageH/24));
+            $row['overdue']  = ($row['age_days'] >= $LOCK_DAYS);
+            $tid = intval($row['tech_id']);
+            if (!isset($byTech[$tid])) $byTech[$tid] = ['tech_id'=>$tid,'tech_name'=>$row['tech_name'],'tech_phone'=>$row['tech_phone'],'total'=>0,'count'=>0,'oldest_days'=>0,'overdue'=>false];
+            $byTech[$tid]['total'] += floatval($row['amount_collected']);
+            $byTech[$tid]['count'] += 1;
+            if ($row['age_days'] > $byTech[$tid]['oldest_days']) $byTech[$tid]['oldest_days'] = $row['age_days'];
+            if ($row['overdue']) $byTech[$tid]['overdue'] = true;
+        }
+        unset($row);
+        echo json_encode(['success'=>true,'lock_days'=>$LOCK_DAYS,'tasks'=>$tasks,'by_technician'=>array_values($byTech)]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// ── ADMIN: Remind technician(s) to deposit pending cash (push + WhatsApp link) ──
+case 'remind_cash_deposit':
+    if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        $taskDbId = intval($body['task_id'] ?? 0);   // remind for one task
+        $techId   = intval($body['tech_id'] ?? 0);   // OR remind a technician for all their pending cash
+        $sent = []; $waLinks = [];
+        if ($taskDbId) {
+            $r = $pdo->prepare("SELECT t.id,t.task_id,t.amount_collected,t.cash_pending_at,u.id tech_id,u.name tech_name,u.phone tech_phone
+                    FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?");
+            $r->execute([$taskDbId]); $row=$r->fetch(PDO::FETCH_ASSOC);
+            if(!$row){ echo json_encode(['error'=>'Task not found']); break; }
+            $amt=floatval($row['amount_collected']); $days=0;
+            try { if($row['cash_pending_at']) $days=(int)floor((time()-strtotime($row['cash_pending_at']))/86400); } catch(Exception $e){}
+            $title='💰 Deposit pending cash';
+            $msg='Please deposit ₹'.number_format($amt).' cash you collected for task '.$row['task_id'].' ('.$days.' day'.($days==1?'':'s').' pending).';
+            if(function_exists('fcm_send_to_user') && $row['tech_id']){ try{ fcm_send_to_user($pdo,intval($row['tech_id']),$title,$msg,['type'=>'cash_deposit','task_id'=>$row['task_id']]); $sent[]='push'; }catch(Exception $e){} }
+            $ph=preg_replace('/\D/','',(string)($row['tech_phone']??'')); if(strlen($ph)===10)$ph='91'.$ph;
+            if($ph) $waLinks[]=['tech'=>$row['tech_name'],'url'=>'https://wa.me/'.$ph.'?text='.rawurlencode($msg)];
+            try { $pdo->prepare("ALTER TABLE tasks ADD COLUMN cash_reminder_at DATETIME NULL"); } catch(Exception $e){}
+            try { $pdo->prepare("UPDATE tasks SET cash_reminder_at=NOW() WHERE id=?")->execute([$taskDbId]); } catch(Exception $e){}
+        } elseif ($techId) {
+            $r = $pdo->prepare("SELECT COALESCE(SUM(amount_collected),0) amt, COUNT(*) c, MIN(cash_pending_at) oldest
+                    FROM tasks WHERE assigned_to=? AND LOWER(payment_mode)='cash' AND cash_deposit_status='pending' AND COALESCE(amount_collected,0)>0");
+            $r->execute([$techId]); $agg=$r->fetch(PDO::FETCH_ASSOC);
+            $u = $pdo->prepare("SELECT name,phone FROM users WHERE id=?"); $u->execute([$techId]); $usr=$u->fetch(PDO::FETCH_ASSOC);
+            $amt=floatval($agg['amt']); $cnt=intval($agg['c']); $days=0;
+            try { if($agg['oldest']) $days=(int)floor((time()-strtotime($agg['oldest']))/86400); } catch(Exception $e){}
+            if($cnt<1){ echo json_encode(['success'=>true,'message'=>'No pending cash for this technician.']); break; }
+            $title='💰 Deposit pending cash';
+            $msg='Please deposit ₹'.number_format($amt).' cash pending across '.$cnt.' task(s), oldest '.$days.' day'.($days==1?'':'s').'. Deposit today to avoid your tasks being locked.';
+            if(function_exists('fcm_send_to_user')){ try{ fcm_send_to_user($pdo,$techId,$title,$msg,['type'=>'cash_deposit']); $sent[]='push'; }catch(Exception $e){} }
+            $ph=preg_replace('/\D/','',(string)($usr['phone']??'')); if(strlen($ph)===10)$ph='91'.$ph;
+            if($ph) $waLinks[]=['tech'=>$usr['name'],'url'=>'https://wa.me/'.$ph.'?text='.rawurlencode($msg)];
+            try { $pdo->prepare("ALTER TABLE tasks ADD COLUMN cash_reminder_at DATETIME NULL"); } catch(Exception $e){}
+            try { $pdo->prepare("UPDATE tasks SET cash_reminder_at=NOW() WHERE assigned_to=? AND LOWER(payment_mode)='cash' AND cash_deposit_status='pending'")->execute([$techId]); } catch(Exception $e){}
+        } else { echo json_encode(['error'=>'Provide task_id or tech_id']); break; }
+        echo json_encode(['success'=>true,'push_sent'=>in_array('push',$sent),'whatsapp'=>$waLinks]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
 // ── ADMIN: Verify cash deposit (approve → 'deposited' / reject → back to 'pending') ──
