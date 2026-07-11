@@ -1266,7 +1266,22 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
 
       <div class="page" id="page-accounts">
         <div class="pg-header"><div class="breadcrumb">Home / <b>P&L Overview</b></div><div class="pg-title">📈 P&L Overview</div></div>
-        <div class="card"><div style="padding:40px;text-align:center;color:var(--text3)">Coming soon</div></div>
+        <div class="card" style="padding:14px 16px;margin-bottom:14px">
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <label style="font-size:11px;font-weight:700;color:var(--text3)">From</label>
+              <input type="date" id="pnl-from" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <label style="font-size:11px;font-weight:700;color:var(--text3)">To</label>
+              <input type="date" id="pnl-to" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+            </div>
+            <button class="ts-btn ts-btn-green" style="padding:9px 16px" onclick="loadAccounts()">Apply</button>
+            <button class="ts-btn" style="padding:9px 14px;background:var(--surface2);border:1.5px solid var(--border)" onclick="pnlQuick('month')">This Month</button>
+            <button class="ts-btn" style="padding:9px 14px;background:var(--surface2);border:1.5px solid var(--border)" onclick="pnlQuick('year')">This Year</button>
+          </div>
+        </div>
+        <div id="pnl-content"><div class="card"><div style="padding:40px;text-align:center;color:var(--text3)">Loading P&L…</div></div></div>
       </div>
       <div class="page" id="page-invoicing">
         <div class="pg-header"><div class="breadcrumb">Home / <b>Invoicing</b></div><div class="pg-title">🧾 Invoicing</div></div>
@@ -1951,6 +1966,7 @@ function showPage(name, opts={}){
     'daily-report':  loadDailyReport,
     'balance-sheet': syncBsAuth,
     'expenses':      syncExpAuth,
+    'accounts':      loadAccounts,
     'admin':         syncAdminAuth,
     'blacklist':     syncBlacklistAuth,
      'price-list':    syncPlAuth,
@@ -7051,6 +7067,87 @@ function syncExpAuth(){
     iframe.src = wantSrc;
     iframe.dataset.loadedToken = (authToken||'');
   }
+}
+
+// ── P&L Overview (admin only) ──
+function pnlQuick(range){
+  const now=new Date();
+  let from, to=now.toISOString().slice(0,10);
+  if(range==='month'){ from=new Date(now.getFullYear(),now.getMonth(),1).toISOString().slice(0,10); }
+  else { from=new Date(now.getFullYear(),0,1).toISOString().slice(0,10); }
+  const f=document.getElementById('pnl-from'), t=document.getElementById('pnl-to');
+  if(f) f.value=from; if(t) t.value=to;
+  loadAccounts();
+}
+
+async function loadAccounts(){
+  const box=document.getElementById('pnl-content'); if(!box) return;
+  let from=document.getElementById('pnl-from')?.value;
+  let to=document.getElementById('pnl-to')?.value;
+  if(!from){ const n=new Date(); from=new Date(n.getFullYear(),0,1).toISOString().slice(0,10); const f=document.getElementById('pnl-from'); if(f) f.value=from; }
+  if(!to){ to=new Date().toISOString().slice(0,10); const t=document.getElementById('pnl-to'); if(t) t.value=to; }
+  box.innerHTML='<div class="card"><div style="padding:40px;text-align:center;color:var(--text3)">Loading P&L…</div></div>';
+  const res=await api('get_accounts_summary',{from,to});
+  if(!res || res.error){ box.innerHTML='<div class="card"><div style="padding:40px;text-align:center;color:var(--red)">'+((res&&res.error)||'Failed to load')+'</div></div>'; return; }
+  const inr=v=>'₹'+Number(v||0).toLocaleString('en-IN',{maximumFractionDigits:0});
+  const inc=res.income||{}, pur=res.purchases||{};
+  const netPos = (res.net_profit||0)>=0;
+  const grossPos = (res.gross_profit||0)>=0;
+
+  const catRows=(res.expenses_by_category||[]).map(c=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-top:1px solid var(--border);font-size:13px"><span>${escHtml(c.category||'–')}</span><strong>${inr(c.ct)}</strong></div>`).join('')||'<div style="color:var(--text3);font-size:12px;padding:8px 0">No expenses in this period</div>';
+
+  const cogsRows=(res.cogs_breakdown||[]).map(c=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-top:1px solid var(--border);font-size:12px"><span>${escHtml(c.model||'–')} <span style="color:var(--text3)">× ${c.units_sold} @ ${inr(c.unit_cost)}</span></span><strong>${inr(c.cost)}</strong></div>`).join('')||'<div style="color:var(--text3);font-size:12px;padding:8px 0">No device sales in this period</div>';
+
+  const monthRows=(res.monthly||[]).map(m=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);font-size:12px"><span>${m.month}</span><span>Income <strong>${inr(m.income)}</strong> · Received <strong style="color:var(--green)">${inr(m.received)}</strong></span></div>`).join('')||'<div style="color:var(--text3);font-size:12px;padding:8px 0">No monthly data</div>';
+
+  box.innerHTML=`
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px">
+      <div class="card" style="border-bottom:3px solid var(--blue);text-align:center;padding:16px"><div style="font-size:22px;font-weight:900;color:var(--blue)">${inr(res.revenue)}</div><div style="font-size:11px;color:var(--text3);font-weight:600">Total Revenue</div></div>
+      <div class="card" style="border-bottom:3px solid var(--green);text-align:center;padding:16px"><div style="font-size:22px;font-weight:900;color:var(--green)">${inr(inc.total_received)}</div><div style="font-size:11px;color:var(--text3);font-weight:600">Received</div></div>
+      <div class="card" style="border-bottom:3px solid var(--amber,#e07b00);text-align:center;padding:16px"><div style="font-size:22px;font-weight:900;color:var(--amber,#e07b00)">${inr(inc.total_pending)}</div><div style="font-size:11px;color:var(--text3);font-weight:600">Outstanding</div></div>
+      <div class="card" style="border-bottom:3px solid var(--purple,#5b2d8e);text-align:center;padding:16px"><div style="font-size:22px;font-weight:900;color:var(--purple,#5b2d8e)">${inr(res.cogs)}</div><div style="font-size:11px;color:var(--text3);font-weight:600">COGS (sold cost)</div></div>
+      <div class="card" style="border-bottom:3px solid var(--red);text-align:center;padding:16px"><div style="font-size:22px;font-weight:900;color:var(--red)">${inr(res.total_expenses)}</div><div style="font-size:11px;color:var(--text3);font-weight:600">Operating Expenses</div></div>
+      <div class="card" style="border-bottom:3px solid ${netPos?'var(--green)':'var(--red)'};text-align:center;padding:16px;background:${netPos?'var(--green-bg)':'var(--red-bg)'}"><div style="font-size:22px;font-weight:900;color:${netPos?'var(--green)':'var(--red)'}">${inr(res.net_profit)}</div><div style="font-size:11px;color:var(--text3);font-weight:700">NET PROFIT</div></div>
+    </div>
+
+    <div class="card" style="padding:18px;margin-bottom:16px">
+      <div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:12px">📊 Profit &amp; Loss Statement</div>
+      <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:14px"><span>Revenue (sales + license)</span><strong style="color:var(--blue)">${inr(res.revenue)}</strong></div>
+      <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13px;color:var(--text2)"><span>Less: Cost of Goods Sold (only sold devices)</span><strong style="color:var(--red)">− ${inr(res.cogs)}</strong></div>
+      <div style="display:flex;justify-content:space-between;padding:10px 0;border-top:2px solid var(--border);font-size:14px;font-weight:800"><span>Gross Profit</span><strong style="color:${grossPos?'var(--green)':'var(--red)'}">${inr(res.gross_profit)}</strong></div>
+      <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13px;color:var(--text2)"><span>Less: Operating Expenses</span><strong style="color:var(--red)">− ${inr(res.total_expenses)}</strong></div>
+      <div style="display:flex;justify-content:space-between;padding:12px 0;border-top:2px solid var(--text);font-size:16px;font-weight:900"><span>NET PROFIT</span><strong style="color:${netPos?'var(--green)':'var(--red)'}">${inr(res.net_profit)}</strong></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
+      <div class="card" style="padding:16px">
+        <div style="font-size:13px;font-weight:800;margin-bottom:6px">💸 Expenses by Category</div>
+        ${catRows}
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-top:2px solid var(--border);font-weight:800;margin-top:4px"><span>Total</span><strong>${inr(res.total_expenses)}</strong></div>
+      </div>
+      <div class="card" style="padding:16px">
+        <div style="font-size:13px;font-weight:800;margin-bottom:6px">📦 Cost of Goods Sold</div>
+        ${cogsRows}
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-top:2px solid var(--border);font-weight:800;margin-top:4px"><span>Total COGS</span><strong>${inr(res.cogs)}</strong></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
+      <div class="card" style="padding:16px">
+        <div style="font-size:13px;font-weight:800;margin-bottom:6px">🏦 Investment &amp; Inventory</div>
+        <div style="display:flex;justify-content:space-between;padding:7px 0;font-size:13px"><span>Total Purchases (this period)</span><strong>${inr(pur.total_po)}</strong></div>
+        <div style="display:flex;justify-content:space-between;padding:7px 0;border-top:1px solid var(--border);font-size:13px"><span>Paid to suppliers</span><strong>${inr(pur.paid)}</strong></div>
+        <div style="display:flex;justify-content:space-between;padding:7px 0;border-top:1px solid var(--border);font-size:13px"><span>Inventory value on hand (unsold stock)</span><strong style="color:var(--blue)">${inr(res.inventory_value)}</strong></div>
+        <div style="font-size:10px;color:var(--text3);margin-top:6px">Unsold stock is an asset — not counted as a loss.</div>
+      </div>
+      <div class="card" style="padding:16px">
+        <div style="font-size:13px;font-weight:800;margin-bottom:6px">📅 Monthly Trend</div>
+        ${monthRows}
+      </div>
+    </div>
+
+    <div style="font-size:11px;color:var(--text3);padding:0 4px 8px">Revenue &amp; units sold from Balance Sheet · Device cost from Price List (buying price) · Operating costs from Expenses · Purchases from Purchase Orders.</div>
+  `;
 }
 
 function syncAdminAuth(){
