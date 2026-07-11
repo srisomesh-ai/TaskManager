@@ -389,6 +389,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
     </div>
     <div class="tb-avatar" id="tb-avatar">?</div>
     <button class="tb-btn admin-only" onclick="openQuickTask()">⚡ Quick Task</button>
+    <button class="tb-btn admin-only" onclick="openDailyReport()">📋 Daily Report</button>
     <button class="tb-btn" onclick="doLogout()">↩ Logout</button>
   </div>
 
@@ -7466,6 +7467,95 @@ function exportDailyCSV(){
 // QUICK TASK — Send enquiry link via WhatsApp
 // ════════════════════════════════════════════════════════
 const QT_ENQUIRY_URL = 'https://salmon-goldfish-110661.hostingersite.com/enquiry.php';
+
+// ── Daily Report (end-of-day WhatsApp report) ──
+async function openDailyReport(){
+  let ov=document.getElementById('dr-ov');
+  if(!ov){
+    ov=document.createElement('div');
+    ov.id='dr-ov';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML='<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:90vh;overflow:auto;padding:18px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+    +   '<div style="font-size:16px;font-weight:800">📋 Daily Report</div>'
+    +   '<button onclick="document.getElementById(\'dr-ov\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888">×</button>'
+    + '</div>'
+    + '<div id="dr-body" style="color:#555;font-size:13px;padding:20px;text-align:center">⏳ Collecting today\'s data…</div>'
+    + '</div>';
+  const res=await api('daily_report_data',{});
+  const body=document.getElementById('dr-body');
+  if(!res || !res.success){ body.innerHTML='<div style="color:#c0392b">'+((res&&res.error)||'Failed to load')+'</div>'; return; }
+  const text=buildDailyReportText(res);
+  body.innerHTML=''
+    + '<textarea id="dr-text" style="width:100%;min-height:320px;font-family:monospace;font-size:12px;padding:10px;border:1.5px solid #ddd;border-radius:8px" spellcheck="false"></textarea>'
+    + '<div style="font-size:11px;color:#888;margin:8px 0">You can edit the text above (e.g. fill in Attendance) before sending.</div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    +   '<button class="ts-btn" style="background:#25D366;color:#fff;flex:1;min-width:150px" onclick="sendDailyReportWhatsApp()">📱 Send to WhatsApp</button>'
+    +   '<button class="ts-btn" style="background:var(--surface2);border:1.5px solid var(--border);flex:1;min-width:120px" onclick="copyDailyReport()">📋 Copy</button>'
+    + '</div>';
+  document.getElementById('dr-text').value=text;
+}
+function buildDailyReportText(res){
+  const d=res.date?res.date.split('-'):null;
+  const shownDate=d?(d[2]+'/'+d[1]+'/'+d[0]):'';
+  const items=res.items||[];
+  const readds=res.readds||[];
+  const order=['Sales','Troubleshoot','Vehicle Change','Removal','Demo'];
+  const byCat={};
+  items.forEach(function(it){
+    const c=it.category||'Sales';
+    if(c==='Re-adding') return;
+    if(!byCat[c]) byCat[c]={};
+    const tech=it.tech||'Unassigned';
+    if(!byCat[c][tech]) byCat[c][tech]=[];
+    byCat[c][tech].push(it);
+  });
+  let lines=[];
+  lines.push('Today Report ('+shownDate+')');
+  lines.push('');
+  order.forEach(function(cat){
+    const techs=byCat[cat];
+    if(!techs || !Object.keys(techs).length) return;
+    lines.push(cat);
+    lines.push('');
+    Object.keys(techs).forEach(function(tech){
+      const arr=techs[tech];
+      lines.push(tech+' ('+arr.length+'):');
+      arr.forEach(function(it){
+        let parts=[it.name];
+        if(cat==='Sales' && it.service) parts.push(it.service);
+        if(it.server) parts.push(it.server);
+        lines.push('* '+parts.join(', '));
+      });
+      lines.push('');
+    });
+  });
+  if(readds.length){
+    lines.push('Re-adding ('+readds.length+'):');
+    readds.forEach(function(r){ lines.push('* '+(r.name||'—')); });
+    lines.push('');
+  }
+  lines.push('Attendance');
+  lines.push('');
+  lines.push('Half Day:');
+  lines.push('* ');
+  lines.push('');
+  lines.push('Absent:');
+  lines.push('* ');
+  return lines.join('\n');
+}
+function copyDailyReport(){
+  const ta=document.getElementById('dr-text'); if(!ta) return;
+  ta.select();
+  try{ document.execCommand('copy'); showToast('✅ Copied'); }catch(e){ if(navigator.clipboard) navigator.clipboard.writeText(ta.value); showToast('✅ Copied'); }
+}
+function sendDailyReportWhatsApp(){
+  const ta=document.getElementById('dr-text'); if(!ta) return;
+  window.open('https://wa.me/?text='+encodeURIComponent(ta.value),'_blank');
+}
 
 function openQuickTask(){
   var svc = document.getElementById('qt-service'); if(svc) svc.value = 'enquiry';
