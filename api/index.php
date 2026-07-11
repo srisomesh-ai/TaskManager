@@ -875,6 +875,9 @@ case 'update_task':
         }
     }
     if (array_key_exists('payment_verify_status',$body)) { try { $pdo->exec("ALTER TABLE tasks ADD COLUMN payment_verify_status VARCHAR(20) DEFAULT NULL"); } catch(Exception $e){} }
+    // partial_finish: technician collected payment for the installed devices but the ORIGINAL
+    // device_qty is preserved so the balance devices can still be installed later on the same task.
+    if (array_key_exists('partial_finish',$body)) { try { $pdo->exec("ALTER TABLE tasks ADD COLUMN partial_finish TINYINT(1) DEFAULT 0"); } catch(Exception $e){} }
     // Stamp when cash first goes pending (start of the 24h deposit clock)
     if (($body['cash_deposit_status'] ?? '') === 'pending' && ($existing['cash_deposit_status'] ?? '') !== 'pending') {
         try { $pdo->exec("ALTER TABLE tasks ADD COLUMN cash_pending_at DATETIME DEFAULT NULL"); } catch(Exception $e){}
@@ -886,7 +889,7 @@ case 'update_task':
                // Outstation fields
                'outstation_location','outstation_travel_paid_by','outstation_customer_travel_amount','outstation_claim_cap','outstation_claim_submitted','outstation_claim_status',
                // Cash deposit tracking
-               'cash_deposit_status',
+               'cash_deposit_status','partial_finish',
                // Feature #4: non-cash payment verification
                'payment_verify_status',
                // Consent reset (when vehicle unavailable after consent)
