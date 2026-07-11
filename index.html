@@ -214,6 +214,14 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
 .ra-btn:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,0,0,.14)}
 .ra-btn:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
 .ra-approve{background:#16a34a;color:#fff}
+/* Excel-like renewal grid */
+.rnw-grid .rnw-th{position:sticky;top:0;z-index:2;background:#0E5C5C;color:#fff;font-size:11px;text-transform:uppercase;letter-spacing:.4px;font-weight:700;text-align:left;padding:11px 12px;white-space:nowrap;box-shadow:inset 0 -1px 0 rgba(255,255,255,.15)}
+.rnw-grid tbody td{padding:9px 12px;border-bottom:1px solid #e6ebee;font-size:12.5px;vertical-align:middle}
+.rnw-grid tbody tr:nth-child(even){background:#f7fafb}
+.rnw-grid tbody tr:hover{background:#eef7f4}
+.rnw-wa-btn{background:#25D366;color:#fff;border:none;border-radius:6px;padding:6px 9px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+.rnw-wa-btn:hover{background:#1eb658}
+.rnw-wa-btn:disabled{background:#c8d0d3;cursor:not-allowed}
 .ra-approve:hover{background:#128a3e}
 .ra-reject{background:#fff;color:#dc2626;border:1.5px solid #f3b5b5}
 .ra-reject:hover{background:#fee2e2}
@@ -1097,19 +1105,25 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
             </div>
             <div id="rnw-fetch-status" style="font-size:12px;color:var(--text3);margin-top:8px"></div>
           </div>
-          <div class="card" style="overflow-x:auto">
-            <input class="form-input" id="rnw-table-filter" placeholder="🔍 Filter by name, IMEI, plate, owner…" style="margin-bottom:10px;max-width:320px" oninput="rnwRenderDevices()">
-            <table style="width:100%;border-collapse:collapse">
-              <thead><tr style="background:var(--surface2);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)">
-                <th style="padding:10px 12px;text-align:left;font-weight:700">Device</th>
-                <th style="padding:10px 12px;text-align:left;font-weight:700">Vehicle / Owner</th>
-                <th style="padding:10px 12px;text-align:left;font-weight:700">Server</th>
-                <th style="padding:10px 12px;text-align:left;font-weight:700">Expiry</th>
-                <th style="padding:10px 12px;text-align:left;font-weight:700">Renewal Plan</th>
-                <th style="padding:10px 12px;text-align:left;font-weight:700">Action</th>
+          <div class="card" style="padding:0;overflow:hidden">
+            <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <input class="form-input" id="rnw-table-filter" placeholder="🔍 Search name, IMEI, plate, owner…" style="flex:1;min-width:220px;max-width:360px;margin:0" oninput="rnwRenderDevices()">
+              <span id="rnw-count-chip" style="font-size:12px;font-weight:700;color:var(--text3)"></span>
+            </div>
+            <div style="overflow-x:auto;max-height:70vh;overflow-y:auto">
+            <table class="rnw-grid" style="width:100%;border-collapse:separate;border-spacing:0;min-width:900px">
+              <thead><tr>
+                <th class="rnw-th">Device</th>
+                <th class="rnw-th">Vehicle / Owner</th>
+                <th class="rnw-th">Phone</th>
+                <th class="rnw-th">Server</th>
+                <th class="rnw-th">Expiry</th>
+                <th class="rnw-th">Renewal Plan</th>
+                <th class="rnw-th" style="text-align:center">Action</th>
               </tr></thead>
-              <tbody id="rnw-devices-tbody"><tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text3)">Fetch devices to begin.</td></tr></tbody>
+              <tbody id="rnw-devices-tbody"><tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text3)">Fetch devices to begin.</td></tr></tbody>
             </table>
+            </div>
           </div>
         </div>
 
@@ -6695,33 +6709,52 @@ function _rnwRenewOptions(){
 function rnwRenderDevices(){
   const q=(document.getElementById('rnw-table-filter').value||'').toLowerCase();
   const tbody=document.getElementById('rnw-devices-tbody');
+  const chip=document.getElementById('rnw-count-chip');
   let rows=_rnwDevices.slice();
-  if(q) rows=rows.filter(function(d){ return [(d.name||''),(d.imei||''),(d.plate||''),(d.owner||'')].join(' ').toLowerCase().indexOf(q)!==-1; });
-  if(!rows.length){ tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text3)">No devices. Fetch to begin.</td></tr>'; return; }
+  if(q) rows=rows.filter(function(d){ return [(d.name||''),(d.imei||''),(d.plate||''),(d.owner||''),(d.phone||'')].join(' ').toLowerCase().indexOf(q)!==-1; });
+  if(chip) chip.textContent = rows.length ? (rows.length+' device'+(rows.length>1?'s':'')) : '';
+  if(!rows.length){ tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text3)">No devices. Fetch to begin.</td></tr>'; return; }
   tbody.innerHTML=rows.map(function(d,i){
     const realIdx=_rnwDevices.indexOf(d);
     const stColor = d.days_left<0?'#c0392b':(d.days_left<=7?'#e07b00':(d.days_left<=30?'#c8860a':'#16794a'));
     const dl = d.days_left<0 ? ('Expired '+Math.abs(d.days_left)+'d ago') : (d.days_left===0?'Expires today':(d.days_left+'d left'));
-    return '<tr style="border-bottom:1px solid var(--border)">'
-      // Device
-      + '<td style="padding:10px 12px"><div style="font-weight:700;font-size:13px">'+escHtml(d.name)+'</div><div style="font-family:monospace;font-size:11px;color:var(--text3)">'+escHtml(d.imei)+'</div></td>'
-      // Vehicle / owner
-      + '<td style="padding:10px 12px;font-size:12px"><div style="font-weight:600">'+escHtml(d.plate||'—')+'</div><div style="color:var(--text3);font-size:11px">'+escHtml(d.owner||'')+'</div></td>'
-      // Server
-      + '<td style="padding:10px 12px;font-size:12px;color:var(--text2);white-space:nowrap">'+escHtml(_RNW_SRV[d.server_id]||('S'+d.server_id))+'</td>'
-      // Expiry
-      + '<td style="padding:10px 12px;white-space:nowrap"><div style="font-size:12px;font-weight:700;color:'+stColor+'">'+escHtml(d.expiry)+'</div><div style="font-size:11px;color:'+stColor+'">'+dl+'</div></td>'
-      // Plan dropdown
-      + '<td style="padding:10px 12px"><select id="rnw-sel-'+realIdx+'" class="form-input" style="width:100%;min-width:200px;font-size:12px;padding:6px 8px">'+_rnwRenewOptions()+'</select></td>'
-      // Screenshot + Renew (one tidy column)
-      + '<td style="padding:10px 12px;white-space:nowrap">'
-        + '<div style="display:flex;align-items:center;gap:8px">'
+    const phone = (d.phone||'').replace(/[^0-9]/g,'');
+    const phoneCell = phone ? ('<span style="font-family:monospace">'+escHtml(phone)+'</span>') : '<span style="color:var(--text3)">—</span>';
+    const waBtn = phone
+      ? '<button class="rnw-wa-btn" title="Send WhatsApp renewal reminder" onclick="rnwWhatsApp('+realIdx+')">💬 WhatsApp</button>'
+      : '<button class="rnw-wa-btn" disabled title="No phone number on this device">💬 WhatsApp</button>';
+    return '<tr>'
+      + '<td><div style="font-weight:700">'+escHtml(d.name)+'</div><div style="font-family:monospace;font-size:11px;color:var(--text3)">'+escHtml(d.imei)+'</div></td>'
+      + '<td><div style="font-weight:600">'+escHtml(d.plate||'—')+'</div><div style="color:var(--text3);font-size:11px">'+escHtml(d.owner||'')+'</div></td>'
+      + '<td>'+phoneCell+'</td>'
+      + '<td style="color:var(--text2);white-space:nowrap">'+escHtml(_RNW_SRV[d.server_id]||('S'+d.server_id))+'</td>'
+      + '<td style="white-space:nowrap"><div style="font-weight:700;color:'+stColor+'">'+escHtml(d.expiry)+'</div><div style="font-size:11px;color:'+stColor+'">'+dl+'</div></td>'
+      + '<td><select id="rnw-sel-'+realIdx+'" class="form-input" style="width:100%;min-width:190px;font-size:12px;padding:6px 8px">'+_rnwRenewOptions()+'</select></td>'
+      + '<td style="white-space:nowrap">'
+        + '<div style="display:flex;align-items:center;gap:6px;justify-content:center;flex-wrap:wrap">'
+          + waBtn
           + '<label class="rnw-file-btn" style="font-size:11px;font-weight:600;color:var(--accent2);cursor:pointer;border:1px dashed var(--border);border-radius:6px;padding:6px 8px;white-space:nowrap">📎 <span id="rnw-shot-status-'+realIdx+'">Proof</span>'
             + '<input type="file" id="rnw-shot-'+realIdx+'" accept="image/*" style="display:none" onchange="rnwShotPicked('+realIdx+')"></label>'
           + '<button class="ra-btn ra-approve" onclick="requestRenewal('+realIdx+',this)">🔄 Renew</button>'
         + '</div></td>'
     + '</tr>';
   }).join('');
+}
+// Send a WhatsApp renewal reminder to the device's customer.
+function rnwWhatsApp(idx){
+  const d=_rnwDevices[idx]; if(!d) return;
+  let phone=(d.phone||'').replace(/[^0-9]/g,'');
+  if(!phone){ showToast('No phone number on this device'); return; }
+  if(phone.length===10) phone='91'+phone;         // add India code if 10-digit
+  const sel=document.getElementById('rnw-sel-'+idx);
+  let planTxt='';
+  if(sel && sel.value){ const parts=sel.value.split('|'); if(parts[3]) planTxt=decodeURIComponent(parts[3]); }
+  const expLine = d.days_left<0 ? ('has EXPIRED on '+d.expiry) : ('will expire on '+d.expiry);
+  const veh = d.plate && d.plate!=='—' ? (' ('+d.plate+')') : '';
+  const msg = 'Dear Customer,\n\nYour BharatGPS device'+veh+' '+expLine+'.\n\nPlease renew to continue uninterrupted GPS tracking.'
+            + (planTxt?('\n\nRenewal plan: '+planTxt):'')
+            + '\n\nTo renew, reply to this message or call 9849849824.\n\n— BharatGPS Tracker';
+  window.open('https://wa.me/'+phone+'?text='+encodeURIComponent(msg), '_blank');
 }
 function rnwShotPicked(idx){
   const inp=document.getElementById('rnw-shot-'+idx);
