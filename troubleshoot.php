@@ -71,8 +71,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
     } else {
         try {
             $year = date('Y');
-            $cnt  = $pdo->query("SELECT COUNT(*) FROM tasks WHERE task_id LIKE 'ID-$year-%'")->fetchColumn();
-            $taskId = 'ID-'.$year.'-'.str_pad($cnt+1, 4, '0', STR_PAD_LEFT);
+            // Use MAX(existing number) + race-safety loop (same as admin create_task) so numbering
+            // stays serial and never repeats/collides after deletions. COUNT() breaks after deletes.
+            $idOffset = 0;
+            try { $offRow = $pdo->query("SELECT key_value FROM app_settings WHERE key_name='task_id_offset'")->fetch(); if($offRow) $idOffset = intval($offRow['key_value']); } catch(Exception $e){}
+            $maxRow = $pdo->query("SELECT MAX(CAST(SUBSTRING(task_id, 9) AS UNSIGNED)) AS maxnum FROM tasks WHERE task_id LIKE 'ID-$year-%'")->fetch();
+            $nextNum = max(intval($maxRow['maxnum'] ?? 0) + 1, $idOffset + 1);
+            $taskId = 'ID-'.$year.'-'.str_pad($nextNum, 4, '0', STR_PAD_LEFT);
+            $guard = 0;
+            while($guard < 50){
+                $exists = $pdo->prepare("SELECT 1 FROM tasks WHERE task_id=? LIMIT 1");
+                $exists->execute([$taskId]);
+                if(!$exists->fetchColumn()) break;
+                $nextNum++;
+                $taskId = 'ID-'.$year.'-'.str_pad($nextNum, 4, '0', STR_PAD_LEFT);
+                $guard++;
+            }
 
             $cb = $pdo->query("SELECT id FROM users WHERE role IN ('admin','assigner') AND is_active=1 ORDER BY id LIMIT 1")->fetchColumn() ?: 1;
 
