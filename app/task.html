@@ -301,6 +301,9 @@
         <div class="tu-lbl">Reference / transaction no *</div>
         <input class="inst-in" id="cd-refno" placeholder="Deposit / UTR / txn reference">
       </div>
+      <div class="tu-lbl" style="margin-top:12px">Payment screenshot (proof)</div>
+      <input type="file" accept="image/*" id="cd-shot" class="inst-in" style="padding:8px" onchange="cdPreviewShot()">
+      <div id="cd-shot-preview" style="display:none;margin-top:8px"><img id="cd-shot-img" style="max-width:140px;max-height:110px;border-radius:8px;border:1px solid var(--border)"></div>
       <div class="tu-lbl" style="margin-top:12px">Remarks</div>
       <input class="inst-in" id="cd-remarks" placeholder="Optional notes">
       <div id="cd-err" style="display:none;color:var(--red);font-size:13px;font-weight:700;margin-top:10px"></div>
@@ -1596,6 +1599,8 @@
     document.getElementById('cd-person').value='';
     document.getElementById('cd-refno').value='';
     document.getElementById('cd-remarks').value='';
+    const _sh=document.getElementById('cd-shot'); if(_sh) _sh.value='';
+    const _shp=document.getElementById('cd-shot-preview'); if(_shp) _shp.style.display='none';
     document.getElementById('cd-person-box').style.display='none';
     document.getElementById('cd-ref-box').style.display='none';
     document.getElementById('cd-err').style.display='none';
@@ -1618,11 +1623,50 @@
     if(_cdMethod==='Cash Handed Over' && !document.getElementById('cd-person').value.trim()){ err.textContent='⚠️ Enter who you handed the cash to'; err.style.display=''; return; }
     if(_cdMethod!=='Cash Handed Over' && !document.getElementById('cd-refno').value.trim()){ err.textContent='⚠️ Enter the deposit reference / transaction no'; err.style.display=''; return; }
     const btn=document.getElementById('cd-save'); btn.textContent='⏳ Submitting…'; btn.disabled=true;
-    const payload={id:_curTask.id,deposit_method:_cdMethod,handover_to:document.getElementById('cd-person').value||'',deposit_ref:document.getElementById('cd-refno').value||'',remarks:document.getElementById('cd-remarks').value||''};
+    let shotData='';
+    try {
+      const f=document.getElementById('cd-shot');
+      if(f && f.files && f.files[0]){ shotData=await _cdReadFile(f.files[0]); }
+    } catch(e){}
+    const payload={id:_curTask.id,deposit_method:_cdMethod,handover_to:document.getElementById('cd-person').value||'',deposit_ref:document.getElementById('cd-refno').value||'',remarks:document.getElementById('cd-remarks').value||'',deposit_screenshot:shotData||''};
     const res=await apiPost('confirm_cash_deposit',payload);
     btn.textContent='✅ Confirm & Submit'; btn.disabled=false;
     if(res&&res.success){ closeCashDeposit(); showTechAppreciation(); }
     else { err.textContent='❌ '+((res&&res.error)||'Failed — please try again'); err.style.display=''; }
+  }
+
+  // Read an image file as a compressed base64 data URL (keeps payload small)
+  function _cdReadFile(file){
+    return new Promise((resolve)=>{
+      const reader=new FileReader();
+      reader.onload=()=>{
+        const img=new Image();
+        img.onload=()=>{
+          try{
+            const max=1000; let w=img.width,h=img.height;
+            if(w>max||h>max){ if(w>h){h=Math.round(h*max/w);w=max;}else{w=Math.round(w*max/h);h=max;} }
+            const c=document.createElement('canvas'); c.width=w; c.height=h;
+            c.getContext('2d').drawImage(img,0,0,w,h);
+            resolve(c.toDataURL('image/jpeg',0.7));
+          }catch(e){ resolve(reader.result); }
+        };
+        img.onerror=()=>resolve(reader.result);
+        img.src=reader.result;
+      };
+      reader.onerror=()=>resolve('');
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function cdPreviewShot(){
+    const f=document.getElementById('cd-shot');
+    const box=document.getElementById('cd-shot-preview');
+    const im=document.getElementById('cd-shot-img');
+    if(f && f.files && f.files[0]){
+      const r=new FileReader();
+      r.onload=()=>{ im.src=r.result; box.style.display=''; };
+      r.readAsDataURL(f.files[0]);
+    } else { box.style.display='none'; }
   }
 
   // Non-cash: submit the completed task for approval directly
