@@ -811,7 +811,9 @@
       if(addingDone && payDone){
         // Installed + paid (non-cash or cash already deposited) → submit for approval
         btn='<button class="act-btn act-primary" id="loc-btn" onclick="submitForApproval()"><div class="ico">✅</div><div class="l">Submit Task</div><div class="s">Installed &amp; paid</div></button>';
-        hint='✅ Installed &amp; payment collected — submit for approval'; hintCls='hint-done';
+        // Vehicle now available for a remaining device — allow continuing the balance on this same task.
+        btn+='<button class="act-btn" style="background:#fff;color:var(--accent2);border:1.5px solid var(--accent2);margin-top:8px" onclick="resumeInstall()"><div class="ico">➕</div><div class="l">Vehicle available — continue install</div><div class="s">Add remaining device(s) before submitting</div></button>';
+        hint='✅ Installed &amp; payment collected — submit for approval. If a remaining vehicle is now available, tap "continue install" to add it to this task first, then collect the balance.'; hintCls='hint-done';
         area.innerHTML='<div class="act-two"><button class="upd-btn" onclick="openUpdate()"><div class="ico">📞</div><div class="l">Update</div><div class="s">Call log &amp; next step</div></button>'+btn+'</div><div class="act-hint '+hintCls+'">'+hint+'</div>';
         return;
       }
@@ -1188,7 +1190,7 @@
           '<div class="inst-field"><div class="inst-lbl">Additional Notes</div><input class="inst-in" id="inotes-'+idx+'" placeholder="Optional"></div>'+
         '</div>'+
         '<div class="inst-res" id="ireview-'+idx+'" style="display:none;margin-bottom:10px"></div>'+
-        '<button class="inst-btn b-push" id="ipush-'+idx+'" onclick="reviewPush('+idx+')">📋 Review &amp; Push</button>'+
+        '<button class="inst-btn b-push" id="ipush-'+idx+'" onclick="reviewPush('+idx+')">📋 Proceed to Adding →</button>'+
         '<button class="inst-btn b-back" style="margin-top:8px" onclick="backToSearch('+idx+')">← Search different IMEI</button>'+
       '</div>';
   }
