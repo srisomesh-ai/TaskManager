@@ -297,7 +297,36 @@ if($action === 'add_device'){
                 'vin'                 => $vin,
             ]);
         }
-        echo json_encode(['success'=>true,'device_id'=>$device_id,'server'=>$srv['name']]);
+        // ── Give support@bharatgps.com access to the newly added device ──
+        $supportAccess = false;
+        if($device_id){
+            $H = rawurlencode($srv['hash']);
+            $SUPPORT_EMAIL = 'support@bharatgps.com';
+            $supportUserId = 0;
+            $sr = do_get($srv['base'].'/admin/clients?search_phrase='.rawurlencode($SUPPORT_EMAIL).'&limit=10&lang=en&user_api_hash='.$H);
+            $sj = $sr['json']; $clients = [];
+            if(is_array($sj)){
+                if(isset($sj['data'])) $clients = $sj['data'];
+                elseif(isset($sj['items'])) $clients = $sj['items'];
+                elseif(isset($sj[0])) $clients = $sj;
+            }
+            foreach($clients as $c){
+                if(strcasecmp(trim($c['email']??''), $SUPPORT_EMAIL) === 0){ $supportUserId = intval($c['id'] ?? 0); break; }
+            }
+            if($supportUserId){
+                $ar = do_post($srv['base'].'/admin/device/'.$device_id.'/user?lang=en&user_api_hash='.$H,
+                    ['user_id'=>strval($supportUserId)]);
+                $aj = $ar['json'];
+                if(($aj['status'] ?? null) == 1){ $supportAccess = true; }
+                else {
+                    $ar2 = do_post($srv['base'].'/edit_device?lang=en&user_api_hash='.$H,
+                        ['id'=>strval($device_id),'user_id'=>strval($supportUserId)]);
+                    $aj2 = $ar2['json'];
+                    if(($aj2['status'] ?? null) == 1){ $supportAccess = true; }
+                }
+            }
+        }
+        echo json_encode(['success'=>true,'device_id'=>$device_id,'server'=>$srv['name'],'support_access'=>$supportAccess]);
     } else {
         echo json_encode(['success'=>false,'error'=>parse_gps_err($json,$result['raw'])]);
     }
