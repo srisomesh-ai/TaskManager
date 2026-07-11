@@ -4376,3 +4376,7 @@ case 'quotation_list':
     break;
 
 default:
+    http_response_code(404);
+    echo json_encode(['error'=>'Unknown action: '.$action]);
+    break;
+}
