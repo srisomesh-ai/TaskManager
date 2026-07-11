@@ -1102,16 +1102,19 @@
     _instQty=parseInt(t.device_qty||1)||1;
     if(_v2vMode) _instQty=1;
     _instStep=1; _instSaved={};
-    // restore already-installed devices
+    // restore already-installed devices (only up to current qty; ignore stray higher indices)
     (t.device_installs||[]).forEach(d=>{
       if(d && d.gps_serial_no && d.name_on_server && d.device_index){
-        _instSaved[parseInt(d.device_index)]={pushed:true,imei:d.gps_serial_no,name:d.name_on_server,server_name:d.server_name,plate:d.vehicle_number,vtype:d.vehicle_type,inst:d.installation_date,exp:d.expiration_date,server_id:d.server_id,device_id:d.device_id};
+        const di=parseInt(d.device_index);
+        if(di>=1) _instSaved[di]={pushed:true,imei:d.gps_serial_no,name:d.name_on_server,server_name:d.server_name,plate:d.vehicle_number,vtype:d.vehicle_type,inst:d.installation_date,exp:d.expiration_date,server_id:d.server_id,device_id:d.device_id};
       }
     });
     // load my assigned devices for the dropdown
     const res=await api('dev_assignments_get'); _myDevices=(res&&res.assignments)?res.assignments:[];
-    // jump to first unsaved device
-    for(let i=1;i<=_instQty;i++){ if(!(_instSaved[i]&&_instSaved[i].pushed)){ _instStep=i; break; } if(i===_instQty) _instStep=i; }
+    // jump to first EMPTY device slot (so the balance device shows its add form).
+    // If every slot 1..qty is already filled, land on the last (shows completion).
+    _instStep=_instQty;
+    for(let i=1;i<=_instQty;i++){ if(!(_instSaved[i]&&_instSaved[i].pushed)){ _instStep=i; break; } }
     document.getElementById('inst-ov').classList.add('open');
     renderInstall();
   }
@@ -1135,9 +1138,12 @@
 
     // all devices done?
     const pushedCount=Object.keys(_instSaved).filter(k=>_instSaved[k]&&_instSaved[k].pushed).length;
+    // first still-empty slot (0 if none)
+    let firstEmpty=0;
+    for(let i=1;i<=_instQty;i++){ if(!(_instSaved[i]&&_instSaved[i].pushed)){ firstEmpty=i; break; } }
     if(saved && saved.pushed){
       bd.innerHTML='<div class="dev-done">✅ Device '+idx+' installed — '+esc(saved.name||'')+' · '+esc(saved.plate||'')+'<br>IMEI '+esc(saved.imei||'')+'</div>'+
-        (idx<_instQty?('<button class="inst-btn b-push" onclick="gotoInstDev('+(idx+1)+')">Next Device →</button>'+
+        (firstEmpty>0?('<button class="inst-btn b-push" onclick="gotoInstDev('+firstEmpty+')">➕ Add Next Device →</button>'+
           '<button class="inst-btn" style="background:#fff;color:var(--saffron);border:1.5px solid var(--saffron);margin-top:8px" onclick="finishPartial('+pushedCount+')">🚗 Remaining vehicle not available — finish with '+pushedCount+' installed</button>'):
           '<div class="inst-card"><div style="font-weight:800;color:var(--green);margin-bottom:6px">🎉 All '+_instQty+' device(s) installed!</div><div style="font-size:13px;color:var(--text2)">Now give the customer access to the device on their GPS account, then collect payment.</div></div>'+
           '<button class="inst-btn b-push" style="background:var(--accent2)" onclick="closeInstall();openAssign()">👤 Give Customer Access</button>'+
