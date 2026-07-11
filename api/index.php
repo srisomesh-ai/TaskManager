@@ -2597,14 +2597,75 @@ case 'delete_expense':
     $pdo->prepare("DELETE FROM expenses WHERE id=?")->execute([intval($body['id']??0)]);echo json_encode(['success'=>true]);break;
 
 case 'get_accounts_summary':
+    if ($userRole !== 'admin') { http_response_code(403); echo json_encode(['error'=>'Only admin can view P&L']); break; }
     $co=$_GET['company']??'BGPT';$from=$_GET['from']??date('Y-01-01');$to=$_GET['to']??date('Y-m-d');
+    // ── Income (from Balance Sheet) ──
     try{$q1=$pdo->prepare("SELECT COALESCE(SUM(total_price),0)ts,COALESCE(SUM(payment_received),0)tr,COALESCE(SUM(pending_payment),0)tp,COALESCE(SUM(CASE WHEN type='sales' THEN total_price ELSE 0 END),0)si,COALESCE(SUM(CASE WHEN type='license' THEN total_price ELSE 0 END),0)li,COALESCE(SUM(CASE WHEN type='sales' THEN qty ELSE 0 END),0)ds,COUNT(*)tc FROM balance_sheet_entries WHERE profile=? AND date BETWEEN ? AND ?");$q1->execute([$co,$from,$to]);$inc=$q1->fetch();}catch(Exception $e){$inc=['ts'=>0,'tr'=>0,'tp'=>0,'si'=>0,'li'=>0,'ds'=>0,'tc'=>0];}
+    // ── Purchases (from Purchase Orders) — cash invested in stock this period ──
     $q2=$pdo->prepare("SELECT COALESCE(SUM(total_amount),0)tp,COALESCE(SUM(paid_amount),0)pp,COUNT(*)pc FROM purchase_orders WHERE company=? AND order_date BETWEEN ? AND ? AND status!='Cancelled'");$q2->execute([$co,$from,$to]);$pur=$q2->fetch();
+    // ── Operating expenses (from Expenses page) ──
     try{$q3=$pdo->prepare("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE company=? AND date BETWEEN ? AND ?");$q3->execute([$co,$from,$to]);$tex=floatval($q3->fetchColumn());}catch(Exception $e){$tex=0;}
     try{$q4=$pdo->prepare("SELECT category,COALESCE(SUM(amount),0)ct FROM expenses WHERE company=? AND date BETWEEN ? AND ? GROUP BY category ORDER BY ct DESC");$q4->execute([$co,$from,$to]);$cats=$q4->fetchAll();}catch(Exception $e){$cats=[];}
     try{$q5=$pdo->prepare("SELECT DATE_FORMAT(date,'%Y-%m')month,COALESCE(SUM(total_price),0)income,COALESCE(SUM(payment_received),0)received FROM balance_sheet_entries WHERE profile=? AND date BETWEEN ? AND ? GROUP BY DATE_FORMAT(date,'%Y-%m') ORDER BY month");$q5->execute([$co,$from,$to]);$monthly=$q5->fetchAll();}catch(Exception $e){$monthly=[];}
-    $gp=floatval($inc['ts']??0)-floatval($pur['tp']??0);
-    echo json_encode(['income'=>['total_sales'=>$inc['ts']??0,'total_received'=>$inc['tr']??0,'total_pending'=>$inc['tp']??0,'sales_income'=>$inc['si']??0,'license_income'=>$inc['li']??0,'devices_sold'=>$inc['ds']??0,'total_entries'=>$inc['tc']??0],'purchases'=>['total_po'=>$pur['tp']??0,'po_count'=>$pur['pc']??0],'expenses_by_category'=>$cats,'total_expenses'=>$tex,'gross_profit'=>$gp,'net_profit'=>$gp-$tex,'monthly'=>$monthly]);break;
+
+    // ── COGS (Cost of Goods Sold) — professional method ──
+    // Only the cost of devices ACTUALLY SOLD counts against profit. Unsold stock stays as inventory.
+    // Cost per model comes from the Price List buying_price (source of truth); if a model has no
+    // buying_price, we fall back to the average purchase-order unit_cost for that model.
+    $cogs = 0.0; $cogsBreakdown = [];
+    try {
+        // Units sold per model from the balance sheet (sales-type entries only)
+        $qs = $pdo->prepare("SELECT device_model, COALESCE(SUM(qty),0) sold FROM balance_sheet_entries
+            WHERE profile=? AND type='sales' AND date BETWEEN ? AND ? AND device_model IS NOT NULL AND device_model<>''
+            GROUP BY device_model");
+        $qs->execute([$co,$from,$to]);
+        $soldRows = $qs->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($soldRows as $sr) {
+            $model = $sr['device_model']; $sold = floatval($sr['sold']); if($sold<=0) continue;
+            $cost = null;
+            // 1) Price List buying_price
+            try { $pc=$pdo->prepare("SELECT buying_price FROM price_list WHERE product_name=? AND buying_price>0 LIMIT 1"); $pc->execute([$model]); $bp=$pc->fetchColumn(); if($bp!==false && floatval($bp)>0) $cost=floatval($bp); } catch(Exception $e){}
+            // 2) Fallback: average purchase-order unit cost for this model
+            if ($cost===null) { try { $ac=$pdo->prepare("SELECT AVG(unit_cost) FROM purchase_order_items WHERE device_model=? AND unit_cost>0"); $ac->execute([$model]); $av=$ac->fetchColumn(); if($av!==false && floatval($av)>0) $cost=floatval($av); } catch(Exception $e){} }
+            if ($cost===null) $cost = 0.0; // unknown cost — counts as 0 so profit isn't overstated as negative
+            $lineCogs = $cost * $sold;
+            $cogs += $lineCogs;
+            $cogsBreakdown[] = ['model'=>$model,'units_sold'=>$sold,'unit_cost'=>$cost,'cost'=>$lineCogs];
+        }
+    } catch(Exception $e){}
+
+    $revenue      = floatval($inc['ts']??0);
+    $totalPurch   = floatval($pur['tp']??0);
+    $grossProfit  = $revenue - $cogs;              // Revenue − COGS
+    $netProfit    = $grossProfit - $tex;           // − Operating expenses
+    // Inventory value on hand this period = what was purchased minus what was consumed (COGS).
+    // (Simple period view; not a full perpetual inventory ledger.)
+    $inventoryValue = max(0, $totalPurch - $cogs);
+
+    echo json_encode([
+        'period'   => ['from'=>$from,'to'=>$to],
+        'income'   => [
+            'total_sales'    => floatval($inc['ts']??0),
+            'total_received' => floatval($inc['tr']??0),
+            'total_pending'  => floatval($inc['tp']??0),
+            'sales_income'   => floatval($inc['si']??0),
+            'license_income' => floatval($inc['li']??0),
+            'devices_sold'   => floatval($inc['ds']??0),
+            'total_entries'  => intval($inc['tc']??0),
+        ],
+        'purchases'      => ['total_po'=>$totalPurch,'paid'=>floatval($pur['pp']??0),'po_count'=>intval($pur['pc']??0)],
+        'cogs'           => $cogs,
+        'cogs_breakdown' => $cogsBreakdown,
+        'inventory_value'=> $inventoryValue,
+        'expenses_by_category' => $cats,
+        'total_expenses' => $tex,
+        'revenue'        => $revenue,
+        'gross_profit'   => $grossProfit,
+        'net_profit'     => $netProfit,
+        'monthly'        => $monthly,
+    ]);
+    break;
+
 
 // ════════════════════════════════════════════════════
 // INVOICING API — Items, Parties, Invoices, Settings
