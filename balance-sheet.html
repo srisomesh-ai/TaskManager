@@ -495,8 +495,26 @@ async function loadCashPending(){
       + '</div>';
   }).join('');
   const totalPending=res.by_technician.reduce((s,t)=>s+Number(t.total||0),0);
-  box.innerHTML='<div class="cashp"><h3>💰 Cash pending deposit with technicians — ₹'+totalPending.toLocaleString('en-IN')
-    +'</h3><div style="font-size:11px;color:#8a6d4d;margin-bottom:4px">Use the 🔔 button on a pending row below to remind that technician.</div>'+rows+'</div>';
+  const nTech=res.by_technician.length;
+  box.innerHTML='<div class="cashp">'
+    +'<h3 onclick="toggleCashPanel()" style="cursor:pointer;user-select:none;margin:0">'
+      +'<span id="cashp-arrow" style="display:inline-block;transition:transform .2s;font-size:12px">▶</span> '
+      +'💰 Cash pending deposit with technicians — ₹'+totalPending.toLocaleString('en-IN')
+      +' <span style="font-weight:600;font-size:12px;color:#8a6d4d">('+nTech+')</span>'
+    +'</h3>'
+    +'<div id="cashp-body" style="display:none;margin-top:10px">'
+      +'<div style="font-size:11px;color:#8a6d4d;margin-bottom:4px">Use the 🔔 button on a pending row below to remind that technician.</div>'
+      +rows
+    +'</div>'
+  +'</div>';
+}
+
+function toggleCashPanel(){
+  const b=document.getElementById('cashp-body'), a=document.getElementById('cashp-arrow');
+  if(!b) return;
+  const open=b.style.display!=='none';
+  b.style.display=open?'none':'block';
+  if(a) a.style.transform=open?'rotate(0deg)':'rotate(90deg)';
 }
 
 async function remindCash(techId, btn){
