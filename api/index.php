@@ -328,22 +328,11 @@ function coin_balance($pdo, $userId){
 }
 
 // Expenses table (manual operating expenses)
+// Ensure the shared expenses table exists (same schema used by the P&L/accounts feature).
 function _ensureExpensesTable($pdo){
-    $pdo->exec("CREATE TABLE IF NOT EXISTS expenses (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        date DATE NOT NULL,
-        category VARCHAR(80) NOT NULL,
-        title VARCHAR(200) NOT NULL,
-        amount DECIMAL(12,2) NOT NULL DEFAULT 0,
-        vendor VARCHAR(160) NULL,
-        payment_mode VARCHAR(50) NULL,
-        reference_no VARCHAR(100) NULL,
-        notes TEXT NULL,
-        created_by_code VARCHAR(80) NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        INDEX idx_date (date), INDEX idx_cat (category)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS expenses(id INT AUTO_INCREMENT PRIMARY KEY,company VARCHAR(10) DEFAULT 'BGPT',date DATE,category VARCHAR(50),description TEXT,amount DECIMAL(10,2),payment_mode VARCHAR(50),paid_to VARCHAR(100),reference VARCHAR(100),receipt_note TEXT,created_by VARCHAR(100),created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch(Exception $e){}
 }
 
 // ── Block-time tracking (for payroll absent calculation) ───────────────────────
@@ -2198,7 +2187,11 @@ case 'exp_get_entries':
         if (!empty($_GET['from'])) { $where[]="date >= ?"; $params[]=$_GET['from']; }
         if (!empty($_GET['to']))   { $where[]="date <= ?"; $params[]=$_GET['to']; }
         if (!empty($_GET['category'])) { $where[]="category = ?"; $params[]=$_GET['category']; }
-        $sql = "SELECT * FROM expenses".($where?" WHERE ".implode(" AND ",$where):"")." ORDER BY date DESC, id DESC LIMIT 2000";
+        // Alias the shared-table columns to the field names the Expenses page expects.
+        $sql = "SELECT id, date, category, amount, payment_mode,
+                       description AS title, paid_to AS vendor, reference AS reference_no,
+                       receipt_note AS notes, created_by AS created_by_code, created_at
+                FROM expenses".($where?" WHERE ".implode(" AND ",$where):"")." ORDER BY date DESC, id DESC LIMIT 2000";
         $st = $pdo->prepare($sql); $st->execute($params);
         echo json_encode(['success'=>true,'entries'=>$st->fetchAll(PDO::FETCH_ASSOC)]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
@@ -2212,14 +2205,16 @@ case 'exp_add_entry':
         $amount = floatval($body['amount'] ?? 0);
         if ($title==='') { echo json_encode(['error'=>'Title required']); break; }
         if ($amount<=0)  { echo json_encode(['error'=>'Amount must be greater than 0']); break; }
-        $pdo->prepare("INSERT INTO expenses (date,category,title,amount,vendor,payment_mode,reference_no,notes,created_by_code)
-            VALUES (?,?,?,?,?,?,?,?,?)")
+        // Store into the shared expenses table columns (description/paid_to/reference/receipt_note).
+        $pdo->prepare("INSERT INTO expenses (company,date,category,description,amount,payment_mode,paid_to,reference,receipt_note,created_by)
+            VALUES (?,?,?,?,?,?,?,?,?,?)")
             ->execute([
+                $body['company'] ?? 'BGPT',
                 $body['date'] ?? date('Y-m-d'),
                 trim($body['category'] ?? 'Other'),
                 $title, $amount,
-                trim($body['vendor'] ?? '') ?: null,
                 trim($body['payment_mode'] ?? '') ?: null,
+                trim($body['vendor'] ?? '') ?: null,
                 trim($body['reference_no'] ?? '') ?: null,
                 trim($body['notes'] ?? '') ?: null,
                 $cu['name'] ?? 'admin',
@@ -2234,9 +2229,11 @@ case 'exp_update_entry':
         _ensureExpensesTable($pdo);
         $id = intval($body['id'] ?? 0);
         if (!$id) { echo json_encode(['error'=>'Missing id']); break; }
-        $allowed = ['date','category','title','amount','vendor','payment_mode','reference_no','notes'];
+        // Map incoming page field names → shared-table column names.
+        $map = ['date'=>'date','category'=>'category','title'=>'description','amount'=>'amount',
+                'vendor'=>'paid_to','payment_mode'=>'payment_mode','reference_no'=>'reference','notes'=>'receipt_note'];
         $sets=[]; $vals=[];
-        foreach ($allowed as $f) { if (array_key_exists($f,$body)) { $sets[]="$f=?"; $vals[]=($body[$f]===''?null:$body[$f]); } }
+        foreach ($map as $in=>$col) { if (array_key_exists($in,$body)) { $sets[]="$col=?"; $vals[]=($body[$in]===''?null:$body[$in]); } }
         if ($sets) { $vals[]=$id; $pdo->prepare("UPDATE expenses SET ".implode(',',$sets)." WHERE id=?")->execute($vals); }
         echo json_encode(['success'=>true]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
