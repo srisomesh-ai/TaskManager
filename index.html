@@ -7140,6 +7140,13 @@ async function loadDailyReport(){
             <span style="font-size:11px;font-weight:700;color:var(--amber)">💰 Cash Holding</span>
             <span style="font-size:14px;font-weight:900;color:var(--amber)">₹${parseFloat(t.cash_holding).toLocaleString('en-IN')}</span>
           </div>`:''}
+          ${(t.blocked_now || t.block_minutes>0)?`<div style="margin-top:8px;background:${t.blocked_now?'#fee2e2':'var(--surface2)'};border:1.5px solid ${t.blocked_now?'#ef4444':'var(--border)'};border-radius:7px;padding:8px 12px">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <span style="font-size:11px;font-weight:800;color:${t.blocked_now?'#b91c1c':'var(--text3)'}">${t.blocked_now?'🔒 BLOCKED':'⏱️ Block time'}</span>
+              <span style="font-size:12px;font-weight:900;color:${t.blocked_now?'#b91c1c':'var(--text2)'}">${t.block_days>0?t.block_days+'d ':''}${t.block_hours}h ${t.block_mins_only}m</span>
+            </div>
+            <div style="font-size:10px;color:${t.blocked_now?'#b91c1c':'var(--text3)'};margin-top:3px">${t.block_days>0?('⚠️ '+t.block_days+' absent day'+(t.block_days>1?'s':'')+' (payroll)'):'Under 1 day'}${t.block_started?' · since '+new Date(t.block_started.replace(' ','T')).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''}</div>
+          </div>`:''}
         </div>`;
       }).join('')}
     </div>`;
