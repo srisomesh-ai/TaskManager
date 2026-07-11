@@ -519,6 +519,7 @@ if($action === 'search_expiry'){
                     'plate'=>$dd['plate_number'] ?? '—',
                     'reg'=>$dd['registration_number'] ?? '—',
                     'owner'=>$dd['object_owner'] ?? '—',
+                    'phone'=>$dd['msisdn'] ?? $dd['sim_number'] ?? $dd['phone'] ?? $dd['device_phone'] ?? $d['msisdn'] ?? '',
                     'expiry'=>$expiry, 'days_left'=>$daysLeft, 'status'=>$status,
                 ];
             }
