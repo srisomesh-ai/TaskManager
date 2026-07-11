@@ -421,9 +421,9 @@
       if(!b) return;
       if(d&&d.locked){
         b.style.display='block';
-        b.innerHTML='<div style="font-weight:800;font-size:15px;margin-bottom:4px">🔒 Tasks locked — deposit pending cash</div>'
-          +'<div>₹'+Number(d.pending_amount||0).toLocaleString('en-IN')+' has been pending for '+d.pending_days+' days. '
-          +'You cannot proceed on tasks until you deposit. <b>-50 coins every 6 hours</b> until deposited.</div>'
+        b.innerHTML='<div style="font-weight:800;font-size:15px;margin-bottom:4px">🔒 Tasks locked — please deposit your pending cash.</div>'
+          +'<div>₹'+Number(d.pending_amount||0).toLocaleString('en-IN')+' pending for '+d.pending_days+' days. Deposit it and your tasks unlock automatically.</div>'
+          +'<div style="margin-top:6px;font-size:13px;line-height:1.5">🔒 మీ టాస్క్‌లు లాక్ అయ్యాయి — దయచేసి మీ దగ్గర ఉన్న క్యాష్ డిపాజిట్ చేయండి. ₹'+Number(d.pending_amount||0).toLocaleString('en-IN')+', '+d.pending_days+' రోజులుగా పెండింగ్‌లో ఉంది. డిపాజిట్ చేయగానే మీ టాస్క్‌లు ఆటోమేటిక్‌గా అన్‌లాక్ అవుతాయి.</div>'
           +'<div style="margin-top:6px;font-size:12px;opacity:.9">Your coin balance: '+(d.coins||0)+'</div>';
       } else {
         b.style.display='none';
