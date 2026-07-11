@@ -2683,10 +2683,9 @@ case 'skip_consent':
         $tr = $pdo->prepare("SELECT t.*, u.name as tech_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?");
         $tr->execute([$id]); $trow = $tr->fetch();
         if(!$trow){ echo json_encode(['error'=>'Task not found']); break; }
-        // Restrict to existing-customer job types
-        $jl = strtolower($trow['device_details'] ?? '');
-        $allowed = (strpos($jl,'vehicle to vehicle')!==false || strpos($jl,'v2v')!==false || strpos($jl,'troubleshoot')!==false || strpos($jl,'offline')!==false);
-        if(!$allowed){ echo json_encode(['error'=>'Skip consent is only allowed for V2V and Troubleshoot tasks']); break; }
+        // Skip consent is allowed on any job when the customer genuinely can't complete it
+        // (forgot login, no email access, etc.). The technician takes responsibility and it is
+        // logged in the task activity for accountability.
         // Only the assigned technician (or admin/assigner) may skip
         if(intval($trow['assigned_to']) !== $userId && !in_array($userRole,['admin','assigner'])){
             echo json_encode(['error'=>'Not authorized']); break;
