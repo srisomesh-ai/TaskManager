@@ -4657,12 +4657,19 @@ case 'renewal_approve':
             $srvLabel = $srvNum ? ('Server '.$srvNum) : ($r['server_name'] ?: '');
             // If a payment screenshot was attached, the payment was made by UPI.
             $payMode = !empty($r['payment_screenshot']) ? 'UPI' : null;
+            // Name on server = "Device name - Vehicle number" (server identification), NOT customer name.
+            $rnwPlate = trim($r['plate'] ?? '');
+            $rnwDev   = trim($r['device_name'] ?? '');
+            if($rnwDev !== '' && $rnwPlate !== '' && $rnwPlate !== '—'){ $rnwNameOnServer = $rnwDev.' - '.$rnwPlate; }
+            elseif($rnwDev !== ''){ $rnwNameOnServer = $rnwDev; }
+            elseif($rnwPlate !== '' && $rnwPlate !== '—'){ $rnwNameOnServer = $rnwPlate; }
+            else { $rnwNameOnServer = $r['owner'] ?: 'Renewal'; }
             $pdo->prepare("INSERT INTO balance_sheet_entries
                 (type,profile,date,gps_serial_no,name_on_server,server_name,device_model,service_type,license_plan,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_mode,payment_transaction_details,payment_received_on,remarks,created_by_code)
                 VALUES ('license',?,CURDATE(),?,?,?,?,?,?,1,?,?,?,'paid',?,0,?,?,CURDATE(),?,?)")
                 ->execute([
                     $rnwProfile,
-                    $r['imei'] ?: null, $r['owner'] ?: $r['device_name'], $srvLabel,
+                    $r['imei'] ?: null, $rnwNameOnServer, $srvLabel,
                     'Renewal', 'Renewal', $r['label'],
                     $amount - $gst, $gst, $amount, $amount,
                     $payMode,
@@ -4695,6 +4702,29 @@ case 'renewal_approve':
         }
 
         echo json_encode(['success'=>true,'bs_entry'=>$bsId?true:false,'emailed'=>$emailed?true:false,'customer_email'=>$customerEmail?:null]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'renewal_backfill_names':
+    // Admin: rewrite name_on_server of already-approved renewal balance-sheet entries to
+    // "Device name - Vehicle number" (server identification) instead of the customer name.
+    try {
+        if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Only admin']); break; }
+        _renewalEnsureTable($pdo);
+        $rows = $pdo->query("SELECT id, device_name, plate, owner, bs_entry_id FROM renewal_requests WHERE status='approved' AND bs_entry_id IS NOT NULL AND bs_entry_id>0")->fetchAll();
+        $updated = 0;
+        foreach($rows as $rr){
+            $dev = trim($rr['device_name'] ?? '');
+            $plate = trim($rr['plate'] ?? '');
+            if($dev !== '' && $plate !== '' && $plate !== '—'){ $newName = $dev.' - '.$plate; }
+            elseif($dev !== ''){ $newName = $dev; }
+            elseif($plate !== '' && $plate !== '—'){ $newName = $plate; }
+            else { continue; }
+            $up = $pdo->prepare("UPDATE balance_sheet_entries SET name_on_server=?, updated_at=NOW() WHERE id=? AND type='license'");
+            $up->execute([$newName, intval($rr['bs_entry_id'])]);
+            if($up->rowCount() > 0) $updated++;
+        }
+        echo json_encode(['success'=>true,'updated'=>$updated,'checked'=>count($rows)]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
