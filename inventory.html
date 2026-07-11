@@ -642,6 +642,24 @@ function loadTechs(){
       renderTechOptions();
     })
     .catch(function(){});
+  loadTechCoins();
+}
+
+// Coin balance per technician (name → coins) for the technician cards
+window._techCoins = {};
+function loadTechCoins(){
+  var token = localStorage.getItem('bgps_token') || '';
+  fetch(API + '?action=tech_coins', { cache:'no-store', headers:{ 'X-Auth-Token': token } })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(d && d.coins){
+        var m = {};
+        d.coins.forEach(function(c){ m[String(c.name||'').trim().toLowerCase()] = parseInt(c.coins)||0; });
+        window._techCoins = m;
+        renderTechCards();
+      }
+    })
+    .catch(function(){});
 }
 
 function renderTechOptions(){
@@ -848,6 +866,10 @@ function renderTechCards(){
 
     var initial = name.split(' ').map(function(w){ return w[0]; }).join('').slice(0,2).toUpperCase();
     var totalHeld = itemsHeld.reduce(function(s,i){ return s + i.qty; }, 0) + asgCount;
+    var coins = (window._techCoins||{})[name.trim().toLowerCase()];
+    var coinChip = (typeof coins!=='undefined')
+      ? '<div style="margin-left:auto;text-align:right;margin-right:8px"><div style="font-size:15px;font-weight:800;color:'+(coins<0?'#ffd1d1':'#fff')+'">'+(coins<0?('−'+Math.abs(coins)):coins)+'</div><div style="font-size:9px;color:rgba(255,255,255,.75);letter-spacing:.3px">'+(coins<0?'COINS (MINUS)':'COINS')+'</div></div>'
+      : '<div style="margin-left:auto;margin-right:8px"></div>';
 
     var asgRow = asgCount ? '<div class="tech-item-row" style="background:rgba(46,134,222,.06)"><div class="tech-item-name">📡 Server devices (IMEI)</div><div class="tech-item-qty" style="color:var(--blue)">' + asgCount + '</div></div>' : '';
 
@@ -855,7 +877,8 @@ function renderTechCards(){
       '<div class="tech-card-hd">' +
         '<div class="tech-av">' + initial + '</div>' +
         '<div><div class="tech-name">' + esc(name) + '</div><div class="tech-sub">' + totalHeld + ' unit(s) held</div></div>' +
-        '<button onclick="showTechDetail(\'' + esc(name) + '\')" style="margin-left:auto;background:rgba(255,255,255,.15);border:none;color:#fff;padding:5px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">Detail</button>' +
+        coinChip +
+        '<button onclick="showTechDetail(\'' + esc(name) + '\')" style="background:rgba(255,255,255,.15);border:none;color:#fff;padding:5px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">Detail</button>' +
       '</div>' +
       '<div class="tech-items">' +
         asgRow +
