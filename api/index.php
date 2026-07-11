@@ -1824,6 +1824,7 @@ case 'bs_get_entries':
     if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     // Ensure table exists
     try { $pdo->exec("CREATE TABLE IF NOT EXISTS balance_sheet_entries (id INT AUTO_INCREMENT PRIMARY KEY, type VARCHAR(20) DEFAULT 'sales', profile VARCHAR(10) DEFAULT 'BGPT', task_id VARCHAR(20) NULL, task_db_id INT NULL, date DATE NOT NULL, invoice_no VARCHAR(50), gps_serial_no VARCHAR(100), customer_type VARCHAR(50), name_on_server TEXT, server_name VARCHAR(50), device_model VARCHAR(100), service_type VARCHAR(100), license_plan VARCHAR(100), qty DECIMAL(10,2) DEFAULT 1, unit_price DECIMAL(10,2) DEFAULT 0, gst DECIMAL(10,2) DEFAULT 0, total_price DECIMAL(10,2) DEFAULT 0, payment_status VARCHAR(50), payment_received DECIMAL(10,2) DEFAULT 0, pending_payment DECIMAL(10,2) DEFAULT 0, payment_mode VARCHAR(50), payment_received_on DATE NULL, payment_transaction_details TEXT, pending_reason VARCHAR(100), discount_given DECIMAL(10,2) DEFAULT 0, discount_reason TEXT, discount_incharge VARCHAR(100), payment_reminder_date DATE NULL, technician_name VARCHAR(100), location VARCHAR(200), remarks TEXT, created_by_code VARCHAR(50), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch(Exception $e) {}
+    try { $pdo->exec("ALTER TABLE balance_sheet_entries ADD COLUMN technician_id INT DEFAULT NULL"); } catch(Exception $e) {}
     // Self-heal installs: this is HEAVY (loops all tasks with installed devices) and was
     // running on every load — for large profiles (BGPT) it slowed the request enough to blank
     // the page. Balance entries are already kept current by the update_task / approve_task hooks,
@@ -1878,14 +1879,15 @@ case 'bs_add_entry':
     $total = floatval($b['total_price']??($unit*$qty+$gst));
     $recv  = floatval($b['payment_received']??0);
     $pend  = floatval($b['pending_payment']??($total-$recv));
+    try { $pdo->exec("ALTER TABLE balance_sheet_entries ADD COLUMN technician_id INT DEFAULT NULL"); } catch(Exception $e){}
     $pdo->prepare("INSERT INTO balance_sheet_entries
         (type,profile,task_id,task_db_id,date,invoice_no,gps_serial_no,customer_type,
          name_on_server,server_name,device_model,service_type,license_plan,
          qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,
          payment_mode,payment_received_on,payment_transaction_details,
          pending_reason,discount_given,discount_reason,discount_incharge,payment_reminder_date,
-         technician_name,location,remarks,created_by_code)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+         technician_name,technician_id,location,remarks,created_by_code)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
         ->execute([
             $b['type']??'sales', $b['profile']??'BGPT',
             $b['task_id']??null, $b['task_db_id']??null,
@@ -1901,7 +1903,9 @@ case 'bs_add_entry':
             $b['pending_reason']??null, floatval($b['discount_given']??0),
             $b['discount_reason']??null, $b['discount_incharge']??null,
             !empty($b['payment_reminder_date'])?$b['payment_reminder_date']:null,
-            $b['technician_name']??null, $b['location']??null,
+            $b['technician_name']??null,
+            (isset($b['technician_id']) && $b['technician_id']!=='')?intval($b['technician_id']):null,
+            $b['location']??null,
             $b['remarks']??null, $cu['name'],
         ]);
     $newId = $pdo->lastInsertId();
@@ -1916,11 +1920,13 @@ case 'bs_update_entry':
     if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     $id = intval($body['id']??0);
     if (!$id) { echo json_encode(['error'=>'Missing id']); break; }
+    // Ensure technician_id column exists for linking manual entries to real technician accounts
+    if (array_key_exists('technician_id',$body)) { try { $pdo->exec("ALTER TABLE balance_sheet_entries ADD COLUMN technician_id INT DEFAULT NULL"); } catch(Exception $e){} }
     $allowed = ['date','invoice_no','gps_serial_no','customer_type','name_on_server','server_name',
                 'device_model','service_type','license_plan','qty','unit_price','gst','total_price',
                 'payment_status','payment_received','pending_payment','payment_mode','payment_received_on',
                 'payment_transaction_details','pending_reason','discount_given','discount_reason',
-                'discount_incharge','payment_reminder_date','technician_name','location','remarks','profile'];
+                'discount_incharge','payment_reminder_date','technician_name','technician_id','location','remarks','profile'];
     $sets=[]; $vals=[];
     foreach ($allowed as $f) {
         if (array_key_exists($f,$body)) { $sets[]="$f=?"; $vals[]=($body[$f]===''?null:$body[$f]); }
@@ -2908,6 +2914,7 @@ case 'cash_pending_summary':
     if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     try {
         $LOCK_DAYS = 4;
+        try { $pdo->exec("ALTER TABLE balance_sheet_entries ADD COLUMN technician_id INT DEFAULT NULL"); } catch(Exception $e){}
         // Per-task pending cash (collected, cash mode, not yet deposited)
         $q = $pdo->query("SELECT t.id, t.task_id, t.customer_name, t.amount_collected, t.cash_pending_at,
                     u.id AS tech_id, u.name AS tech_name, u.phone AS tech_phone,
@@ -2923,6 +2930,7 @@ case 'cash_pending_summary':
             $ageH = intval($row['age_hours']??0);
             $row['age_days'] = intval(floor($ageH/24));
             $row['overdue']  = ($row['age_days'] >= $LOCK_DAYS);
+            $row['source']   = 'task';
             $tid = intval($row['tech_id']);
             if (!isset($byTech[$tid])) $byTech[$tid] = ['tech_id'=>$tid,'tech_name'=>$row['tech_name'],'tech_phone'=>$row['tech_phone'],'total'=>0,'count'=>0,'oldest_days'=>0,'overdue'=>false];
             $byTech[$tid]['total'] += floatval($row['amount_collected']);
@@ -2931,6 +2939,35 @@ case 'cash_pending_summary':
             if ($row['overdue']) $byTech[$tid]['overdue'] = true;
         }
         unset($row);
+        // Manual balance-sheet entries linked to a technician with pending cash (no task behind them).
+        // These are the old manually-entered rows: cash mode, has pending amount, technician_id set,
+        // and NOT already linked to a task (task_db_id empty) to avoid double counting.
+        try {
+            $mq = $pdo->query("SELECT b.id, b.task_id, b.name_on_server AS customer_name,
+                        b.pending_payment, b.date,
+                        u.id AS tech_id, u.name AS tech_name, u.phone AS tech_phone,
+                        DATEDIFF(NOW(), b.date) AS age_days
+                     FROM balance_sheet_entries b JOIN users u ON b.technician_id=u.id
+                     WHERE LOWER(COALESCE(b.payment_mode,''))='cash'
+                       AND COALESCE(b.pending_payment,0) > 0
+                       AND (b.task_db_id IS NULL OR b.task_db_id=0)
+                     ORDER BY b.date ASC");
+            $ments = $mq->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($ments as $m) {
+                $ad = intval($m['age_days']??0);
+                $overdue = ($ad >= $LOCK_DAYS);
+                $tid = intval($m['tech_id']);
+                $tasks[] = ['id'=>$m['id'],'task_id'=>$m['task_id'],'customer_name'=>$m['customer_name'],
+                    'amount_collected'=>$m['pending_payment'],'cash_pending_at'=>$m['date'],
+                    'tech_id'=>$tid,'tech_name'=>$m['tech_name'],'tech_phone'=>$m['tech_phone'],
+                    'age_days'=>$ad,'overdue'=>$overdue,'source'=>'manual'];
+                if (!isset($byTech[$tid])) $byTech[$tid] = ['tech_id'=>$tid,'tech_name'=>$m['tech_name'],'tech_phone'=>$m['tech_phone'],'total'=>0,'count'=>0,'oldest_days'=>0,'overdue'=>false];
+                $byTech[$tid]['total'] += floatval($m['pending_payment']);
+                $byTech[$tid]['count'] += 1;
+                if ($ad > $byTech[$tid]['oldest_days']) $byTech[$tid]['oldest_days'] = $ad;
+                if ($overdue) $byTech[$tid]['overdue'] = true;
+            }
+        } catch(Exception $e){}
         echo json_encode(['success'=>true,'lock_days'=>$LOCK_DAYS,'tasks'=>$tasks,'by_technician'=>array_values($byTech)]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
@@ -2960,9 +2997,19 @@ case 'remind_cash_deposit':
             $r = $pdo->prepare("SELECT COALESCE(SUM(amount_collected),0) amt, COUNT(*) c, MIN(cash_pending_at) oldest
                     FROM tasks WHERE assigned_to=? AND LOWER(payment_mode)='cash' AND cash_deposit_status='pending' AND COALESCE(amount_collected,0)>0");
             $r->execute([$techId]); $agg=$r->fetch(PDO::FETCH_ASSOC);
+            $amt=floatval($agg['amt']); $cnt=intval($agg['c']); $oldest=$agg['oldest'];
+            // Add manual balance-sheet pending cash for this technician
+            try {
+                $rm = $pdo->prepare("SELECT COALESCE(SUM(pending_payment),0) amt, COUNT(*) c, MIN(date) oldest
+                        FROM balance_sheet_entries WHERE technician_id=? AND LOWER(COALESCE(payment_mode,''))='cash'
+                          AND COALESCE(pending_payment,0)>0 AND (task_db_id IS NULL OR task_db_id=0)");
+                $rm->execute([$techId]); $aggM=$rm->fetch(PDO::FETCH_ASSOC);
+                $amt += floatval($aggM['amt']); $cnt += intval($aggM['c']);
+                if (!empty($aggM['oldest']) && (empty($oldest) || $aggM['oldest']<$oldest)) $oldest=$aggM['oldest'];
+            } catch(Exception $e){}
             $u = $pdo->prepare("SELECT name,phone FROM users WHERE id=?"); $u->execute([$techId]); $usr=$u->fetch(PDO::FETCH_ASSOC);
-            $amt=floatval($agg['amt']); $cnt=intval($agg['c']); $days=0;
-            try { if($agg['oldest']) $days=(int)floor((time()-strtotime($agg['oldest']))/86400); } catch(Exception $e){}
+            $days=0;
+            try { if($oldest) $days=(int)floor((time()-strtotime($oldest))/86400); } catch(Exception $e){}
             if($cnt<1){ echo json_encode(['success'=>true,'message'=>'No pending cash for this technician.']); break; }
             $title='💰 Deposit pending cash';
             $msg='Please deposit ₹'.number_format($amt).' cash pending across '.$cnt.' task(s), oldest '.$days.' day'.($days==1?'':'s').'. Deposit today to avoid your tasks being locked.';
