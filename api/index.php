@@ -704,6 +704,16 @@ case 'get_task':
         $di=$pdo->prepare("SELECT * FROM task_device_installs WHERE task_id=? ORDER BY device_index ASC");
         $di->execute([$id]); $task['device_installs']=$di->fetchAll();
     } catch(Exception $e){ $task['device_installs']=[]; }
+    // SELF-HEAL: device_qty must never be less than the number of devices actually installed
+    // (fixes tasks whose qty was wrongly reduced by older partial-finish logic).
+    try {
+        $instN = 0;
+        foreach (($task['device_installs']??[]) as $diR) { if (!empty($diR['gps_serial_no'])) $instN++; }
+        if ($instN > intval($task['device_qty']??1)) {
+            $pdo->prepare("UPDATE tasks SET device_qty=? WHERE id=?")->execute([$instN, $id]);
+            $task['device_qty'] = $instN;
+        }
+    } catch(Exception $e){}
     echo json_encode(['task'=>$task]);
     break;
 
@@ -1580,6 +1590,15 @@ case 'save_device_install':
             $doneCount = $pdo->prepare("SELECT COUNT(*) FROM task_device_installs WHERE task_id=? AND gps_serial_no IS NOT NULL AND gps_serial_no != ''");
             $doneCount->execute([$tid]);
             $installedCount = intval($doneCount->fetchColumn());
+
+            // SELF-HEAL: device_qty must never be LESS than the number of devices actually
+            // installed. Older partial-finish logic could reduce device_qty below the real
+            // installed count (e.g. task showed qty 4 while 5 devices were installed). Correct it.
+            if ($installedCount > $totalQty) {
+                try { $pdo->prepare("UPDATE tasks SET device_qty=? WHERE id=?")->execute([$installedCount, $tid]); } catch(Exception $e2){}
+                $totalQty = $installedCount;
+                $t2['device_qty'] = $installedCount;
+            }
 
             if ($installedCount >= 1) {
                 // Collect installed devices' serials/names for the entry
