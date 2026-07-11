@@ -124,6 +124,8 @@
     </div>
   </div>
 
+  <div id="cash-lock-banner" style="display:none;margin:12px 14px;padding:14px 16px;background:linear-gradient(135deg,#c0392b,#e74c3c);color:#fff;border-radius:12px;box-shadow:0 3px 10px rgba(192,57,43,.3);font-size:14px;line-height:1.5"></div>
+
   <div class="hi-tiles">
     <div class="hi-tile">
       <div class="hi-ico dev">📡</div>
@@ -409,6 +411,24 @@
     loadDevices();
     loadCoins();
     loadReaddingBadge();
+    loadCashLock();
+  }
+
+  async function loadCashLock(){
+    try{
+      const d=await api('my_cash_lock_status');
+      const b=document.getElementById('cash-lock-banner');
+      if(!b) return;
+      if(d&&d.locked){
+        b.style.display='block';
+        b.innerHTML='<div style="font-weight:800;font-size:15px;margin-bottom:4px">🔒 Tasks locked — deposit pending cash</div>'
+          +'<div>₹'+Number(d.pending_amount||0).toLocaleString('en-IN')+' has been pending for '+d.pending_days+' days. '
+          +'You cannot proceed on tasks until you deposit. <b>-50 coins every 6 hours</b> until deposited.</div>'
+          +'<div style="margin-top:6px;font-size:12px;opacity:.9">Your coin balance: '+(d.coins||0)+'</div>';
+      } else {
+        b.style.display='none';
+      }
+    }catch(e){}
   }
   async function loadReaddingBadge(){
     try{
