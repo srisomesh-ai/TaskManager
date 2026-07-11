@@ -4707,22 +4707,25 @@ case 'daily_report_data':
     try {
         if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
         $date = $_GET['date'] ?? date('Y-m-d');
-        // Closed-today tasks with their technician + device details
-        $rows = $pdo->prepare("SELECT t.id, t.task_id, t.device_details, t.customer_name, t.vehicle_number,
+        // ── Installs DONE today (by install date saved_at), not by close date. This matches what the
+        //    manager actually reports — devices physically installed today, regardless of admin close time.
+        $rows = $pdo->prepare("SELECT DISTINCT t.id, t.task_id, t.device_details, t.customer_name, t.vehicle_number,
                     u.name AS tech_name
-                FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id
-                WHERE t.task_status='Closed' AND DATE(t.closed_at)=?
+                FROM task_device_installs di
+                JOIN tasks t ON di.task_id=t.id
+                LEFT JOIN users u ON t.assigned_to=u.id
+                WHERE DATE(di.saved_at)=? AND di.gps_serial_no IS NOT NULL AND di.gps_serial_no<>''
                 ORDER BY u.name, t.id");
         $rows->execute([$date]);
         $tasks = $rows->fetchAll(PDO::FETCH_ASSOC);
 
-        // For each closed task, pull its installed device name(s) + server from task_device_installs
+        // For each task, pull its installed device name(s) + server (only today's installs)
         $out = [];
         foreach($tasks as $t){
             $names = []; $servers = [];
             try {
-                $di = $pdo->prepare("SELECT name_on_server, server_name FROM task_device_installs WHERE task_id=? AND gps_serial_no IS NOT NULL AND gps_serial_no<>'' ORDER BY device_index ASC");
-                $di->execute([$t['id']]);
+                $di = $pdo->prepare("SELECT name_on_server, server_name FROM task_device_installs WHERE task_id=? AND DATE(saved_at)=? AND gps_serial_no IS NOT NULL AND gps_serial_no<>'' ORDER BY device_index ASC");
+                $di->execute([$t['id'], $date]);
                 foreach($di->fetchAll(PDO::FETCH_ASSOC) as $d){
                     if(trim($d['name_on_server']??'')!=='') $names[] = trim($d['name_on_server']);
                     if(trim($d['server_name']??'')!=='') $servers[] = trim($d['server_name']);
@@ -4732,13 +4735,13 @@ case 'daily_report_data':
             $server = $servers ? $servers[0] : '';
             // Classify job type from device_details
             $jd = strtolower(trim($t['device_details'] ?? ''));
-            if(strpos($jd,'troubleshoot')!==false || strpos($jd,'offline')!==false)      $cat='Troubleshoot';
+            if(strpos($jd,'self')!==false)                                             $cat='Self Installation';
+            elseif(strpos($jd,'troubleshoot')!==false || strpos($jd,'offline')!==false) $cat='Troubleshoot';
             elseif(strpos($jd,'vehicle change')!==false || strpos($jd,'v2v')!==false || strpos($jd,'vehicle to vehicle')!==false) $cat='Vehicle Change';
             elseif(strpos($jd,'re-add')!==false || strpos($jd,'readd')!==false || strpos($jd,'re add')!==false) $cat='Re-adding';
             elseif(strpos($jd,'remove')!==false)   $cat='Removal';
             elseif(strpos($jd,'demo')!==false)     $cat='Demo';
             else                                    $cat='Sales';
-            // "Service" label shown per line (the device_details text, cleaned)
             $service = trim($t['device_details'] ?? '') ?: 'Installation';
             $out[] = [
                 'tech'    => $t['tech_name'] ?: 'Unassigned',
