@@ -1123,8 +1123,8 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
             <table class="rnw-grid" style="width:100%;border-collapse:separate;border-spacing:0;min-width:900px">
               <thead><tr>
                 <th class="rnw-th">Device</th>
-                <th class="rnw-th">Vehicle / Owner</th>
-                <th class="rnw-th">Phone</th>
+                <th class="rnw-th">Vehicle / Customer</th>
+                <th class="rnw-th">Reg. No.</th>
                 <th class="rnw-th">Server</th>
                 <th class="rnw-th">Expiry</th>
                 <th class="rnw-th">Renewal Plan</th>
@@ -6727,16 +6727,27 @@ function rnwRenderDevices(){
     const realIdx=_rnwDevices.indexOf(d);
     const stColor = d.days_left<0?'#c0392b':(d.days_left<=7?'#e07b00':(d.days_left<=30?'#c8860a':'#16794a'));
     const dl = d.days_left<0 ? ('Expired '+Math.abs(d.days_left)+'d ago') : (d.days_left===0?'Expires today':(d.days_left+'d left'));
+    // Customer name: object_owner. Guard against it just repeating the plate/vehicle number.
+    const plate = (d.plate||'').trim();
+    let customer = (d.owner||'').trim();
+    const norm = function(s){ return (s||'').toLowerCase().replace(/[^a-z0-9]/g,''); };
+    if(customer && norm(customer)===norm(plate)) customer = '';   // owner is just the plate → not a real name
+    const custCell = customer ? escHtml(customer) : '<span style="color:var(--text3)">—</span>';
+    // Registration number column
+    const reg = (d.reg||'').trim();
+    const regCell = reg ? ('<span style="font-family:monospace">'+escHtml(reg)+'</span>') : '<span style="color:var(--text3)">—</span>';
+    // Server clean label (name, not URL)
+    const srvName = d.server_label || _RNW_SRV[d.server_id] || ('S'+d.server_id);
+    // WhatsApp uses the SIM phone number
     const phone = (d.phone||'').replace(/[^0-9]/g,'');
-    const phoneCell = phone ? ('<span style="font-family:monospace">'+escHtml(phone)+'</span>') : '<span style="color:var(--text3)">—</span>';
     const waBtn = phone
       ? '<button class="rnw-wa-btn" title="Send WhatsApp renewal reminder" onclick="rnwWhatsApp('+realIdx+')">💬 WhatsApp</button>'
       : '<button class="rnw-wa-btn" disabled title="No phone number on this device">💬 WhatsApp</button>';
     return '<tr>'
       + '<td><div style="font-weight:700">'+escHtml(d.name)+'</div><div style="font-family:monospace;font-size:11px;color:var(--text3)">'+escHtml(d.imei)+'</div></td>'
-      + '<td><div style="font-weight:600">'+escHtml(d.plate||'—')+'</div><div style="color:var(--text3);font-size:11px">'+escHtml(d.owner||'')+'</div></td>'
-      + '<td>'+phoneCell+'</td>'
-      + '<td style="color:var(--text2);white-space:nowrap">'+escHtml(_RNW_SRV[d.server_id]||('S'+d.server_id))+'</td>'
+      + '<td><div style="font-weight:600">'+escHtml(plate||'—')+'</div><div style="color:var(--text3);font-size:11px">'+custCell+'</div></td>'
+      + '<td>'+regCell+'</td>'
+      + '<td style="color:var(--text2);white-space:nowrap">'+escHtml(srvName)+'</td>'
       + '<td style="white-space:nowrap"><div style="font-weight:700;color:'+stColor+'">'+escHtml(d.expiry)+'</div><div style="font-size:11px;color:'+stColor+'">'+dl+'</div></td>'
       + '<td><select id="rnw-sel-'+realIdx+'" class="form-input" style="width:100%;min-width:190px;font-size:12px;padding:6px 8px">'+_rnwRenewOptions()+'</select></td>'
       + '<td style="white-space:nowrap">'
