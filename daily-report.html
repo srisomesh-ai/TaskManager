@@ -982,10 +982,11 @@ async function loadDailyReport(){
   if(!document.getElementById('report-date').value)document.getElementById('report-date').value=date;
   const today=new Date().toISOString().split('T')[0];
 
-  const [res, allRes, usersRes] = await Promise.all([
+  const [res, allRes, usersRes, cashRes] = await Promise.all([
     api('daily_report',{date}),
     api('get_tasks',{}),
-    api('get_users',{})
+    api('get_users',{}),
+    api('cash_pending_summary').catch(()=>({}))
   ]);
   const tasks=res.tasks||[];
   const allTasks=allRes.tasks||[];
@@ -1011,6 +1012,16 @@ async function loadDailyReport(){
   // Active users (logged in last 24h — based on token presence as proxy)
   const activeUsers=users.filter(u=>u.auth_token);
 
+  // Cash pending deposit with technicians (tasks + manual entries)
+  const cashTechs=(cashRes&&cashRes.by_technician)?cashRes.by_technician.slice().sort((a,b)=>b.total-a.total):[];
+  const cashTotal=cashTechs.reduce((s,t)=>s+Number(t.total||0),0);
+  const cashPendingHtml=cashTechs.length
+    ? cashTechs.map(t=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:13px;font-weight:600">${(t.tech_name||'Unknown')}${t.overdue?' <span style="font-size:10px;font-weight:700;color:#b91c1c;background:#fee2e2;border-radius:10px;padding:1px 6px">OVERDUE ${t.oldest_days}d</span>':''}</span>
+        <strong style="color:#b45309;font-family:'Consolas','Courier New',monospace">₹${Number(t.total).toLocaleString('en-IN')}</strong>
+      </div>`).join('')
+    : '<div style="color:var(--text3);font-size:12px">No cash pending with technicians 🎉</div>';
+
   document.getElementById('daily-report-content').innerHTML=`
     <div class="report-summary" style="grid-template-columns:repeat(4,1fr)">
       <div class="summary-box"><div class="val" style="color:var(--accent)">${tasks.length}</div><div class="lbl">Total Tasks</div></div>
@@ -1033,6 +1044,14 @@ async function loadDailyReport(){
           <span style="font-size:11px;color:var(--text3);margin-left:auto">${u.role}</span>
         </div>`).join(''):'<div style="color:var(--text3);font-size:12px">No active users</div>'}
       </div>
+    </div>
+
+    <div class="card" style="padding:14px;margin-bottom:16px;border-left:4px solid #e07b00">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:800;color:#b45309">💰 Cash Pending Deposit with Technicians</div>
+        <strong style="color:#b45309;font-size:15px">₹${cashTotal.toLocaleString('en-IN')}</strong>
+      </div>
+      ${cashPendingHtml}
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
