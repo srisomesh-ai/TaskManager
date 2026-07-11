@@ -572,7 +572,8 @@
   function buildStepper(t){
     const cancelled=t.task_status==='Cancelled', isClosed=t.task_status==='Closed';
     const installs=t.device_installs||[], qty=parseInt(t.device_qty||1)||1;
-    const addingDone=installs.length>=qty && installs.every(d=>d.gps_serial_no&&d.name_on_server);
+    const installedOk=installs.filter(d=>d.gps_serial_no&&d.name_on_server).length;
+    const addingDone=(installedOk>=qty && installs.every(d=>d.gps_serial_no&&d.name_on_server)) || (String(t.partial_finish)==='1' && installedOk>=1);
     const hasTechAct=!!(t.last_tech_activity||t.consent_token||t.customer_consent_at||['In Progress','Task Pending','Awaiting Approval','Closed'].includes(t.task_status));
     const payDone=parseFloat(t.amount_collected||0)>=parseFloat(t.price_to_collect||0)-15 && parseFloat(t.price_to_collect||0)>0;
     const jt=(t.device_details||'').toLowerCase();
@@ -778,7 +779,10 @@
       // Has installation been completed? (all devices pushed)
       const installs=t.device_installs||[]; let qty=parseInt(t.device_qty||1)||1;
       if((jobLower.includes('vehicle to vehicle')||jobLower.includes('v2v'))&&qty<1) qty=1;
-      const addingDone=installs.length>=qty && installs.every(d=>d.gps_serial_no&&d.name_on_server);
+      const installedOk=installs.filter(d=>d.gps_serial_no&&d.name_on_server).length;
+      const isPartial=String(t.partial_finish)==='1';
+      const hasBalance=installedOk<qty;   // still devices left to install up to the ORIGINAL qty
+      const addingDone=(installedOk>=qty && installs.every(d=>d.gps_serial_no&&d.name_on_server)) || (isPartial && installedOk>=1);
       const price=parseFloat(t.price_to_collect||0), coll=parseFloat(t.amount_collected||0);
       const payDone=coll>=price-15 && price>0;
       const cashPending=(t.cash_deposit_status==='pending');
@@ -796,14 +800,14 @@
         const allAccessGiven=installs.length>0 && installs.every(d=>String(d.access_given)==='1'||d.access_given===1||d.access_given===true);
         if(!allAccessGiven){
           btn='<button class="act-btn" id="loc-btn" style="background:var(--accent2)" onclick="openAssign()"><div class="ico">📧</div><div class="l">Give Customer Access</div><div class="s">Assign device before payment</div></button>';
-          btn+='<button class="act-btn" style="background:#fff;color:var(--accent2);border:1.5px solid var(--accent2);margin-top:8px" onclick="resumeInstall()"><div class="ico">➕</div><div class="l">Vehicle available — continue install</div><div class="s">Add remaining device(s) to this task</div></button>';
+          if(hasBalance){ btn+='<button class="act-btn" style="background:#fff;color:var(--accent2);border:1.5px solid var(--accent2);margin-top:8px" onclick="resumeInstall()"><div class="ico">➕</div><div class="l">Vehicle available — continue install</div><div class="s">Add remaining '+(qty-installedOk)+' device(s) to this task</div></button>'; }
           hint='📧 Device(s) installed — assign them to the customer\'s GPS account before collecting payment. If a remaining vehicle is now available, tap "continue install" to add it to the same task.'; hintCls='hint-blue';
           area.innerHTML='<div class="act-two"><button class="upd-btn" onclick="openUpdate()"><div class="ico">📞</div><div class="l">Update</div><div class="s">Call log &amp; next step</div></button>'+btn+'</div><div class="act-hint '+hintCls+'">'+hint+'</div>';
           return;
         }
         // Access given → PAYMENT step
         btn='<button class="act-btn" id="loc-btn" style="background:var(--green)" onclick="openPaymentSoon()"><div class="ico">💰</div><div class="l">Collect Payment</div><div class="s">₹'+(price-coll).toLocaleString('en-IN')+' to collect</div></button>';
-        btn+='<button class="act-btn" style="background:#fff;color:var(--accent2);border:1.5px solid var(--accent2);margin-top:8px" onclick="resumeInstall()"><div class="ico">➕</div><div class="l">Vehicle available — continue install</div><div class="s">Add remaining device(s) before payment</div></button>';
+        if(hasBalance){ btn+='<button class="act-btn" style="background:#fff;color:var(--accent2);border:1.5px solid var(--accent2);margin-top:8px" onclick="resumeInstall()"><div class="ico">➕</div><div class="l">Vehicle available — continue install</div><div class="s">Add remaining '+(qty-installedOk)+' device(s) before payment</div></button>'; }
         hint='✅ Device(s) installed &amp; access given — collect payment to finish. If a remaining vehicle is now available, tap "continue install" to add it to this task first.'; hintCls='hint-done';
         area.innerHTML='<div class="act-two"><button class="upd-btn" onclick="openUpdate()"><div class="ico">📞</div><div class="l">Update</div><div class="s">Call log &amp; next step</div></button>'+btn+'</div><div class="act-hint '+hintCls+'">'+hint+'</div>';
         return;
@@ -812,7 +816,7 @@
         // Installed + paid (non-cash or cash already deposited) → submit for approval
         btn='<button class="act-btn act-primary" id="loc-btn" onclick="submitForApproval()"><div class="ico">✅</div><div class="l">Submit Task</div><div class="s">Installed &amp; paid</div></button>';
         // Vehicle now available for a remaining device — allow continuing the balance on this same task.
-        btn+='<button class="act-btn" style="background:#fff;color:var(--accent2);border:1.5px solid var(--accent2);margin-top:8px" onclick="resumeInstall()"><div class="ico">➕</div><div class="l">Vehicle available — continue install</div><div class="s">Add remaining device(s) before submitting</div></button>';
+        if(hasBalance){ btn+='<button class="act-btn" style="background:#fff;color:var(--accent2);border:1.5px solid var(--accent2);margin-top:8px" onclick="resumeInstall()"><div class="ico">➕</div><div class="l">Vehicle available — continue install</div><div class="s">Add remaining '+(qty-installedOk)+' device(s) before submitting</div></button>'; }
         hint='✅ Installed &amp; payment collected — submit for approval. If a remaining vehicle is now available, tap "continue install" to add it to this task first, then collect the balance.'; hintCls='hint-done';
         area.innerHTML='<div class="act-two"><button class="upd-btn" onclick="openUpdate()"><div class="ico">📞</div><div class="l">Update</div><div class="s">Call log &amp; next step</div></button>'+btn+'</div><div class="act-hint '+hintCls+'">'+hint+'</div>';
         return;
@@ -1401,9 +1405,11 @@
   async function finishPartial(installedCount){
     const n = parseInt(installedCount)||0;
     if(n < 1){ toast('Install at least one device first'); return; }
-    if(!await cxConfirm({title:'Finish with '+n+' device(s)?', icon:'\U0001F4E6', message:'Use this when the remaining vehicle(s) are not available. The task will bill only the '+n+' installed device(s), and you can give access & collect payment now. This cannot be undone.', okText:'Finish'})) return;
+    const origQty=parseInt(_curTask.device_qty||1)||1;
+    if(!await cxConfirm({title:'Finish with '+n+' of '+origQty+' device(s)?', icon:'\U0001F4E6', message:'Use this when the remaining vehicle(s) are not available right now. You can give access & collect payment for the '+n+' installed device(s). The task keeps its original quantity ('+origQty+') so the remaining '+(origQty-n)+' device(s) can still be installed later on this same task.', okText:'Finish for now'})) return;
     toast('⏳ Updating…');
-    await apiPost('update_task',{id:_curTask.id,device_qty:n,remark:'🚗 Remaining vehicle(s) not available — task finished with '+n+' installed device(s). Quantity reduced to '+n+'.'}).catch(()=>({}));
+    // Keep the ORIGINAL device_qty intact; just flag it as partially finished so payment can proceed.
+    await apiPost('update_task',{id:_curTask.id,partial_finish:1,remark:'🚗 Remaining vehicle(s) not available — collected for '+n+' of '+origQty+' device(s). Balance '+(origQty-n)+' pending on same task.'}).catch(()=>({}));
     const res=await api('get_task',{id:taskId}); const t=res.task||res;
     if(t&&t.id){ _curTask=t; }
     closeInstall();
@@ -1416,20 +1422,19 @@
   // devices on the SAME task. Restores device_qty so the remaining device steps reappear.
   async function resumeInstall(){
     const installed=(_curTask.device_installs||[]).filter(d=>d&&d.gps_serial_no).length||0;
-    const curQty=parseInt(_curTask.device_qty||1)||1;
-    const suggested=Math.max(curQty, installed+1);
-    const ans=prompt('Vehicle now available — continue on the same task.\n\n'+installed+' device(s) already installed.\nHow many devices should this task have in TOTAL?', String(suggested));
-    if(ans===null) return;
-    const total=parseInt(ans);
-    if(!total || total<=installed){ toast('⚠️ Total must be more than the '+installed+' already installed'); return; }
-    toast('⏳ Updating…');
-    await apiPost('update_task',{id:_curTask.id,device_qty:total,remark:'🔧 Vehicle available — installation resumed on same task. Total devices set to '+total+' ('+installed+' already installed, '+(total-installed)+' remaining).'}).catch(()=>({}));
+    const origQty=parseInt(_curTask.device_qty||1)||1;
+    // Original quantity is preserved — resume only up to it, never beyond. Extra devices = new task.
+    if(installed>=origQty){ toast('✅ All '+origQty+' assigned device(s) are already installed. For extra devices, create a new task.'); return; }
+    const remaining=origQty-installed;
+    if(!await cxConfirm({title:'Continue installation?', icon:'\U0001F527', message:'This task was assigned '+origQty+' device(s). '+installed+' installed, '+remaining+' remaining. Continue installing the balance '+remaining+' device(s) on this same task now?', okText:'Continue'})) return;
+    toast('⏳ Reopening…');
+    // Clear the partial flag so the flow goes back to normal install for the balance devices.
+    await apiPost('update_task',{id:_curTask.id,partial_finish:0,remark:'🔧 Vehicle available — resuming balance '+remaining+' device(s) on same task ('+installed+'/'+origQty+' done).'}).catch(()=>({}));
     const res=await api('get_task',{id:taskId}); const t=res.task||res;
     if(t&&t.id){ _curTask=t; }
-    // Force the local qty in case the re-fetch is stale, so the stepper opens on the empty slot.
-    _curTask.device_qty=total;
-    toast('✅ Resumed — install the remaining '+(total-installed)+' device(s)');
-    openInstall(total);
+    _curTask.device_qty=origQty; _curTask.partial_finish=0;
+    toast('✅ Install the remaining '+remaining+' device(s)');
+    openInstall(origQty);
   }
 
 
