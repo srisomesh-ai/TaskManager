@@ -26,6 +26,17 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:var(--text)}
 .bs-pane.active{display:block}
 /* stats */
 .bs-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:14px}
+.cashp{background:#fff;border:1px solid #ffd9b3;border-left:4px solid #e07b00;border-radius:12px;padding:14px 16px;margin-bottom:14px}
+.cashp h3{margin:0 0 10px;font-size:14px;color:#b45309;display:flex;align-items:center;gap:8px}
+.cashp-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-top:1px solid #f2e4d4;flex-wrap:wrap}
+.cashp-row:first-of-type{border-top:none}
+.cashp-name{font-weight:700;color:#333;font-size:13px}
+.cashp-meta{font-size:11px;color:#8a6d4d}
+.cashp-amt{font-weight:800;color:#b45309;font-family:monospace;font-size:14px}
+.cashp-badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:#fee2e2;color:#b91c1c;margin-left:6px}
+.cashp-btn{background:linear-gradient(135deg,#e07b00,#f59e0b);color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+.cashp-btn:hover{opacity:.9}
+.cashp-btn.all{background:#b45309}
 .bs-stat{background:#fff;border-radius:8px;padding:12px;box-shadow:var(--shadow);text-align:center;border-top:3px solid var(--accent)}
 .bs-stat .v{font-size:17px;font-weight:900;line-height:1;margin-bottom:3px}
 .bs-stat .l{font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase}
@@ -119,6 +130,7 @@ tr:hover td{background:#f7f9fc}
 <!-- RECORDS -->
 <div class="bs-pane active" id="bspane-records">
   <div class="bs-stats" id="bs-stats"></div>
+  <div id="bs-cash-pending"></div>
   <div class="bs-toolbar">
     <div class="bs-tb-grp"><span class="bs-tb-lbl">Search</span>
       <input class="bs-tb-in" id="bs-search" placeholder="Name, task, serial…" oninput="renderTable()" style="min-width:160px">
@@ -463,6 +475,49 @@ async function loadEntries(){
   }
   allEntries = res.entries||[];
   renderTable();   // computes & renders stats from the filtered entries
+  loadCashPending();
+}
+
+// ── Cash pending deposit panel (per technician) ──
+async function loadCashPending(){
+  const box=document.getElementById('bs-cash-pending'); if(!box) return;
+  const escC=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const res=await bsApi('cash_pending_summary').catch(()=>({}));
+  if(!res||!res.success||!res.by_technician||!res.by_technician.length){ box.innerHTML=''; return; }
+  const lockDays=res.lock_days||4;
+  const rows=res.by_technician.sort((a,b)=>b.total-a.total).map(function(t){
+    const badge = t.overdue ? '<span class="cashp-badge">OVERDUE '+t.oldest_days+'d — LOCKED</span>'
+                            : (t.oldest_days>=lockDays-1 ? '<span class="cashp-badge" style="background:#fef3c7;color:#92400e">'+t.oldest_days+'d</span>' : '');
+    return '<div class="cashp-row">'
+      + '<div><div class="cashp-name">'+escC(t.tech_name||'Unknown')+badge+'</div>'
+      + '<div class="cashp-meta">'+t.count+' task(s) · oldest '+t.oldest_days+' day(s)</div></div>'
+      + '<div style="display:flex;align-items:center;gap:10px">'
+      + '<span class="cashp-amt">₹'+Number(t.total).toLocaleString('en-IN')+'</span>'
+      + '<button class="cashp-btn" onclick="remindCash('+t.tech_id+',this)">🔔 Remind</button>'
+      + '</div></div>';
+  }).join('');
+  const totalPending=res.by_technician.reduce((s,t)=>s+Number(t.total||0),0);
+  box.innerHTML='<div class="cashp"><h3>💰 Cash pending deposit with technicians — ₹'+totalPending.toLocaleString('en-IN')
+    +' <button class="cashp-btn all" style="margin-left:auto" onclick="remindAllCash(this)">🔔 Remind all</button></h3>'+rows+'</div>';
+}
+
+async function remindCash(techId, btn){
+  if(btn){ btn.disabled=true; btn.textContent='Sending…'; }
+  const res=await bsApi('remind_cash_deposit',{},'POST',{tech_id:techId}).catch(()=>({}));
+  if(res&&res.success){
+    if(res.whatsapp&&res.whatsapp.length){ window.open(res.whatsapp[0].url,'_blank'); }
+    toast('✅ Reminder sent'+(res.push_sent?' (push + WhatsApp)':' (WhatsApp)'));
+    if(btn){ btn.textContent='✓ Reminded'; }
+  } else { toast('❌ '+((res&&res.error)||'Failed')); if(btn){ btn.disabled=false; btn.textContent='🔔 Remind'; } }
+}
+
+async function remindAllCash(btn){
+  const res=await bsApi('cash_pending_summary').catch(()=>({}));
+  if(!res||!res.by_technician) return;
+  if(btn){ btn.disabled=true; btn.textContent='Sending…'; }
+  for(const t of res.by_technician){ await bsApi('remind_cash_deposit',{},'POST',{tech_id:t.tech_id}).catch(()=>({})); }
+  toast('✅ Reminders sent to '+res.by_technician.length+' technician(s)');
+  if(btn){ btn.textContent='✓ All reminded'; }
 }
 
 function computeStats(entries){
