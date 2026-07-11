@@ -239,7 +239,7 @@ function renderExp(){
     <td style="font-size:11px;color:var(--text3)">${esc(e.created_by_code||'–')}</td>
     <td>
       <button class="act-btn" title="Edit" onclick="editExpense(${e.id})">✏️</button>
-      <button class="act-btn" title="Delete" onclick="delExpense(${e.id})">🗑️</button>
+      ${EXP_ROLE==='admin'?`<button class="act-btn" title="Delete" onclick="delExpense(${e.id})">🗑️</button>`:''}
     </td>
   </tr>`).join('');
 }
@@ -291,6 +291,8 @@ function delExpense(id){
 }
 
 // init
+let EXP_ROLE = null;
+expApi('me').then(r=>{ EXP_ROLE = (r && r.user && r.user.role) ? r.user.role : null; renderExp(); }).catch(()=>{});
 setToday();
 loadExpenses();
 </script>
