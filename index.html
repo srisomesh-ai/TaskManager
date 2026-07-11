@@ -6737,7 +6737,8 @@ function rnwRenderDevices(){
     const reg = (d.reg||'').trim();
     const regCell = reg ? ('<span style="font-family:monospace">'+escHtml(reg)+'</span>') : '<span style="color:var(--text3)">—</span>';
     // Server clean label (name, not URL)
-    const srvName = d.server_label || _RNW_SRV[d.server_id] || ('S'+d.server_id);
+    // Server column: show the server NUMBER (S1 / S2 / S3), not the URL or name.
+    const srvName = d.server_tag || ('S'+d.server_id);
     // WhatsApp uses the SIM phone number
     const phone = (d.phone||'').replace(/[^0-9]/g,'');
     const waBtn = phone
