@@ -1305,10 +1305,15 @@
     const name=(g('iname')||'').trim(), plate=(g('iplate')||'').trim().toUpperCase(), vtype=g('ivtype');
     const owner=(g('iowner')||'').trim(), inst=g('iinst'), exp=g('iexp'), notes=(g('inotes')||'').trim(), iconId=g('iiconid');
     if(!plate){ toast('Vehicle number / plate is required.'); return; }
-    if(!/^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}$/.test(plate)){ toast('Vehicle number must be AB01CD1234 (2 letters, 2 digits, 2 letters, 4 digits).'); return; }
+    // Accept real-world Indian plate formats (state series can be 1-3 letters, district 1-2 digits,
+    // series 0-3 letters, number 1-4 digits) plus BH-series. Only block obviously-empty/junk values.
+    const plateOk = /^[A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{1,4}$/.test(plate)   // standard AP39US1187, AP31A1234, TS09EA1234
+                 || /^[0-9]{2}BH[0-9]{4}[A-Z]{1,2}$/.test(plate)             // BH-series 22BH1234AA
+                 || /^[A-Z0-9]{6,12}$/.test(plate);                          // fallback: any 6-12 alphanumeric
+    if(!plateOk){ toast('Please enter a valid vehicle number (e.g. AP39US1187).'); return; }
     if(!name){ toast('Name on server is required.'); return; }
     if(!inst){ toast('Installation date is required.'); return; }
-    if(!iconId){ toast('Please select a vehicle icon.'); return; }
+    // Vehicle icon is preferred but must NOT block the push if the icon list failed to load.
     const serverNames=['','Server 1 — bharatgps.com','Server 2 — bharatgps.in','Server 3 — bharatgps.school','Server 4 — bharatgps.org'];
     const row=(k,v)=>'<tr><td style="color:var(--text3);padding:3px 0;width:42%">'+k+'</td><td style="font-weight:700">'+esc(v)+'</td></tr>';
     const rev=document.getElementById('ireview-'+idx);
@@ -1346,7 +1351,8 @@
     const g=id=>document.getElementById(id+'-'+idx)?.value;
     const serverId=g('iserverid'),deviceId=g('ideviceid'),imei=g('iimeih');
     const name=(g('iname')||'').trim(), plate=(g('iplate')||'').trim().toUpperCase(), vtype=g('ivtype');
-    const owner=(g('iowner')||'').trim(), reg=(g('ireg')||'').trim(), inst=g('iinst'), exp=g('iexp'), notes=(g('inotes')||'').trim(), iconId=g('iiconid');
+    const owner=(g('iowner')||'').trim(), reg=(g('ireg')||'').trim(), inst=g('iinst'), exp=g('iexp'), notes=(g('inotes')||'').trim();
+    let iconId=g('iiconid'); if(!iconId){ iconId='1'; }   // fallback to default icon if list failed / none picked
     const btn=document.getElementById('iconfirm-'+idx); if(btn){btn.textContent='Pushing…';btn.disabled=true;}
     try{
       const fd=new FormData();
