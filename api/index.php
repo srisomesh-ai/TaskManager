@@ -324,6 +324,11 @@ function _bsSyncInstalls($pdo, $cuName){
         $billQty   = $installedCount;
         $billTotal = round($unit2*$billQty, 2);
         $recv2     = floatval($t2['amount_collected']??0); if($recv2>$billTotal)$recv2=$billTotal;
+        // CASH is only truly RECEIVED once the technician has deposited it and admin confirmed
+        // (cash_deposit_status='deposited'). While pending/submitted, the cash is still with the
+        // technician, so the balance sheet must show it as PENDING, not received.
+        $isCash2 = strtolower((string)($t2['payment_mode']??''))==='cash';
+        if ($isCash2 && ($t2['cash_deposit_status']??'') !== 'deposited') { $recv2 = 0; }
         $pend2     = max(0, $billTotal-$recv2);
         $pStatus   = ($recv2>=$billTotal && $billTotal>0) ? 'paid' : ($recv2>0 ? 'partially_paid' : 'pending');
         $profile2  = !empty($t2['profile']) ? $t2['profile'] : 'BGPT';
@@ -1661,6 +1666,9 @@ case 'save_device_install':
                 // Payment received stays as recorded on the task; pending is only on installed amount
                 $recv2 = floatval($t2['amount_collected']??0);
                 if ($recv2 > $billTotal) $recv2 = $billTotal; // never show received above billed-so-far
+                // CASH counts as received only after it is deposited & confirmed (cash_deposit_status='deposited').
+                // While the cash is still with the technician, the balance sheet shows it as pending.
+                if (strtolower((string)($t2['payment_mode']??''))==='cash' && ($t2['cash_deposit_status']??'') !== 'deposited') { $recv2 = 0; }
                 $pend2 = max(0, $billTotal - $recv2);
                 $pStatus = ($recv2 >= $billTotal && $billTotal > 0) ? 'paid' : ($recv2>0 ? 'partially_paid' : 'pending');
 
