@@ -1154,7 +1154,7 @@ case 'update_task':
                         'pending_amount'=>$amt,
                         'pending_tasks'=>$cnt,
                         'oldest_days'=>$days,
-                        'message'=>'🔒 Blocked: you have ₹'.number_format($amt).' cash pending deposit for '.$days.' days. Deposit it to unlock your tasks. Coins are being deducted every 6 hours until you deposit.'
+                        'message'=>'🔒 Tasks locked — please deposit your pending cash. ₹'.number_format($amt).' pending for '.$days.' days. Deposit it and your tasks unlock automatically.'."\n".'🔒 మీ టాస్క్‌లు లాక్ అయ్యాయి — దయచేసి మీ దగ్గర ఉన్న క్యాష్ డిపాజిట్ చేయండి. ₹'.number_format($amt).', '.$days.' రోజులుగా పెండింగ్‌లో ఉంది. డిపాజిట్ చేయగానే మీ టాస్క్‌లు ఆటోమేటిక్‌గా అన్‌లాక్ అవుతాయి.'
                     ]);
                     break;
                 }
@@ -3197,7 +3197,7 @@ case 'my_cash_lock_status':
             'pending_days'=>$days,
             'pending_amount'=>$amt,
             'coins'=>coin_balance($pdo,$me2),
-            'message'=>$locked ? ('🔒 Your tasks are locked. ₹'.number_format($amt).' cash is pending deposit for '.$days.' days. Deposit now to unlock — coins are being deducted every 6 hours until you do.') : ''
+            'message'=>$locked ? ('🔒 Tasks locked — please deposit your pending cash. ₹'.number_format($amt).' pending for '.$days.' days. Deposit it and your tasks unlock automatically.'."\n".'🔒 మీ టాస్క్‌లు లాక్ అయ్యాయి — దయచేసి మీ దగ్గర ఉన్న క్యాష్ డిపాజిట్ చేయండి. ₹'.number_format($amt).', '.$days.' రోజులుగా పెండింగ్‌లో ఉంది. డిపాజిట్ చేయగానే మీ టాస్క్‌లు ఆటోమేటిక్‌గా అన్‌లాక్ అవుతాయి.') : ''
         ]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
