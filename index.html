@@ -87,7 +87,7 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
 /* CONTENT */
 .content{flex:1;height:100%;overflow:auto;background:var(--bg)}
 .page{display:none;padding:22px 24px}
-.page.active{display:block}#page-balance-sheet.active{display:flex}#page-admin.active{display:flex}#page-blacklist.active{display:flex}
+.page.active{display:block}#page-balance-sheet.active{display:flex}#page-expenses.active{display:flex}#page-admin.active{display:flex}#page-blacklist.active{display:flex}
 
 /* PAGE HEADER */
 .pg-header{margin-bottom:20px}
@@ -408,6 +408,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
       <div class="nav-sec">Reports</div>
       <div class="nav-item admin-only" id="nav-daily-report" onclick="showPage('daily-report')"><span class="nav-icon">📅</span> Daily Report</div>
       <div class="nav-item admin-only" id="nav-balance-sheet" onclick="showPage('balance-sheet')"><span class="nav-icon">💰</span> Balance Sheet</div>
+      <div class="nav-item admin-only" id="nav-expenses" onclick="showPage('expenses')"><span class="nav-icon">💸</span> Expenses</div>
       <div class="nav-sec">Accounts</div>
       <div class="nav-item admin-only" id="nav-accounts" onclick="showPage('accounts')"><span class="nav-icon">📈</span> P&L Overview</div>
       <div class="nav-item admin-only" id="nav-invoicing" onclick="showPage('invoicing')"><span class="nav-icon">🧾</span> Invoicing</div>
@@ -1257,6 +1258,12 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
         </iframe>
       </div>
 
+      <div class="page" id="page-expenses" style="padding:0;flex-direction:column">
+        <iframe id="exp-iframe" src="about:blank"
+          style="flex:1;width:100%;border:none;min-height:calc(100vh - 120px)">
+        </iframe>
+      </div>
+
       <div class="page" id="page-accounts">
         <div class="pg-header"><div class="breadcrumb">Home / <b>P&L Overview</b></div><div class="pg-title">📈 P&L Overview</div></div>
         <div class="card"><div style="padding:40px;text-align:center;color:var(--text3)">Coming soon</div></div>
@@ -1943,6 +1950,7 @@ function showPage(name, opts={}){
     renewals:        loadRenewalsPage,
     'daily-report':  loadDailyReport,
     'balance-sheet': syncBsAuth,
+    'expenses':      syncExpAuth,
     'admin':         syncAdminAuth,
     'blacklist':     syncBlacklistAuth,
      'price-list':    syncPlAuth,
@@ -7029,6 +7037,16 @@ function syncBsAuth(){
   // Load the iframe only once. Re-setting src on every visit reloads the whole
   // page and causes a blank flash. If the token changed, reload; otherwise leave it.
   const wantSrc = 'balance-sheet.html?token=' + encodeURIComponent(authToken||'');
+  if(iframe.dataset.loadedToken !== (authToken||'')){
+    iframe.src = wantSrc;
+    iframe.dataset.loadedToken = (authToken||'');
+  }
+}
+
+function syncExpAuth(){
+  const iframe = document.getElementById('exp-iframe');
+  if(!iframe) return;
+  const wantSrc = 'expenses.html?token=' + encodeURIComponent(authToken||'');
   if(iframe.dataset.loadedToken !== (authToken||'')){
     iframe.src = wantSrc;
     iframe.dataset.loadedToken = (authToken||'');
