@@ -4701,6 +4701,67 @@ case 'renewal_approve':
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
+case 'daily_report_data':
+    // Admin/manager: structured data for the end-of-day WhatsApp report.
+    // Installations & services CLOSED today, grouped by technician and job type, plus today's re-addings.
+    try {
+        if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+        $date = $_GET['date'] ?? date('Y-m-d');
+        // Closed-today tasks with their technician + device details
+        $rows = $pdo->prepare("SELECT t.id, t.task_id, t.device_details, t.customer_name, t.vehicle_number,
+                    u.name AS tech_name
+                FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id
+                WHERE t.task_status='Closed' AND DATE(t.closed_at)=?
+                ORDER BY u.name, t.id");
+        $rows->execute([$date]);
+        $tasks = $rows->fetchAll(PDO::FETCH_ASSOC);
+
+        // For each closed task, pull its installed device name(s) + server from task_device_installs
+        $out = [];
+        foreach($tasks as $t){
+            $names = []; $servers = [];
+            try {
+                $di = $pdo->prepare("SELECT name_on_server, server_name FROM task_device_installs WHERE task_id=? AND gps_serial_no IS NOT NULL AND gps_serial_no<>'' ORDER BY device_index ASC");
+                $di->execute([$t['id']]);
+                foreach($di->fetchAll(PDO::FETCH_ASSOC) as $d){
+                    if(trim($d['name_on_server']??'')!=='') $names[] = trim($d['name_on_server']);
+                    if(trim($d['server_name']??'')!=='') $servers[] = trim($d['server_name']);
+                }
+            } catch(Exception $e){}
+            $nameOnServer = $names ? implode(', ', $names) : ($t['vehicle_number'] ?: $t['customer_name'] ?: '—');
+            $server = $servers ? $servers[0] : '';
+            // Classify job type from device_details
+            $jd = strtolower(trim($t['device_details'] ?? ''));
+            if(strpos($jd,'troubleshoot')!==false || strpos($jd,'offline')!==false)      $cat='Troubleshoot';
+            elseif(strpos($jd,'vehicle change')!==false || strpos($jd,'v2v')!==false || strpos($jd,'vehicle to vehicle')!==false) $cat='Vehicle Change';
+            elseif(strpos($jd,'re-add')!==false || strpos($jd,'readd')!==false || strpos($jd,'re add')!==false) $cat='Re-adding';
+            elseif(strpos($jd,'remove')!==false)   $cat='Removal';
+            elseif(strpos($jd,'demo')!==false)     $cat='Demo';
+            else                                    $cat='Sales';
+            // "Service" label shown per line (the device_details text, cleaned)
+            $service = trim($t['device_details'] ?? '') ?: 'Installation';
+            $out[] = [
+                'tech'    => $t['tech_name'] ?: 'Unassigned',
+                'category'=> $cat,
+                'name'    => $nameOnServer,
+                'server'  => $server,
+                'service' => $service,
+            ];
+        }
+
+        // Today's approved re-addings (separate list)
+        $readds = [];
+        try {
+            _readdingEnsureTable($pdo);
+            $rr = $pdo->prepare("SELECT r.name, u.name AS tech_name FROM readding_requests r LEFT JOIN users u ON r.requested_by=u.id WHERE r.status='approved' AND DATE(r.approved_at)=? ORDER BY u.name");
+            $rr->execute([$date]);
+            $readds = $rr->fetchAll(PDO::FETCH_ASSOC);
+        } catch(Exception $e){}
+
+        echo json_encode(['success'=>true,'date'=>$date,'items'=>$out,'readds'=>$readds]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'renewal_backfill_names':
     // Admin: rewrite name_on_server of already-approved renewal balance-sheet entries to
     // "Device name - Vehicle number" (server identification) instead of the customer name.
