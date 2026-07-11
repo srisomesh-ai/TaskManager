@@ -486,19 +486,17 @@ async function loadCashPending(){
   if(!res||!res.success||!res.by_technician||!res.by_technician.length){ box.innerHTML=''; return; }
   const lockDays=res.lock_days||4;
   const rows=res.by_technician.sort((a,b)=>b.total-a.total).map(function(t){
-    const badge = t.overdue ? '<span class="cashp-badge">OVERDUE '+t.oldest_days+'d — LOCKED</span>'
+    const badge = t.overdue ? '<span class="cashp-badge">OVERDUE '+t.oldest_days+'d</span>'
                             : (t.oldest_days>=lockDays-1 ? '<span class="cashp-badge" style="background:#fef3c7;color:#92400e">'+t.oldest_days+'d</span>' : '');
     return '<div class="cashp-row">'
       + '<div><div class="cashp-name">'+escC(t.tech_name||'Unknown')+badge+'</div>'
-      + '<div class="cashp-meta">'+t.count+' task(s) · oldest '+t.oldest_days+' day(s)</div></div>'
-      + '<div style="display:flex;align-items:center;gap:10px">'
+      + '<div class="cashp-meta">'+t.count+' entry(s) · oldest '+t.oldest_days+' day(s)</div></div>'
       + '<span class="cashp-amt">₹'+Number(t.total).toLocaleString('en-IN')+'</span>'
-      + '<button class="cashp-btn" onclick="remindCash('+t.tech_id+',this)">🔔 Remind</button>'
-      + '</div></div>';
+      + '</div>';
   }).join('');
   const totalPending=res.by_technician.reduce((s,t)=>s+Number(t.total||0),0);
   box.innerHTML='<div class="cashp"><h3>💰 Cash pending deposit with technicians — ₹'+totalPending.toLocaleString('en-IN')
-    +' <button class="cashp-btn all" style="margin-left:auto" onclick="remindAllCash(this)">🔔 Remind all</button></h3>'+rows+'</div>';
+    +'</h3><div style="font-size:11px;color:#8a6d4d;margin-bottom:4px">Use the 🔔 button on a pending row below to remind that technician.</div>'+rows+'</div>';
 }
 
 async function remindCash(techId, btn){
@@ -518,6 +516,19 @@ async function remindAllCash(btn){
   for(const t of res.by_technician){ await bsApi('remind_cash_deposit',{},'POST',{tech_id:t.tech_id}).catch(()=>({})); }
   toast('✅ Reminders sent to '+res.by_technician.length+' technician(s)');
   if(btn){ btn.textContent='✓ All reminded'; }
+}
+
+// Remind the technician linked to a specific balance-sheet row
+async function remindEntry(entryId, btn){
+  const e=allEntries.find(x=>+x.id===+entryId);
+  if(!e || !e.technician_id){ toast('⚠️ Link a technician to this entry first (Edit)'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='⏳'; }
+  const res=await bsApi('remind_cash_deposit',{},'POST',{tech_id:e.technician_id}).catch(()=>({}));
+  if(res&&res.success){
+    if(res.whatsapp&&res.whatsapp.length){ window.open(res.whatsapp[0].url,'_blank'); }
+    toast('✅ Reminder sent'+(res.push_sent?' (push + WhatsApp)':' (WhatsApp)'));
+    if(btn){ btn.textContent='✓'; }
+  } else { toast('❌ '+((res&&res.error)||'Failed')); if(btn){ btn.disabled=false; btn.textContent='🔔'; } }
 }
 
 function computeStats(entries){
@@ -652,6 +663,7 @@ function renderTable(){
         <button class="act-btn" onclick="editEntry(${e.id})" title="Edit">✏️</button>
         ${isAdmin?`<button class="act-btn" onclick="delEntry(${e.id})" title="Delete">🗑️</button>`:''}
         <button class="act-btn" onclick="waEntry(${e.id})" title="WhatsApp">📱</button>
+        ${((+e.pending_payment||0)>0 && e.technician_id)?`<button class="act-btn" onclick="remindEntry(${e.id},this)" title="Remind technician to deposit">🔔</button>`:''}
       </td>
     </tr>`;
   }).join('');
