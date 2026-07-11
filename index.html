@@ -6888,11 +6888,16 @@ function renderRenewalRequests(){
     const st=r.status||'pending';
     let action='';
     if(st==='pending'){
+      const shotBtn = r.payment_screenshot
+        ? '<button class="ra-btn" style="background:#e8f0fb;color:#1a56a0;border:1px solid #1a56a0" onclick="viewRenewalShot('+r.id+')">📸 View payment</button>'
+        : '<span class="ra-pill" style="background:#fef3c7;color:#92600a">📸 No screenshot</span>';
       if(canApprove){
-        action='<div style="display:flex;gap:8px"><button class="ra-btn ra-approve" onclick="approveRenewal('+r.id+',this)">✅ Approve</button>'
+        action='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+shotBtn
+             + '<button class="ra-btn ra-approve" onclick="approveRenewal('+r.id+',this)">✅ Approve</button>'
              + '<button class="ra-btn ra-reject" onclick="rejectRenewal('+r.id+',this)">✖ Reject</button></div>';
       } else {
-        action='<span class="ra-pill" style="background:#fef3c7;color:#92600a">⏳ Pending admin approval</span>';
+        action='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+shotBtn
+             + '<span class="ra-pill" style="background:#fef3c7;color:#92600a">⏳ Pending admin approval</span></div>';
       }
     } else if(st==='approved'){
       action='<div><span class="ra-pill ok">✅ Approved</span><div style="font-size:11px;color:var(--text3);margin-top:3px">by '+escHtml(r.approved_by||'—')+'</div></div>';
@@ -6909,6 +6914,39 @@ function renderRenewalRequests(){
       + '<td style="padding:9px 12px">'+action+'</td>'
     + '</tr>';
   }).join('');
+}
+function viewRenewalShot(id){
+  const r=_rnwRequests.find(function(x){ return String(x.id)===String(id); });
+  if(!r) return;
+  if(!r.payment_screenshot){ showToast('No screenshot attached'); return; }
+  const url='https://salmon-goldfish-110661.hostingersite.com/'+r.payment_screenshot;
+  const amt=parseFloat(r.amount||0);
+  let ov=document.getElementById('rnw-shot-ov');
+  if(!ov){
+    ov=document.createElement('div');
+    ov.id='rnw-shot-ov';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML='<div style="background:#fff;border-radius:14px;max-width:480px;width:100%;max-height:90vh;overflow:auto;padding:18px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+    +   '<div style="font-size:15px;font-weight:800">📸 Payment Screenshot</div>'
+    +   '<button onclick="document.getElementById(\'rnw-shot-ov\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888">×</button>'
+    + '</div>'
+    + '<div style="background:#e8f0fb;border:1.5px solid #1a56a0;border-radius:9px;padding:10px 14px;margin-bottom:12px;text-align:center">'
+    +   '<div style="font-size:11px;color:#555;font-weight:700">RENEWAL AMOUNT TO VERIFY</div>'
+    +   '<div style="font-size:24px;font-weight:900;color:#1a56a0">'+(amt>0?('₹'+amt.toLocaleString('en-IN')):'—')+'</div>'
+    +   '<div style="font-size:11px;color:#666;margin-top:2px">'+escHtml(r.device_name||'')+' · '+escHtml(r.label||'')+'</div>'
+    + '</div>'
+    + '<div style="font-size:12px;color:#c0392b;font-weight:700;margin-bottom:8px;text-align:center">⚠️ Check the paid amount matches before approving</div>'
+    + '<a href="'+url+'" target="_blank"><img src="'+url+'" style="width:100%;border-radius:10px;border:1px solid #ddd" onerror="this.style.display=\'none\';this.nextSibling.style.display=\'block\'"></a>'
+    + '<div style="display:none;padding:20px;text-align:center;color:#888;font-size:13px">Could not load image. <a href="'+url+'" target="_blank">Open in new tab</a></div>'
+    + '<div style="margin-top:12px;display:flex;gap:8px">'
+    +   '<button class="ra-btn ra-approve" style="flex:1" onclick="document.getElementById(\'rnw-shot-ov\').remove();approveRenewal('+r.id+',null)">✅ Amount OK — Approve</button>'
+    +   '<button class="ra-btn ra-reject" style="flex:1" onclick="document.getElementById(\'rnw-shot-ov\').remove();rejectRenewal('+r.id+',null)">✖ Reject</button>'
+    + '</div>'
+    + '</div>';
 }
 async function approveRenewal(id, btn){
   const r=_rnwRequests.find(function(x){ return String(x.id)===String(id); });
