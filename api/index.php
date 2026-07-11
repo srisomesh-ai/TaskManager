@@ -327,6 +327,68 @@ function coin_balance($pdo, $userId){
     catch(Exception $e){ return 0; }
 }
 
+// ── Block-time tracking (for payroll absent calculation) ───────────────────────
+// When a technician crosses into the blocked state (cash > 4 days overdue) we stamp the exact
+// time the block STARTED (today onward — never backdated). When they deposit, the period closes.
+// Accumulated blocked minutes are summed; every full 24h (1440 min) = 1 absent day.
+function _ensureBlockLog($pdo){
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS tech_block_log (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            blocked_at DATETIME NOT NULL,
+            unblocked_at DATETIME NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_user (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch(Exception $e){}
+}
+
+// Is this technician currently blocked? (cash > 4 days overdue with a real pending amount)
+function is_tech_blocked($pdo, $techId){
+    if(!$techId) return false;
+    $days = cash_oldest_pending_days($pdo, $techId);
+    if($days <= 4) return false;
+    $amt = 0.0;
+    try { $r=$pdo->prepare("SELECT COALESCE(SUM(amount_collected),0) FROM tasks WHERE assigned_to=? AND LOWER(payment_mode)='cash' AND cash_deposit_status='pending' AND COALESCE(amount_collected,0)>0"); $r->execute([$techId]); $amt+=floatval($r->fetchColumn()); } catch(Exception $e){}
+    try { $r2=$pdo->prepare("SELECT COALESCE(SUM(pending_payment),0) FROM balance_sheet_entries WHERE technician_id=? AND COALESCE(pending_payment,0)>0 AND (task_db_id IS NULL OR task_db_id=0)"); $r2->execute([$techId]); $amt+=floatval($r2->fetchColumn()); } catch(Exception $e){}
+    return ($amt > 0);
+}
+
+// Open a block period when blocked, close it when unblocked. Stamps start time NOW (not backdated).
+function sync_block_log($pdo, $techId){
+    if(!$techId) return;
+    _ensureBlockLog($pdo);
+    try {
+        $open = $pdo->prepare("SELECT id FROM tech_block_log WHERE user_id=? AND unblocked_at IS NULL ORDER BY id DESC LIMIT 1");
+        $open->execute([$techId]); $openId = $open->fetchColumn();
+        $blocked = is_tech_blocked($pdo, $techId);
+        if($blocked && !$openId){
+            $pdo->prepare("INSERT INTO tech_block_log (user_id, blocked_at) VALUES (?, NOW())")->execute([$techId]);
+        } elseif(!$blocked && $openId){
+            $pdo->prepare("UPDATE tech_block_log SET unblocked_at=NOW() WHERE id=?")->execute([intval($openId)]);
+        }
+    } catch(Exception $e){ error_log('sync_block_log: '.$e->getMessage()); }
+}
+
+// Total accumulated blocked minutes (closed periods + any currently-open one).
+function tech_block_minutes($pdo, $techId){
+    if(!$techId) return ['minutes'=>0,'blocked_now'=>false,'started_at'=>null];
+    _ensureBlockLog($pdo);
+    try {
+        $c = $pdo->prepare("SELECT COALESCE(SUM(TIMESTAMPDIFF(MINUTE, blocked_at, unblocked_at)),0) FROM tech_block_log WHERE user_id=? AND unblocked_at IS NOT NULL");
+        $c->execute([$techId]); $mins = intval($c->fetchColumn());
+        $o = $pdo->prepare("SELECT blocked_at FROM tech_block_log WHERE user_id=? AND unblocked_at IS NULL ORDER BY id DESC LIMIT 1");
+        $o->execute([$techId]); $startedAt = $o->fetchColumn();
+        $blockedNow = false;
+        if($startedAt){
+            $blockedNow = true;
+            $mins += max(0, (int)floor((time()-strtotime($startedAt))/60));
+        }
+        return ['minutes'=>$mins, 'blocked_now'=>$blockedNow, 'started_at'=>$startedAt?:null];
+    } catch(Exception $e){ return ['minutes'=>0,'blocked_now'=>false,'started_at'=>null]; }
+}
+
 // Count DAYTIME hours (08:00–20:00) elapsed between two unix timestamps. Overnight time is paused.
 function daytime_hours_between($fromTs, $toTs){
     if($toTs <= $fromTs) return 0;
@@ -1532,6 +1594,10 @@ case 'get_daily_report':
         $techPerf = [];
         foreach($techs as $tech){
             $tid = $tech['id'];
+            // Keep the block log in sync (opens/closes a block period based on current overdue state).
+            try { sync_block_log($pdo, $tid); } catch(Exception $e){}
+            $blk = tech_block_minutes($pdo, $tid);
+            $bMin = intval($blk['minutes']);
             $techPerf[] = [
                 'id'        => $tid,
                 'name'      => $tech['name'],
@@ -1543,6 +1609,13 @@ case 'get_daily_report':
                 'collected'    => floatval($q($pdo,"SELECT COALESCE(SUM(t.amount_collected),0) FROM tasks t WHERE t.assigned_to=? AND DATE(t.closed_at)=? AND t.amount_collected>0",[$tid,$date])->fetchColumn()),
                 // Cash holding = tech collected but task NOT yet closed (pending with tech)
                 'cash_holding' => floatval($q($pdo,"SELECT COALESCE(SUM(t.amount_collected),0) FROM tasks t WHERE t.assigned_to=? AND t.task_status NOT IN ('Closed','Cancelled') AND t.amount_collected>0",[$tid])->fetchColumn()),
+                // Block info for payroll: minutes blocked, whether blocked now, when it started, absent days
+                'blocked_now'    => $blk['blocked_now'] ? 1 : 0,
+                'block_started'  => $blk['started_at'],
+                'block_minutes'  => $bMin,
+                'block_hours'    => intval(floor(($bMin % 1440) / 60)),
+                'block_mins_only'=> intval($bMin % 60),
+                'block_days'     => intval(floor($bMin / 1440)),
             ];
         }
 
