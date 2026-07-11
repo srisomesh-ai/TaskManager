@@ -4708,19 +4708,23 @@ case 'renewal_backfill_names':
         if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Only admin']); break; }
         _renewalEnsureTable($pdo);
         $rows = $pdo->query("SELECT id, device_name, plate, owner, bs_entry_id FROM renewal_requests WHERE status='approved' AND bs_entry_id IS NOT NULL AND bs_entry_id>0")->fetchAll();
-        $updated = 0;
+        $updated = 0; $skipped = 0; $sample = [];
         foreach($rows as $rr){
             $dev = trim($rr['device_name'] ?? '');
             $plate = trim($rr['plate'] ?? '');
             // Name on server = EXACT device (object) name from the server. Fallback to plate only if empty.
             if($dev !== ''){ $newName = $dev; }
             elseif($plate !== '' && $plate !== '—'){ $newName = $plate; }
-            else { continue; }
+            else { $skipped++; continue; }
+            // Read the current bs name for the diagnostic sample
+            $curName = '';
+            try { $cs=$pdo->prepare("SELECT name_on_server FROM balance_sheet_entries WHERE id=?"); $cs->execute([intval($rr['bs_entry_id'])]); $curName=(string)$cs->fetchColumn(); } catch(Exception $e){}
             $up = $pdo->prepare("UPDATE balance_sheet_entries SET name_on_server=?, updated_at=NOW() WHERE id=? AND type='license'");
             $up->execute([$newName, intval($rr['bs_entry_id'])]);
             if($up->rowCount() > 0) $updated++;
+            if(count($sample) < 8){ $sample[] = ['bs_id'=>intval($rr['bs_entry_id']),'was'=>$curName,'now'=>$newName,'owner'=>trim($rr['owner']??'')]; }
         }
-        echo json_encode(['success'=>true,'updated'=>$updated,'checked'=>count($rows)]);
+        echo json_encode(['success'=>true,'updated'=>$updated,'skipped'=>$skipped,'checked'=>count($rows),'sample'=>$sample]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
