@@ -389,7 +389,9 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
     </div>
     <div class="tb-avatar" id="tb-avatar">?</div>
     <button class="tb-btn admin-only" onclick="openQuickTask()">⚡ Quick Task</button>
-    <button class="tb-btn admin-only" onclick="openDailyReport()">📋 Daily Report</button>
+    <button class="tb-btn admin-only" onclick="openDailyReport()">📋 Manager Report</button>
+    <button class="tb-btn admin-only" onclick="openAssignmentReport()">📞 Assignment</button>
+    <button class="tb-btn admin-only" onclick="openLicenseReport()">🔄 License Report</button>
     <button class="tb-btn" onclick="doLogout()">↩ Logout</button>
   </div>
 
@@ -7538,6 +7540,17 @@ function buildDailyReportText(res){
     readds.forEach(function(r){ lines.push('* '+(r.name||'—')); });
     lines.push('');
   }
+  // Licenses done today (flat list)
+  const lic=res.licenses||[];
+  if(lic.length){
+    lines.push('License ('+lic.length+'):');
+    lic.forEach(function(l){
+      let parts=[l.name];
+      if(l.server) parts.push(l.server);
+      lines.push('* '+parts.join(', '));
+    });
+    lines.push('');
+  }
   lines.push('Attendance');
   lines.push('');
   lines.push('Half Day:');
@@ -7555,6 +7568,77 @@ function copyDailyReport(){
 function sendDailyReportWhatsApp(){
   const ta=document.getElementById('dr-text'); if(!ta) return;
   window.open('https://wa.me/?text='+encodeURIComponent(ta.value),'_blank');
+}
+
+// Generic report modal (shared by Assignment & License reports)
+function _showReportModal(title, text){
+  let ov=document.getElementById('dr-ov');
+  if(!ov){
+    ov=document.createElement('div');
+    ov.id='dr-ov';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML='<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:90vh;overflow:auto;padding:18px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+    +   '<div style="font-size:16px;font-weight:800">'+escHtml(title)+'</div>'
+    +   '<button onclick="document.getElementById(\'dr-ov\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888">×</button>'
+    + '</div>'
+    + '<textarea id="dr-text" style="width:100%;min-height:300px;font-family:monospace;font-size:12px;padding:10px;border:1.5px solid #ddd;border-radius:8px" spellcheck="false"></textarea>'
+    + '<div style="font-size:11px;color:#888;margin:8px 0">Edit the text (e.g. fill in calls) before sending.</div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    +   '<button class="ts-btn" style="background:#25D366;color:#fff;flex:1;min-width:150px" onclick="sendDailyReportWhatsApp()">📱 Send to WhatsApp</button>'
+    +   '<button class="ts-btn" style="background:var(--surface2);border:1.5px solid var(--border);flex:1;min-width:120px" onclick="copyDailyReport()">📋 Copy</button>'
+    + '</div>';
+  document.getElementById('dr-text').value=text;
+}
+
+// ── Assignment Report: tasks created today + manual calls received ──
+async function openAssignmentReport(){
+  _showReportModal('📞 Assignment Report','⏳ Loading…');
+  const res=await api('daily_report_data',{});
+  if(!res || !res.success){ const t=document.getElementById('dr-text'); if(t) t.value=(res&&res.error)||'Failed to load'; return; }
+  const d=res.date?res.date.split('-'):null;
+  const shownDate=d?(d[2]+'/'+d[1]+'/'+d[0]):'';
+  let lines=[];
+  lines.push('Assignment Report ('+shownDate+')');
+  lines.push('');
+  lines.push('Tasks Created: '+(res.created_count||0));
+  lines.push('');
+  (res.created_list||[]).forEach(function(c){
+    let parts=[];
+    if(c.task_id) parts.push(c.task_id);
+    if(c.name) parts.push(c.name);
+    if(c.service) parts.push(c.service);
+    lines.push('* '+parts.join(' — '));
+  });
+  lines.push('');
+  lines.push('Calls Received: ');
+  document.getElementById('dr-text').value=lines.join('\n');
+}
+
+// ── License Report: licenses done today + manual calls made ──
+async function openLicenseReport(){
+  _showReportModal('🔄 License Report','⏳ Loading…');
+  const res=await api('daily_report_data',{});
+  if(!res || !res.success){ const t=document.getElementById('dr-text'); if(t) t.value=(res&&res.error)||'Failed to load'; return; }
+  const d=res.date?res.date.split('-'):null;
+  const shownDate=d?(d[2]+'/'+d[1]+'/'+d[0]):'';
+  const lic=res.licenses||[];
+  let lines=[];
+  lines.push('License Report ('+shownDate+')');
+  lines.push('');
+  lines.push('Licenses Done: '+lic.length);
+  lines.push('');
+  lic.forEach(function(l){
+    let parts=[l.name];
+    if(l.server) parts.push(l.server);
+    lines.push('* '+parts.join(', '));
+  });
+  lines.push('');
+  lines.push('Calls Made: ');
+  document.getElementById('dr-text').value=lines.join('\n');
 }
 
 function openQuickTask(){
