@@ -6769,14 +6769,30 @@ function rnwWhatsApp(idx){
   let phone=String(d.reg||'').split(/[,/;|]/)[0].replace(/[^0-9]/g,'');
   if(!phone){ showToast('No registration number on this device'); return; }
   if(phone.length===10) phone='91'+phone;         // add India code if 10-digit
-  const sel=document.getElementById('rnw-sel-'+idx);
-  let planTxt='';
-  if(sel && sel.value){ const parts=sel.value.split('|'); if(parts[3]) planTxt=decodeURIComponent(parts[3]); }
-  const expLine = d.days_left<0 ? ('has EXPIRED on '+d.expiry) : ('will expire on '+d.expiry);
-  const veh = d.plate && d.plate!=='—' ? (' ('+d.plate+')') : '';
-  const msg = 'Dear Customer,\n\nYour BharatGPS device'+veh+' '+expLine+'.\n\nPlease renew to continue uninterrupted GPS tracking.'
-            + (planTxt?('\n\nRenewal plan: '+planTxt):'')
-            + '\n\nTo renew, reply to this message or call 9849849824.\n\n— BharatGPS Tracker';
+  const name = (d.owner && String(d.owner).trim()) ? String(d.owner).trim() : 'Customer';
+  const veh  = (d.plate && d.plate!=='—') ? String(d.plate).trim() : '';
+  // Status line adapts to expired / today / upcoming
+  let statusLine;
+  if(d.days_left<0){ statusLine='⚠️ Expired *'+Math.abs(d.days_left)+' day'+(Math.abs(d.days_left)===1?'':'s')+' ago* ('+d.expiry+')'; }
+  else if(d.days_left===0){ statusLine='⏰ Due *today* ('+d.expiry+')'; }
+  else { statusLine='⏰ Due in *'+d.days_left+' day'+(d.days_left===1?'':'s')+'* ('+d.expiry+')'; }
+  const vehLine = veh ? ('This is a gentle reminder from *BharatGPS Tracker* for your vehicle *'+veh+'*.')
+                      : ('This is a gentle reminder from *BharatGPS Tracker* about your GPS subscription.');
+  const msg =
+    '📢 Dear *'+name+'*,\n\n'
+    + vehLine + '\n\n'
+    + '📍 Your GPS Tracking subscription status:\n'
+    + statusLine + '\n\n'
+    + '🛡️ Stay protected! Renewing ensures *24/7 live tracking* and peace of mind.\n\n'
+    + '✨ *Why renew with BharatGPS?*\n'
+    + '• Real-time vehicle location\n'
+    + '• Theft alerts and many more\n'
+    + '• Trip history & reports\n'
+    + '• 24/7 dedicated support\n\n'
+    + '📞 *Call or WhatsApp our Renewal Team now:*\n'
+    + '👉 *+91 9381874178*\n\n'
+    + 'You can also renew directly in the *BharatGPS app* → *Services* → *Renew*.\n\n'
+    + 'Thank you for trusting BharatGPS! 🙏🚗';
   window.open('https://wa.me/'+phone+'?text='+encodeURIComponent(msg), '_blank');
 }
 function rnwShotPicked(idx){
