@@ -4758,7 +4758,37 @@ case 'daily_report_data':
             $readds = $rr->fetchAll(PDO::FETCH_ASSOC);
         } catch(Exception $e){}
 
-        echo json_encode(['success'=>true,'date'=>$date,'items'=>$out,'readds'=>$readds]);
+        // Licenses done today (license-type balance sheet entries created today) — flat list
+        $licenses = [];
+        try {
+            $lc = $pdo->prepare("SELECT name_on_server, server_name, license_plan FROM balance_sheet_entries WHERE type='license' AND date=? ORDER BY id");
+            $lc->execute([$date]);
+            foreach($lc->fetchAll(PDO::FETCH_ASSOC) as $l){
+                $licenses[] = [
+                    'name'   => trim($l['name_on_server'] ?? '') ?: '—',
+                    'server' => trim($l['server_name'] ?? ''),
+                    'plan'   => trim($l['license_plan'] ?? ''),
+                ];
+            }
+        } catch(Exception $e){}
+
+        // Tasks created today (for the Assignment report) — count + list of names/IDs
+        $createdList = []; $createdCount = 0;
+        try {
+            $ct = $pdo->prepare("SELECT task_id, customer_name, device_details FROM tasks WHERE DATE(created_at)=? ORDER BY id");
+            $ct->execute([$date]);
+            $cr = $ct->fetchAll(PDO::FETCH_ASSOC);
+            $createdCount = count($cr);
+            foreach($cr as $c){
+                $createdList[] = [
+                    'task_id' => $c['task_id'] ?? '',
+                    'name'    => trim($c['customer_name'] ?? '') ?: '—',
+                    'service' => trim($c['device_details'] ?? ''),
+                ];
+            }
+        } catch(Exception $e){}
+
+        echo json_encode(['success'=>true,'date'=>$date,'items'=>$out,'readds'=>$readds,'licenses'=>$licenses,'created_count'=>$createdCount,'created_list'=>$createdList]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
