@@ -4657,13 +4657,9 @@ case 'renewal_approve':
             $srvLabel = $srvNum ? ('Server '.$srvNum) : ($r['server_name'] ?: '');
             // If a payment screenshot was attached, the payment was made by UPI.
             $payMode = !empty($r['payment_screenshot']) ? 'UPI' : null;
-            // Name on server = "Device name - Vehicle number" (server identification), NOT customer name.
-            $rnwPlate = trim($r['plate'] ?? '');
-            $rnwDev   = trim($r['device_name'] ?? '');
-            if($rnwDev !== '' && $rnwPlate !== '' && $rnwPlate !== '—'){ $rnwNameOnServer = $rnwDev.' - '.$rnwPlate; }
-            elseif($rnwDev !== ''){ $rnwNameOnServer = $rnwDev; }
-            elseif($rnwPlate !== '' && $rnwPlate !== '—'){ $rnwNameOnServer = $rnwPlate; }
-            else { $rnwNameOnServer = $r['owner'] ?: 'Renewal'; }
+            // Name on server = the EXACT device (object) name from the server. Not owner, not plate.
+            $rnwNameOnServer = trim($r['device_name'] ?? '');
+            if($rnwNameOnServer === '') $rnwNameOnServer = trim($r['plate'] ?? '') ?: 'Renewal';
             $pdo->prepare("INSERT INTO balance_sheet_entries
                 (type,profile,date,gps_serial_no,name_on_server,server_name,device_model,service_type,license_plan,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_mode,payment_transaction_details,payment_received_on,remarks,created_by_code)
                 VALUES ('license',?,CURDATE(),?,?,?,?,?,?,1,?,?,?,'paid',?,0,?,?,CURDATE(),?,?)")
@@ -4716,8 +4712,8 @@ case 'renewal_backfill_names':
         foreach($rows as $rr){
             $dev = trim($rr['device_name'] ?? '');
             $plate = trim($rr['plate'] ?? '');
-            if($dev !== '' && $plate !== '' && $plate !== '—'){ $newName = $dev.' - '.$plate; }
-            elseif($dev !== ''){ $newName = $dev; }
+            // Name on server = EXACT device (object) name from the server. Fallback to plate only if empty.
+            if($dev !== ''){ $newName = $dev; }
             elseif($plate !== '' && $plate !== '—'){ $newName = $plate; }
             else { continue; }
             $up = $pdo->prepare("UPDATE balance_sheet_entries SET name_on_server=?, updated_at=NOW() WHERE id=? AND type='license'");
