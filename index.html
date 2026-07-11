@@ -6879,11 +6879,20 @@ async function loadRenewalRequests(){
 async function loadRenewalsPageRefresh(){ return loadRenewalRequests(); }
 
 async function backfillRenewalNames(btn){
-  if(!confirm('Update all already-approved renewal entries in the balance sheet to use "Device name - Vehicle number" instead of the customer name?\n\nThis is safe and only changes the name shown.')) return;
+  if(!confirm('Update all already-approved renewal entries in the balance sheet to use the exact device name from the server (instead of the customer name)?\n\nThis is safe and only changes the name shown.')) return;
   if(btn){ btn.disabled=true; btn.textContent='⏳ Fixing…'; }
   const r=await api('renewal_backfill_names',{},'POST',{});
   if(btn){ btn.disabled=false; btn.textContent='🔧 Fix renewal names'; }
-  if(r && r.success){ showToast('✅ Updated '+r.updated+' of '+r.checked+' renewal entries'); }
+  if(r && r.success){
+    console.log('Renewal name backfill sample:', r.sample);
+    let msg='✅ Updated '+r.updated+' of '+r.checked+' entries'+(r.skipped?(' · '+r.skipped+' skipped (no device name)'):'');
+    showToast(msg);
+    if(r.sample && r.sample.length){
+      const preview=r.sample.slice(0,4).map(function(s){ return '• "'+s.was+'" → "'+s.now+'"'; }).join('\n');
+      alert('Sample of changes (was → now):\n\n'+preview+'\n\nCheck the console for full details. Refresh the balance sheet to see updates.');
+    }
+    loadRenewalRequests();
+  }
   else { showToast('❌ '+((r&&r.error)||'Failed')); }
 }
 function renderRenewalRequests(){
