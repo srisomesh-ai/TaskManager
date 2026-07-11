@@ -1147,6 +1147,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
               <option value="rejected">Rejected</option>
               <option value="">All</option>
             </select>
+            <button class="card-btn admin-only" onclick="backfillRenewalNames(this)" style="margin-left:auto" title="Rewrite already-approved renewal names in the balance sheet to Device name - Vehicle number">🔧 Fix renewal names</button>
           </div>
           <div class="card" style="overflow-x:auto">
             <table style="width:100%;border-collapse:collapse">
@@ -6876,6 +6877,15 @@ async function loadRenewalRequests(){
   renderRenewalRequests();
 }
 async function loadRenewalsPageRefresh(){ return loadRenewalRequests(); }
+
+async function backfillRenewalNames(btn){
+  if(!confirm('Update all already-approved renewal entries in the balance sheet to use "Device name - Vehicle number" instead of the customer name?\n\nThis is safe and only changes the name shown.')) return;
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Fixing…'; }
+  const r=await api('renewal_backfill_names',{},'POST',{});
+  if(btn){ btn.disabled=false; btn.textContent='🔧 Fix renewal names'; }
+  if(r && r.success){ showToast('✅ Updated '+r.updated+' of '+r.checked+' renewal entries'); }
+  else { showToast('❌ '+((r&&r.error)||'Failed')); }
+}
 function renderRenewalRequests(){
   const tbody=document.getElementById('rnw-requests-tbody');
   if(!tbody) return;
