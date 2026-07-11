@@ -511,16 +511,20 @@ if($action === 'search_expiry'){
                 } else $include = true;
                 if(!$include) continue;
                 $status = ($daysLeft<0)?'expired':(($daysLeft<=7)?'critical':(($daysLeft<=30)?'warning':(($daysLeft<=90)?'soon':'ok')));
+                // Clean server label (name without the "Server N — " prefix, e.g. "bharatgps.com")
+                $srvLabel = trim(preg_replace('/^Server\s*\d+\s*[—-]\s*/u', '', $srv['name']));
                 $out[] = [
-                    'server_id'=>$sid, 'server_name'=>$srv['name'], 'server_tag'=>'S'.$sid,
+                    'server_id'=>$sid, 'server_name'=>$srv['name'], 'server_label'=>$srvLabel, 'server_tag'=>'S'.$sid,
                     'id'=>$dd['id'] ?? ($d['id'] ?? null),
                     'name'=>$d['name'] ?? '—',
                     'imei'=>$dd['imei'] ?? '—',
                     'plate'=>$dd['plate_number'] ?? '—',
-                    'reg'=>$dd['registration_number'] ?? '—',
-                    'owner'=>$dd['object_owner'] ?? '—',
+                    'reg'=>$dd['registration_number'] ?? '',
+                    'owner'=>$dd['object_owner'] ?? '',
+                    'vin'=>$dd['vin'] ?? '',
                     'phone'=>$dd['msisdn'] ?? $dd['sim_number'] ?? $dd['phone'] ?? $dd['device_phone'] ?? $d['msisdn'] ?? '',
                     'expiry'=>$expiry, 'days_left'=>$daysLeft, 'status'=>$status,
+                    '_raw'=> (!empty($_GET['debug']) ? $dd : null),
                 ];
             }
         }
