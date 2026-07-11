@@ -6563,19 +6563,22 @@ async function approveReadding(id, btn){
       return;
     }
 
+    // Record whether support access was granted during the push (server-side, reliable).
+    let supportOK = !!pr.support_access;
+
     // 2) Record approval + assign to requesting technician stock (server-side, fast, always runs)
     if(btn) btn.textContent='⏳ Finishing…';
     const ar = await api('readding_approve', {}, 'POST', {id:id, device_id:deviceId});
     if(ar && ar.success){
-      showToast('✅ Approved — pushed to '+((_RA_SRV[row.server_id])||'server')+' · added to technician stock');
+      showToast('✅ Approved — pushed to '+((_RA_SRV[row.server_id])||'server')+' · added to technician stock'+(supportOK?' · support access granted':''));
     } else {
       showToast('⚠️ Pushed to server but could not record approval: '+((ar&&ar.error)||''));
     }
     // Refresh the list immediately so the row updates — admin does not wait on support access
     loadReaddingPage();
 
-    // 3) Give access to support@bharatgps.com in the BACKGROUND (never blocks the UI)
-    if(deviceId){
+    // 3) Fallback: if support access was NOT granted during the push, try again in the background.
+    if(deviceId && !supportOK){
       (async()=>{
         try{
           const fu = await _raFetchJSON('gps_proxy.php?action=find_user&server_id='+row.server_id+'&email='+encodeURIComponent('support@bharatgps.com'),{headers:{'X-Auth-Token':authToken}});
@@ -6587,6 +6590,9 @@ async function approveReadding(id, btn){
             afd.append('user_id', supportUserId);
             const asg = await _raFetchJSON('gps_proxy.php?action=assign_device',{method:'POST',headers:{'X-Auth-Token':authToken},body:afd});
             if(asg && asg.success) showToast('✅ Support access granted for '+row.name);
+            else showToast('⚠️ Could not grant support access for '+row.name+' — check the support account exists on '+((_RA_SRV[row.server_id])||'this server'));
+          } else {
+            showToast('⚠️ support@bharatgps.com not found on '+((_RA_SRV[row.server_id])||'this server')+' — support access not granted');
           }
         }catch(e){}
       })();
