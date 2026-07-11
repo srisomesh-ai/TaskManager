@@ -2972,6 +2972,27 @@ case 'confirm_cash_deposit':
     }
     $depositMethod = trim($body['deposit_method'] ?? '');
     if(!$depositMethod){ echo json_encode(['error'=>'Deposit method required']); break; }
+    // Optional payment screenshot (base64 data URL) — saved as a file, path stored on the task.
+    $shotPath = null;
+    try {
+        $shot = $body['deposit_screenshot'] ?? '';
+        if (is_string($shot) && strpos($shot,'base64,') !== false) {
+            try { $pdo->exec("ALTER TABLE tasks ADD COLUMN cash_deposit_screenshot VARCHAR(255) NULL"); } catch(Exception $e){}
+            $parts = explode('base64,', $shot, 2);
+            $meta  = $parts[0]; $data = base64_decode($parts[1] ?? '', true);
+            if ($data !== false && strlen($data) > 0) {
+                $ext = 'jpg';
+                if (stripos($meta,'image/png')!==false)  $ext='png';
+                elseif (stripos($meta,'image/webp')!==false) $ext='webp';
+                elseif (stripos($meta,'image/jpeg')!==false || stripos($meta,'image/jpg')!==false) $ext='jpg';
+                $dir = __DIR__.'/../uploads/task_'.$id.'/'; if(!is_dir($dir)) @mkdir($dir,0755,true);
+                $fn  = 'cash_deposit_'.time().'.'.$ext;
+                if (@file_put_contents($dir.$fn, $data) !== false) {
+                    $shotPath = 'uploads/task_'.$id.'/'.$fn;
+                }
+            }
+        }
+    } catch(Exception $e){ error_log('deposit screenshot save: '.$e->getMessage()); }
     // Compute how many devices remain not-installed (for office partial handling)
     try { $pdo->exec("ALTER TABLE tasks ADD COLUMN pending_devices INT DEFAULT 0"); } catch(Exception $e){}
     $instCnt = 0;
@@ -2982,6 +3003,7 @@ case 'confirm_cash_deposit':
     $totQty = intval($td['device_qty'] ?? 1); if($totQty < 1) $totQty = 1;
     $pendDev = max(0, $totQty - $instCnt);
     $pdo->prepare("UPDATE tasks SET pending_devices=? WHERE id=?")->execute([$pendDev, $id]);
+    try { $pdo->exec("ALTER TABLE tasks ADD COLUMN cash_deposit_screenshot VARCHAR(255) NULL"); } catch(Exception $e){}
     $pdo->prepare("UPDATE tasks SET
         cash_deposit_status='submitted',
         task_status='Awaiting Approval',
@@ -2990,6 +3012,7 @@ case 'confirm_cash_deposit':
         cash_deposit_date=?,
         cash_deposit_ref=?,
         cash_deposit_notes=?,
+        cash_deposit_screenshot=COALESCE(?, cash_deposit_screenshot),
         cash_submitted_at=NOW()
         WHERE id=?")
         ->execute([
@@ -2998,6 +3021,7 @@ case 'confirm_cash_deposit':
             trim($body['deposit_date'] ?? '') ?: null,
             trim($body['deposit_ref'] ?? ''),
             trim($body['remarks'] ?? ''),
+            $shotPath,
             $id
         ]);
     $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'remark')")
