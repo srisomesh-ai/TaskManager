@@ -7505,7 +7505,7 @@ function buildDailyReportText(res){
   const shownDate=d?(d[2]+'/'+d[1]+'/'+d[0]):'';
   const items=res.items||[];
   const readds=res.readds||[];
-  const order=['Sales','Troubleshoot','Vehicle Change','Removal','Demo'];
+  const order=['Sales','Self Installation','Troubleshoot','Vehicle Change','Removal','Demo'];
   const byCat={};
   items.forEach(function(it){
     const c=it.category||'Sales';
@@ -7529,7 +7529,7 @@ function buildDailyReportText(res){
       arr.forEach(function(it){
         let parts=[it.name];
         if(cat==='Sales' && it.service) parts.push(it.service);
-        if(it.server) parts.push(it.server);
+        if(cat!=='Self Installation' && it.server) parts.push(it.server);
         lines.push('* '+parts.join(', '));
       });
       lines.push('');
