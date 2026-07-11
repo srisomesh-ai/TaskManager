@@ -1096,7 +1096,7 @@
   let _instQty=1, _instStep=1, _instSaved={}, _myDevices=[];
   let _v2vMode=false;
 
-  async function openInstall(){
+  async function openInstall(forceQty){
     const t=_curTask;
     _v2vMode=false;
     // route special jobs — troubleshoot/demo/v2v/remove now have their own flows
@@ -1106,6 +1106,10 @@
       return;
     }
     _instQty=parseInt(t.device_qty||1)||1;
+    // If a caller (resumeInstall) forces a higher quantity, honour it even if the
+    // re-fetched task hasn't reflected the DB update yet (avoids a stale-read race
+    // that would show the completion / give-access card instead of the empty slot).
+    if(forceQty && parseInt(forceQty)>_instQty) _instQty=parseInt(forceQty);
     if(_v2vMode) _instQty=1;
     _instStep=1; _instSaved={};
     // restore already-installed devices (only up to current qty; ignore stray higher indices)
@@ -1416,9 +1420,10 @@
     await apiPost('update_task',{id:_curTask.id,device_qty:total,remark:'🔧 Vehicle available — installation resumed on same task. Total devices set to '+total+' ('+installed+' already installed, '+(total-installed)+' remaining).'}).catch(()=>({}));
     const res=await api('get_task',{id:taskId}); const t=res.task||res;
     if(t&&t.id){ _curTask=t; }
-    await load();
+    // Force the local qty in case the re-fetch is stale, so the stepper opens on the empty slot.
+    _curTask.device_qty=total;
     toast('✅ Resumed — install the remaining '+(total-installed)+' device(s)');
-    openInstall();
+    openInstall(total);
   }
 
 
