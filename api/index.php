@@ -318,7 +318,9 @@ function _bsSyncInstalls($pdo, $cuName){
         }
         $fullQty   = intval($t2['device_qty']??1); if($fullQty<1)$fullQty=1;
         $fullTotal = floatval($t2['price_to_collect']??0);
-        $unit2     = $fullQty>0 ? $fullTotal/$fullQty : $fullTotal;
+        // Use the per-device unit_price captured at creation; fall back to total÷qty for old tasks.
+        $storedUnit = isset($t2['unit_price']) ? floatval($t2['unit_price']) : 0;
+        $unit2     = $storedUnit>0 ? $storedUnit : ($fullQty>0 ? $fullTotal/$fullQty : $fullTotal);
         $billQty   = $installedCount;
         $billTotal = round($unit2*$billQty, 2);
         $recv2     = floatval($t2['amount_collected']??0); if($recv2>$billTotal)$recv2=$billTotal;
@@ -712,6 +714,28 @@ case 'get_task':
         if ($instN > intval($task['device_qty']??1)) {
             $pdo->prepare("UPDATE tasks SET device_qty=? WHERE id=?")->execute([$instN, $id]);
             $task['device_qty'] = $instN;
+        }
+    } catch(Exception $e){}
+    // ONE-TIME price correction for task ID-2026-1443 (original 6 devices @ Rs.3500 was lost when
+    // the old partial-finish reduced the quantity, leaving an inflated 21000 total). Set the true
+    // per-device price so it bills 3500 × installed. Runs once; harmless if already correct.
+    try {
+        if (($task['task_id']??'')==='ID-2026-1443' && floatval($task['unit_price']??0) != 3500) {
+            try { $pdo->exec("ALTER TABLE tasks ADD COLUMN unit_price DECIMAL(10,2) DEFAULT NULL"); } catch(Exception $e2){}
+            $instN2 = 0;
+            foreach (($task['device_installs']??[]) as $diR2) { if (!empty($diR2['gps_serial_no'])) $instN2++; }
+            if ($instN2 < 1) $instN2 = intval($task['device_qty']??1);
+            $newTotal = 3500 * $instN2;
+            $pdo->prepare("UPDATE tasks SET unit_price=3500, price_to_collect=? WHERE id=?")->execute([$newTotal, $id]);
+            // Refresh its balance-sheet entry to match
+            if (!empty($task['bs_entry_id'])) {
+                $recvB = floatval($task['amount_collected']??0); if($recvB>$newTotal)$recvB=$newTotal;
+                $pendB = max(0, $newTotal - $recvB);
+                $stB   = ($recvB>=$newTotal && $newTotal>0)?'paid':($recvB>0?'partially_paid':'pending');
+                $pdo->prepare("UPDATE balance_sheet_entries SET qty=?,unit_price=3500,total_price=?,payment_received=?,pending_payment=?,payment_status=?,updated_at=NOW() WHERE id=?")
+                    ->execute([$instN2,$newTotal,$recvB,$pendB,$stB,intval($task['bs_entry_id'])]);
+            }
+            $task['unit_price']=3500; $task['price_to_collect']=$newTotal;
         }
     } catch(Exception $e){}
     echo json_encode(['task'=>$task]);
