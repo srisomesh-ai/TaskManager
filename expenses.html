@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Expenses</title>
+<style>
+:root{
+  --accent:#0E5C5C;--accent2:#137272;--green:#1a7a3a;--green-bg:#e8f5ec;
+  --red:#c0392b;--red-bg:#fdecea;--amber:#e07b00;--amber-bg:#fff3e0;
+  --blue:#1a56a0;--blue-bg:#e8f0fb;--purple:#5b2d8e;--purple-bg:#f0eaf8;
+  --text:#1a1f2e;--text2:#4a5568;--text3:#8a9ab0;
+  --border:#e2e8f0;--surface:#fff;--surface2:#f7f8fa;
+  --shadow:0 2px 10px rgba(0,0,0,.08);
+}
+*{box-sizing:border-box}
+body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:var(--text);margin:0;padding:14px}
+.tabs{display:flex;gap:4px;border-bottom:2px solid var(--border);margin-bottom:16px}
+.tab{padding:10px 16px;font-size:13px;font-weight:700;color:var(--text3);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;background:none;border-top:none;border-left:none;border-right:none}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.pane{display:none}
+.pane.active{display:block}
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.stat{background:#fff;border-radius:10px;padding:14px;box-shadow:var(--shadow);text-align:center;border-top:3px solid var(--amber)}
+.stat .v{font-size:20px;font-weight:900;color:var(--amber)}
+.stat .l{font-size:11px;color:var(--text3);font-weight:600;margin-top:3px}
+.card{background:#fff;border-radius:12px;box-shadow:var(--shadow);padding:16px;margin-bottom:16px}
+.fg-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fg{display:flex;flex-direction:column;gap:5px}
+.fg.span2{grid-column:1 / -1}
+label{font-size:12px;font-weight:700;color:var(--text2)}
+.in,.sel{padding:9px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;outline:none;background:#fff;width:100%}
+.in:focus,.sel:focus{border-color:var(--accent)}
+textarea.in{resize:vertical;min-height:52px}
+.btn{padding:10px 18px;border:none;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
+.btn-primary:hover{opacity:.92}
+.btn-ghost{background:var(--surface2);color:var(--text2);border:1.5px solid var(--border)}
+.row-btns{display:flex;gap:10px;margin-top:6px;flex-wrap:wrap}
+.table-wrap{background:#fff;border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+.table-scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--surface2);color:var(--text2);font-weight:700;text-align:left;padding:11px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap}
+td{padding:11px 12px;border-top:1px solid var(--border);white-space:nowrap}
+tr:hover td{background:var(--surface2)}
+.amt{font-family:'Consolas','Courier New',monospace;font-weight:700;color:var(--red)}
+.cat-badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;background:var(--amber-bg);color:var(--amber)}
+.act-btn{background:none;border:none;cursor:pointer;font-size:15px;padding:3px 5px;border-radius:6px}
+.act-btn:hover{background:var(--surface2)}
+.filters{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px}
+.empty{padding:40px;text-align:center;color:var(--text3)}
+.empty .ico{font-size:36px;margin-bottom:8px}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1a1f2e;color:#fff;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.25);opacity:0;transition:opacity .2s;z-index:999;pointer-events:none;max-width:90%;text-align:center}
+#toast.show{opacity:1}
+@media(max-width:600px){.fg-grid{grid-template-columns:1fr}.filters{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+
+<div class="tabs">
+  <button class="tab active" id="tab-records" onclick="expTab('records')">📋 Expense Records</button>
+  <button class="tab" id="tab-add" onclick="expTab('add')">➕ Add Expense</button>
+</div>
+
+<!-- RECORDS -->
+<div class="pane active" id="pane-records">
+  <div class="stats" id="exp-stats"></div>
+
+  <div class="card" style="padding:14px 16px">
+    <div class="filters">
+      <div class="fg"><label>Search</label><input type="text" class="in" id="exp-search" placeholder="Title, category, notes…" oninput="renderExp()"></div>
+      <div class="fg"><label>Category</label>
+        <select class="sel" id="exp-fcat" onchange="renderExp()">
+          <option value="">All categories</option>
+        </select>
+      </div>
+      <div class="fg"><label>Month</label>
+        <select class="sel" id="exp-month" onchange="renderExp()">
+          <option value="">All time</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th>Date</th><th>Category</th><th>Title</th><th>Paid To / Vendor</th>
+          <th>Payment Mode</th><th>Amount</th><th>Notes</th><th>By</th><th></th>
+        </tr></thead>
+        <tbody id="exp-tbody">
+          <tr><td colspan="9" class="empty"><div class="ico">💸</div>Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ADD -->
+<div class="pane" id="pane-add">
+  <div class="card">
+    <div class="fg-grid">
+      <div class="fg"><label>Date *</label><input type="date" class="in" id="e-date"></div>
+      <div class="fg"><label>Category *</label>
+        <select class="sel" id="e-cat">
+          <option value="Electricity Bill">⚡ Electricity Bill</option>
+          <option value="Wi-Fi / Internet">🌐 Wi-Fi / Internet</option>
+          <option value="Water Bill">💧 Water Bill</option>
+          <option value="Rent">🏠 Rent</option>
+          <option value="Maintenance">🔧 Maintenance</option>
+          <option value="Office Supplies">🖇️ Office Supplies</option>
+          <option value="Salary / Wages">👥 Salary / Wages</option>
+          <option value="Fuel / Travel">⛽ Fuel / Travel</option>
+          <option value="Marketing">📣 Marketing</option>
+          <option value="Other">📦 Other</option>
+        </select>
+      </div>
+      <div class="fg"><label>Title / Description *</label><input type="text" class="in" id="e-title" placeholder="e.g. June electricity bill"></div>
+      <div class="fg"><label>Amount (₹) *</label><input type="number" class="in" id="e-amount" placeholder="0" min="0" step="0.01"></div>
+      <div class="fg"><label>Paid To / Vendor</label><input type="text" class="in" id="e-vendor" placeholder="e.g. TSSPDCL / Airtel"></div>
+      <div class="fg"><label>Payment Mode</label>
+        <select class="sel" id="e-mode">
+          <option value="Cash">Cash</option>
+          <option value="UPI">UPI</option>
+          <option value="Bank Transfer">Bank Transfer</option>
+          <option value="Card">Card</option>
+          <option value="Cheque">Cheque</option>
+          <option value="Auto Debit">Auto Debit</option>
+        </select>
+      </div>
+      <div class="fg"><label>Reference / Bill No</label><input type="text" class="in" id="e-ref" placeholder="Optional"></div>
+      <div class="fg span2"><label>Notes</label><textarea class="in" id="e-notes" placeholder="Any remarks…"></textarea></div>
+    </div>
+    <div class="row-btns">
+      <button class="btn btn-primary" id="e-save" onclick="saveExpense()">💾 Save Expense</button>
+      <button class="btn btn-ghost" onclick="resetExpense()">Reset</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = 'api/index.php';
+const AUTH_TOKEN = (()=>{
+  const p = new URLSearchParams(window.location.search);
+  return p.get('token') || localStorage.getItem('bgps_token') || '';
+})();
+
+async function expApi(action, params={}, method='GET', body=null){
+  let url = API+'?action='+action;
+  if(method==='GET') url += '&'+new URLSearchParams(params);
+  const opts = {method, headers:{'X-Auth-Token':AUTH_TOKEN}};
+  if(body){ opts.headers['Content-Type']='application/json'; opts.body=JSON.stringify(body); }
+  try { const r = await fetch(url,opts); return await r.json(); }
+  catch(e){ return {error:'Network error'}; }
+}
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2600); }
+
+function expTab(which){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tab-'+which).classList.add('active');
+  document.getElementById('pane-'+which).classList.add('active');
+}
+
+let allExpenses = [];
+
+function setToday(){ const d=new Date().toISOString().slice(0,10); const el=document.getElementById('e-date'); if(el && !el.value) el.value=d; }
+
+async function loadExpenses(){
+  document.getElementById('exp-tbody').innerHTML='<tr><td colspan="9" class="empty"><div class="ico">💸</div>Loading…</td></tr>';
+  const res = await expApi('exp_get_entries');
+  if(res.error){
+    document.getElementById('exp-tbody').innerHTML='<tr><td colspan="9" class="empty" style="color:var(--red)">'+esc(res.error)+'</td></tr>';
+    return;
+  }
+  allExpenses = res.entries || [];
+  buildMonthOptions();
+  buildCatOptions();
+  renderExp();
+}
+
+function buildMonthOptions(){
+  const sel=document.getElementById('exp-month'); if(!sel) return;
+  const cur=sel.value;
+  const months=[...new Set(allExpenses.map(e=>(e.date||'').slice(0,7)).filter(Boolean))].sort().reverse();
+  sel.innerHTML='<option value="">All time</option>'+months.map(m=>`<option value="${m}">${m}</option>`).join('');
+  sel.value=cur;
+}
+function buildCatOptions(){
+  const sel=document.getElementById('exp-fcat'); if(!sel) return;
+  const cur=sel.value;
+  const cats=[...new Set(allExpenses.map(e=>e.category).filter(Boolean))].sort();
+  sel.innerHTML='<option value="">All categories</option>'+cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  sel.value=cur;
+}
+
+function getFiltered(){
+  const q=(document.getElementById('exp-search').value||'').toLowerCase();
+  const cat=document.getElementById('exp-fcat').value;
+  const month=document.getElementById('exp-month').value;
+  return allExpenses.filter(e=>{
+    if(cat && e.category!==cat) return false;
+    if(month && !(e.date||'').startsWith(month)) return false;
+    if(q){ const hay=[e.title,e.category,e.vendor,e.notes,e.reference_no].join(' ').toLowerCase(); if(!hay.includes(q)) return false; }
+    return true;
+  });
+}
+
+function renderExp(){
+  const rows=getFiltered();
+  // stats
+  const total=rows.reduce((s,e)=>s+parseFloat(e.amount||0),0);
+  const thisMonth=new Date().toISOString().slice(0,7);
+  const monthTotal=rows.filter(e=>(e.date||'').startsWith(thisMonth)).reduce((s,e)=>s+parseFloat(e.amount||0),0);
+  const byCat={};
+  rows.forEach(e=>{ byCat[e.category]=(byCat[e.category]||0)+parseFloat(e.amount||0); });
+  const topCat=Object.entries(byCat).sort((a,b)=>b[1]-a[1])[0];
+  document.getElementById('exp-stats').innerHTML=`
+    <div class="stat"><div class="v">₹${total.toLocaleString('en-IN')}</div><div class="l">Total (filtered)</div></div>
+    <div class="stat"><div class="v">₹${monthTotal.toLocaleString('en-IN')}</div><div class="l">This month</div></div>
+    <div class="stat"><div class="v">${rows.length}</div><div class="l">Entries</div></div>
+    <div class="stat"><div class="v" style="font-size:13px">${topCat?esc(topCat[0]):'–'}</div><div class="l">Top category${topCat?' · ₹'+topCat[1].toLocaleString('en-IN'):''}</div></div>`;
+
+  const tb=document.getElementById('exp-tbody');
+  if(!rows.length){ tb.innerHTML='<tr><td colspan="9" class="empty"><div class="ico">💸</div>No expenses found</td></tr>'; return; }
+  tb.innerHTML=rows.map(e=>`<tr>
+    <td>${esc(e.date||'–')}</td>
+    <td><span class="cat-badge">${esc(e.category||'–')}</span></td>
+    <td><strong>${esc(e.title||'–')}</strong></td>
+    <td>${esc(e.vendor||'–')}</td>
+    <td>${esc(e.payment_mode||'–')}</td>
+    <td class="amt">₹${parseFloat(e.amount||0).toLocaleString('en-IN')}</td>
+    <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${esc(e.notes||'–')}</td>
+    <td style="font-size:11px;color:var(--text3)">${esc(e.created_by_code||'–')}</td>
+    <td>
+      <button class="act-btn" title="Edit" onclick="editExpense(${e.id})">✏️</button>
+      <button class="act-btn" title="Delete" onclick="delExpense(${e.id})">🗑️</button>
+    </td>
+  </tr>`).join('');
+}
+
+async function saveExpense(){
+  const title=document.getElementById('e-title').value.trim();
+  const amount=parseFloat(document.getElementById('e-amount').value)||0;
+  const date=document.getElementById('e-date').value;
+  if(!date){ toast('⚠️ Pick a date'); return; }
+  if(!title){ toast('⚠️ Enter a title'); return; }
+  if(amount<=0){ toast('⚠️ Enter an amount'); return; }
+  const body={
+    date, category:document.getElementById('e-cat').value,
+    title, amount, vendor:document.getElementById('e-vendor').value.trim(),
+    payment_mode:document.getElementById('e-mode').value,
+    reference_no:document.getElementById('e-ref').value.trim(),
+    notes:document.getElementById('e-notes').value.trim()
+  };
+  const btn=document.getElementById('e-save'); btn.disabled=true; btn.textContent='Saving…';
+  const res=await expApi('exp_add_entry',{},'POST',body);
+  btn.disabled=false; btn.textContent='💾 Save Expense';
+  if(res.success){ toast('✅ Expense saved'); resetExpense(); expTab('records'); loadExpenses(); }
+  else toast('❌ '+(res.error||'Failed'));
+}
+
+function resetExpense(){
+  ['e-title','e-amount','e-vendor','e-ref','e-notes'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('e-cat').selectedIndex=0;
+  document.getElementById('e-mode').selectedIndex=0;
+  document.getElementById('e-date').value=new Date().toISOString().slice(0,10);
+}
+
+function editExpense(id){
+  const e=allExpenses.find(x=>+x.id===+id); if(!e) return;
+  const nt=prompt('Edit title:', e.title||''); if(nt===null) return;
+  const na=prompt('Edit amount (₹):', e.amount||0); if(na===null) return;
+  const amt=parseFloat(na)||0;
+  expApi('exp_update_entry',{},'POST',{id, title:nt.trim(), amount:amt}).then(r=>{
+    if(r.success){ toast('✅ Updated'); loadExpenses(); } else toast('❌ '+(r.error||'Failed'));
+  });
+}
+
+function delExpense(id){
+  const e=allExpenses.find(x=>+x.id===+id);
+  if(!confirm('Delete this expense: "'+((e&&e.title)||id)+'"?')) return;
+  expApi('exp_delete_entry',{},'POST',{id}).then(r=>{
+    if(r.success){ toast('🗑️ Deleted'); loadExpenses(); } else toast('❌ '+(r.error||'Failed'));
+  });
+}
+
+// init
+setToday();
+loadExpenses();
+</script>
+</body>
+</html>
