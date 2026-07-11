@@ -2995,6 +2995,24 @@ case 'office_task_action':
     }
     break;
 
+// ── Technician coin balances (all technicians) — for inventory cards ──
+case 'tech_coins':
+    if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        _ensureCoinLedger($pdo);
+        // Accrue any owed penalties first so balances are current.
+        try {
+            $techs = $pdo->query("SELECT id FROM users WHERE role='technician' AND is_active=1")->fetchAll(PDO::FETCH_COLUMN);
+            foreach ($techs as $tId) { try { apply_cash_penalty($pdo, intval($tId)); } catch(Exception $e){} }
+        } catch(Exception $e){}
+        $rows = $pdo->query("SELECT u.id, u.name, COALESCE(SUM(c.coins),0) AS coins
+                    FROM users u LEFT JOIN coin_ledger c ON c.user_id=u.id
+                    WHERE u.role='technician'
+                    GROUP BY u.id, u.name ORDER BY u.name")->fetchAll(PDO::FETCH_ASSOC);
+        echo json_encode(['success'=>true,'coins'=>$rows]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 // ── Technician: my cash lock + coin status (for the red banner on app home) ──
 case 'my_cash_lock_status':
     try {
