@@ -222,6 +222,15 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
 .rnw-wa-btn{background:#25D366;color:#fff;border:none;border-radius:6px;padding:6px 9px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
 .rnw-wa-btn:hover{background:#1eb658}
 .rnw-wa-btn:disabled{background:#c8d0d3;cursor:not-allowed}
+/* Modern form controls (filters, dropdowns, buttons) */
+.form-input{height:38px;padding:0 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-weight:600;color:var(--text);background:var(--surface);outline:none;transition:border-color .15s,box-shadow .15s;font-family:inherit;cursor:pointer;box-shadow:0 1px 2px rgba(14,92,92,.04)}
+.form-input:hover{border-color:var(--accent2)}
+.form-input:focus{border-color:var(--accent2);box-shadow:0 0 0 3px rgba(19,114,114,.12)}
+select.form-input{-webkit-appearance:none;appearance:none;padding-right:32px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' stroke='%23137272' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center}
+textarea.form-input{height:auto;padding:9px 12px;cursor:text;resize:vertical}
+.btn-primary{height:38px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 6px rgba(14,92,92,.22);transition:transform .12s,box-shadow .12s}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(14,92,92,.3)}
+.rnw-fbar-lbl{font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:5px}
 .ra-approve:hover{background:#128a3e}
 .ra-reject{background:#fff;color:#dc2626;border:1.5px solid #f3b5b5}
 .ra-reject:hover{background:#fee2e2}
@@ -1066,10 +1075,10 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
 
         <!-- SEARCH & REQUEST -->
         <div id="rnw-search-view">
-          <div class="card" style="margin-bottom:14px">
-            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
-              <div><label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">Quick filter</label>
-                <select id="rnw-filter" class="form-input" style="width:200px" onchange="rnwOnFilterChange()">
+          <div class="card" style="margin-bottom:14px;padding:16px">
+            <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:end">
+              <div><label class="rnw-fbar-lbl">Quick filter</label>
+                <select id="rnw-filter" class="form-input" style="width:210px" onchange="rnwOnFilterChange()">
                   <optgroup label="Expiring soon">
                     <option value="expiring_tomorrow">Expiring tomorrow</option>
                     <option value="expiring_next_week">Expiring next week (7 days)</option>
@@ -1086,24 +1095,24 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
                 </select>
               </div>
               <div id="rnw-range-wrap" style="display:none">
-                <label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">From</label>
-                <input type="date" id="rnw-from" class="form-input" style="width:150px">
+                <label class="rnw-fbar-lbl">From</label>
+                <input type="date" id="rnw-from" class="form-input" style="width:155px">
               </div>
               <div id="rnw-range-wrap2" style="display:none">
-                <label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">To</label>
-                <input type="date" id="rnw-to" class="form-input" style="width:150px">
+                <label class="rnw-fbar-lbl">To</label>
+                <input type="date" id="rnw-to" class="form-input" style="width:155px">
               </div>
-              <div><label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">Servers</label>
-                <select id="rnw-servers" class="form-input" style="width:160px">
+              <div><label class="rnw-fbar-lbl">Servers</label>
+                <select id="rnw-servers" class="form-input" style="width:180px">
                   <option value="1,2,3">All servers</option>
                   <option value="1">S1 · bharatgps.com</option>
                   <option value="2">S2 · bharatgps.in</option>
                   <option value="3">S3 · bharatgps.school</option>
                 </select>
               </div>
-              <button class="btn-primary" id="rnw-fetch-btn" onclick="rnwFetch()" style="padding:9px 18px;border:none;border-radius:8px;font-weight:700;cursor:pointer">🔍 Fetch Devices</button>
+              <button class="btn-primary" id="rnw-fetch-btn" onclick="rnwFetch()" style="padding:0 20px">🔍 Fetch Devices</button>
             </div>
-            <div id="rnw-fetch-status" style="font-size:12px;color:var(--text3);margin-top:8px"></div>
+            <div id="rnw-fetch-status" style="font-size:12px;color:var(--text3);margin-top:10px"></div>
           </div>
           <div class="card" style="padding:0;overflow:hidden">
             <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
