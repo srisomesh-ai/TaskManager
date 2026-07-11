@@ -6739,8 +6739,9 @@ function rnwRenderDevices(){
     // Server clean label (name, not URL)
     // Server column: show the server NUMBER (S1 / S2 / S3), not the URL or name.
     const srvName = d.server_tag || ('S'+d.server_id);
-    // WhatsApp uses the registration/asset number (customer contact), not the SIM
-    const phone = (d.reg||'').replace(/[^0-9]/g,'');
+    // WhatsApp uses the registration/asset number (customer contact), not the SIM.
+    // The field may contain two comma-separated numbers — use only the first.
+    const phone = String(d.reg||'').split(/[,/;|]/)[0].replace(/[^0-9]/g,'');
     const waBtn = phone
       ? '<button class="rnw-wa-btn" title="Send WhatsApp renewal reminder" onclick="rnwWhatsApp('+realIdx+')">💬 WhatsApp</button>'
       : '<button class="rnw-wa-btn" disabled title="No registration number on this device">💬 WhatsApp</button>';
@@ -6764,7 +6765,8 @@ function rnwRenderDevices(){
 // Send a WhatsApp renewal reminder to the device's customer.
 function rnwWhatsApp(idx){
   const d=_rnwDevices[idx]; if(!d) return;
-  let phone=(d.reg||'').replace(/[^0-9]/g,'');   // use registration/asset number, not the SIM
+  // Registration field may hold two numbers separated by a comma/slash — use only the FIRST one.
+  let phone=String(d.reg||'').split(/[,/;|]/)[0].replace(/[^0-9]/g,'');
   if(!phone){ showToast('No registration number on this device'); return; }
   if(phone.length===10) phone='91'+phone;         // add India code if 10-digit
   const sel=document.getElementById('rnw-sel-'+idx);
