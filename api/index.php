@@ -327,6 +327,59 @@ function coin_balance($pdo, $userId){
     catch(Exception $e){ return 0; }
 }
 
+// Count DAYTIME hours (08:00–20:00) elapsed between two unix timestamps. Overnight time is paused.
+function daytime_hours_between($fromTs, $toTs){
+    if($toTs <= $fromTs) return 0;
+    $DAY_START = 8; $DAY_END = 20;   // 8 AM to 8 PM
+    $secs = 0;
+    // Walk day by day.
+    $cur = strtotime(date('Y-m-d 00:00:00', $fromTs));
+    $guard = 0;
+    while($cur <= $toTs && $guard < 400){
+        $guard++;
+        $winStart = $cur + $DAY_START*3600;
+        $winEnd   = $cur + $DAY_END*3600;
+        $s = max($winStart, $fromTs);
+        $e = min($winEnd, $toTs);
+        if($e > $s) $secs += ($e - $s);
+        $cur += 86400;
+    }
+    return $secs / 3600.0;
+}
+
+// Penalise a technician -50 ONCE if a task assigned to them was not opened within 3 DAYTIME hours.
+// Idempotent per task via event_key. Only applies while the task is still unopened & active.
+function apply_unopened_penalty($pdo, $taskId){
+    try {
+        $t = $pdo->prepare("SELECT id, assigned_to, tech_viewed_at, assigned_at, created_at, task_status FROM tasks WHERE id=?");
+        $t->execute([$taskId]); $row = $t->fetch();
+        if(!$row) return;
+        if(empty($row['assigned_to'])) return;
+        if(!empty($row['tech_viewed_at'])) return;         // already opened — no penalty
+        if(in_array($row['task_status'], ['Closed','Cancelled'])) return;
+        $startStr = !empty($row['assigned_at']) ? $row['assigned_at'] : $row['created_at'];
+        if(!$startStr) return;
+        $startTs = strtotime($startStr);
+        $dh = daytime_hours_between($startTs, time());
+        if($dh >= 3){
+            $key = 'unopened_'.$taskId;   // one-time per task
+            award_coins($pdo, intval($row['assigned_to']), -50, 'Task not opened within 3 daytime hours', $taskId, $key,
+                '⚠️ -50 coins', 'A task assigned to you was not opened within 3 hours. Please check your tasks promptly.');
+        }
+    } catch(Exception $e){ error_log('apply_unopened_penalty: '.$e->getMessage()); }
+}
+
+// Sweep all unopened assigned tasks and apply the not-opened penalty where due.
+function sweep_unopened_penalties($pdo){
+    try {
+        $rows = $pdo->query("SELECT id FROM tasks
+            WHERE assigned_to IS NOT NULL AND tech_viewed_at IS NULL
+              AND task_status NOT IN ('Closed','Cancelled')
+              AND COALESCE(assigned_at, created_at) < (NOW() - INTERVAL 3 HOUR)")->fetchAll(PDO::FETCH_COLUMN);
+        foreach($rows as $tid){ apply_unopened_penalty($pdo, intval($tid)); }
+    } catch(Exception $e){ error_log('sweep_unopened_penalties: '.$e->getMessage()); }
+}
+
 // ── Device sync helpers ──
 function _devEnsureTables($pdo){
     $pdo->exec("CREATE TABLE IF NOT EXISTS server_devices (
@@ -637,6 +690,8 @@ case 'deactivate_user':
 
 // ---- GET TASKS ----
 case 'get_tasks':
+    // Apply any due "not opened within 3 daytime hours" penalties (idempotent, cheap query).
+    try { sweep_unopened_penalties($pdo); } catch(Exception $e){}
     $where=[]; $params=[];
 
     // ROLE-BASED FILTER — enforced server-side
@@ -776,6 +831,11 @@ case 'get_task':
     if ($userRole === 'technician' && $task['assigned_to'] != $userId) {
         http_response_code(403); echo json_encode(['error'=>'Not authorized']); break;
     }
+    // Stamp the first time the ASSIGNED technician opens the task (stops the 3-hour open timer).
+    try { $pdo->exec("ALTER TABLE tasks ADD COLUMN tech_viewed_at DATETIME DEFAULT NULL"); } catch(Exception $e){}
+    if ($userRole === 'technician' && $task['assigned_to'] == $userId && empty($task['tech_viewed_at'])) {
+        try { $pdo->prepare("UPDATE tasks SET tech_viewed_at=NOW() WHERE id=? AND tech_viewed_at IS NULL")->execute([$id]); $task['tech_viewed_at']=date('Y-m-d H:i:s'); } catch(Exception $e){}
+    }
     $a=$pdo->prepare("SELECT a.*,u.name as user_name FROM task_activities a LEFT JOIN users u ON a.user_id=u.id WHERE a.task_id=? ORDER BY a.created_at ASC"); $a->execute([$id]); $task['activities']=$a->fetchAll();
     $d=$pdo->prepare("SELECT * FROM task_documents WHERE task_id=?"); $d->execute([$id]); $task['documents']=$d->fetchAll();
     $p=$pdo->prepare("SELECT p.*,u.name as collector_name FROM payments p LEFT JOIN users u ON p.collected_by=u.id WHERE p.task_id=?"); $p->execute([$id]); $task['payments']=$p->fetchAll();
@@ -901,6 +961,11 @@ case 'create_task':
         $unitU  = isset($body['unit_price']) ? floatval($body['unit_price'])
                                              : (floatval($body['price_to_collect']??0) / $qtyU);
         $pdo->prepare("UPDATE tasks SET unit_price=? WHERE id=?")->execute([round($unitU,2), $newIdU]);
+    } catch(Exception $e){}
+    // Stamp assigned_at (start of the 3-hour open timer) when the task is created with a technician.
+    try { $pdo->exec("ALTER TABLE tasks ADD COLUMN assigned_at DATETIME DEFAULT NULL"); } catch(Exception $e){}
+    try {
+        if (!empty($at)) { $pdo->prepare("UPDATE tasks SET assigned_at=NOW() WHERE id=? AND assigned_at IS NULL")->execute([$newIdU]); }
     } catch(Exception $e){}
     // Override status for yellow outstation
     if (!empty($body['outstation_travel_paid_by']) && $body['outstation_travel_paid_by']==='COMPANY') {
@@ -1305,6 +1370,10 @@ case 'transfer_task':
     if (!$task) { echo json_encode(['success'=>false,'error'=>'Not found']); break; }
     $tu=$pdo->prepare("SELECT name FROM users WHERE id=? AND is_active=1"); $tu->execute([$toId]); $toName=$tu->fetchColumn();
     $pdo->prepare("UPDATE tasks SET assigned_to=?,transferred_from=?,task_status='Open' WHERE id=?")->execute([$toId,$task['assigned_to'],$id]);
+    // New assignee gets a fresh 3-hour open window: reset the timers.
+    try { $pdo->exec("ALTER TABLE tasks ADD COLUMN assigned_at DATETIME DEFAULT NULL"); } catch(Exception $e){}
+    try { $pdo->exec("ALTER TABLE tasks ADD COLUMN tech_viewed_at DATETIME DEFAULT NULL"); } catch(Exception $e){}
+    try { $pdo->prepare("UPDATE tasks SET assigned_at=NOW(), tech_viewed_at=NULL WHERE id=?")->execute([$id]); } catch(Exception $e){}
     $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'assignment')")->execute([$id,$userId,"Transferred to $toName".(!empty($body['note'])?": {$body['note']}":"")]);
     echo json_encode(['success'=>true]);
     break;
@@ -3000,6 +3069,7 @@ case 'tech_coins':
     try {
         _ensureCoinLedger($pdo);
         // Accrue any owed penalties first so balances are current.
+        try { sweep_unopened_penalties($pdo); } catch(Exception $e){}
         try {
             $techs = $pdo->query("SELECT id FROM users WHERE role='technician' AND is_active=1")->fetchAll(PDO::FETCH_COLUMN);
             foreach ($techs as $tId) { try { apply_cash_penalty($pdo, intval($tId)); } catch(Exception $e){} }
