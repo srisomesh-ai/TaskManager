@@ -254,6 +254,79 @@ function award_coins($pdo, $userId, $coins, $reason, $taskId = null, $eventKey =
     } catch(Exception $e){ error_log('award_coins: '.$e->getMessage()); return false; }
 }
 
+// ── Cash-deposit penalty ────────────────────────────────────────────────────
+// Rules: a technician who holds cash pending deposit for MORE than 4 days is penalised
+// 50 coins per 6-hour DAYTIME window (08:00 and 14:00 slots — two windows per day) until
+// the deposit is confirmed. 50 total per window regardless of how many tasks. Idempotent
+// per window via a deterministic event_key so it never double-charges.
+// Returns the technician's oldest pending age in DAYS (0 if none / not overdue).
+
+// How many days of cash the technician has been holding (oldest pending, tasks + manual entries).
+function cash_oldest_pending_days($pdo, $techId){
+    if(!$techId) return 0;
+    $oldest = null;
+    try {
+        $r = $pdo->prepare("SELECT MIN(cash_pending_at) FROM tasks
+            WHERE assigned_to=? AND LOWER(payment_mode)='cash' AND cash_deposit_status='pending'
+              AND COALESCE(amount_collected,0)>0 AND cash_pending_at IS NOT NULL");
+        $r->execute([$techId]); $v=$r->fetchColumn(); if($v) $oldest=$v;
+    } catch(Exception $e){}
+    try {
+        $r2 = $pdo->prepare("SELECT MIN(date) FROM balance_sheet_entries
+            WHERE technician_id=? AND COALESCE(pending_payment,0)>0 AND (task_db_id IS NULL OR task_db_id=0)");
+        $r2->execute([$techId]); $v2=$r2->fetchColumn();
+        if($v2){ if(!$oldest || $v2<$oldest) $oldest=$v2; }
+    } catch(Exception $e){}
+    if(!$oldest) return 0;
+    $days = (int)floor((time()-strtotime($oldest))/86400);
+    return max(0,$days);
+}
+
+// Apply any owed penalty windows for one technician. Safe to call often (idempotent).
+function apply_cash_penalty($pdo, $techId){
+    if(!$techId) return;
+    try {
+        $r = $pdo->prepare("SELECT MIN(cash_pending_at) oldest FROM tasks
+            WHERE assigned_to=? AND LOWER(payment_mode)='cash' AND cash_deposit_status='pending'
+              AND COALESCE(amount_collected,0)>0 AND cash_pending_at IS NOT NULL");
+        $r->execute([$techId]); $ot=$r->fetchColumn();
+        $om=null;
+        $r2 = $pdo->prepare("SELECT MIN(date) FROM balance_sheet_entries
+            WHERE technician_id=? AND COALESCE(pending_payment,0)>0 AND (task_db_id IS NULL OR task_db_id=0)");
+        $r2->execute([$techId]); $om=$r2->fetchColumn();
+        $oldest=null;
+        if($ot) $oldest=$ot;
+        if($om && (!$oldest || $om<$oldest)) $oldest=$om;
+        if(!$oldest) return; // nothing pending
+        $startTs = strtotime($oldest);
+        $graceEnd = $startTs + 4*86400;           // penalty begins only AFTER 4 full days
+        $now = time();
+        if($now <= $graceEnd) return;             // still within grace
+        // Walk each DAYTIME 6-hour window (08:00 and 14:00) from grace end to now.
+        // For each elapsed window, deduct 50 once (idempotent by event_key).
+        $dayStart = strtotime(date('Y-m-d 00:00:00', $graceEnd));
+        $maxWindows = 400; // safety cap
+        $count=0;
+        for($d=$dayStart; $d <= $now && $count<$maxWindows; $d += 86400){
+            foreach ([8,14] as $h){                // 08:00 and 14:00 daytime slots
+                $winTs = $d + $h*3600;
+                if($winTs <= $graceEnd) continue;  // before penalties start
+                if($winTs > $now) continue;        // future window
+                $count++;
+                $key = 'cashpen_'.$techId.'_'.date('Ymd_H', $winTs);
+                award_coins($pdo, $techId, -50, 'Cash deposit overdue penalty ('.date('d M H:i',$winTs).')', null, $key,
+                    '⚠️ -50 coins', 'Cash deposit is overdue. Deposit now to stop further penalty.');
+            }
+        }
+    } catch(Exception $e){ error_log('apply_cash_penalty: '.$e->getMessage()); }
+}
+
+// Current coin balance for a user.
+function coin_balance($pdo, $userId){
+    try { _ensureCoinLedger($pdo); $s=$pdo->prepare("SELECT COALESCE(SUM(coins),0) FROM coin_ledger WHERE user_id=?"); $s->execute([$userId]); return intval($s->fetchColumn()); }
+    catch(Exception $e){ return 0; }
+}
+
 // ── Device sync helpers ──
 function _devEnsureTables($pdo){
     $pdo->exec("CREATE TABLE IF NOT EXISTS server_devices (
@@ -914,34 +987,47 @@ case 'update_task':
     $ex = $pdo->prepare("SELECT * FROM tasks WHERE id=?"); $ex->execute([$id]); $existing=$ex->fetch();
     if (!$existing) { echo json_encode(['error'=>'Not found']); break; }
     // ── CASH DEPOSIT LOCK ──────────────────────────────────────────────
-    // A technician who is holding cash undeposited for more than 4 days is blocked from
-    // COLLECTING payment or CLOSING new tasks until they deposit. They can still open/install.
+    // A technician holding cash undeposited for more than 4 days is blocked from moving ANY
+    // task forward (attend, install, give access, collect, close). They can still open & read
+    // the task, and log a call/update note. Penalty coins accrue separately.
     if (!in_array($userRole,['admin','assigner'])) {
-        $isCollectOrClose = array_key_exists('amount_collected',$body)
-            || (($body['task_status']??'')==='Closed')
-            || (($body['cash_deposit_status']??'')==='pending' && ($existing['cash_deposit_status']??'')!=='pending');
-        if ($isCollectOrClose) {
+        // Fields that are harmless (do not progress the task) — allow these even when locked.
+        $harmlessOnly = ['id','general_notes','reminder_date','last_tech_activity','star_rating'];
+        $touchesProgress = false;
+        foreach (array_keys($body) as $bk) { if (!in_array($bk,$harmlessOnly)) { $touchesProgress = true; break; } }
+        if ($touchesProgress) {
             try {
+                // Overdue cash from tasks
                 $lockChk = $pdo->prepare("SELECT COUNT(*) c, COALESCE(SUM(amount_collected),0) amt, MIN(cash_pending_at) oldest
                     FROM tasks
                     WHERE assigned_to=? AND id<>?
-                      AND LOWER(payment_mode)='cash'
-                      AND cash_deposit_status='pending'
-                      AND cash_pending_at IS NOT NULL
-                      AND cash_pending_at < (NOW() - INTERVAL 4 DAY)");
+                      AND LOWER(payment_mode)='cash' AND cash_deposit_status='pending'
+                      AND cash_pending_at IS NOT NULL AND cash_pending_at < (NOW() - INTERVAL 4 DAY)");
                 $lockChk->execute([$existing['assigned_to'], $id]);
                 $lk = $lockChk->fetch();
-                if ($lk && intval($lk['c'])>0) {
+                $cnt = intval($lk['c']??0); $amt = floatval($lk['amt']??0); $oldest = $lk['oldest']??null;
+                // Overdue cash from manual balance-sheet entries linked to this technician
+                try {
+                    $lm = $pdo->prepare("SELECT COUNT(*) c, COALESCE(SUM(pending_payment),0) amt, MIN(date) oldest
+                        FROM balance_sheet_entries WHERE technician_id=? AND COALESCE(pending_payment,0)>0
+                          AND (task_db_id IS NULL OR task_db_id=0) AND date < (CURDATE() - INTERVAL 4 DAY)");
+                    $lm->execute([$existing['assigned_to']]); $lmr=$lm->fetch();
+                    $cnt += intval($lmr['c']??0); $amt += floatval($lmr['amt']??0);
+                    if (!empty($lmr['oldest']) && (!$oldest || $lmr['oldest']<$oldest)) $oldest=$lmr['oldest'];
+                } catch(Exception $e){}
+                if ($cnt>0) {
                     $days = 0;
-                    try { $days = (int)floor((time()-strtotime($lk['oldest']))/86400); } catch(Exception $e){}
+                    try { $days = (int)floor((time()-strtotime($oldest))/86400); } catch(Exception $e){}
+                    // Make sure penalty windows are up to date the moment they hit the wall.
+                    try { apply_cash_penalty($pdo, intval($existing['assigned_to'])); } catch(Exception $e){}
                     http_response_code(423);
                     echo json_encode([
                         'error'=>'Cash deposit overdue',
                         'cash_locked'=>true,
-                        'pending_amount'=>floatval($lk['amt']),
-                        'pending_tasks'=>intval($lk['c']),
+                        'pending_amount'=>$amt,
+                        'pending_tasks'=>$cnt,
                         'oldest_days'=>$days,
-                        'message'=>'You have ₹'.number_format(floatval($lk['amt'])).' cash pending deposit for '.$days.' days across '.intval($lk['c']).' task(s). Please deposit it before collecting or closing new tasks.'
+                        'message'=>'🔒 Blocked: you have ₹'.number_format($amt).' cash pending deposit for '.$days.' days. Deposit it to unlock your tasks. Coins are being deducted every 6 hours until you deposit.'
                     ]);
                     break;
                 }
@@ -2909,6 +2995,29 @@ case 'office_task_action':
     }
     break;
 
+// ── Technician: my cash lock + coin status (for the red banner on app home) ──
+case 'my_cash_lock_status':
+    try {
+        $me2 = $userId;
+        // Accrue any owed penalty before reporting.
+        try { apply_cash_penalty($pdo, $me2); } catch(Exception $e){}
+        $days = cash_oldest_pending_days($pdo, $me2);
+        // Pending amount (tasks + manual)
+        $amt = 0.0;
+        try { $r=$pdo->prepare("SELECT COALESCE(SUM(amount_collected),0) FROM tasks WHERE assigned_to=? AND LOWER(payment_mode)='cash' AND cash_deposit_status='pending' AND COALESCE(amount_collected,0)>0"); $r->execute([$me2]); $amt+=floatval($r->fetchColumn()); } catch(Exception $e){}
+        try { $r2=$pdo->prepare("SELECT COALESCE(SUM(pending_payment),0) FROM balance_sheet_entries WHERE technician_id=? AND COALESCE(pending_payment,0)>0 AND (task_db_id IS NULL OR task_db_id=0)"); $r2->execute([$me2]); $amt+=floatval($r2->fetchColumn()); } catch(Exception $e){}
+        $locked = ($days > 4 && $amt > 0);
+        echo json_encode([
+            'success'=>true,
+            'locked'=>$locked,
+            'pending_days'=>$days,
+            'pending_amount'=>$amt,
+            'coins'=>coin_balance($pdo,$me2),
+            'message'=>$locked ? ('🔒 Your tasks are locked. ₹'.number_format($amt).' cash is pending deposit for '.$days.' days. Deposit now to unlock — coins are being deducted every 6 hours until you do.') : ''
+        ]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 // ── ADMIN: Cash pending-deposit summary (per technician + per task) ──
 case 'cash_pending_summary':
     if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
@@ -2967,7 +3076,14 @@ case 'cash_pending_summary':
                 if ($overdue) $byTech[$tid]['overdue'] = true;
             }
         } catch(Exception $e){}
-        echo json_encode(['success'=>true,'lock_days'=>$LOCK_DAYS,'tasks'=>$tasks,'by_technician'=>array_values($byTech)]);
+        // Apply any owed penalty windows and attach each technician's current coin balance.
+        $techList = array_values($byTech);
+        foreach ($techList as &$tt) {
+            try { apply_cash_penalty($pdo, intval($tt['tech_id'])); } catch(Exception $e){}
+            $tt['coins'] = coin_balance($pdo, intval($tt['tech_id']));
+        }
+        unset($tt);
+        echo json_encode(['success'=>true,'lock_days'=>$LOCK_DAYS,'tasks'=>$tasks,'by_technician'=>$techList]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
