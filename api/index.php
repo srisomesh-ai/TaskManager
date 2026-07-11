@@ -788,6 +788,18 @@ case 'create_task':
         echo json_encode(['error'=>'Database error: '.$insertEx->getMessage()]);
         break;
     }
+    // Capture the PER-DEVICE unit price at creation, so billing = unit_price × installed count
+    // stays correct even if the quantity later changes (only some devices installed).
+    try {
+        $pdo->exec("ALTER TABLE tasks ADD COLUMN unit_price DECIMAL(10,2) DEFAULT NULL");
+    } catch(Exception $e){}
+    try {
+        $newIdU = $pdo->lastInsertId();
+        $qtyU   = intval($body['device_qty']??1); if($qtyU<1) $qtyU=1;
+        $unitU  = isset($body['unit_price']) ? floatval($body['unit_price'])
+                                             : (floatval($body['price_to_collect']??0) / $qtyU);
+        $pdo->prepare("UPDATE tasks SET unit_price=? WHERE id=?")->execute([round($unitU,2), $newIdU]);
+    } catch(Exception $e){}
     // Override status for yellow outstation
     if (!empty($body['outstation_travel_paid_by']) && $body['outstation_travel_paid_by']==='COMPANY') {
         $newId2 = $pdo->lastInsertId();
@@ -904,7 +916,9 @@ case 'update_task':
                'payment_verify_status',
                // Consent reset (when vehicle unavailable after consent)
                'consent_token','customer_consent_at','customer_consent_name','customer_consent_mobile'];
-    if (in_array($userRole,['admin','assigner'])) $fields=array_merge($fields,['customer_name','contact_number','email','location','lead_type','device_qty','price_to_collect','assigned_to','vehicle_number']);
+    if (in_array($userRole,['admin','assigner'])) $fields=array_merge($fields,['customer_name','contact_number','email','location','lead_type','device_qty','price_to_collect','unit_price','assigned_to','vehicle_number']);
+    // Ensure unit_price column exists if an admin is editing it
+    if (array_key_exists('unit_price',$body)) { try { $pdo->exec("ALTER TABLE tasks ADD COLUMN unit_price DECIMAL(10,2) DEFAULT NULL"); } catch(Exception $e){} }
     $sets=[]; $vals=[];
     foreach ($fields as $f) {
         if (array_key_exists($f,$body)) {
@@ -1609,12 +1623,15 @@ case 'save_device_install':
                 $allNames   = implode(', ', array_filter(array_column($installs, 'name_on_server')));
                 $serverName = $installs[0]['server_name'] ?? $t2['server_name'] ?? null;
 
-                // PER-DEVICE PRICE: only installed devices are billed
+                // PER-DEVICE PRICE: bill = unit_price × installed devices.
+                // Use the unit_price captured at creation (stable even if qty changes). Fall back
+                // to total ÷ qty only for older tasks that have no unit_price stored yet.
                 $fullQty   = $totalQty > 0 ? $totalQty : 1;
                 $fullTotal = floatval($t2['price_to_collect']??0);
-                $unit2     = $fullQty > 0 ? $fullTotal / $fullQty : $fullTotal;
+                $storedUnit = isset($t2['unit_price']) ? floatval($t2['unit_price']) : 0;
+                $unit2     = $storedUnit > 0 ? $storedUnit : ($fullQty > 0 ? $fullTotal / $fullQty : $fullTotal);
                 $billQty   = $installedCount;                 // only what is installed
-                $billTotal = round($unit2 * $billQty, 2);     // partial amount
+                $billTotal = round($unit2 * $billQty, 2);     // installed devices × per-device price
                 $profile2  = $t2['profile']??'BGPT';
 
                 // Payment received stays as recorded on the task; pending is only on installed amount
