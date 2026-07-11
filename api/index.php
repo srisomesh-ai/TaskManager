@@ -2971,6 +2971,34 @@ case 'cash_pending_summary':
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
+// ── ADMIN: Test the reminder (push + WhatsApp) on any user, WITHOUT touching tasks/balance sheet ──
+case 'test_reminder':
+    if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        $tid = intval($body['tech_id'] ?? 0);
+        $tname = trim($body['tech_name'] ?? '');
+        if(!$tid && $tname){ $uq=$pdo->prepare("SELECT id FROM users WHERE name=? LIMIT 1"); $uq->execute([$tname]); $tid=intval($uq->fetchColumn()); }
+        if(!$tid){ echo json_encode(['error'=>'Provide tech_id or tech_name']); break; }
+        $u=$pdo->prepare("SELECT name,phone,fcm_token FROM users WHERE id=?"); $u->execute([$tid]); $usr=$u->fetch(PDO::FETCH_ASSOC);
+        if(!$usr){ echo json_encode(['error'=>'User not found']); break; }
+        $title='🔔 Test reminder — BharatGPS';
+        $msg='This is a TEST cash-deposit reminder from the office. If you received this, notifications are working. No action needed.';
+        $pushSent=false; $hasToken=!empty($usr['fcm_token']);
+        if(function_exists('fcm_send_to_user')){ try{ $pushSent = (bool) fcm_send_to_user($pdo,$tid,$title,$msg,['type'=>'test']); }catch(Exception $e){} }
+        $ph=preg_replace('/\D/','',(string)($usr['phone']??'')); if(strlen($ph)===10)$ph='91'.$ph;
+        $wa = $ph ? ('https://wa.me/'.$ph.'?text='.rawurlencode($msg)) : '';
+        echo json_encode([
+            'success'=>true,
+            'user'=>$usr['name'],
+            'push_sent'=>$pushSent,
+            'has_fcm_token'=>$hasToken,
+            'has_phone'=>($ph!==''),
+            'whatsapp'=>$wa,
+            'note'=> ($hasToken ? 'Push attempted.' : 'No app token saved for this user — they must log into the technician app on their phone for push to work. WhatsApp still works.')
+        ]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 // ── ADMIN: Remind technician(s) to deposit pending cash (push + WhatsApp link) ──
 case 'remind_cash_deposit':
     if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
