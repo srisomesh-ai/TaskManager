@@ -327,6 +327,25 @@ function coin_balance($pdo, $userId){
     catch(Exception $e){ return 0; }
 }
 
+// Expenses table (manual operating expenses)
+function _ensureExpensesTable($pdo){
+    $pdo->exec("CREATE TABLE IF NOT EXISTS expenses (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        date DATE NOT NULL,
+        category VARCHAR(80) NOT NULL,
+        title VARCHAR(200) NOT NULL,
+        amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+        vendor VARCHAR(160) NULL,
+        payment_mode VARCHAR(50) NULL,
+        reference_no VARCHAR(100) NULL,
+        notes TEXT NULL,
+        created_by_code VARCHAR(80) NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_date (date), INDEX idx_cat (category)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+}
+
 // ── Block-time tracking (for payroll absent calculation) ───────────────────────
 // When a technician crosses into the blocked state (cash > 4 days overdue) we stamp the exact
 // time the block STARTED (today onward — never backdated). When they deposit, the period closes.
@@ -2168,6 +2187,69 @@ case 'bs_delete_entry':
     $id = intval($body['id']??0);
     $pdo->prepare("DELETE FROM balance_sheet_entries WHERE id=?")->execute([$id]);
     echo json_encode(['success'=>true]);
+    break;
+
+// ── EXPENSES (manual operating expenses: electricity, wifi, rent, etc.) ──────
+case 'exp_get_entries':
+    if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        _ensureExpensesTable($pdo);
+        $where=[]; $params=[];
+        if (!empty($_GET['from'])) { $where[]="date >= ?"; $params[]=$_GET['from']; }
+        if (!empty($_GET['to']))   { $where[]="date <= ?"; $params[]=$_GET['to']; }
+        if (!empty($_GET['category'])) { $where[]="category = ?"; $params[]=$_GET['category']; }
+        $sql = "SELECT * FROM expenses".($where?" WHERE ".implode(" AND ",$where):"")." ORDER BY date DESC, id DESC LIMIT 2000";
+        $st = $pdo->prepare($sql); $st->execute($params);
+        echo json_encode(['success'=>true,'entries'=>$st->fetchAll(PDO::FETCH_ASSOC)]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'exp_add_entry':
+    if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        _ensureExpensesTable($pdo);
+        $title = trim($body['title'] ?? '');
+        $amount = floatval($body['amount'] ?? 0);
+        if ($title==='') { echo json_encode(['error'=>'Title required']); break; }
+        if ($amount<=0)  { echo json_encode(['error'=>'Amount must be greater than 0']); break; }
+        $pdo->prepare("INSERT INTO expenses (date,category,title,amount,vendor,payment_mode,reference_no,notes,created_by_code)
+            VALUES (?,?,?,?,?,?,?,?,?)")
+            ->execute([
+                $body['date'] ?? date('Y-m-d'),
+                trim($body['category'] ?? 'Other'),
+                $title, $amount,
+                trim($body['vendor'] ?? '') ?: null,
+                trim($body['payment_mode'] ?? '') ?: null,
+                trim($body['reference_no'] ?? '') ?: null,
+                trim($body['notes'] ?? '') ?: null,
+                $cu['name'] ?? 'admin',
+            ]);
+        echo json_encode(['success'=>true,'id'=>$pdo->lastInsertId()]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'exp_update_entry':
+    if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        _ensureExpensesTable($pdo);
+        $id = intval($body['id'] ?? 0);
+        if (!$id) { echo json_encode(['error'=>'Missing id']); break; }
+        $allowed = ['date','category','title','amount','vendor','payment_mode','reference_no','notes'];
+        $sets=[]; $vals=[];
+        foreach ($allowed as $f) { if (array_key_exists($f,$body)) { $sets[]="$f=?"; $vals[]=($body[$f]===''?null:$body[$f]); } }
+        if ($sets) { $vals[]=$id; $pdo->prepare("UPDATE expenses SET ".implode(',',$sets)." WHERE id=?")->execute($vals); }
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'exp_delete_entry':
+    if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        _ensureExpensesTable($pdo);
+        $id = intval($body['id'] ?? 0);
+        $pdo->prepare("DELETE FROM expenses WHERE id=?")->execute([$id]);
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
 case 'bs_from_task':
