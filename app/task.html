@@ -756,7 +756,8 @@
         // Report is "done" if the local flag is set, OR payment already collected, OR a troubleshoot report exists in activity
         const tsActivityDone=(t.activities||[]).some(a=>String(a.remark||'').includes('Troubleshoot Report'));
         const tsReportDone=localStorage.getItem('ts_done_'+t.id)==='1' || tsColl>0 || tsActivityDone;
-        const tsCashPending=(t.cash_deposit_status==='pending');
+        const _tsCds=(t.cash_deposit_status||''); const _tsCash=String(t.payment_mode||'').toLowerCase()==='cash';
+        const tsCashPending=(_tsCds==='pending') || (_tsCash && tsColl>0 && _tsCds!=='submitted' && _tsCds!=='deposited');
 
         if(tsReportDone && !tsPayDone){
           // Report done, payment still due → collect payment
@@ -764,7 +765,8 @@
           hint='🔧 Troubleshoot done — collect payment to finish.'; hintCls='hint-done';
         } else if(tsReportDone && tsColl>0 && tsCashPending){
           // Cash collected but not deposited → deposit then submit
-          btn='<button class="act-btn" id="loc-btn" style="background:var(--saffron)" onclick="openCashDeposit()"><div class="ico">🏦</div><div class="l">Confirm Cash Deposit</div><div class="s">Deposit cash &amp; submit</div></button>';
+          btn='<button class="act-btn" id="loc-btn" style="background:var(--saffron)" onclick="openCashDeposit()"><div class="ico">🏦</div><div class="l">Confirm Cash Deposit</div><div class="s">Deposit cash &amp; submit</div></button>'
+            +'<button class="act-btn" style="background:#fff;border:1.5px dashed var(--amber);color:#b45309;margin-top:8px" onclick="correctCollectedAmount()"><div class="ico">✏️</div><div class="l">Correct amount (₹'+tsColl.toLocaleString('en-IN')+')</div><div class="s">Fix if you entered the wrong amount</div></button>';
           hint='🏦 Cash deposit pending — deposit &amp; confirm within 24h to submit.'; hintCls='hint-amber';
         } else if(tsReportDone && tsPayDone){
           // Report done + paid → submit for approval
@@ -788,7 +790,11 @@
       const addingDone=(installedOk>=qty && installs.every(d=>d.gps_serial_no&&d.name_on_server)) || (isPartial && installedOk>=1);
       const price=parseFloat(t.price_to_collect||0), coll=parseFloat(t.amount_collected||0);
       const payDone=coll>=price-15 && price>0;
-      const cashPending=(t.cash_deposit_status==='pending');
+      // A cash task needs the deposit step whenever cash was collected but not yet submitted/deposited.
+      // (Covers status 'pending', empty, or null — e.g. after a manager sends the task back.)
+      const _cds=(t.cash_deposit_status||'');
+      const _isCashMode=String(t.payment_mode||'').toLowerCase()==='cash';
+      const cashPending=(_cds==='pending') || (_isCashMode && coll>0 && _cds!=='submitted' && _cds!=='deposited');
 
       // Cash collected but deposit not confirmed → must deposit before submit (priority)
       if(coll>0 && cashPending){
@@ -849,12 +855,14 @@
           const rmPrice=parseFloat(t.price_to_collect||0), rmColl=parseFloat(t.amount_collected||0);
           const rmPayDone=rmColl>=rmPrice-15 || rmPrice<=0;
           const rmReportDone=localStorage.getItem('rm_done_'+t.id)==='1' || rmColl>0 || (t.activities||[]).some(a=>String(a.remark||'').includes('Removal Report'));
-          const rmCashPending=(t.cash_deposit_status==='pending');
+          const _rmCds=(t.cash_deposit_status||''); const _rmCash=String(t.payment_mode||'').toLowerCase()==='cash';
+          const rmCashPending=(_rmCds==='pending') || (_rmCash && rmColl>0 && _rmCds!=='submitted' && _rmCds!=='deposited');
           if(rmReportDone && !rmPayDone){
             btn='<button class="act-btn" id="loc-btn" style="background:var(--green)" onclick="openPaymentSoon()"><div class="ico">💰</div><div class="l">Collect Payment</div><div class="s">₹'+(rmPrice-rmColl).toLocaleString('en-IN')+' to collect</div></button>';
             hint='🔴 Device removed — collect payment to finish.'; hintCls='hint-done';
           } else if(rmReportDone && rmColl>0 && rmCashPending){
-            btn='<button class="act-btn" id="loc-btn" style="background:var(--saffron)" onclick="openCashDeposit()"><div class="ico">🏦</div><div class="l">Confirm Cash Deposit</div><div class="s">Deposit cash &amp; submit</div></button>';
+            btn='<button class="act-btn" id="loc-btn" style="background:var(--saffron)" onclick="openCashDeposit()"><div class="ico">🏦</div><div class="l">Confirm Cash Deposit</div><div class="s">Deposit cash &amp; submit</div></button>'
+              +'<button class="act-btn" style="background:#fff;border:1.5px dashed var(--amber);color:#b45309;margin-top:8px" onclick="correctCollectedAmount()"><div class="ico">✏️</div><div class="l">Correct amount (₹'+rmColl.toLocaleString('en-IN')+')</div><div class="s">Fix if you entered the wrong amount</div></button>';
             hint='🏦 Cash deposit pending — deposit &amp; confirm within 24h to submit.'; hintCls='hint-amber';
           } else if(rmReportDone && rmPayDone){
             btn='<button class="act-btn act-primary" id="loc-btn" onclick="submitForApproval()"><div class="ico">✅</div><div class="l">Submit Task</div><div class="s">Removed'+(rmPrice>0?' &amp; paid':'')+'</div></button>';
