@@ -2501,6 +2501,17 @@ case 'list_tech_notes':
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
+case 'delete_tech_note':
+    // Admin only: delete a note. Removing it here removes it for the technician too (single source).
+    if($userRole!=='admin'){ http_response_code(403); echo json_encode(['error'=>'Only admin can delete notes']); break; }
+    try {
+        $nid = intval($body['note_id'] ?? 0);
+        if(!$nid){ echo json_encode(['error'=>'note_id required']); break; }
+        $pdo->prepare("DELETE FROM tech_notes WHERE id=?")->execute([$nid]);
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'ack_tech_note':
     // Technician acknowledges (marks read) one of their own notes.
     try {
