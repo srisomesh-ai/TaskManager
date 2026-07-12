@@ -2692,7 +2692,14 @@ function renderTasksTable(){
     const ageTxt    = isCrit  ? `<span class="age-badge" style="background:#fdecea;color:#c0392b">🚨 ${age}h</span>`
                     : isUrgent? `<span class="age-badge" style="background:#fff3e0;color:#e07b00">⚠️ ${age}h</span>`
                     : age>0   ? `<span style="color:var(--text3);font-size:11px">${age}h</span>` : '–';
-    return `<tr class="${getRowClass(t)}" style="border-bottom:1px solid var(--border);cursor:pointer;${rowStyle}${closedStyle}" onclick="viewTask(${t.id})">
+    // Date group heading — inserted whenever the task's date differs from the previous row's date.
+    const thisDate  = (t.created_at||'').slice(0,10);
+    const prevDate  = i>0 ? (slice[i-1].created_at||'').slice(0,10) : null;
+    let headingRow  = '';
+    if(thisDate !== prevDate){
+      headingRow = `<tr class="date-group-row"><td colspan="13" style="background:var(--surface2,#f7f8fa);padding:8px 12px;font-weight:800;font-size:12px;color:var(--accent);border-top:2px solid var(--border);border-bottom:1px solid var(--border)">📅 ${taskDateLabel(thisDate)}</td></tr>`;
+    }
+    return headingRow + `<tr class="${getRowClass(t)}" style="border-bottom:1px solid var(--border);cursor:pointer;${rowStyle}${closedStyle}" onclick="viewTask(${t.id})">
       <td style="color:var(--text3);font-size:11px;padding:9px 12px">${start+i+1}</td>
       <td style="padding:9px 12px"><span class="task-id">${t.task_id||'–'}</span>${getWorkflowBadge(t)}</td>
       <td style="padding:9px 12px"><div class="cust-name">${t.customer_name||'–'}</div></td>
@@ -2715,6 +2722,18 @@ function renderTasksTable(){
       </td>
     </tr>`;
   }).join('');
+}
+
+// Human-friendly date label for task group headings (Today / Yesterday / Day before yesterday / date)
+function taskDateLabel(dateStr){
+  if(!dateStr) return 'No date';
+  const today=new Date(); today.setHours(0,0,0,0);
+  const d=new Date(dateStr+'T00:00:00');
+  const diff=Math.round((today - d)/86400000);
+  if(diff===0) return 'Today · '+dateStr;
+  if(diff===1) return 'Yesterday · '+dateStr;
+  if(diff===2) return 'Day before yesterday · '+dateStr;
+  return dateStr;
 }
 
 
