@@ -1204,6 +1204,16 @@ case 'update_task':
     if (in_array($userRole,['admin','assigner'])) $fields=array_merge($fields,['customer_name','contact_number','email','location','lead_type','device_qty','price_to_collect','unit_price','assigned_to','vehicle_number']);
     // Ensure unit_price column exists if an admin is editing it
     if (array_key_exists('unit_price',$body)) { try { $pdo->exec("ALTER TABLE tasks ADD COLUMN unit_price DECIMAL(10,2) DEFAULT NULL"); } catch(Exception $e){} }
+    // Guard: a technician cannot record an amount far above the price to collect (typo protection,
+    // e.g. 45000 instead of 4500). Admins/managers may override (corrections, adjustments).
+    if (array_key_exists('amount_collected',$body) && !in_array($userRole,['admin','assigner'])) {
+        $priceChk = floatval($existing['price_to_collect'] ?? 0);
+        $amtChk   = floatval($body['amount_collected']);
+        if ($priceChk > 0 && $amtChk > $priceChk + 20) {
+            echo json_encode(['error'=>'Amount ₹'.number_format($amtChk).' is more than the price to collect (₹'.number_format($priceChk).'). Please enter the correct amount.']);
+            break;
+        }
+    }
     $sets=[]; $vals=[];
     foreach ($fields as $f) {
         if (array_key_exists($f,$body)) {
