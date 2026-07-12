@@ -2512,6 +2512,15 @@ case 'delete_tech_note':
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
+case 'ack_all_notes':
+    // Technician: mark ALL their notes as read (called when they open the notes panel).
+    try {
+        $pdo->prepare("UPDATE tech_notes SET acknowledged_at=NOW() WHERE user_id=? AND acknowledged_at IS NULL")
+            ->execute([intval($userId)]);
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'ack_tech_note':
     // Technician acknowledges (marks read) one of their own notes.
     try {
