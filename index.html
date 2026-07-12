@@ -5145,7 +5145,7 @@ async function confirmSendBack(taskId){
     id: taskId,
     task_status: 'In Progress',
     remark: '↩️ Sent back by admin — ' + reason,
-    cash_deposit_status: '', // clear deposit status so tech can resubmit
+    sent_back: 1, // backend will re-arm the cash deposit flow if this is a cash task with collected money
   }).catch(()=>({}));
 
   if(res.success){
