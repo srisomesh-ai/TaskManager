@@ -1715,6 +1715,28 @@ case 'erase_all_tasks':
     echo json_encode(['success'=>true,'count'=>$count]);
     break;
 
+// ---- GENERATE CUSTOMER DOCUMENT-UPLOAD LINK ----
+case 'gen_docs_token':
+    // Admin/manager/technician: create (or reuse) a secure token for the customer document portal.
+    $tid = intval($body['task_id'] ?? $body['id'] ?? 0);
+    if(!$tid){ echo json_encode(['error'=>'Task ID required']); break; }
+    try { $pdo->exec("ALTER TABLE tasks ADD COLUMN docs_token VARCHAR(64) NULL"); } catch(Exception $e){}
+    try { $pdo->exec("ALTER TABLE tasks ADD COLUMN docs_received_at DATETIME NULL"); } catch(Exception $e){}
+    try {
+        $row = $pdo->prepare("SELECT docs_token, docs_received_at, contact_number, customer_name FROM tasks WHERE id=?");
+        $row->execute([$tid]); $tk = $row->fetch();
+        if(!$tk){ echo json_encode(['error'=>'Task not found']); break; }
+        $token = $tk['docs_token'] ?? '';
+        // New token if none, or if the old one was already used (docs received) — a fresh request.
+        if(!$token || !empty($tk['docs_received_at'])){
+            $token = bin2hex(random_bytes(16));
+            $pdo->prepare("UPDATE tasks SET docs_token=?, docs_received_at=NULL WHERE id=?")->execute([$token,$tid]);
+        }
+        $base = 'https://salmon-goldfish-110661.hostingersite.com/customer-docs.php?token='.$token;
+        echo json_encode(['success'=>true,'token'=>$token,'link'=>$base,'phone'=>preg_replace('/\D/','',(string)($tk['contact_number']??'')),'customer'=>$tk['customer_name']??'']);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 // ---- UPLOAD DOCUMENT ----
 case 'upload_document':
     $tid=intval($body['task_id']??$_POST['task_id']??0);
