@@ -6770,8 +6770,11 @@ function _rnwRenewOptions(){
     const incl = parseFloat(it.price_incl_gst||0);
     const excl = parseFloat(it.price_excl_gst||0);
     const gst = Math.max(0, incl-excl);
-    // Label = the actual Price List product name + its price, so it's always clear.
-    return '<option value="'+months+'|'+incl+'|'+gst.toFixed(2)+'|'+escHtml(it.product_name)+'">'+escHtml(it.product_name)+' — ₹'+incl.toLocaleString('en-IN')+'</option>';
+    // Short, clean label: period + price (e.g. "1 Year · ₹1,200"), not the long product name.
+    let shortLabel;
+    if(months>=12 && months%12===0){ const y=months/12; shortLabel=y+' Year'+(y>1?'s':''); }
+    else { shortLabel=months+' Month'+(months>1?'s':''); }
+    return '<option value="'+months+'|'+incl+'|'+gst.toFixed(2)+'|'+escHtml(it.product_name)+'">'+shortLabel+' · ₹'+incl.toLocaleString('en-IN')+'</option>';
   }
   // Group by GST: SBGT/with-GST vs BGT/no-GST. Old-style items (e.g. "Annual Renewal") fall by their GST%.
   const sbgt = _rnwRenewalItems.filter(function(i){ return /SBGT/i.test(i.product_name||'') || parseFloat(i.gst_percent||0)>0; });
@@ -6818,8 +6821,13 @@ function rnwRenderDevices(){
       + '<td>'+regCell+'</td>'
       + '<td style="color:var(--text2);white-space:nowrap">'+escHtml(srvName)+'</td>'
       + '<td style="white-space:nowrap"><div style="font-weight:700;color:'+stColor+'">'+escHtml(d.expiry)+'</div><div style="font-size:11px;color:'+stColor+'">'+dl+'</div></td>'
-      + '<td><select id="rnw-sel-'+realIdx+'" class="form-input" style="width:100%;min-width:150px;font-size:12px;padding:6px 8px" onchange="rnwSyncAmount('+realIdx+')">'+_rnwRenewOptions()+'</select>'
-        + '<div style="margin-top:5px;display:flex;align-items:center;gap:4px"><span style="font-size:12px;color:var(--text3)">₹</span><input type="number" id="rnw-amt-'+realIdx+'" class="form-input" min="0" step="1" placeholder="Amount" title="Amount to bill (editable — reduce for a discount)" style="width:100%;min-width:90px;font-size:12px;padding:5px 7px"></div></td>'
+      + '<td><div style="display:flex;align-items:stretch;gap:6px;min-width:230px">'
+        + '<select id="rnw-sel-'+realIdx+'" class="form-input" style="flex:1;min-width:120px;font-size:12px;padding:6px 8px" onchange="rnwSyncAmount('+realIdx+')">'+_rnwRenewOptions()+'</select>'
+        + '<div style="display:flex;align-items:center;border:1.5px solid var(--border);border-radius:8px;padding:0 8px;background:var(--surface,#fff);min-width:96px" title="Amount to bill — edit to give a discount">'
+          + '<span style="font-size:12px;color:var(--text3);font-weight:700">₹</span>'
+          + '<input type="number" id="rnw-amt-'+realIdx+'" min="0" step="1" oninput="rnwAmtEdited('+realIdx+')" style="width:100%;border:none;outline:none;background:transparent;font-size:13px;font-weight:700;padding:6px 2px;color:var(--text)">'
+        + '</div></div>'
+        + '<div id="rnw-amt-note-'+realIdx+'" style="font-size:10.5px;margin-top:3px;height:13px"></div></td>'
       + '<td style="white-space:nowrap">'
         + '<div style="display:flex;align-items:center;gap:6px;justify-content:center;flex-wrap:wrap">'
           + waBtn
@@ -6877,8 +6885,21 @@ function rnwSyncAmount(idx){
   if(!sel || !amtInp) return;
   const parts=(sel.value||'12|0|0|Renewal').split('|');
   const planAmt=parseFloat(parts[1])||0;
-  // Always reflect the plan's price when the plan changes (user can still override after).
+  amtInp.dataset.plan = planAmt;
   amtInp.value = planAmt>0 ? planAmt : '';
+  rnwAmtEdited(idx);
+}
+// Live note under the amount box: confirms the price, or flags a discount vs the plan price.
+function rnwAmtEdited(idx){
+  const amtInp=document.getElementById('rnw-amt-'+idx);
+  const note=document.getElementById('rnw-amt-note-'+idx);
+  if(!amtInp || !note) return;
+  const plan=parseFloat(amtInp.dataset.plan||0);
+  const val=parseFloat(amtInp.value||0);
+  if(!val || val<=0){ note.textContent=''; return; }
+  if(plan>0 && val<plan){ note.innerHTML='<span style="color:#e07b00;font-weight:700">↓ Discount · plan ₹'+plan.toLocaleString('en-IN')+'</span>'; }
+  else if(plan>0 && val>plan){ note.innerHTML='<span style="color:#c0392b;font-weight:700">↑ Above plan ₹'+plan.toLocaleString('en-IN')+'</span>'; }
+  else { note.innerHTML='<span style="color:var(--green,#16794a);font-weight:700">✓ Plan price</span>'; }
 }
 async function requestRenewal(idx, btn){
   const d=_rnwDevices[idx]; if(!d) return;
