@@ -794,7 +794,9 @@
       if(coll>0 && cashPending){
         btn='<button class="act-btn" id="loc-btn" style="background:var(--saffron)" onclick="openCashDeposit()"><div class="ico">🏦</div><div class="l">Confirm Cash Deposit</div><div class="s">Deposit cash &amp; submit</div></button>';
         hint='🏦 Cash deposit pending — deposit the cash & confirm within 24h. Once confirmed, the task is submitted for approval.'; hintCls='hint-amber';
-        area.innerHTML='<div class="act-two"><button class="upd-btn" onclick="openUpdate()"><div class="ico">📞</div><div class="l">Update</div><div class="s">Call log &amp; next step</div></button>'+btn+'</div><div class="act-hint '+hintCls+'">'+hint+'</div>';
+        area.innerHTML='<div class="act-two"><button class="upd-btn" onclick="openUpdate()"><div class="ico">📞</div><div class="l">Update</div><div class="s">Call log &amp; next step</div></button>'+btn+'</div>'
+          +'<div style="margin-top:8px"><button class="upd-btn" style="width:100%;background:#fff;border:1.5px dashed var(--amber);color:#b45309" onclick="correctCollectedAmount()"><div class="ico">✏️</div><div class="l">Correct amount (₹'+coll.toLocaleString('en-IN')+')</div><div class="s">Fix if you entered the wrong amount</div></button></div>'
+          +'<div class="act-hint '+hintCls+'">'+hint+'</div>';
         return;
       }
 
@@ -1527,6 +1529,12 @@
     if(!mode){ toast('Please select payment mode.'); return; }
     const price=parseFloat(t.price_to_collect||0), prev=parseFloat(t.amount_collected||0);
     const total=prev+amount, bal=price-total, isFullyPaid=bal<=PM_ROUND_TOLERANCE;
+    // Guard against a typo that enters far more than the price (e.g. 45000 instead of 4500).
+    // Allow a tiny rounding overage only.
+    if(price>0 && total > price + 20){
+      toast('⚠️ Amount ₹'+total.toLocaleString('en-IN')+' is more than the price to collect (₹'+price.toLocaleString('en-IN')+'). Please check and enter the correct amount.');
+      return;
+    }
     const directModes=['Cash','UPI','Bank Transfer','Cheque'];
     const mismatch=directModes.includes(_payAgreed)&&_payAgreed&&_payAgreed!==mode;
     if(mode==='Cash'&&mismatch&&!document.getElementById('pay-cash-reason').value){ toast('Please select the reason for cash payment.'); return; }
@@ -1591,6 +1599,22 @@
 
   // ═══════════════ CASH DEPOSIT + SUBMIT (matches web) ═══════════════
   let _cdMethod='';
+
+  // Let the technician fix a wrong collected amount (e.g. typed 45000 instead of 4500)
+  // before depositing / after a manager sends it back.
+  async function correctCollectedAmount(){
+    const t=_curTask;
+    const price=parseFloat(t.price_to_collect||0);
+    const cur=parseFloat(t.amount_collected||0);
+    const val=prompt('Enter the correct amount collected'+(price>0?(' (price to collect: ₹'+price.toLocaleString('en-IN')+')'):'')+':', cur);
+    if(val===null) return;
+    const amt=parseFloat(val);
+    if(!amt||amt<=0){ toast('⚠️ Enter a valid amount.'); return; }
+    if(price>0 && amt > price + 20){ toast('⚠️ ₹'+amt.toLocaleString('en-IN')+' is more than the price to collect (₹'+price.toLocaleString('en-IN')+'). Please enter the correct amount.'); return; }
+    const res=await apiPost('update_task',{id:t.id,amount_collected:amt,remark:'✏️ Corrected collected amount to ₹'+amt.toLocaleString('en-IN')+' (was ₹'+cur.toLocaleString('en-IN')+')'});
+    if(res && !res.error){ toast('✅ Amount corrected to ₹'+amt.toLocaleString('en-IN')); await load(); }
+    else { toast('❌ '+((res&&res.error)||'Could not update')); }
+  }
 
   function openCashDeposit(){
     const t=_curTask; _cdMethod='';
