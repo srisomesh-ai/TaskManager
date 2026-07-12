@@ -368,21 +368,23 @@
     requestAnimationFrame(function(){ sh.style.transform='translateY(0)'; });
     const res=await api('list_tech_notes').catch(()=>({}));
     const notes=(res&&res.notes)||[];
+    // Opening the panel = the technician has seen the notes → auto-mark all as read.
+    try{ await api2('ack_all_notes',{}); }catch(e){}
+    const b=document.getElementById('notes-badge'); if(b) b.style.display='none';
     if(!notes.length){ body.innerHTML='<div style="text-align:center;color:#8a9ab0;padding:40px;font-size:14px">\u{1F4ED} No notes yet.<br>Messages from the office will appear here.</div>'; return; }
     body.innerHTML = notes.map(function(n){
       const m=_ntMeta(n.note_type);
       const when=(n.created_at||'').replace('T',' ').slice(0,16);
-      const unread=!n.acknowledged_at;
+      const isNew=!n.acknowledged_at; // was it unread when opened? (just for a subtle NEW tag this once)
       return '<div style="background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.05);margin-bottom:11px;overflow:hidden">'
         + '<div style="background:'+m.bg+';padding:10px 14px;display:flex;justify-content:space-between;align-items:center">'
           + '<span style="font-size:13px;font-weight:800;color:'+m.c+'">'+m.i+' '+m.l+'</span>'
-          + (unread?'<span style="font-size:10px;font-weight:800;background:#e74c3c;color:#fff;border-radius:10px;padding:2px 8px">NEW</span>':'<span style="font-size:11px;color:#1a7a3a;font-weight:700">\u2705 Read</span>')
+          + (isNew?'<span style="font-size:10px;font-weight:800;background:#e74c3c;color:#fff;border-radius:10px;padding:2px 8px">NEW</span>':'')
         + '</div>'
         + '<div style="padding:12px 14px">'
           + (n.title?('<div style="font-size:14px;font-weight:700;margin-bottom:3px">'+esc(n.title)+'</div>'):'')
           + '<div style="font-size:13.5px;color:#374658;white-space:pre-wrap;line-height:1.5">'+esc(n.body||'')+'</div>'
           + '<div style="font-size:11px;color:#8a9ab0;margin-top:7px">'+esc(when)+' \u00B7 by '+esc(n.created_by_name||'Office')+'</div>'
-          + (unread?('<button onclick="ackNote('+n.id+',this)" style="margin-top:9px;background:#137272;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">\u2713 Mark as read</button>'):'')
         + '</div>'
       + '</div>';
     }).join('');
