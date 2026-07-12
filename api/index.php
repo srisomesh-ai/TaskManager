@@ -4784,10 +4784,10 @@ case 'daily_report_data':
             $readds = $rr->fetchAll(PDO::FETCH_ASSOC);
         } catch(Exception $e){}
 
-        // Licenses done today (license-type balance sheet entries created today) — flat list
+        // Licenses done today — ONLY actual renewals (service_type='Renewal'), not re-adding/other jobs
         $licenses = [];
         try {
-            $lc = $pdo->prepare("SELECT name_on_server, server_name, license_plan FROM balance_sheet_entries WHERE type='license' AND date=? ORDER BY id");
+            $lc = $pdo->prepare("SELECT name_on_server, server_name, license_plan FROM balance_sheet_entries WHERE type='license' AND service_type='Renewal' AND date=? ORDER BY id");
             $lc->execute([$date]);
             foreach($lc->fetchAll(PDO::FETCH_ASSOC) as $l){
                 $licenses[] = [
@@ -4814,7 +4814,26 @@ case 'daily_report_data':
             }
         } catch(Exception $e){}
 
-        echo json_encode(['success'=>true,'date'=>$date,'items'=>$out,'readds'=>$readds,'licenses'=>$licenses,'created_count'=>$createdCount,'created_list'=>$createdList]);
+        // Attendance: technicians who did NO completed work today (no installs) → Half Day.
+        // "Work" = an install saved today (installation, troubleshoot, v2v, removal all create install/activity).
+        $halfDay = [];
+        try {
+            $techsAll = $pdo->query("SELECT id,name FROM users WHERE role='technician' AND is_active=1 ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+            // Set of technician names who have at least one install saved today
+            $workedIds = [];
+            $ws = $pdo->prepare("SELECT DISTINCT t.assigned_to FROM task_device_installs di JOIN tasks t ON di.task_id=t.id WHERE DATE(di.saved_at)=? AND di.gps_serial_no IS NOT NULL AND di.gps_serial_no<>''");
+            $ws->execute([$date]);
+            foreach($ws->fetchAll(PDO::FETCH_COLUMN) as $wid){ $workedIds[intval($wid)] = true; }
+            // Also count a troubleshoot/removal report activity today as "work"
+            $as = $pdo->prepare("SELECT DISTINCT t.assigned_to FROM task_activities a JOIN tasks t ON a.task_id=t.id WHERE DATE(a.created_at)=? AND (a.remark LIKE '%Troubleshoot Report%' OR a.remark LIKE '%Removal Report%' OR a.remark LIKE '%Transfer%')");
+            $as->execute([$date]);
+            foreach($as->fetchAll(PDO::FETCH_COLUMN) as $wid){ $workedIds[intval($wid)] = true; }
+            foreach($techsAll as $tc){
+                if(empty($workedIds[intval($tc['id'])])){ $halfDay[] = $tc['name']; }
+            }
+        } catch(Exception $e){}
+
+        echo json_encode(['success'=>true,'date'=>$date,'items'=>$out,'readds'=>$readds,'licenses'=>$licenses,'created_count'=>$createdCount,'created_list'=>$createdList,'half_day'=>$halfDay]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
