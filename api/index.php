@@ -1715,6 +1715,25 @@ case 'erase_all_tasks':
     echo json_encode(['success'=>true,'count'=>$count]);
     break;
 
+// ---- DELETE A TASK DOCUMENT (admin/manager only) ----
+case 'delete_document':
+    if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    $docId = intval($body['doc_id'] ?? 0);
+    if(!$docId){ echo json_encode(['error'=>'Document ID required']); break; }
+    try {
+        $dr = $pdo->prepare("SELECT task_id, filename FROM task_documents WHERE id=?");
+        $dr->execute([$docId]); $doc = $dr->fetch();
+        if(!$doc){ echo json_encode(['error'=>'Document not found']); break; }
+        // Remove the physical file if present
+        if(!empty($doc['filename'])){
+            $fp = __DIR__.'/../uploads/task_'.intval($doc['task_id']).'/'.$doc['filename'];
+            if(is_file($fp)) @unlink($fp);
+        }
+        $pdo->prepare("DELETE FROM task_documents WHERE id=?")->execute([$docId]);
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 // ---- GENERATE CUSTOMER DOCUMENT-UPLOAD LINK ----
 case 'gen_docs_token':
     // Admin/manager/technician: create (or reuse) a secure token for the customer document portal.
