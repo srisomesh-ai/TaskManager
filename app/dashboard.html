@@ -394,7 +394,7 @@
   }
   async function ackNote(noteId, btn){
     if(btn){ btn.textContent='…'; btn.disabled=true; }
-    const r=await api('ack_tech_note',{},'POST',{note_id:noteId}).catch(()=>({}));
+    const r=await api2('ack_tech_note',{note_id:noteId}).catch(()=>({}));
     if(r&&r.success){ openMyNotes(); loadNotesBadge(); }
     else if(btn){ btn.textContent='\u2713 Mark as read'; btn.disabled=false; }
   }
