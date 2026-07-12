@@ -6511,13 +6511,26 @@ function renderReadding(){
   const filter = (document.getElementById('ra-filter')||{}).value ?? 'pending';
   let rows = _readdingRows.slice();
   if(filter) rows = rows.filter(r => (r.status||'')===filter);
+  // Sort newest-first by the relevant date so date-group headings are contiguous
+  rows.sort(function(a,b){
+    const da=((a.status==='approved'&&a.approved_at)?a.approved_at:(a.created_at||''));
+    const db=((b.status==='approved'&&b.approved_at)?b.approved_at:(b.created_at||''));
+    return db.localeCompare(da);
+  });
   if(!rows.length){
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:48px;color:var(--text3)"><div style="font-size:36px;margin-bottom:10px">🔌</div><div style="font-size:14px;font-weight:700">No '+(filter||'')+' requests</div></td></tr>';
     return;
   }
-  tbody.innerHTML = rows.map(r=>{
+  tbody.innerHTML = rows.map((r,idx)=>{
     const st = r.status||'pending';
     const when = (r.created_at||'').replace('T',' ').slice(0,16);
+    const rowDate = ((st==='approved' && r.approved_at) ? r.approved_at : (r.created_at||'')).slice(0,10);
+    const prevR = idx>0 ? rows[idx-1] : null;
+    const prevDate = prevR ? (((prevR.status==='approved' && prevR.approved_at) ? prevR.approved_at : (prevR.created_at||'')).slice(0,10)) : null;
+    let headingRow = '';
+    if(rowDate && rowDate !== prevDate){
+      headingRow = '<tr><td colspan="7" style="background:var(--surface2,#f7f8fa);padding:8px 12px;font-weight:800;font-size:12px;color:var(--accent);border-top:2px solid var(--border);border-bottom:1px solid var(--border)">📅 '+taskDateLabel(rowDate)+'</td></tr>';
+    }
     let action='';
     if(st==='pending'){
       action = `<div style="display:flex;gap:8px;align-items:center">
@@ -6528,7 +6541,7 @@ function renderReadding(){
     } else {
       action = '<span class="ra-pill no">✖ Rejected</span><div style="font-size:11px;color:var(--text3);margin-top:3px">by '+escHtml(r.cancelled_by||'—')+'</div>';
     }
-    return `<tr style="border-bottom:1px solid var(--border)">
+    return headingRow + `<tr style="border-bottom:1px solid var(--border)">
       <td style="padding:9px 12px;font-weight:700">${escHtml(r.name)}</td>
       <td style="padding:9px 12px;font-size:12px">${escHtml(r.plate_number||'—')}${r.object_owner?('<br><span style=\"color:var(--text3);font-size:11px\">'+escHtml(r.object_owner)+'</span>'):''}</td>
       <td style="padding:9px 12px;font-family:monospace;font-size:12px">${escHtml(r.imei)}${r.vin?('<br><span style=\"color:var(--text3);font-size:11px\">VIN '+escHtml(r.vin)+'</span>'):''}${r.registration_number?('<br><span style=\"color:var(--text3);font-size:11px\">M '+escHtml(r.registration_number)+'</span>'):''}</td>
