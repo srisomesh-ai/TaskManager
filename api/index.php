@@ -2462,6 +2462,66 @@ case 'check_blacklist':
     }
     break;
 
+// ══════════ TECHNICIAN NOTES (warning / appreciation / issue / general) ══════════
+case 'add_tech_note':
+    // Admin only: post a note for a staff member (technician or any user).
+    if($userRole!=='admin'){ http_response_code(403); echo json_encode(['error'=>'Only admin can add notes']); break; }
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS tech_notes (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, note_type VARCHAR(20) DEFAULT 'general', title VARCHAR(200), body TEXT, created_by INT NULL, created_by_name VARCHAR(190), acknowledged_at DATETIME NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $uid  = intval($body['user_id'] ?? 0);
+        $type = trim($body['note_type'] ?? 'general');
+        $ttl  = trim($body['title'] ?? '');
+        $bdy  = trim($body['body'] ?? '');
+        if(!$uid || $bdy===''){ echo json_encode(['error'=>'Staff and note are required']); break; }
+        if(!in_array($type,['warning','appreciation','issue','general'])) $type='general';
+        $pdo->prepare("INSERT INTO tech_notes (user_id,note_type,title,body,created_by,created_by_name) VALUES (?,?,?,?,?,?)")
+            ->execute([$uid,$type,$ttl,$bdy,$userId,($cu['name']??'Admin')]);
+        // Optional push to the technician
+        try {
+            $titles = ['warning'=>'⚠️ Warning from admin','appreciation'=>'👏 Appreciation from admin','issue'=>'❗ Issue noted','general'=>'📝 Note from admin'];
+            if(function_exists('fcm_send_to_user')){ fcm_send_to_user($pdo,$uid,$titles[$type]??'📝 New note', ($ttl!==''?$ttl:mb_substr($bdy,0,80)), ['type'=>'tech_note']); }
+        } catch(Exception $e){}
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'list_tech_notes':
+    // Admin: notes for a given user_id (?user_id=). Technician: their own notes.
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS tech_notes (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, note_type VARCHAR(20) DEFAULT 'general', title VARCHAR(200), body TEXT, created_by INT NULL, created_by_name VARCHAR(190), acknowledged_at DATETIME NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        if($userRole==='admin'){
+            $uid = intval($_GET['user_id'] ?? $body['user_id'] ?? 0);
+            if(!$uid){ echo json_encode(['error'=>'user_id required']); break; }
+        } else {
+            $uid = intval($userId);   // technician sees only their own
+        }
+        $st = $pdo->prepare("SELECT * FROM tech_notes WHERE user_id=? ORDER BY created_at DESC");
+        $st->execute([$uid]);
+        echo json_encode(['success'=>true,'notes'=>$st->fetchAll()]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'ack_tech_note':
+    // Technician acknowledges (marks read) one of their own notes.
+    try {
+        $nid = intval($body['note_id'] ?? 0);
+        if(!$nid){ echo json_encode(['error'=>'note_id required']); break; }
+        $pdo->prepare("UPDATE tech_notes SET acknowledged_at=NOW() WHERE id=? AND user_id=? AND acknowledged_at IS NULL")
+            ->execute([$nid, intval($userId)]);
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'my_notes_unread':
+    // Technician: count of unacknowledged notes (for a badge).
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS tech_notes (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, note_type VARCHAR(20) DEFAULT 'general', title VARCHAR(200), body TEXT, created_by INT NULL, created_by_name VARCHAR(190), acknowledged_at DATETIME NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $st = $pdo->prepare("SELECT COUNT(*) FROM tech_notes WHERE user_id=? AND acknowledged_at IS NULL");
+        $st->execute([intval($userId)]);
+        echo json_encode(['success'=>true,'unread'=>intval($st->fetchColumn())]);
+    } catch(Exception $e){ echo json_encode(['success'=>true,'unread'=>0]); }
+    break;
+
 case 'get_blacklist':
     if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     // Create table if not exists (runs on first load of blacklist page)
