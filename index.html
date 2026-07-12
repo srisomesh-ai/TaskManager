@@ -4303,6 +4303,14 @@ function openTaskDetail(id){ viewTask(id); }async function viewTask(id){
       sendBackBtn.onclick = () => adminSendBackTask(t.id, t.task_id);
       btnRow.appendChild(sendBackBtn);
 
+      // Customer Document Link (RC + ID + selfie collection)
+      const docLinkBtn = document.createElement('button');
+      docLinkBtn.className = 'ts-btn';
+      docLinkBtn.style.cssText = 'background:#e7f0ff;color:#2563eb;border:1.5px solid #93c5fd;flex:1;min-width:120px';
+      docLinkBtn.innerHTML = '📄 Document Link';
+      docLinkBtn.onclick = () => genDocsLink(t.id);
+      btnRow.appendChild(docLinkBtn);
+
       adFooter.appendChild(btnRow);
 
     } else {
@@ -5130,6 +5138,32 @@ async function adminApproveTask(taskId){
 
 async function adminRejectTask(taskId){
   adminSendBackTask(taskId, _detailTask?.task_id||'');
+}
+
+// Generate the customer document-upload link (RC + ID + selfie) and show it with copy / WhatsApp.
+async function genDocsLink(taskId){
+  const res = await api('gen_docs_token',{task_id:taskId}).catch(()=>({}));
+  if(!res || !res.success || !res.link){ showToast('❌ '+((res&&res.error)||'Could not create link')); return; }
+  const link = res.link;
+  const phone = (res.phone||'').replace(/\D/g,'');
+  const waPhone = phone ? (phone.length===10 ? '91'+phone : phone) : '';
+  const msg = 'Hello'+(res.customer?(' '+res.customer):'')+'! For your BharatGPS installation, please upload your vehicle RC, ID proof and a selfie using this secure link:\n\n'+link;
+  const footer = document.getElementById('td-admin-footer');
+  if(footer){
+    footer.innerHTML =
+      '<div style="background:#eef5ff;border:2px solid #93c5fd;border-radius:10px;padding:16px;width:100%">'
+      + '<div style="font-size:13px;font-weight:800;color:#2563eb;margin-bottom:8px">📄 Customer Document Link</div>'
+      + '<div style="font-size:12px;color:var(--text2);margin-bottom:8px">Send this to the customer. They enter their vehicle number(s) and upload RC + ID proof + selfie.</div>'
+      + '<input id="doc-link-field" value="'+link+'" readonly style="width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;margin-bottom:10px" onclick="this.select()">'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+        + '<button class="ts-btn" style="background:#25D366;color:#fff;flex:2;min-width:140px" onclick="window.open(\'https://wa.me/'+waPhone+'?text=\'+encodeURIComponent('+JSON.stringify(msg)+'),\'_blank\')">📱 Send on WhatsApp</button>'
+        + '<button class="ts-btn" style="background:var(--surface2);border:1.5px solid var(--border);flex:1;min-width:90px" onclick="if(navigator.clipboard)navigator.clipboard.writeText('+JSON.stringify(link)+');showToast(\'✅ Copied\')">📋 Copy</button>'
+        + '<button class="ts-btn" style="background:#e7f0ff;color:#2563eb;flex:1;min-width:90px" onclick="window.open('+JSON.stringify(link)+',\'_blank\')">🔗 Open</button>'
+      + '</div>'
+      + '<div style="text-align:center;margin-top:10px"><a href="#" onclick="viewTask('+taskId+');return false;" style="font-size:12px;color:var(--text3)">← Back to task</a></div>'
+      + '</div>';
+    footer.style.display = 'flex';
+  }
 }
 
 async function adminSendBackTask(taskId, taskRef){
