@@ -1370,6 +1370,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
           <div style="padding:16px 20px;border-bottom:1px solid var(--border);background:var(--surface)">
             <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--accent2);margin-bottom:12px">📋 Task Information</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px" id="td-info-grid"></div>
+            <div id="td-install-proof"></div>
             <div id="td-vehicle-status" style="margin-top:10px"></div>
             <div id="td-office-partial" style="margin-top:10px"></div>
           </div>
@@ -3773,6 +3774,47 @@ async function fmPullVehicleStatus(idx){
   if(btn){ btn.disabled=false; btn.textContent='📡 Pull Status'; }
 }
 
+function renderInstallProof(t){
+  const box=document.getElementById('td-install-proof');
+  if(!box) return;
+  const installs=(t.device_installs||[]).filter(function(d){ return d.gps_serial_no; });
+  const withLoc=installs.filter(function(d){ return d.install_lat && d.install_lng; });
+  if(!installs.length){ box.innerHTML=''; return; }
+  // Reference point: where the technician claimed to "Reach" (trip_reach). If install GPS is far
+  // from that, or from where they started, it's a red flag worth reviewing.
+  const refLat=parseFloat(t.trip_reach_lat||0), refLng=parseFloat(t.trip_reach_lng||0);
+  function distKm(a1,o1,a2,o2){
+    const R=6371,dLa=(a2-a1)*Math.PI/180,dLo=(o2-o1)*Math.PI/180;
+    const x=Math.sin(dLa/2)**2+Math.cos(a1*Math.PI/180)*Math.cos(a2*Math.PI/180)*Math.sin(dLo/2)**2;
+    return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+  }
+  let rows=installs.map(function(d){
+    if(d.install_lat && d.install_lng){
+      const url='https://www.google.com/maps?q='+d.install_lat+','+d.install_lng;
+      let distTxt='';
+      if(refLat && refLng){
+        const km=distKm(refLat,refLng,parseFloat(d.install_lat),parseFloat(d.install_lng));
+        const far=km>0.5;
+        distTxt='<span style="font-size:11px;font-weight:700;color:'+(far?'#c0392b':'#1a7a3a')+'">'+(far?'⚠️ ':'✅ ')+km.toFixed(2)+' km from arrival point</span>';
+      }
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-top:1px solid var(--border);font-size:12px">'
+        + '<span>'+escHtml(d.name_on_server||d.gps_serial_no||'Device')+'</span>'
+        + '<span style="display:flex;gap:8px;align-items:center">'+distTxt+'<a href="'+url+'" target="_blank" style="color:#2563eb;font-weight:700">📍 View on map</a></span>'
+        + '</div>';
+    } else {
+      return '<div style="display:flex;justify-content:space-between;padding:7px 0;border-top:1px solid var(--border);font-size:12px">'
+        + '<span>'+escHtml(d.name_on_server||d.gps_serial_no||'Device')+'</span>'
+        + '<span style="font-size:11px;color:#e07b00;font-weight:700">⚠️ No GPS captured</span>'
+        + '</div>';
+    }
+  }).join('');
+  box.innerHTML='<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:12px">'
+    + '<div style="font-size:12px;font-weight:800;color:var(--accent);margin-bottom:2px">📍 Install Presence Proof</div>'
+    + '<div style="font-size:10.5px;color:var(--text3);margin-bottom:4px">Where the technician\'s phone actually was at each install. Review for mismatches.</div>'
+    + rows
+    + (withLoc.length<installs.length?'<div style="font-size:10.5px;color:#e07b00;margin-top:6px">⚠️ Some installs have no GPS — technician may have had location off, or used an old app.</div>':'')
+    + '</div>';
+}
 function renderOfficePartialPanel(t){
   const box = document.getElementById('td-office-partial');
   if(!box){ return; }
@@ -4063,6 +4105,9 @@ function openTaskDetail(id){ viewTask(id); }async function viewTask(id){
       <div style="font-size:13px;font-weight:600;color:var(--text)">${val}</div>
     </div>
   `).join('');
+
+  // ── INSTALL PRESENCE PROOF (where the technician actually was at install) ──
+  renderInstallProof(t);
 
   // ── VEHICLE STATUS (plate lookup from GPS servers) ─────
   renderVehicleStatusPanel(t);
