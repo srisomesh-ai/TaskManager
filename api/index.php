@@ -1214,6 +1214,16 @@ case 'update_task':
             break;
         }
     }
+    // Admin "Send Back": re-arm the cash deposit flow so a cash task with collected money shows the
+    // technician the deposit + correct-amount screen again (instead of an empty/locked state).
+    if (!empty($body['sent_back']) && in_array($userRole,['admin','assigner'])) {
+        $pm = strtolower($existing['payment_mode'] ?? '');
+        if ($pm === 'cash' && floatval($existing['amount_collected'] ?? 0) > 0) {
+            $body['cash_deposit_status'] = 'pending';
+        } else {
+            $body['cash_deposit_status'] = '';
+        }
+    }
     $sets=[]; $vals=[];
     foreach ($fields as $f) {
         if (array_key_exists($f,$body)) {
@@ -3530,11 +3540,14 @@ case 'verify_cash_deposit':
             ->execute([$id2, $userId, "✅ Cash deposit verified and confirmed by {$currentUser['name']}."]);
         echo json_encode(['success'=>true,'message'=>'Cash deposit verified.']);
     } else {
-        $pdo->prepare("UPDATE tasks SET cash_deposit_status='pending' WHERE id=?")
+        // Rejecting the deposit must also UNLOCK the task for the technician. The task was moved to
+        // 'Awaiting Approval' when submitted; if we only reset cash_deposit_status the technician stays
+        // stuck on the locked "Awaiting approval" screen and can never re-deposit or correct the amount.
+        $pdo->prepare("UPDATE tasks SET cash_deposit_status='pending', task_status='In Progress' WHERE id=?")
             ->execute([$id2]);
         $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'remark')")
-            ->execute([$id2, $userId, "❌ Cash deposit rejected by {$currentUser['name']} — technician must resubmit."]);
-        echo json_encode(['success'=>true,'message'=>'Deposit rejected — technician must resubmit.']);
+            ->execute([$id2, $userId, "❌ Cash deposit rejected by {$currentUser['name']} — sent back to technician to correct and resubmit."]);
+        echo json_encode(['success'=>true,'message'=>'Deposit rejected — sent back to technician.']);
     }
     break;
 
