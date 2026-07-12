@@ -1892,8 +1892,12 @@ case 'save_device_install':
     } catch(Exception $e) {}
     try { $pdo->exec("ALTER TABLE task_device_installs ADD COLUMN server_id INT NULL"); } catch(Exception $e){}
     try { $pdo->exec("ALTER TABLE task_device_installs ADD COLUMN device_id VARCHAR(50) NULL"); } catch(Exception $e){}
-    $pdo->prepare("INSERT INTO task_device_installs (task_id,device_index,vehicle_number,vehicle_type,gps_serial_no,name_on_server,server_name,server_id,device_id,remarks) VALUES (?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE vehicle_number=VALUES(vehicle_number),vehicle_type=VALUES(vehicle_type),gps_serial_no=VALUES(gps_serial_no),name_on_server=VALUES(name_on_server),server_name=VALUES(server_name),server_id=VALUES(server_id),device_id=VALUES(device_id),remarks=VALUES(remarks),saved_at=NOW()")
-        ->execute([$tid,$idx,trim($body['vehicle_number']??''),trim($body['vehicle_type']??''),trim($body['gps_serial_no']??''),trim($body['name_on_server']??''),trim($body['server_name']??''),(isset($body['server_id'])?intval($body['server_id']):null),trim($body['device_id']??''),trim($body['remarks']??'')]);
+    try { $pdo->exec("ALTER TABLE task_device_installs ADD COLUMN install_lat DECIMAL(10,6) NULL"); } catch(Exception $e){}
+    try { $pdo->exec("ALTER TABLE task_device_installs ADD COLUMN install_lng DECIMAL(10,6) NULL"); } catch(Exception $e){}
+    $_ilat = (isset($body['install_lat']) && $body['install_lat']!=='' && $body['install_lat']!==null) ? floatval($body['install_lat']) : null;
+    $_ilng = (isset($body['install_lng']) && $body['install_lng']!=='' && $body['install_lng']!==null) ? floatval($body['install_lng']) : null;
+    $pdo->prepare("INSERT INTO task_device_installs (task_id,device_index,vehicle_number,vehicle_type,gps_serial_no,name_on_server,server_name,server_id,device_id,install_lat,install_lng,remarks) VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE vehicle_number=VALUES(vehicle_number),vehicle_type=VALUES(vehicle_type),gps_serial_no=VALUES(gps_serial_no),name_on_server=VALUES(name_on_server),server_name=VALUES(server_name),server_id=VALUES(server_id),device_id=VALUES(device_id),install_lat=COALESCE(VALUES(install_lat),install_lat),install_lng=COALESCE(VALUES(install_lng),install_lng),remarks=VALUES(remarks),saved_at=NOW()")
+        ->execute([$tid,$idx,trim($body['vehicle_number']??''),trim($body['vehicle_type']??''),trim($body['gps_serial_no']??''),trim($body['name_on_server']??''),trim($body['server_name']??''),(isset($body['server_id'])?intval($body['server_id']):null),trim($body['device_id']??''),$_ilat,$_ilng,trim($body['remarks']??'')]);
     if ($idx===1) {
         $pdo->prepare("UPDATE tasks SET gps_serial_no=?,name_on_server=?,server_name=? WHERE id=?")->execute([trim($body['gps_serial_no']??''),trim($body['name_on_server']??''),trim($body['server_name']??''),$tid]);
     }
