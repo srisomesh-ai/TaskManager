@@ -119,6 +119,7 @@
       </div>
       <div style="display:flex;align-items:center">
         <button onclick="openGuidelines()" title="Guidelines" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:50%;width:34px;height:34px;font-size:16px;cursor:pointer;margin-right:8px;display:flex;align-items:center;justify-content:center">ℹ️</button>
+        <button onclick="openMyNotes()" title="My Notes" style="position:relative;background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:50%;width:34px;height:34px;font-size:16px;cursor:pointer;margin-right:8px;display:flex;align-items:center;justify-content:center">📋<span id="notes-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#e74c3c;color:#fff;border-radius:10px;min-width:17px;height:17px;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px">0</span></button>
         <div class="avatar" id="h-avatar">T</div>
         <button class="logout-x" onclick="logout()">Logout</button>
       </div>
@@ -206,6 +207,17 @@
         <button onclick="closeGuidelines()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:9px;width:34px;height:34px;font-size:20px;cursor:pointer">×</button>
       </div>
       <div id="gl-body" style="padding:14px 14px 40px;max-width:560px;margin:0 auto"></div>
+    </div>
+  </div>
+
+  <!-- My Notes slide-in panel -->
+  <div id="nt-ov" onclick="if(event.target===this)closeMyNotes()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000">
+    <div id="nt-sheet" style="position:absolute;inset:0;background:#eef1f5;overflow-y:auto;transform:translateY(100%);transition:transform .25s ease">
+      <div style="position:sticky;top:0;background:linear-gradient(135deg,#137272,#0d5555);color:#fff;padding:16px 18px;display:flex;justify-content:space-between;align-items:center;z-index:5">
+        <div><div style="font-size:18px;font-weight:800">📋 My Notes</div><div style="font-size:12px;opacity:.9">Messages from the office</div></div>
+        <button onclick="closeMyNotes()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:9px;width:34px;height:34px;font-size:20px;cursor:pointer">×</button>
+      </div>
+      <div id="nt-body" style="padding:14px 14px 40px;max-width:560px;margin:0 auto"></div>
     </div>
   </div>
 
@@ -331,6 +343,60 @@
     const r=await fetch(url,{cache:'no-store',headers:{'X-Auth-Token':authToken}});
     const t=await r.text();
     try{return JSON.parse(t);}catch(e){console.error('non-JSON',action,t.slice(0,200));return {};}
+  }
+  // ── My Notes (warnings / appreciation from admin) ──
+  function _ntMeta(t){
+    return ({
+      warning:      {i:'\u26A0\uFE0F', c:'#c76e00', bg:'#fff3e0', l:'Warning'},
+      appreciation: {i:'\u{1F44F}', c:'#1a7a3a', bg:'#e8f5ec', l:'Appreciation'},
+      issue:        {i:'\u2757', c:'#c0392b', bg:'#fdecea', l:'Issue'},
+      general:      {i:'\u{1F4DD}', c:'#2563eb', bg:'#eef5ff', l:'Note'}
+    })[t] || {i:'\u{1F4DD}',c:'#2563eb',bg:'#eef5ff',l:'Note'};
+  }
+  async function loadNotesBadge(){
+    try{
+      const r=await api('my_notes_unread');
+      const b=document.getElementById('notes-badge');
+      if(b){ if(r&&r.unread>0){ b.textContent=r.unread; b.style.display='flex'; } else b.style.display='none'; }
+    }catch(e){}
+  }
+  async function openMyNotes(){
+    const ov=document.getElementById('nt-ov'); const sh=document.getElementById('nt-sheet');
+    const body=document.getElementById('nt-body');
+    body.innerHTML='<div style="text-align:center;color:#8a9ab0;padding:30px;font-size:14px">Loading…</div>';
+    ov.style.display='block';
+    requestAnimationFrame(function(){ sh.style.transform='translateY(0)'; });
+    const res=await api('list_tech_notes').catch(()=>({}));
+    const notes=(res&&res.notes)||[];
+    if(!notes.length){ body.innerHTML='<div style="text-align:center;color:#8a9ab0;padding:40px;font-size:14px">\u{1F4ED} No notes yet.<br>Messages from the office will appear here.</div>'; return; }
+    body.innerHTML = notes.map(function(n){
+      const m=_ntMeta(n.note_type);
+      const when=(n.created_at||'').replace('T',' ').slice(0,16);
+      const unread=!n.acknowledged_at;
+      return '<div style="background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.05);margin-bottom:11px;overflow:hidden">'
+        + '<div style="background:'+m.bg+';padding:10px 14px;display:flex;justify-content:space-between;align-items:center">'
+          + '<span style="font-size:13px;font-weight:800;color:'+m.c+'">'+m.i+' '+m.l+'</span>'
+          + (unread?'<span style="font-size:10px;font-weight:800;background:#e74c3c;color:#fff;border-radius:10px;padding:2px 8px">NEW</span>':'<span style="font-size:11px;color:#1a7a3a;font-weight:700">\u2705 Read</span>')
+        + '</div>'
+        + '<div style="padding:12px 14px">'
+          + (n.title?('<div style="font-size:14px;font-weight:700;margin-bottom:3px">'+esc(n.title)+'</div>'):'')
+          + '<div style="font-size:13.5px;color:#374658;white-space:pre-wrap;line-height:1.5">'+esc(n.body||'')+'</div>'
+          + '<div style="font-size:11px;color:#8a9ab0;margin-top:7px">'+esc(when)+' \u00B7 by '+esc(n.created_by_name||'Office')+'</div>'
+          + (unread?('<button onclick="ackNote('+n.id+',this)" style="margin-top:9px;background:#137272;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">\u2713 Mark as read</button>'):'')
+        + '</div>'
+      + '</div>';
+    }).join('');
+  }
+  function closeMyNotes(){
+    const ov=document.getElementById('nt-ov'); const sh=document.getElementById('nt-sheet');
+    sh.style.transform='translateY(100%)';
+    setTimeout(function(){ ov.style.display='none'; loadNotesBadge(); }, 250);
+  }
+  async function ackNote(noteId, btn){
+    if(btn){ btn.textContent='…'; btn.disabled=true; }
+    const r=await api('ack_tech_note',{},'POST',{note_id:noteId}).catch(()=>({}));
+    if(r&&r.success){ openMyNotes(); loadNotesBadge(); }
+    else if(btn){ btn.textContent='\u2713 Mark as read'; btn.disabled=false; }
   }
   function openGuidelines(){
     const b=document.getElementById('gl-body');
@@ -505,6 +571,7 @@
     loadCoins();
     loadReaddingBadge();
     loadCashLock();
+    loadNotesBadge();
   }
 
   async function loadCashLock(){
