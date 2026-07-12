@@ -1426,7 +1426,10 @@
       }
       if(ok){
         _instSaved[idx]={pushed:true,server_id:serverId,device_id:deviceId,imei,name,server_name:'Server '+serverId,plate,vtype,inst,exp};
-        await apiPost('save_device_install',{task_id:_curTask.id,device_index:idx,vehicle_number:plate,vehicle_type:vtype||'',gps_serial_no:imei,name_on_server:name,server_name:'Server '+serverId,server_id:serverId,device_id:deviceId,remarks:notes||(_v2vMode?'Vehicle changed on server':'GPS device added to server')}).catch(()=>{});
+        // Silently capture the technician's live GPS at the moment of install (presence proof for admin review).
+        let _instLat=null,_instLng=null;
+        try{ const _p=await getPos(); if(_p){ _instLat=_p.lat; _instLng=_p.lng; } }catch(e){}
+        await apiPost('save_device_install',{task_id:_curTask.id,device_index:idx,vehicle_number:plate,vehicle_type:vtype||'',gps_serial_no:imei,name_on_server:name,server_name:'Server '+serverId,server_id:serverId,device_id:deviceId,install_lat:_instLat,install_lng:_instLng,remarks:notes||(_v2vMode?'Vehicle changed on server':'GPS device added to server')}).catch(()=>{});
         const lbl=SERVER_LABELS[parseInt(serverId)||0]||('Server '+serverId);
         const remark=(_v2vMode?'🚗 Vehicle changed on GPS server':'🛰 Device added to GPS server')+' | IMEI: '+imei+' | Name: '+name+' | Plate: '+plate+(vtype?' | Type: '+vtype:'')+' | Server: '+lbl+(_v2vMode?'':(' | Installed: '+inst))+' | Expires: '+exp;
         await apiPost('update_task',{id:_curTask.id,remark}).catch(()=>{});
