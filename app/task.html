@@ -184,6 +184,11 @@
       <div class="tu-lbl">What happened? *</div>
       <textarea class="tu-ta" id="tu-discussed" placeholder="Describe what happened on the call/visit…"></textarea>
       <div class="tu-rem" id="tu-rem"></div>
+      <div id="tu-date-box" style="display:none;margin-top:12px">
+        <div class="tu-lbl">📅 Follow-up / reschedule date *</div>
+        <input type="date" class="inst-in" id="tu-date" onchange="tuDatePick()" style="padding:10px">
+        <div style="font-size:11.5px;color:var(--text3,#94a3b8);margin-top:4px">Pick the date the customer agreed to. The reminder will trigger on this day.</div>
+      </div>
     </div>
     <div class="sheet-ft">
       <button class="btn btn-cancel" onclick="closeUpdate()">Cancel</button>
@@ -978,10 +983,10 @@
     {resp:'No answer',ico:'📵',t:'No Answer',s:'Nobody picked up',next:'Retry call in 2 hours',remind:2,prefill:'I called the customer but there was no answer. Will retry again shortly.'},
     {resp:'Call back later',ico:'⏰',t:'Call Back Later',s:'Asked to call later',next:'Call back as requested',remind:4,prefill:'I called the customer. They picked up and asked me to call back later as they are busy right now.'},
     {resp:'Called — come tomorrow',ico:'📅',t:'Come Tomorrow',s:'Called, come tomorrow',next:'Visit customer tomorrow',remind:24,prefill:'I called the customer. They confirmed availability and asked me to come tomorrow for the installation.'},
-    {resp:'Called — rescheduled',ico:'🗓️',t:'Rescheduled',s:'Requested reschedule',next:'Visit on rescheduled date',remind:24,prefill:'I called the customer. They requested to reschedule the installation. New date agreed and will be updated.'},
+    {resp:'Called — rescheduled',ico:'🗓️',t:'Rescheduled',s:'Requested reschedule',next:'Visit on rescheduled date',remind:24,pickDate:true,prefill:'I called the customer. They requested to reschedule the installation. New date agreed and will be updated.'},
     {resp:'Called — payment issue',ico:'💳',t:'Payment Issue',s:'Concern on payment',next:'Follow up on payment',remind:24,prefill:'I called the customer. They mentioned a concern regarding the payment. Will follow up to resolve this before visiting.'},
-    {resp:'Visited — not available',ico:'🚪',t:'Not Available',s:'Customer not at address',next:'Call customer to reschedule',remind:24,prefill:'I visited the customer location but the customer was not available at the address provided.'},
-    {resp:'Visited — vehicle not ready',ico:'🚗',t:'Vehicle Not Ready',s:'Vehicle not available',next:'Follow up when vehicle is ready',remind:48,prefill:'I visited the customer location. The vehicle was not available or ready for installation. Customer asked to reschedule when the vehicle is ready.'},
+    {resp:'Visited — not available',ico:'🚪',t:'Not Available',s:'Customer not at address',next:'Call customer to reschedule',remind:24,pickDate:true,prefill:'I visited the customer location but the customer was not available at the address provided.'},
+    {resp:'Visited — vehicle not ready',ico:'🚗',t:'Vehicle Not Ready',s:'Vehicle not available',next:'Follow up when vehicle is ready',remind:48,pickDate:true,prefill:'I visited the customer location. The vehicle was not available or ready for installation. Customer asked to reschedule when the vehicle is ready.'},
     {resp:'Other',ico:'✏️',t:'Other',s:'Something else',next:'',remind:0,prefill:''}
   ];
   let _tuSel=null, _tuSubmitting=false;
@@ -991,6 +996,8 @@
     document.getElementById('upd-ref').textContent=(_curTask.task_id||'')+' · '+(_curTask.customer_name||'');
     document.getElementById('tu-discussed').value='';
     document.getElementById('tu-rem').style.display='none';
+    const _db=document.getElementById('tu-date-box'); if(_db) _db.style.display='none';
+    const _di=document.getElementById('tu-date'); if(_di) _di.value='';
     document.getElementById('tu-grid').innerHTML=TU_CARDS.map((c,i)=>
       '<div class="tu-card" onclick="selTu('+i+')" id="tu-c-'+i+'"><div class="ci">'+c.ico+'</div><div class="ct">'+c.t+'</div><div class="cs">'+c.s+'</div></div>').join('');
     document.getElementById('upd-ov').classList.add('open');
@@ -1007,10 +1014,28 @@
     const ta=document.getElementById('tu-discussed');
     ta.value=_tuSel.prefill; ta.focus();
     const rem=document.getElementById('tu-rem');
-    if(_tuSel.remind>0){
-      const d=new Date(); d.setHours(d.getHours()+_tuSel.remind);
-      rem.style.display=''; rem.textContent='⏰ Follow-up reminder: '+d.toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
-    } else rem.style.display='none';
+    const dateBox=document.getElementById('tu-date-box');
+    const dateInp=document.getElementById('tu-date');
+    // Reschedule-type responses let the technician pick the actual agreed date.
+    if(_tuSel.pickDate){
+      dateBox.style.display='';
+      if(dateInp){ dateInp.min=new Date().toISOString().slice(0,10); if(!dateInp.value){ const d=new Date(); d.setDate(d.getDate()+1); dateInp.value=d.toISOString().slice(0,10); } }
+      tuDatePick();
+    } else {
+      dateBox.style.display='none';
+      if(_tuSel.remind>0){
+        const d=new Date(); d.setHours(d.getHours()+_tuSel.remind);
+        rem.style.display=''; rem.textContent='⏰ Follow-up reminder: '+d.toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+      } else rem.style.display='none';
+    }
+  }
+  function tuDatePick(){
+    const dateInp=document.getElementById('tu-date');
+    const rem=document.getElementById('tu-rem');
+    if(dateInp && dateInp.value){
+      const d=new Date(dateInp.value+'T09:00:00');
+      rem.style.display=''; rem.textContent='⏰ Reminder will trigger on '+d.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+    }
   }
   async function submitUpdate(){
     if(_tuSubmitting)return;
@@ -1020,7 +1045,13 @@
     if(_tuSel && _tuSel.resp!=='Other') parts.push('Customer: '+_tuSel.resp);
     if(_tuSel && _tuSel.next) parts.push('Next step: '+_tuSel.next);
     const body={id:_curTask.id, remark:parts.join(' | ')};
-    if(_tuSel && _tuSel.remind>0){ const d=new Date(); d.setHours(d.getHours()+_tuSel.remind); body.reminder_date=d.toISOString().slice(0,10); parts.push('Follow-up: '+body.reminder_date); body.remark=parts.join(' | '); }
+    // Reschedule-type response with a chosen date → use that exact date for the reminder.
+    if(_tuSel && _tuSel.pickDate){
+      const dateInp=document.getElementById('tu-date');
+      const chosen=dateInp && dateInp.value;
+      if(!chosen){ toast('📅 Please pick the reschedule / follow-up date.'); if(dateInp) dateInp.focus(); return; }
+      body.reminder_date=chosen; parts.push('Reschedule date: '+chosen); body.remark=parts.join(' | ');
+    } else if(_tuSel && _tuSel.remind>0){ const d=new Date(); d.setHours(d.getHours()+_tuSel.remind); body.reminder_date=d.toISOString().slice(0,10); parts.push('Follow-up: '+body.reminder_date); body.remark=parts.join(' | '); }
     _tuSubmitting=true;
     const btn=document.getElementById('tu-save'); btn.textContent='Saving…'; btn.disabled=true;
     try{
