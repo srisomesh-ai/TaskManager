@@ -1372,6 +1372,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px" id="td-info-grid"></div>
             <div id="td-vehicle-status" style="margin-top:10px"></div>
             <div id="td-office-partial" style="margin-top:10px"></div>
+            <div id="td-docs-panel" style="margin-top:10px"></div>
           </div>
 
           <!-- PAYMENT INFO -->
@@ -3773,6 +3774,20 @@ async function fmPullVehicleStatus(idx){
   if(btn){ btn.disabled=false; btn.textContent='📡 Pull Status'; }
 }
 
+function renderDocsPanel(t){
+  const box=document.getElementById('td-docs-panel');
+  if(!box) return;
+  const got=!!t.docs_received_at;
+  box.innerHTML='<div style="background:'+(got?'#e8f5ec':'#eef5ff')+';border:1.5px solid '+(got?'#1a7a3a':'#93c5fd')+';border-radius:10px;padding:12px 14px">'
+    + '<div style="font-size:12px;font-weight:800;color:'+(got?'#1a7a3a':'#2563eb')+';margin-bottom:'+(got?'2px':'8px')+'">'
+      + (got?'\u{1F4C4} Customer Documents Received \u2705':'\u{1F4C4} Customer Documents')+'</div>'
+    + (got
+        ? '<div style="font-size:11.5px;color:var(--text3)">RC, ID proof and selfie were uploaded by the customer.</div>'
+        : '<div style="font-size:11.5px;color:var(--text2);margin-bottom:8px">Send the customer a secure link to upload their vehicle RC, ID proof and selfie.</div>'
+          + '<button class="ts-btn" style="background:#2563eb;color:#fff;width:100%" onclick="genDocsLink('+t.id+')">\u{1F4E4} Get / Send Document Link</button>')
+    + '</div>';
+}
+
 function renderOfficePartialPanel(t){
   const box = document.getElementById('td-office-partial');
   if(!box){ return; }
@@ -4067,6 +4082,7 @@ function openTaskDetail(id){ viewTask(id); }async function viewTask(id){
   // ── VEHICLE STATUS (plate lookup from GPS servers) ─────
   renderVehicleStatusPanel(t);
   renderOfficePartialPanel(t);
+  renderDocsPanel(t);
 
   // ── PAYMENT ────────────────────────────────────────────
   const price  = parseFloat(t.price_to_collect||0);
@@ -4302,14 +4318,6 @@ function openTaskDetail(id){ viewTask(id); }async function viewTask(id){
       sendBackBtn.innerHTML = '↩️ Send Back';
       sendBackBtn.onclick = () => adminSendBackTask(t.id, t.task_id);
       btnRow.appendChild(sendBackBtn);
-
-      // Customer Document Link (RC + ID + selfie collection)
-      const docLinkBtn = document.createElement('button');
-      docLinkBtn.className = 'ts-btn';
-      docLinkBtn.style.cssText = 'background:#e7f0ff;color:#2563eb;border:1.5px solid #93c5fd;flex:1;min-width:120px';
-      docLinkBtn.innerHTML = '📄 Document Link';
-      docLinkBtn.onclick = () => genDocsLink(t.id);
-      btnRow.appendChild(docLinkBtn);
 
       adFooter.appendChild(btnRow);
 
