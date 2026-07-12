@@ -1319,6 +1319,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
             <input id="sn-title" class="form-input" style="width:100%;margin-bottom:12px" placeholder="Short heading">
             <label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:5px">Note *</label>
             <textarea id="sn-body" class="form-input" rows="3" style="width:100%;margin-bottom:12px" placeholder="Write the warning / appreciation / note…"></textarea>
+            <div id="sn-msg" style="display:none;background:#e8f5ec;color:#1a7a3a;border:1px solid #1a7a3a;border-radius:8px;padding:9px 12px;font-size:13px;font-weight:700;margin-bottom:12px"></div>
             <button class="ts-btn" style="background:var(--accent);color:#fff" onclick="submitStaffNote()">📤 Post Note</button>
           </div>
           <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:18px">
@@ -7434,13 +7435,27 @@ async function submitStaffNote(){
   const bodyTxt = document.getElementById('sn-body').value.trim();
   if(!uid){ showToast('\u26A0\uFE0F Select a staff member'); return; }
   if(!bodyTxt){ showToast('\u26A0\uFE0F Write the note'); return; }
+  const btn = document.querySelector('#page-staff-notes button[onclick="submitStaffNote()"]');
+  const msg = document.getElementById('sn-msg');
+  if(btn){ btn.disabled=true; btn.textContent='Posting…'; }
   const res = await api('add_tech_note',{},'POST',{user_id:parseInt(uid),note_type:type,title:title,body:bodyTxt}).catch(()=>({}));
   if(res && res.success){
-    showToast('\u2705 Note posted');
+    // Confirmation banner in the form
+    if(msg){ msg.style.display='block'; msg.textContent='✅ Note posted successfully.'; setTimeout(function(){ if(msg) msg.style.display='none'; }, 4000); }
+    showToast('✅ Note posted');
+    // Wipe the form back to normal
     document.getElementById('sn-title').value='';
     document.getElementById('sn-body').value='';
-    const fsel=document.getElementById('sn-filter-user'); if(fsel){ fsel.value=uid; loadStaffNotes(); }
-  } else { showToast('\u274C '+((res&&res.error)||'Could not post')); }
+    document.getElementById('sn-type').value='general';
+    const uref = uid; // keep for history view
+    document.getElementById('sn-user').value='';
+    // Show it in the history for the staff we just posted to
+    const fsel=document.getElementById('sn-filter-user'); if(fsel){ fsel.value=uref; loadStaffNotes(); }
+  } else {
+    if(msg){ msg.style.display='block'; msg.style.color='#c0392b'; msg.textContent='❌ '+((res&&res.error)||'Could not post'); }
+    showToast('❌ '+((res&&res.error)||'Could not post'));
+  }
+  if(btn){ btn.disabled=false; btn.textContent='📤 Post Note'; }
 }
 function _snTypeMeta(t){
   return ({
