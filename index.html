@@ -7484,9 +7484,18 @@ async function loadStaffNotes(){
       + '</div>'
       + (n.title?('<div style="font-size:13px;font-weight:700;margin-bottom:2px">'+escHtml(n.title)+'</div>'):'')
       + '<div style="font-size:13px;color:var(--text2);white-space:pre-wrap">'+escHtml(n.body||'')+'</div>'
-      + '<div style="font-size:10.5px;color:var(--text3);margin-top:5px">by '+escHtml(n.created_by_name||'Admin')+'</div>'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">'
+        + '<span style="font-size:10.5px;color:var(--text3)">by '+escHtml(n.created_by_name||'Admin')+'</span>'
+        + '<button onclick="deleteStaffNote('+n.id+')" style="background:#fdecea;color:#c0392b;border:1px solid #e74c3c;border-radius:6px;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer">🗑 Delete</button>'
+      + '</div>'
       + '</div>';
   }).join('');
+}
+async function deleteStaffNote(noteId){
+  if(!confirm('Delete this note?\n\nIt will also be removed from the technician\'s app. This cannot be undone.')) return;
+  const res = await api('delete_tech_note',{},'POST',{note_id:noteId}).catch(()=>({}));
+  if(res && res.success){ showToast('🗑 Note deleted'); loadStaffNotes(); }
+  else { showToast('❌ '+((res&&res.error)||'Could not delete')); }
 }
 function syncBlacklistAuth(){
   if(currentUser?.role !== 'admin'){ return; }
