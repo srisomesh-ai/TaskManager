@@ -87,7 +87,7 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
 /* CONTENT */
 .content{flex:1;height:100%;overflow:auto;background:var(--bg)}
 .page{display:none;padding:22px 24px}
-.page.active{display:block}#page-balance-sheet.active{display:flex}#page-expenses.active{display:flex}#page-admin.active{display:flex}#page-blacklist.active{display:flex}
+.page.active{display:block}#page-balance-sheet.active{display:flex}#page-expenses.active{display:flex}#page-admin.active{display:flex}#page-blacklist.active{display:flex}#page-staff-notes.active{display:block}
 
 /* PAGE HEADER */
 .pg-header{margin-bottom:20px}
@@ -421,6 +421,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
       <div class="nav-item super-admin-only" id="nav-discount-budgets" onclick="showPage('discount-budgets')"><span class="nav-icon">🏷️</span> Discount Budgets</div>
       <div class="nav-item super-admin-only" id="nav-purchases" onclick="showPage('purchases')"><span class="nav-icon">🛒</span> Purchases</div>
       <div class="nav-item super-admin-only" id="nav-blacklist" onclick="showPage('blacklist')"><span class="nav-icon">🚫</span> Blacklist</div>
+      <div class="nav-item super-admin-only" id="nav-staff-notes" onclick="showPage('staff-notes')"><span class="nav-icon">📋</span> Staff Notes</div>
       <div class="nav-item super-admin-only" id="nav-admin" onclick="showPage('admin')"><span class="nav-icon">⚙️</span> Admin Panel</div>
       <div class="sb-footer">
         <div class="sb-av" id="sb-avatar">?</div>
@@ -1293,6 +1294,42 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
       <div class="page" id="page-blacklist" style="padding:0;flex-direction:column">
         <iframe id="blacklist-iframe" src="about:blank" style="flex:1;width:100%;border:none;min-height:calc(100vh - 120px)"></iframe>
       </div>
+      <div class="page" id="page-staff-notes" style="padding:20px">
+        <h2 style="font-size:18px;font-weight:800;margin-bottom:4px">📋 Staff Notes</h2>
+        <p style="font-size:13px;color:var(--text3);margin-bottom:16px">Issue a warning, appreciation, or note to a staff member. They will see it in their app.</p>
+        <div style="display:grid;grid-template-columns:1fr;gap:16px;max-width:900px">
+          <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:18px">
+            <div style="font-size:14px;font-weight:800;margin-bottom:12px">✍️ New Note</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+              <div>
+                <label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:5px">Staff member *</label>
+                <select id="sn-user" class="form-input" style="width:100%"><option value="">Loading…</option></select>
+              </div>
+              <div>
+                <label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:5px">Type *</label>
+                <select id="sn-type" class="form-input" style="width:100%">
+                  <option value="warning">⚠️ Warning</option>
+                  <option value="appreciation">👏 Appreciation</option>
+                  <option value="issue">❗ Issue</option>
+                  <option value="general" selected>📝 General note</option>
+                </select>
+              </div>
+            </div>
+            <label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:5px">Title (optional)</label>
+            <input id="sn-title" class="form-input" style="width:100%;margin-bottom:12px" placeholder="Short heading">
+            <label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:5px">Note *</label>
+            <textarea id="sn-body" class="form-input" rows="3" style="width:100%;margin-bottom:12px" placeholder="Write the warning / appreciation / note…"></textarea>
+            <button class="ts-btn" style="background:var(--accent);color:#fff" onclick="submitStaffNote()">📤 Post Note</button>
+          </div>
+          <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:18px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+              <div style="font-size:14px;font-weight:800">📜 Notes History</div>
+              <select id="sn-filter-user" class="form-input" style="width:auto;font-size:12px" onchange="loadStaffNotes()"><option value="">Select staff to view…</option></select>
+            </div>
+            <div id="sn-history"><div style="color:var(--text3);font-size:13px;padding:20px;text-align:center">Select a staff member to see their notes.</div></div>
+          </div>
+        </div>
+      </div>
       <div class="page" id="page-price-list" style="padding:0;flex-direction:column">
         <iframe id="pl-iframe" src="about:blank"
           style="flex:1;width:100%;border:none;min-height:calc(100vh - 54px)">
@@ -1973,6 +2010,7 @@ function showPage(name, opts={}){
     'accounts':      loadAccounts,
     'admin':         syncAdminAuth,
     'blacklist':     syncBlacklistAuth,
+    'staff-notes':   loadStaffNotesPage,
      'price-list':    syncPlAuth,
      'purchases':     syncPurAuth,
      'discount-budgets': loadDiscountBudgets,
@@ -7379,6 +7417,61 @@ function syncAdminAuth(){
   const iframe = document.getElementById('admin-iframe');
   if(!iframe) return;
   iframe.src = 'admin.html?token=' + encodeURIComponent(authToken||'');
+}
+// ── Staff Notes (admin issues warnings/appreciation/notes to staff) ──
+let _snUsers = [];
+async function loadStaffNotesPage(){
+  const res = await api('get_users',{role:'all'}).catch(()=>({}));
+  _snUsers = (res.users||[]).filter(u=>u.is_active==1 || u.is_active===true || u.is_active==='1');
+  const opts = '<option value="">Select staff…</option>' + _snUsers.map(u=>'<option value="'+u.id+'">'+escHtml(u.name)+' ('+escHtml(u.role)+')</option>').join('');
+  const sel = document.getElementById('sn-user'); if(sel) sel.innerHTML = opts;
+  const fsel = document.getElementById('sn-filter-user'); if(fsel) fsel.innerHTML = '<option value="">Select staff to view…</option>' + _snUsers.map(u=>'<option value="'+u.id+'">'+escHtml(u.name)+'</option>').join('');
+}
+async function submitStaffNote(){
+  const uid = document.getElementById('sn-user').value;
+  const type = document.getElementById('sn-type').value;
+  const title = document.getElementById('sn-title').value.trim();
+  const bodyTxt = document.getElementById('sn-body').value.trim();
+  if(!uid){ showToast('\u26A0\uFE0F Select a staff member'); return; }
+  if(!bodyTxt){ showToast('\u26A0\uFE0F Write the note'); return; }
+  const res = await api('add_tech_note',{},'POST',{user_id:parseInt(uid),note_type:type,title:title,body:bodyTxt}).catch(()=>({}));
+  if(res && res.success){
+    showToast('\u2705 Note posted');
+    document.getElementById('sn-title').value='';
+    document.getElementById('sn-body').value='';
+    const fsel=document.getElementById('sn-filter-user'); if(fsel){ fsel.value=uid; loadStaffNotes(); }
+  } else { showToast('\u274C '+((res&&res.error)||'Could not post')); }
+}
+function _snTypeMeta(t){
+  return ({
+    warning:      {i:'\u26A0\uFE0F', c:'#c76e00', bg:'#fff3e0', l:'Warning'},
+    appreciation: {i:'\u{1F44F}', c:'#1a7a3a', bg:'#e8f5ec', l:'Appreciation'},
+    issue:        {i:'\u2757', c:'#c0392b', bg:'#fdecea', l:'Issue'},
+    general:      {i:'\u{1F4DD}', c:'#2563eb', bg:'#eef5ff', l:'Note'}
+  })[t] || {i:'\u{1F4DD}',c:'#2563eb',bg:'#eef5ff',l:'Note'};
+}
+async function loadStaffNotes(){
+  const uid = document.getElementById('sn-filter-user').value;
+  const box = document.getElementById('sn-history');
+  if(!uid){ box.innerHTML='<div style="color:var(--text3);font-size:13px;padding:20px;text-align:center">Select a staff member to see their notes.</div>'; return; }
+  box.innerHTML='<div style="color:var(--text3);font-size:13px;padding:20px;text-align:center">Loading…</div>';
+  const res = await api('list_tech_notes',{user_id:uid}).catch(()=>({}));
+  const notes = (res && res.notes) || [];
+  if(!notes.length){ box.innerHTML='<div style="color:var(--text3);font-size:13px;padding:20px;text-align:center">No notes yet for this staff member.</div>'; return; }
+  box.innerHTML = notes.map(function(n){
+    const m=_snTypeMeta(n.note_type);
+    const when=(n.created_at||'').replace('T',' ').slice(0,16);
+    const ack = n.acknowledged_at ? '<span style="font-size:11px;color:#1a7a3a;font-weight:700">\u2705 Read</span>' : '<span style="font-size:11px;color:var(--text3)">Unread</span>';
+    return '<div style="background:'+m.bg+';border:1px solid var(--border);border-radius:9px;padding:11px 13px;margin-bottom:9px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
+        + '<span style="font-size:12px;font-weight:800;color:'+m.c+'">'+m.i+' '+m.l+'</span>'
+        + '<span style="font-size:11px;color:var(--text3)">'+escHtml(when)+' \u00B7 '+ack+'</span>'
+      + '</div>'
+      + (n.title?('<div style="font-size:13px;font-weight:700;margin-bottom:2px">'+escHtml(n.title)+'</div>'):'')
+      + '<div style="font-size:13px;color:var(--text2);white-space:pre-wrap">'+escHtml(n.body||'')+'</div>'
+      + '<div style="font-size:10.5px;color:var(--text3);margin-top:5px">by '+escHtml(n.created_by_name||'Admin')+'</div>'
+      + '</div>';
+  }).join('');
 }
 function syncBlacklistAuth(){
   if(currentUser?.role !== 'admin'){ return; }
