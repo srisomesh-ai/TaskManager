@@ -6818,7 +6818,8 @@ function rnwRenderDevices(){
       + '<td>'+regCell+'</td>'
       + '<td style="color:var(--text2);white-space:nowrap">'+escHtml(srvName)+'</td>'
       + '<td style="white-space:nowrap"><div style="font-weight:700;color:'+stColor+'">'+escHtml(d.expiry)+'</div><div style="font-size:11px;color:'+stColor+'">'+dl+'</div></td>'
-      + '<td><select id="rnw-sel-'+realIdx+'" class="form-input" style="width:100%;min-width:190px;font-size:12px;padding:6px 8px">'+_rnwRenewOptions()+'</select></td>'
+      + '<td><select id="rnw-sel-'+realIdx+'" class="form-input" style="width:100%;min-width:150px;font-size:12px;padding:6px 8px" onchange="rnwSyncAmount('+realIdx+')">'+_rnwRenewOptions()+'</select>'
+        + '<div style="margin-top:5px;display:flex;align-items:center;gap:4px"><span style="font-size:12px;color:var(--text3)">₹</span><input type="number" id="rnw-amt-'+realIdx+'" class="form-input" min="0" step="1" placeholder="Amount" title="Amount to bill (editable — reduce for a discount)" style="width:100%;min-width:90px;font-size:12px;padding:5px 7px"></div></td>'
       + '<td style="white-space:nowrap">'
         + '<div style="display:flex;align-items:center;gap:6px;justify-content:center;flex-wrap:wrap">'
           + waBtn
@@ -6828,6 +6829,8 @@ function rnwRenderDevices(){
         + '</div></td>'
     + '</tr>';
   }).join('');
+  // Pre-fill each row's editable amount from its default selected plan.
+  rows.forEach(function(d){ const ri=_rnwDevices.indexOf(d); rnwSyncAmount(ri); });
 }
 // Send a WhatsApp renewal reminder to the device's customer.
 function rnwWhatsApp(idx){
@@ -6867,16 +6870,33 @@ function rnwShotPicked(idx){
   const st=document.getElementById('rnw-shot-status-'+idx);
   if(inp && inp.files && inp.files[0] && st){ st.textContent='✅ Proof'; st.style.color='var(--green)'; st.parentElement.style.borderColor='var(--green)'; st.parentElement.style.borderStyle='solid'; }
 }
+// Pre-fill the editable amount box from the selected plan. Manager/tech can then change it (discount).
+function rnwSyncAmount(idx){
+  const sel=document.getElementById('rnw-sel-'+idx);
+  const amtInp=document.getElementById('rnw-amt-'+idx);
+  if(!sel || !amtInp) return;
+  const parts=(sel.value||'12|0|0|Renewal').split('|');
+  const planAmt=parseFloat(parts[1])||0;
+  // Always reflect the plan's price when the plan changes (user can still override after).
+  amtInp.value = planAmt>0 ? planAmt : '';
+}
 async function requestRenewal(idx, btn){
   const d=_rnwDevices[idx]; if(!d) return;
   const sel=document.getElementById('rnw-sel-'+idx);
   const parts=(sel?sel.value:'12|0|0|Renewal').split('|');
-  const months=parseInt(parts[0])||12, amount=parseFloat(parts[1])||0, gst=parseFloat(parts[2])||0, itemName=parts[3]||'Renewal';
+  const months=parseInt(parts[0])||12, planAmount=parseFloat(parts[1])||0, planGst=parseFloat(parts[2])||0, itemName=parts[3]||'Renewal';
   const label = (months>=12&&months%12===0)?((months/12)+' Year'+((months/12)>1?'s':'')):(months+' Months');
-  if(!sel || !sel.value || amount<=0){ showToast('⚠️ Select a renewal plan first. If the list is empty, reload the page so plans load (or add them in Price List).'); return; }
+  if(!sel || !sel.value || planAmount<=0){ showToast('⚠️ Select a renewal plan first. If the list is empty, reload the page so plans load (or add them in Price List).'); return; }
+  // Use the editable amount (allows a discount / negotiated price). Falls back to the plan price.
+  const amtInp=document.getElementById('rnw-amt-'+idx);
+  let amount=amtInp && amtInp.value!=='' ? parseFloat(amtInp.value) : planAmount;
+  if(isNaN(amount) || amount<=0){ showToast('⚠️ Enter a valid amount'); if(amtInp) amtInp.focus(); return; }
+  // Keep GST proportional to the plan's GST ratio so the balance sheet stays consistent.
+  const gst = planAmount>0 ? Math.round((planGst/planAmount)*amount) : 0;
   const shotInp=document.getElementById('rnw-shot-'+idx);
   if(!shotInp || !shotInp.files || !shotInp.files[0]){ showToast('⚠️ Attach the payment screenshot first'); return; }
-  if(!confirm('Request renewal of "'+d.name+'" for '+label+(amount>0?(' (₹'+amount.toLocaleString('en-IN')+')'):'')+'?\n\nThis will be sent to admin for approval.')) return;
+  const discountNote = amount<planAmount ? ('\n\n⚠️ Discounted: ₹'+amount.toLocaleString('en-IN')+' (plan price ₹'+planAmount.toLocaleString('en-IN')+')') : '';
+  if(!confirm('Request renewal of "'+d.name+'" for '+label+' (₹'+amount.toLocaleString('en-IN')+')?'+discountNote+'\n\nThis will be sent to admin for approval.')) return;
   if(btn){ btn.disabled=true; btn.textContent='⏳ Uploading…'; }
   // 1) Upload the payment screenshot
   let shotPath='';
