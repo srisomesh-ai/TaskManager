@@ -7524,6 +7524,19 @@ async function openDailyReport(dateStr){
     + '</div>';
   document.getElementById('dr-text').value=text;
 }
+function svcShort(service){
+  const s=(service||'').toLowerCase();
+  if(s.includes('engine cut')||s.includes('engine-cut')||s.includes('immobiliz')||s.includes('engine off')) return 'EC';
+  if(s.includes('engine status')||s.includes('engine on/off')||s.includes('engine-status')) return 'ES';
+  if(s.includes('fuel')) return 'FS';
+  if(s.includes('ac ')||s.includes('a/c')) return 'AC';
+  if(s.includes('temperature')||s.includes('temp ')) return 'TS';
+  if(s.includes('basic')||s.includes('normal')) return 'B';
+  // Fallback: first letters of the words, uppercased (max 3 chars)
+  const w=(service||'').trim().split(/\s+/).filter(Boolean);
+  if(!w.length) return '';
+  return w.map(function(x){ return x[0]; }).join('').toUpperCase().slice(0,3);
+}
 function buildDailyReportText(res){
   const d=res.date?res.date.split('-'):null;
   const shownDate=d?(d[2]+'/'+d[1]+'/'+d[0]):'';
@@ -7552,7 +7565,7 @@ function buildDailyReportText(res){
       lines.push(tech+' ('+arr.length+'):');
       arr.forEach(function(it){
         let parts=[it.name];
-        if(cat==='Sales' && it.service) parts.push(it.service);
+        if(cat==='Sales' && it.service) parts.push(svcShort(it.service));
         if(cat!=='Self Installation' && it.server) parts.push(it.server);
         lines.push('* '+parts.join(', '));
       });
@@ -7578,7 +7591,9 @@ function buildDailyReportText(res){
   lines.push('Attendance');
   lines.push('');
   lines.push('Half Day:');
-  lines.push('* ');
+  const hd=res.half_day||[];
+  if(hd.length){ hd.forEach(function(n){ lines.push('* '+n); }); }
+  else { lines.push('* '); }
   lines.push('');
   lines.push('Absent:');
   lines.push('* ');
