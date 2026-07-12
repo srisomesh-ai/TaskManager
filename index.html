@@ -7471,7 +7471,8 @@ function exportDailyCSV(){
 const QT_ENQUIRY_URL = 'https://salmon-goldfish-110661.hostingersite.com/enquiry.php';
 
 // ── Daily Report (end-of-day WhatsApp report) ──
-async function openDailyReport(){
+async function openDailyReport(dateStr){
+  const theDate = dateStr || new Date().toISOString().slice(0,10);
   let ov=document.getElementById('dr-ov');
   if(!ov){
     ov=document.createElement('div');
@@ -7482,12 +7483,16 @@ async function openDailyReport(){
   }
   ov.innerHTML='<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:90vh;overflow:auto;padding:18px">'
     + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
-    +   '<div style="font-size:16px;font-weight:800">📋 Daily Report</div>'
+    +   '<div style="font-size:16px;font-weight:800">📋 Manager Report</div>'
     +   '<button onclick="document.getElementById(\'dr-ov\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888">×</button>'
     + '</div>'
-    + '<div id="dr-body" style="color:#555;font-size:13px;padding:20px;text-align:center">⏳ Collecting today\'s data…</div>'
+    + '<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">'
+    +   '<label style="font-size:12px;font-weight:700;color:#555">Report date:</label>'
+    +   '<input type="date" id="dr-date" value="'+theDate+'" max="'+new Date().toISOString().slice(0,10)+'" onchange="openDailyReport(this.value)" style="padding:7px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">'
+    + '</div>'
+    + '<div id="dr-body" style="color:#555;font-size:13px;padding:20px;text-align:center">⏳ Collecting data…</div>'
     + '</div>';
-  const res=await api('daily_report_data',{});
+  const res=await api('daily_report_data',{date:theDate});
   const body=document.getElementById('dr-body');
   if(!res || !res.success){ body.innerHTML='<div style="color:#c0392b">'+((res&&res.error)||'Failed to load')+'</div>'; return; }
   const text=buildDailyReportText(res);
@@ -7571,7 +7576,7 @@ function sendDailyReportWhatsApp(){
 }
 
 // Generic report modal (shared by Assignment & License reports)
-function _showReportModal(title, text){
+function _showReportModal(title, text, theDate, reloadFn){
   let ov=document.getElementById('dr-ov');
   if(!ov){
     ov=document.createElement('div');
@@ -7580,11 +7585,18 @@ function _showReportModal(title, text){
     ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
     document.body.appendChild(ov);
   }
+  const today=new Date().toISOString().slice(0,10);
+  const dv=theDate||today;
+  const datePicker = reloadFn ? ('<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">'
+    +   '<label style="font-size:12px;font-weight:700;color:#555">Report date:</label>'
+    +   '<input type="date" value="'+dv+'" max="'+today+'" onchange="'+reloadFn+'(this.value)" style="padding:7px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">'
+    + '</div>') : '';
   ov.innerHTML='<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:90vh;overflow:auto;padding:18px">'
     + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
     +   '<div style="font-size:16px;font-weight:800">'+escHtml(title)+'</div>'
     +   '<button onclick="document.getElementById(\'dr-ov\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888">×</button>'
     + '</div>'
+    + datePicker
     + '<textarea id="dr-text" style="width:100%;min-height:300px;font-family:monospace;font-size:12px;padding:10px;border:1.5px solid #ddd;border-radius:8px" spellcheck="false"></textarea>'
     + '<div style="font-size:11px;color:#888;margin:8px 0">Edit the text (e.g. fill in calls) before sending.</div>'
     + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
@@ -7595,9 +7607,10 @@ function _showReportModal(title, text){
 }
 
 // ── Assignment Report: tasks created today + manual calls received ──
-async function openAssignmentReport(){
-  _showReportModal('📞 Assignment Report','⏳ Loading…');
-  const res=await api('daily_report_data',{});
+async function openAssignmentReport(dateStr){
+  const theDate = dateStr || new Date().toISOString().slice(0,10);
+  _showReportModal('📞 Assignment Report','⏳ Loading…', theDate, 'openAssignmentReport');
+  const res=await api('daily_report_data',{date:theDate});
   if(!res || !res.success){ const t=document.getElementById('dr-text'); if(t) t.value=(res&&res.error)||'Failed to load'; return; }
   const d=res.date?res.date.split('-'):null;
   const shownDate=d?(d[2]+'/'+d[1]+'/'+d[0]):'';
@@ -7619,9 +7632,10 @@ async function openAssignmentReport(){
 }
 
 // ── License Report: licenses done today + manual calls made ──
-async function openLicenseReport(){
-  _showReportModal('🔄 License Report','⏳ Loading…');
-  const res=await api('daily_report_data',{});
+async function openLicenseReport(dateStr){
+  const theDate = dateStr || new Date().toISOString().slice(0,10);
+  _showReportModal('🔄 License Report','⏳ Loading…', theDate, 'openLicenseReport');
+  const res=await api('daily_report_data',{date:theDate});
   if(!res || !res.success){ const t=document.getElementById('dr-text'); if(t) t.value=(res&&res.error)||'Failed to load'; return; }
   const d=res.date?res.date.split('-'):null;
   const shownDate=d?(d[2]+'/'+d[1]+'/'+d[0]):'';
