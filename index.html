@@ -239,6 +239,7 @@ textarea.form-input{height:auto;padding:9px 12px;cursor:text;resize:vertical}
 .ra-pill.no{background:#fee2e2;color:#b91c1c}
 .act-edit{background:var(--saffron-bg);color:var(--saffron)}
 .act-wa{background:var(--green-bg);color:var(--green)}
+.act-remind{background:var(--saffron-bg);color:var(--saffron)}
 .act-del{background:var(--red-bg);color:var(--red)}
 .tbl-footer{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--border);background:var(--surface);border-radius:0 0 8px 8px;font-size:12px;color:var(--text3)}
 .pg-btn{padding:5px 12px;border:1.5px solid var(--border);border-radius:5px;background:var(--surface);cursor:pointer;font-size:12px;font-weight:700}
@@ -2777,6 +2778,7 @@ function renderTasksTable(){
           <button class="act-btn act-view" onclick="viewTask(${t.id})" title="View">👁</button>
           ${isAdmin?`<button class="act-btn act-edit" onclick="openEditModal(${t.id})" title="Edit">✏️</button>`:''}
           <button class="act-btn act-wa" onclick="quickWA('${t.contact_number}','${t.task_id}','${t.customer_name}')" title="WhatsApp">📱</button>
+          ${isAdmin?`<button class="act-btn act-remind" onclick="pushTaskReminder(${t.id},'${t.task_id}')" title="Send urgent push reminder to technician">🔔</button>`:''}
           ${isAdmin?`<button class="act-btn act-del" onclick="deleteTask(${t.id},'${t.task_id}')" title="Delete">🗑</button>`:''}
         </div>
       </td>
@@ -2903,6 +2905,17 @@ async function deleteTask(id, taskId){
 function quickWA(phone, taskId, name){
   const msg = encodeURIComponent(`Hello ${name}, this is regarding your task ${taskId} at BharatGPS. Please let us know if you need any assistance.`);
   window.open(`https://wa.me/91${phone.replace(/\D/g,'')}?text=${msg}`, '_blank');
+}
+
+// ── Send an urgent push reminder for a task to its assigned technician ─────
+async function pushTaskReminder(id, taskId){
+  const note = prompt('Urgent reminder for '+(taskId||'this task')+'.\n\nOptional message (leave blank for the default "Please attend this task now"):','');
+  if(note===null) return; // cancelled
+  try{
+    const res = await api('push_task_reminder',{task_id:id, message:(note||'').trim()},'POST');
+    if(res && res.success){ showToast('🔔 Reminder pushed to technician'); }
+    else { showToast('⚠️ '+((res&&res.error)||'Could not send reminder')); }
+  }catch(e){ showToast('⚠️ Could not send reminder'); }
 }
 
 // ── Export CSV ────────────────────────────────────────────────────────────
