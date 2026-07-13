@@ -2479,7 +2479,6 @@ case 'add_tech_note':
         // Optional push to the technician
         try {
             $titles = ['warning'=>'⚠️ Warning from admin','appreciation'=>'👏 Appreciation from admin','issue'=>'❗ Issue noted','general'=>'📝 Note from admin'];
-            require_once __DIR__.'/fcm_send.php';
             if(function_exists('fcm_send_to_user')){ fcm_send_to_user($pdo,$uid,$titles[$type]??'📝 New note', ($ttl!==''?$ttl:mb_substr($bdy,0,80)), ['type'=>'tech_note']); }
         } catch(Exception $e){}
         echo json_encode(['success'=>true]);
@@ -2499,69 +2498,6 @@ case 'list_tech_notes':
         $st = $pdo->prepare("SELECT * FROM tech_notes WHERE user_id=? ORDER BY created_at DESC");
         $st->execute([$uid]);
         echo json_encode(['success'=>true,'notes'=>$st->fetchAll()]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
-    break;
-
-case 'fcm_diagnostic':
-    // Admin only: report FCM health so we know why pushes are/aren't arriving.
-    if($userRole!=='admin'){ http_response_code(403); echo json_encode(['error'=>'Admin only']); break; }
-    try {
-        $out = [];
-        require_once __DIR__.'/fcm_send.php';
-        // 1) Key file present & readable?
-        $keyPath = function_exists('fcm_key_path') ? fcm_key_path() : (__DIR__.'/../fcm-key.json');
-        $out['key_file_path'] = $keyPath;
-        $out['key_file_exists'] = file_exists($keyPath);
-        $out['key_file_readable'] = is_readable($keyPath);
-        if($out['key_file_readable']){
-            $k = json_decode(@file_get_contents($keyPath), true);
-            $out['project_id'] = $k['project_id'] ?? null;
-            $out['client_email'] = $k['client_email'] ?? null;
-        }
-        // 2) Function available?
-        $out['fcm_function_exists'] = function_exists('fcm_send_to_user');
-        // 3) Access token obtainable?
-        if(function_exists('fcm_get_access_token')){
-            $tok = fcm_get_access_token();
-            $out['access_token_ok'] = !empty($tok);
-        } else { $out['access_token_ok'] = 'no fcm_get_access_token()'; }
-        // 4) How many users have a token?
-        try { $out['users_total'] = intval($pdo->query("SELECT COUNT(*) FROM users WHERE is_active=1")->fetchColumn()); } catch(Exception $e){ $out['users_total']='?'; }
-        try { $out['users_with_token'] = intval($pdo->query("SELECT COUNT(*) FROM users WHERE is_active=1 AND fcm_token IS NOT NULL AND fcm_token<>''")->fetchColumn()); } catch(Exception $e){ $out['users_with_token']='err: '.$e->getMessage(); }
-        // 5) Does the CURRENT admin have a token, and can we send to self?
-        try { $me=$pdo->prepare("SELECT fcm_token FROM users WHERE id=?"); $me->execute([$userId]); $mt=$me->fetchColumn(); $out['my_token_present']=!empty($mt); } catch(Exception $e){ $out['my_token_present']='err'; }
-        if(!empty($mt) && function_exists('fcm_send_to_user')){
-            $out['test_send_to_self'] = fcm_send_to_user($pdo,$userId,'🔔 Test','This is a test push from BharatGPS',['type'=>'test']) ? 'sent' : 'failed';
-        } else { $out['test_send_to_self']='skipped (no token)'; }
-        echo json_encode(['success'=>true,'diag'=>$out]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
-    break;
-
-case 'broadcast_push':
-    // Admin only: send a one-off push alert to all active staff. Not stored — just a pop-up.
-    if($userRole!=='admin'){ http_response_code(403); echo json_encode(['error'=>'Only admin can broadcast']); break; }
-    try {
-        $title = trim($body['title'] ?? '📢 Announcement');
-        $msg   = trim($body['message'] ?? '');
-        if($msg===''){ echo json_encode(['error'=>'Message is required']); break; }
-        if($title==='') $title='📢 Announcement';
-        // Target: all active users, or a role filter if provided
-        $roleFilter = trim($body['role'] ?? '');
-        if(in_array($roleFilter,['technician','assigner','admin'])){
-            $q = $pdo->prepare("SELECT id FROM users WHERE is_active=1 AND role=?"); $q->execute([$roleFilter]);
-        } else {
-            $q = $pdo->query("SELECT id FROM users WHERE is_active=1");
-        }
-        $ids = $q->fetchAll(PDO::FETCH_COLUMN);
-        $sent=0; $failed=0;
-        require_once __DIR__.'/fcm_send.php';
-        if(function_exists('fcm_send_to_user')){
-            foreach($ids as $uid){
-                try { if(fcm_send_to_user($pdo, intval($uid), $title, $msg, ['type'=>'broadcast'])) $sent++; else $failed++; }
-                catch(Exception $e){ $failed++; }
-            }
-        }
-        echo json_encode(['success'=>true,'sent'=>$sent,'failed'=>$failed,'total'=>count($ids)]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
