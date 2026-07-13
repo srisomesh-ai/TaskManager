@@ -7306,12 +7306,16 @@ async function approveRenewal(id, btn){
       showToast('⚠️ Server updated but could not record: '+((ar&&ar.error)||''));
     }
     // Refresh ONLY the approvals list (stay on this tab — no full page reload, no stuck button).
+    // Small delay so the just-approved status is fully committed before we re-read the list.
+    await new Promise(function(res){ setTimeout(res, 400); });
     await loadRenewalRequests();
-    loadRenewalBadge();
+    await loadRenewalBadge();
   }catch(e){
     showToast('❌ '+e.message);
     if(btn){ btn.disabled=false; btn.textContent='✅ Approve'; }
+    await new Promise(function(res){ setTimeout(res, 400); });
     await loadRenewalRequests();
+    await loadRenewalBadge();
   }
 }
 async function backfillCoins(btn){
@@ -7365,7 +7369,7 @@ async function rejectRenewal(id, btn){
   if(notes===null) return;
   if(btn){ btn.disabled=true; btn.textContent='…'; }
   const r=await api('renewal_reject',{},'POST',{id:id, notes:notes||''});
-  if(r && r.success){ showToast('Renewal rejected'); await loadRenewalRequests(); loadRenewalBadge(); }
+  if(r && r.success){ showToast('Renewal rejected'); await new Promise(function(res){ setTimeout(res, 400); }); await loadRenewalRequests(); await loadRenewalBadge(); }
   else { showToast('❌ '+((r&&r.error)||'Could not reject')); if(btn){ btn.disabled=false; btn.textContent='✖ Reject'; } }
 }
 async function fixMissingRenewalBs(btn){
