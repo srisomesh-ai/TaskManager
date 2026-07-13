@@ -581,8 +581,8 @@
   function buildStepper(t){
     const cancelled=t.task_status==='Cancelled', isClosed=t.task_status==='Closed';
     const installs=t.device_installs||[], qty=parseInt(t.device_qty||1)||1;
-    const installedOk=installs.filter(d=>d.gps_serial_no&&d.name_on_server).length;
-    const addingDone=(installedOk>=qty && installs.every(d=>d.gps_serial_no&&d.name_on_server)) || (String(t.partial_finish)==='1' && installedOk>=1);
+    const installedOk=installs.filter(d=>d.gps_serial_no).length;
+    const addingDone=(installedOk>=qty && installs.every(d=>d.gps_serial_no)) || (String(t.partial_finish)==='1' && installedOk>=1);
     const hasTechAct=!!(t.last_tech_activity||t.consent_token||t.customer_consent_at||['In Progress','Task Pending','Awaiting Approval','Closed'].includes(t.task_status));
     const payDone=parseFloat(t.amount_collected||0)>=parseFloat(t.price_to_collect||0)-15 && parseFloat(t.price_to_collect||0)>0;
     const jt=(t.device_details||'').toLowerCase();
@@ -790,10 +790,10 @@
       // Has installation been completed? (all devices pushed)
       const installs=t.device_installs||[]; let qty=parseInt(t.device_qty||1)||1;
       if((jobLower.includes('vehicle to vehicle')||jobLower.includes('v2v'))&&qty<1) qty=1;
-      const installedOk=installs.filter(d=>d.gps_serial_no&&d.name_on_server).length;
+      const installedOk=installs.filter(d=>d.gps_serial_no).length;
       const isPartial=String(t.partial_finish)==='1';
       const hasBalance=installedOk<qty;   // still devices left to install up to the ORIGINAL qty
-      const addingDone=(installedOk>=qty && installs.every(d=>d.gps_serial_no&&d.name_on_server)) || (isPartial && installedOk>=1);
+      const addingDone=(installedOk>=qty && installs.every(d=>d.gps_serial_no)) || (isPartial && installedOk>=1);
       const price=parseFloat(t.price_to_collect||0), coll=parseFloat(t.amount_collected||0);
       const payDone=coll>=price-15 && price>0;
       // A cash task needs the deposit step whenever cash was collected but not yet submitted/deposited.
@@ -1164,7 +1164,7 @@
     _instStep=1; _instSaved={};
     // restore already-installed devices (only up to current qty; ignore stray higher indices)
     (t.device_installs||[]).forEach(d=>{
-      if(d && d.gps_serial_no && d.name_on_server && d.device_index){
+      if(d && d.gps_serial_no && d.device_index){
         const di=parseInt(d.device_index);
         if(di>=1) _instSaved[di]={pushed:true,imei:d.gps_serial_no,name:d.name_on_server,server_name:d.server_name,plate:d.vehicle_number,vtype:d.vehicle_type,inst:d.installation_date,exp:d.expiration_date,server_id:d.server_id,device_id:d.device_id};
       }
@@ -1400,7 +1400,10 @@
   async function confirmPush(idx){
     const g=id=>document.getElementById(id+'-'+idx)?.value;
     const serverId=g('iserverid'),deviceId=g('ideviceid'),imei=g('iimeih');
-    const name=(g('iname')||'').trim(), plate=(g('iplate')||'').trim().toUpperCase(), vtype=g('ivtype');
+    let name=(g('iname')||'').trim(); const plate=(g('iplate')||'').trim().toUpperCase(), vtype=g('ivtype');
+    // Re-adding an existing device may not require typing a new name. Never save an empty
+    // name_on_server, or the device won't be counted as installed and the task can't be submitted.
+    if(!name){ name = plate || (_curTask && _curTask.customer_name) || ('Device '+idx); }
     const owner=(g('iowner')||'').trim(), reg=(g('ireg')||'').trim(), inst=g('iinst'), exp=g('iexp'), notes=(g('inotes')||'').trim();
     let iconId=g('iiconid'); if(!iconId){ iconId='1'; }   // fallback to default icon if list failed / none picked
     const btn=document.getElementById('iconfirm-'+idx); if(btn){btn.textContent='Pushing…';btn.disabled=true;}
