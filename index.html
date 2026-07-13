@@ -783,8 +783,9 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
               </div>
               <div id="fm-reminder-wrap" style="margin-bottom:12px">
                 <div style="background:var(--saffron-bg);border:1.5px solid var(--saffron);border-radius:7px;padding:10px 14px">
-                  <div style="font-size:11px;font-weight:700;color:var(--saffron);margin-bottom:6px">⚠️ No technician assigned — set a follow-up reminder</div>
+                  <div style="font-size:11px;font-weight:700;color:var(--saffron);margin-bottom:6px">📅 Follow-up / Reschedule reminder date</div>
                   <input type="date" id="fm-reminder" style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;outline:none">
+                  <div style="font-size:10px;color:var(--text3);margin-top:5px;line-height:1.4">Set this when the customer asked to reschedule or a follow-up is needed — even if a technician is already assigned. Leave blank if not needed.</div>
                 </div>
               </div>
               <div id="fm-outstation-wrap" style="display:none">
@@ -2836,6 +2837,7 @@ async function saveTask(){
     discount_reason:   document.getElementById('fm-discount-reason')?.value||'',
     discount_incharge: document.getElementById('fm-discount-approver')?.value||'',
     vehicle_number:    (function(){ const q=Math.max(1,parseInt(document.getElementById('fm-qty')?.value||1)||1); const arr=[]; for(let i=0;i<q;i++){ const v=(document.getElementById('fm-vehicle-'+i)?.value||'').trim(); if(v) arr.push(v); } return arr.join(', '); })(),
+    reminder_date:     (document.getElementById('fm-reminder')?.value||'').trim(),
   };
   // If a vehicle status was pulled, append it to notes so it becomes part of the record / activity
   if(_fmVehicleStatus && _fmVehicleStatus.vehicle){
@@ -3354,9 +3356,8 @@ function invStat(label, val, color){
 
 function handleTechChange(){
   const val=document.getElementById('fm-tech')?.value||'';
-  const rw=document.getElementById('fm-reminder-wrap');
   const ow=document.getElementById('fm-outstation-wrap');
-  if(rw) rw.style.display=val?'none':'';
+  // Reminder/reschedule date stays available whether or not a technician is assigned.
   if(ow) ow.style.display=val?'':'none';
   if(!val){
     const osCb=document.getElementById('fm-outstation'); if(osCb) osCb.checked=false;
