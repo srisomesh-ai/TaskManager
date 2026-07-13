@@ -271,12 +271,9 @@ function cash_oldest_pending_days($pdo, $techId){
               AND COALESCE(amount_collected,0)>0 AND cash_pending_at IS NOT NULL");
         $r->execute([$techId]); $v=$r->fetchColumn(); if($v) $oldest=$v;
     } catch(Exception $e){}
-    try {
-        $r2 = $pdo->prepare("SELECT MIN(date) FROM balance_sheet_entries
-            WHERE technician_id=? AND COALESCE(pending_payment,0)>0 AND (task_db_id IS NULL OR task_db_id=0)");
-        $r2->execute([$techId]); $v2=$r2->fetchColumn();
-        if($v2){ if(!$oldest || $v2<$oldest) $oldest=$v2; }
-    } catch(Exception $e){}
+    // NOTE: Only real cash collected on tasks counts toward blocking. Old manual balance-sheet
+    // entries (customer-owed pending amounts) must NOT block or notify a technician — they are not
+    // cash the technician is physically holding.
     if(!$oldest) return 0;
     $days = (int)floor((time()-strtotime($oldest))/86400);
     return max(0,$days);
@@ -290,13 +287,9 @@ function apply_cash_penalty($pdo, $techId){
             WHERE assigned_to=? AND LOWER(payment_mode)='cash' AND cash_deposit_status='pending'
               AND COALESCE(amount_collected,0)>0 AND cash_pending_at IS NOT NULL");
         $r->execute([$techId]); $ot=$r->fetchColumn();
-        $om=null;
-        $r2 = $pdo->prepare("SELECT MIN(date) FROM balance_sheet_entries
-            WHERE technician_id=? AND COALESCE(pending_payment,0)>0 AND (task_db_id IS NULL OR task_db_id=0)");
-        $r2->execute([$techId]); $om=$r2->fetchColumn();
-        $oldest=null;
-        if($ot) $oldest=$ot;
-        if($om && (!$oldest || $om<$oldest)) $oldest=$om;
+        // Only real undeposited cash from tasks is penalised. Manual balance-sheet pending amounts
+        // (customer dues) are NOT the technician's held cash — they must not trigger penalties.
+        $oldest = $ot ?: null;
         if(!$oldest) return; // nothing pending
         $startTs = strtotime($oldest);
         $graceEnd = $startTs + 4*86400;           // penalty begins only AFTER 4 full days
@@ -359,7 +352,8 @@ function is_tech_blocked($pdo, $techId){
     if($days <= 4) return false;
     $amt = 0.0;
     try { $r=$pdo->prepare("SELECT COALESCE(SUM(amount_collected),0) FROM tasks WHERE assigned_to=? AND LOWER(payment_mode)='cash' AND cash_deposit_status='pending' AND COALESCE(amount_collected,0)>0"); $r->execute([$techId]); $amt+=floatval($r->fetchColumn()); } catch(Exception $e){}
-    try { $r2=$pdo->prepare("SELECT COALESCE(SUM(pending_payment),0) FROM balance_sheet_entries WHERE technician_id=? AND COALESCE(pending_payment,0)>0 AND (task_db_id IS NULL OR task_db_id=0)"); $r2->execute([$techId]); $amt+=floatval($r2->fetchColumn()); } catch(Exception $e){}
+    // Only real undeposited cash from tasks blocks a technician. Manual balance-sheet pending
+    // amounts (customer dues) are NOT the technician's held cash and must never trigger a block.
     return ($amt > 0);
 }
 
@@ -1141,15 +1135,9 @@ case 'update_task':
                 $lockChk->execute([$existing['assigned_to'], $id]);
                 $lk = $lockChk->fetch();
                 $cnt = intval($lk['c']??0); $amt = floatval($lk['amt']??0); $oldest = $lk['oldest']??null;
-                // Overdue cash from manual balance-sheet entries linked to this technician
-                try {
-                    $lm = $pdo->prepare("SELECT COUNT(*) c, COALESCE(SUM(pending_payment),0) amt, MIN(date) oldest
-                        FROM balance_sheet_entries WHERE technician_id=? AND COALESCE(pending_payment,0)>0
-                          AND (task_db_id IS NULL OR task_db_id=0) AND date < (CURDATE() - INTERVAL 4 DAY)");
-                    $lm->execute([$existing['assigned_to']]); $lmr=$lm->fetch();
-                    $cnt += intval($lmr['c']??0); $amt += floatval($lmr['amt']??0);
-                    if (!empty($lmr['oldest']) && (!$oldest || $lmr['oldest']<$oldest)) $oldest=$lmr['oldest'];
-                } catch(Exception $e){}
+                // Only real undeposited cash the technician collected on tasks locks their account.
+                // Manual balance-sheet pending amounts (customer dues, old entries) are NOT the
+                // technician's held cash and must never lock or notify them.
                 if ($cnt>0) {
                     $days = 0;
                     try { $days = (int)floor((time()-strtotime($oldest))/86400); } catch(Exception $e){}
@@ -3530,10 +3518,11 @@ case 'my_cash_lock_status':
         // Accrue any owed penalty before reporting.
         try { apply_cash_penalty($pdo, $me2); } catch(Exception $e){}
         $days = cash_oldest_pending_days($pdo, $me2);
-        // Pending amount (tasks + manual)
+        // Pending amount = ONLY real cash the technician collected on tasks and has not deposited.
+        // Manual balance-sheet pending amounts (customer dues) are excluded — they are not the
+        // technician's held cash and must not lock or notify them.
         $amt = 0.0;
         try { $r=$pdo->prepare("SELECT COALESCE(SUM(amount_collected),0) FROM tasks WHERE assigned_to=? AND LOWER(payment_mode)='cash' AND cash_deposit_status='pending' AND COALESCE(amount_collected,0)>0"); $r->execute([$me2]); $amt+=floatval($r->fetchColumn()); } catch(Exception $e){}
-        try { $r2=$pdo->prepare("SELECT COALESCE(SUM(pending_payment),0) FROM balance_sheet_entries WHERE technician_id=? AND COALESCE(pending_payment,0)>0 AND (task_db_id IS NULL OR task_db_id=0)"); $r2->execute([$me2]); $amt+=floatval($r2->fetchColumn()); } catch(Exception $e){}
         $locked = ($days > 4 && $amt > 0);
         echo json_encode([
             'success'=>true,
