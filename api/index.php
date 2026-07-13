@@ -2479,7 +2479,6 @@ case 'add_tech_note':
         // Optional push to the technician
         try {
             $titles = ['warning'=>'⚠️ Warning from admin','appreciation'=>'👏 Appreciation from admin','issue'=>'❗ Issue noted','general'=>'📝 Note from admin'];
-            require_once __DIR__.'/fcm_send.php';
             if(function_exists('fcm_send_to_user')){ fcm_send_to_user($pdo,$uid,$titles[$type]??'📝 New note', ($ttl!==''?$ttl:mb_substr($bdy,0,80)), ['type'=>'tech_note']); }
         } catch(Exception $e){}
         echo json_encode(['success'=>true]);
