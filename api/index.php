@@ -2186,6 +2186,36 @@ case 'bs_get_entries':
     $sql = "SELECT * FROM balance_sheet_entries" . ($where?" WHERE ".implode(" AND ",$where):"") . " ORDER BY date DESC, created_at DESC LIMIT 1000";
     $s = $pdo->prepare($sql); $s->execute($params);
     $entries = $s->fetchAll();
+    // Attach the task's payment screenshot (for sales/task entries) from task_documents.
+    // License/renewal entries already carry their proof in payment_transaction_details.
+    try {
+        $taskDbIds = [];
+        foreach ($entries as $e) { if (!empty($e['task_db_id'])) $taskDbIds[(int)$e['task_db_id']] = true; }
+        if ($taskDbIds) {
+            $ids = array_keys($taskDbIds);
+            $ph  = implode(',', array_fill(0, count($ids), '?'));
+            // Prefer a verified/collected payment screenshot; fall back to cash deposit proof.
+            $ds = $pdo->prepare("SELECT task_id, doc_type, filename FROM task_documents
+                                 WHERE task_id IN ($ph)
+                                   AND doc_type IN ('payment_screenshot','cash_deposit_screenshot','cash_deposit')
+                                 ORDER BY id ASC");
+            $ds->execute($ids);
+            $shotByTask = [];
+            foreach ($ds->fetchAll(PDO::FETCH_ASSOC) as $doc) {
+                // last one wins (most recent id) — payment_screenshot preferred over cash if both exist
+                $tid = (int)$doc['task_id'];
+                $path = 'uploads/task_'.$tid.'/'.$doc['filename'];
+                if (!isset($shotByTask[$tid]) || $doc['doc_type']==='payment_screenshot') {
+                    $shotByTask[$tid] = $path;
+                }
+            }
+            foreach ($entries as &$e) {
+                $tid = (int)($e['task_db_id'] ?? 0);
+                if ($tid && isset($shotByTask[$tid])) { $e['payment_screenshot'] = $shotByTask[$tid]; }
+            }
+            unset($e);
+        }
+    } catch(Exception $e) { /* non-fatal: entries still returned without screenshot */ }
     // Stats
     $stats = [
         'total_sales'       => 0, 'total_license'     => 0,
