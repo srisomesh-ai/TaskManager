@@ -443,6 +443,10 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
           <div class="pg-title">📊 Dashboard</div>
           <div class="pg-sub" id="dash-welcome">Welcome back.</div>
           <button onclick="loadDashboard()" style="margin-top:8px;background:var(--accent);color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">🔄 Refresh</button>
+          <span style="display:inline-flex;gap:6px;align-items:center;margin-top:8px;margin-left:8px;vertical-align:top">
+            <input id="dev-search-imei" type="text" inputmode="numeric" placeholder="Enter IMEI number…" onkeydown="if(event.key==='Enter')searchDeviceByImei()" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;outline:none;width:180px">
+            <button onclick="searchDeviceByImei()" style="background:var(--accent2);color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">🔍 Search Device</button>
+          </span>
         </div>
 
         <!-- ALERT BANNERS -->
@@ -5557,6 +5561,74 @@ async function checkAndUpdateAttendBtn(taskId){
 // DEVICE INSTALLATION — IMEI Search + GPS Server Push
 // ════════════════════════════════════════════════════════
 const GPS_PROXY = 'gps_proxy.php';
+
+// ───────── DASHBOARD: SEARCH DEVICE BY IMEI (read-only popup) ─────────
+async function searchDeviceByImei(){
+  const inp = document.getElementById('dev-search-imei');
+  const imei = (inp?.value||'').trim();
+  if(!imei){ if(typeof showToast==='function') showToast('⚠️ Enter an IMEI number'); else alert('Enter an IMEI number'); return; }
+  _showDevicePopup('<div style="text-align:center;padding:30px 10px;color:var(--text3);font-size:13px">🔍 Searching all servers for <b>'+escHtml(imei)+'</b>…</div>');
+  try{
+    const r = await fetch(GPS_PROXY+'?action=find&keyword='+encodeURIComponent(imei),{headers:{'X-Auth-Token':authToken},cache:'no-store'});
+    const data = await r.json();
+    if(!data.success){ _showDevicePopup('<div style="padding:24px;text-align:center;color:var(--red);font-size:13px">❌ '+escHtml(data.error||'Search failed')+'</div>'); return; }
+    if(!data.devices || !data.devices.length){
+      _showDevicePopup('<div style="padding:28px 20px;text-align:center"><div style="font-size:34px;margin-bottom:8px">🔍</div><div style="color:var(--red);font-weight:700;font-size:14px">No device found</div><div style="color:var(--text3);font-size:12px;margin-top:6px">No device with IMEI <b>'+escHtml(imei)+'</b> on any server. Check the number and try again.</div></div>');
+      return;
+    }
+    _showDevicePopup(data.devices.map(_deviceCardHtml).join(''), data.devices.length);
+  }catch(e){
+    _showDevicePopup('<div style="padding:24px;text-align:center;color:var(--red);font-size:13px">❌ Error: '+escHtml(e.message)+'</div>');
+  }
+}
+
+function _deviceCardHtml(device){
+  const dd = device.device_data || {};
+  const online = (device.online === 'online' || device.online === true || device.online === 1);
+  const statusBadge = online
+    ? '<span style="background:var(--green-bg);color:var(--green);font-weight:800;font-size:11px;padding:2px 10px;border-radius:20px">🟢 ONLINE</span>'
+    : '<span style="background:var(--red-bg);color:var(--red);font-weight:800;font-size:11px;padding:2px 10px;border-radius:20px">🔴 OFFLINE</span>';
+  const exp = dd.expiration_date && dd.expiration_date!=='0000-00-00' ? dd.expiration_date : '';
+  let expBadge = '';
+  if(exp){
+    const days = Math.floor((new Date(exp) - new Date())/86400000);
+    const c = days<0 ? 'var(--red)' : (days<=15 ? 'var(--saffron)' : 'var(--green)');
+    const lbl = days<0 ? ('Expired '+Math.abs(days)+'d ago') : (days+'d left');
+    expBadge = ' · <span style="color:'+c+';font-weight:700">'+escHtml(exp)+' ('+lbl+')</span>';
+  }
+  const row = (label, val) => '<div style="display:flex;padding:5px 0;border-bottom:1px solid var(--border)"><div style="width:130px;color:var(--text3);font-size:12px;flex-shrink:0">'+label+'</div><div style="font-size:12px;font-weight:600;color:var(--text)">'+escHtml(val||'–')+'</div></div>';
+  return '<div style="border:1.5px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:12px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px">'
+    +   '<div style="font-weight:800;font-size:15px;color:var(--text)">📡 '+escHtml(device.name||'–')+'</div>'
+    +   statusBadge
+    + '</div>'
+    + row('Server', device._server_name)
+    + row('IMEI', dd.imei)
+    + row('SIM Number', dd.sim_number)
+    + row('Plate / Vehicle', dd.plate_number)
+    + row('Owner', dd.object_owner)
+    + row('Reg. Number', dd.registration_number)
+    + row('Installed On', (dd.installation_date && dd.installation_date!=='0000-00-00') ? dd.installation_date : '')
+    + '<div style="display:flex;padding:5px 0;border-bottom:1px solid var(--border)"><div style="width:130px;color:var(--text3);font-size:12px;flex-shrink:0">Expiry</div><div style="font-size:12px;font-weight:600;color:var(--text)">'+(exp?expBadge.replace(/^ · /,''):'–')+'</div></div>'
+    + row('Group', device._group)
+    + (dd.additional_notes ? row('Notes', dd.additional_notes) : '')
+    + '</div>';
+}
+
+function _showDevicePopup(inner, count){
+  let ov = document.getElementById('dev-search-popup');
+  if(ov) ov.remove();
+  ov = document.createElement('div');
+  ov.id = 'dev-search-popup';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99999;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto';
+  ov.onclick = function(e){ if(e.target===ov) ov.remove(); };
+  const head = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
+    + '<div style="font-weight:800;font-size:16px;color:var(--text)">🔍 Device Search'+(count?(' · '+count+' found'):'')+'</div>'
+    + '<button onclick="document.getElementById(\'dev-search-popup\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text3);line-height:1">×</button>'
+    + '</div>';
+  ov.innerHTML = '<div style="background:var(--bg,#fff);border-radius:14px;padding:20px;max-width:520px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3)">'+head+inner+'</div>';
+  document.body.appendChild(ov);
+}
 var _attendSavedDevices = {};
 var _attendTaskQty = 1;
 var _attendTaskId  = null;
