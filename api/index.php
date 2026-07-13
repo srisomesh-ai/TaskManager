@@ -2501,6 +2501,33 @@ case 'list_tech_notes':
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
+case 'broadcast_push':
+    // Admin only: send a one-off push alert to all active staff. Not stored — just a pop-up.
+    if($userRole!=='admin'){ http_response_code(403); echo json_encode(['error'=>'Only admin can broadcast']); break; }
+    try {
+        $title = trim($body['title'] ?? '📢 Announcement');
+        $msg   = trim($body['message'] ?? '');
+        if($msg===''){ echo json_encode(['error'=>'Message is required']); break; }
+        if($title==='') $title='📢 Announcement';
+        // Target: all active users, or a role filter if provided
+        $roleFilter = trim($body['role'] ?? '');
+        if(in_array($roleFilter,['technician','assigner','admin'])){
+            $q = $pdo->prepare("SELECT id FROM users WHERE is_active=1 AND role=?"); $q->execute([$roleFilter]);
+        } else {
+            $q = $pdo->query("SELECT id FROM users WHERE is_active=1");
+        }
+        $ids = $q->fetchAll(PDO::FETCH_COLUMN);
+        $sent=0; $failed=0;
+        if(function_exists('fcm_send_to_user')){
+            foreach($ids as $uid){
+                try { if(fcm_send_to_user($pdo, intval($uid), $title, $msg, ['type'=>'broadcast'])) $sent++; else $failed++; }
+                catch(Exception $e){ $failed++; }
+            }
+        }
+        echo json_encode(['success'=>true,'sent'=>$sent,'failed'=>$failed,'total'=>count($ids)]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'delete_tech_note':
     // Admin only: delete a note. Removing it here removes it for the technician too (single source).
     if($userRole!=='admin'){ http_response_code(403); echo json_encode(['error'=>'Only admin can delete notes']); break; }
