@@ -4549,6 +4549,10 @@ async function viewTaskInEditDrawer(id){
   if(!t||!t.id) return;
   const isAdmin = ['admin','assigner'].includes(currentUser?.role);
 
+  // Make sure the GPS device job-type options are loaded (never leave "Loading…" stuck on edit).
+  await loadJobTypeItems();
+  loadPricesFromPriceList();
+
   editingTaskId = t.id;
   document.getElementById('task-modal-title').textContent = `Edit — ${t.task_id||''}`;
   document.getElementById('fm-task-id').value = t.id;
@@ -7291,22 +7295,24 @@ if(!window._rnwBadgeTimer){
 
 // ── Load GPS device options from Item Master (stock_items) ──────────────
 async function loadJobTypeItems(){
+  const grp = document.getElementById('fm-job-gps-group');
+  if(!grp) return;
+  // Always-available fallback device list so the dropdown never gets stuck on "Loading…".
+  const fallback = ['Basic/Normal GPS','Engine Status GPS','Engine Cut GPS','Micro GPS','Magnet GPS','MIC/SOS GPS','VLTD'];
+  function fillFallback(){
+    grp.innerHTML='';
+    fallback.forEach(function(label){ var o=document.createElement('option'); o.value=label; o.textContent=label; grp.appendChild(o); });
+  }
   try {
-    // Read from Price List (master) — only items marked has_stock=1 are physical devices
-    const d = await api('pl_get_public').catch(()=>({}));
+    // Read from Price List (master) — only product categories are physical devices.
+    let d = null;
+    try { d = await api('pl_get_public'); } catch(e){ d = null; }
     var productCats = ['GPS Tracker','VLTD','Accessory','Wire / Cable','SIM Card'];
-    const items = (d.items || []).filter(function(i){ return productCats.includes(i.category); });
-    const grp = document.getElementById('fm-job-gps-group');
-    if(!grp) return;
+    const items = ((d && d.items) || []).filter(function(i){ return productCats.includes(i.category); });
     grp.innerHTML = '';
     if(!items.length){
-      // Fallback if no items in price list yet
-      const fallback = ['Basic/Normal GPS','Engine Status GPS','Engine Cut GPS','Micro GPS','Magnet GPS','MIC/SOS GPS','VLTD'];
-      fallback.forEach(function(label){
-        var o = document.createElement('option');
-        o.value = label; o.textContent = label;
-        grp.appendChild(o);
-      });
+      // No items from the price list (or the call failed) → use the fallback so it's never stuck.
+      fillFallback();
       return;
     }
     items.forEach(function(item){
@@ -7315,7 +7321,10 @@ async function loadJobTypeItems(){
       o.textContent = item.product_name;
       grp.appendChild(o);
     });
-  } catch(e){}
+  } catch(e){
+    // Any unexpected error → show the fallback rather than leaving "Loading…" forever.
+    fillFallback();
+  }
 }
 
 function syncPurAuth(){
