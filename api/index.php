@@ -2479,6 +2479,7 @@ case 'add_tech_note':
         // Optional push to the technician
         try {
             $titles = ['warning'=>'⚠️ Warning from admin','appreciation'=>'👏 Appreciation from admin','issue'=>'❗ Issue noted','general'=>'📝 Note from admin'];
+            require_once __DIR__.'/fcm_send.php';
             if(function_exists('fcm_send_to_user')){ fcm_send_to_user($pdo,$uid,$titles[$type]??'📝 New note', ($ttl!==''?$ttl:mb_substr($bdy,0,80)), ['type'=>'tech_note']); }
         } catch(Exception $e){}
         echo json_encode(['success'=>true]);
@@ -2506,6 +2507,7 @@ case 'fcm_diagnostic':
     if($userRole!=='admin'){ http_response_code(403); echo json_encode(['error'=>'Admin only']); break; }
     try {
         $out = [];
+        require_once __DIR__.'/fcm_send.php';
         // 1) Key file present & readable?
         $keyPath = function_exists('fcm_key_path') ? fcm_key_path() : (__DIR__.'/../fcm-key.json');
         $out['key_file_path'] = $keyPath;
@@ -2552,6 +2554,7 @@ case 'broadcast_push':
         }
         $ids = $q->fetchAll(PDO::FETCH_COLUMN);
         $sent=0; $failed=0;
+        require_once __DIR__.'/fcm_send.php';
         if(function_exists('fcm_send_to_user')){
             foreach($ids as $uid){
                 try { if(fcm_send_to_user($pdo, intval($uid), $title, $msg, ['type'=>'broadcast'])) $sent++; else $failed++; }
