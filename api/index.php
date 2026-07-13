@@ -2189,15 +2189,37 @@ case 'bs_get_entries':
     // Attach the task's payment screenshot (for sales/task entries) from task_documents.
     // License/renewal entries already carry their proof in payment_transaction_details.
     try {
+        // Build the set of numeric task ids to look up. Prefer task_db_id; if missing,
+        // resolve the string task_id (e.g. ID-2026-1462) to the numeric tasks.id.
         $taskDbIds = [];
-        foreach ($entries as $e) { if (!empty($e['task_db_id'])) $taskDbIds[(int)$e['task_db_id']] = true; }
+        $needResolve = [];       // string task_id => entry indices
+        foreach ($entries as $i => $e) {
+            if (!empty($e['task_db_id'])) { $taskDbIds[(int)$e['task_db_id']] = true; }
+            else if (!empty($e['task_id'])) { $needResolve[$e['task_id']][] = $i; }
+        }
+        // Resolve any string task_ids to numeric ids
+        $resolvedByStr = [];
+        if ($needResolve) {
+            $strs = array_keys($needResolve);
+            $ph2  = implode(',', array_fill(0, count($strs), '?'));
+            try {
+                $rq = $pdo->prepare("SELECT id, task_id FROM tasks WHERE task_id IN ($ph2)");
+                $rq->execute($strs);
+                foreach ($rq->fetchAll(PDO::FETCH_ASSOC) as $tr) {
+                    $resolvedByStr[$tr['task_id']] = (int)$tr['id'];
+                    $taskDbIds[(int)$tr['id']] = true;
+                }
+            } catch(Exception $e) {}
+        }
         if ($taskDbIds) {
             $ids = array_keys($taskDbIds);
             $ph  = implode(',', array_fill(0, count($ids), '?'));
-            // Prefer a verified/collected payment screenshot; fall back to cash deposit proof.
             $ds = $pdo->prepare("SELECT task_id, doc_type, filename FROM task_documents
                                  WHERE task_id IN ($ph)
-                                   AND doc_type IN ('payment_screenshot','cash_deposit_screenshot','cash_deposit')
+                                   AND ( doc_type IN ('payment_screenshot','cash_deposit_screenshot','cash_deposit')
+                                         OR doc_type LIKE '%payment%'
+                                         OR doc_type LIKE '%screenshot%'
+                                         OR doc_type LIKE '%deposit%' )
                                  ORDER BY id ASC");
             $ds->execute($ids);
             $shotByTask = [];
@@ -2209,8 +2231,11 @@ case 'bs_get_entries':
                     $shotByTask[$tid] = $path;
                 }
             }
-            foreach ($entries as &$e) {
+            foreach ($entries as $i => &$e) {
                 $tid = (int)($e['task_db_id'] ?? 0);
+                if (!$tid && !empty($e['task_id']) && isset($resolvedByStr[$e['task_id']])) {
+                    $tid = $resolvedByStr[$e['task_id']];
+                }
                 if ($tid && isset($shotByTask[$tid])) { $e['payment_screenshot'] = $shotByTask[$tid]; }
             }
             unset($e);
