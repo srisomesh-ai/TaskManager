@@ -718,23 +718,93 @@ function _bsShot(v){
 }
 function viewEntry(id){
   const e=allEntries.find(x=>+x.id===+id); if(!e) return;
-  const rows=[['Type',e.type],['Date',e.date],['Task No',e.task_id||e.task_no],['Invoice',e.invoice_no],
-    ['Name on Server',e.name_on_server],['Server',e.server_name],['Model/Service',e.device_model||e.service_type],
-    ['Qty',qtyFmt(e.qty)],['Unit Price',e.unit_price?'₹'+parseFloat(e.unit_price).toLocaleString('en-IN'):'–'],
-    ['GST',e.gst?'₹'+parseFloat(e.gst).toLocaleString('en-IN'):'–'],
-    ['Total','₹'+parseFloat(e.total_price||0).toLocaleString('en-IN')],
-    ['Received','₹'+parseFloat(e.payment_received||0).toLocaleString('en-IN')],
-    ['Pending','₹'+parseFloat(e.pending_payment||0).toLocaleString('en-IN')],
-    ['Mode',e.payment_mode],['Status',e.payment_status],
-    ['Received On',e.payment_received_on||'–'],['Payment Screenshot',_bsShot(e.payment_transaction_details)],
-    ['Pending Reason',e.pending_reason||'–'],['Discount',e.discount_given?'₹'+e.discount_given:'–'],
-    ['Discount Reason',e.discount_reason||'–'],['Discount Incharge',e.discount_incharge||'–'],
-    ['Technician',e.technician_name||'–'],['Location',e.location||'–'],
-    ['GPS Serial',e.gps_serial_no||'–'],['Customer Type',e.customer_type||'–'],
-    ['Remarks',e.remarks||'–'],['Created By',e.created_by_code||'–'],
-    ['Created At',e.created_at?new Date(e.created_at).toLocaleString('en-IN'):'–']];
-  document.getElementById('bs-view-body').innerHTML=rows.map(([l,v])=>`
-    <div class="bs-modal-row"><span class="bs-modal-lbl">${l}</span><span class="bs-modal-val">${v||'–'}</span></div>`).join('');
+  const money = v => '₹'+parseFloat(v||0).toLocaleString('en-IN',{maximumFractionDigits:2});
+  const total = parseFloat(e.total_price||0);
+  const recv  = parseFloat(e.payment_received||0);
+  const pend  = parseFloat(e.pending_payment||0);
+  const status = (e.payment_status||'pending').toLowerCase();
+  const stMap = {
+    paid:            {t:'PAID',           bg:'var(--green-bg)', c:'var(--green)', ic:'✅'},
+    partially_paid:  {t:'PARTIALLY PAID', bg:'var(--amber-bg)', c:'var(--amber)', ic:'⏳'},
+    pending:         {t:'PENDING',        bg:'var(--red-bg)',   c:'var(--red)',   ic:'🔴'}
+  };
+  const S = stMap[status] || stMap.pending;
+  const typeLabel = (e.type||'').toLowerCase()==='license' ? '🔄 License / Service' : ((e.type||'').toLowerCase()==='sales' ? '📡 Sales' : (e.type||'–'));
+  const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  // one row
+  const row = (label,val,opts) => {
+    opts = opts||{};
+    if(val==null || val==='' || val==='–') val='–';
+    const vc = opts.color ? ('color:'+opts.color+';') : '';
+    const vw = opts.bold ? 'font-weight:800;' : 'font-weight:600;';
+    return '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--border)">'
+      + '<span style="font-size:12px;color:var(--text3);font-weight:600;flex-shrink:0">'+label+'</span>'
+      + '<span style="font-size:13px;color:var(--text);text-align:right;'+vw+vc+'">'+val+'</span></div>';
+  };
+  // section wrapper
+  const section = (title,inner) =>
+    '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:6px 14px 4px;margin-bottom:12px">'
+    + '<div style="font-size:11px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;padding:8px 0 4px">'+title+'</div>'
+    + inner + '</div>';
+
+  const shot = _bsShot(e.payment_transaction_details);
+  const hasDiscount = parseFloat(e.discount_given||0)>0;
+
+  const hero =
+    '<div style="background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-radius:12px;padding:16px 18px;margin-bottom:14px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">'
+    +   '<div style="min-width:0">'
+    +     '<div style="font-size:11px;opacity:.8;font-weight:600;text-transform:uppercase;letter-spacing:.4px">'+typeLabel+'</div>'
+    +     '<div style="font-size:18px;font-weight:800;margin-top:2px;overflow:hidden;text-overflow:ellipsis">'+esc(e.name_on_server||'–')+'</div>'
+    +     '<div style="font-size:12px;opacity:.85;margin-top:2px">'+esc(e.server_name||'')+(e.task_id||e.task_no?(' · '+esc(e.task_id||e.task_no)):'')+'</div>'
+    +   '</div>'
+    +   '<span style="background:'+S.bg+';color:'+S.c+';font-size:11px;font-weight:800;padding:5px 12px;border-radius:20px;white-space:nowrap">'+S.ic+' '+S.t+'</span>'
+    + '</div>'
+    + '<div style="display:flex;gap:8px;margin-top:14px">'
+    +   '<div style="flex:1;background:rgba(255,255,255,.15);border-radius:8px;padding:8px 10px;text-align:center"><div style="font-size:10px;opacity:.8;font-weight:700">TOTAL</div><div style="font-size:15px;font-weight:800">'+money(total)+'</div></div>'
+    +   '<div style="flex:1;background:rgba(255,255,255,.15);border-radius:8px;padding:8px 10px;text-align:center"><div style="font-size:10px;opacity:.8;font-weight:700">RECEIVED</div><div style="font-size:15px;font-weight:800">'+money(recv)+'</div></div>'
+    +   '<div style="flex:1;background:rgba(255,255,255,'+(pend>0?'.28':'.15')+');border-radius:8px;padding:8px 10px;text-align:center"><div style="font-size:10px;opacity:.85;font-weight:700">PENDING</div><div style="font-size:15px;font-weight:800">'+money(pend)+'</div></div>'
+    + '</div></div>';
+
+  const jobSec = section('Job Details',
+      row('Date', esc(e.date))
+    + row('Task No', esc(e.task_id||e.task_no))
+    + row('Invoice', esc(e.invoice_no))
+    + row('Model / Service', esc(e.device_model||e.service_type))
+    + row('Quantity', qtyFmt(e.qty))
+    + row('Unit Price', e.unit_price?money(e.unit_price):'–')
+    + row('GST', e.gst?money(e.gst):'–')
+  );
+
+  const paySec = section('Payment',
+      row('Total', money(total), {bold:true})
+    + row('Received', money(recv), {color:'var(--green)', bold:true})
+    + row('Pending', money(pend), {color:pend>0?'var(--red)':'var(--text)', bold:true})
+    + row('Mode', esc(e.payment_mode))
+    + row('Status', S.ic+' '+S.t, {bold:true, color:S.c})
+    + row('Received On', esc(e.payment_received_on))
+    + row('Payment Screenshot', shot)
+    + row('Pending Reason', esc(e.pending_reason))
+  );
+
+  const discSec = hasDiscount ? section('Discount',
+      row('Discount Given', money(e.discount_given), {color:'var(--amber)', bold:true})
+    + row('Reason', esc(e.discount_reason))
+    + row('Approved By', esc(e.discount_incharge))
+  ) : '';
+
+  const metaSec = section('Other',
+      row('Technician', esc(e.technician_name))
+    + row('Location', esc(e.location))
+    + row('GPS Serial', esc(e.gps_serial_no))
+    + row('Customer Type', esc(e.customer_type))
+    + row('Remarks', esc(e.remarks))
+    + row('Created By', esc(e.created_by_code))
+    + row('Created At', e.created_at?new Date(e.created_at).toLocaleString('en-IN'):'–')
+  );
+
+  document.getElementById('bs-view-body').innerHTML = hero + jobSec + paySec + discSec + metaSec;
   document.getElementById('bs-view-ov').classList.add('open');
 }
 function closeView(){ document.getElementById('bs-view-ov').classList.remove('open'); }
