@@ -1803,6 +1803,40 @@ case 'mark_access_given':
     break;
 
 // ---- SAVE FCM DEVICE TOKEN (for push notifications) ----
+// ---- PUSH AN URGENT REMINDER FOR A TASK (admin/manager -> assigned technician) ----
+case 'push_task_reminder':
+    if (!in_array($userRole, ['admin','assigner'])) { echo json_encode(['error'=>'Not allowed']); break; }
+    $rtid = intval($body['task_id'] ?? 0);
+    if (!$rtid) { echo json_encode(['error'=>'Missing task_id']); break; }
+    try {
+        $rt = $pdo->prepare("SELECT id, task_id, customer_name, location, assigned_to FROM tasks WHERE id=?");
+        $rt->execute([$rtid]);
+        $rtask = $rt->fetch(PDO::FETCH_ASSOC);
+        if (!$rtask) { echo json_encode(['error'=>'Task not found']); break; }
+        $atech = intval($rtask['assigned_to'] ?? 0);
+        if (!$atech) { echo json_encode(['error'=>'This task is not assigned to any technician yet']); break; }
+        $ttl = '🔔 Urgent: ' . ($rtask['task_id'] ?? 'Task');
+        $bdy = trim($body['message'] ?? '');
+        if ($bdy === '') {
+            $bdy = 'Please attend this task now — ' . ($rtask['customer_name'] ?? '') .
+                   (($rtask['location'] ?? '') !== '' ? (', ' . $rtask['location']) : '');
+        }
+        require_once __DIR__.'/fcm_send.php';
+        $ok = false;
+        if (function_exists('fcm_send_to_user')) {
+            try {
+                $ok = (bool) fcm_send_to_user($pdo, $atech, $ttl, $bdy, [
+                    'type'    => 'task_reminder',
+                    'task_id' => (string)$rtid,
+                    'url'     => 'task.html?id=' . $rtid,
+                ]);
+            } catch(Exception $e){}
+        }
+        if ($ok) echo json_encode(['success'=>true]);
+        else echo json_encode(['error'=>'Could not send — the technician may not have the app installed or notifications enabled.']);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'save_fcm_token':
     $fcm = trim($body['fcm_token'] ?? '');
     $platform = trim($body['platform'] ?? 'android');
