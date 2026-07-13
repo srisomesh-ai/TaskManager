@@ -453,12 +453,13 @@
       <div class="r" id="asg-ref"></div>
     </div>
     <div class="sheet-bd">
-      <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:14px">Assign the installed device(s) to the customer's GPS account so they can track their vehicle. Enter their email and check if an account exists.</div>
-      <div class="tu-lbl">Customer Email *</div>
-      <div style="display:flex;gap:8px;margin-bottom:10px">
-        <input class="inst-in" id="asg-email" type="email" placeholder="customer@email.com" style="flex:1">
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:14px">Assign the installed device(s) to the customer's GPS account so they can track their vehicle. The email is locked to the one saved on this task.</div>
+      <div class="tu-lbl">Customer Email * <span style="font-weight:600;color:var(--text3)">(locked)</span></div>
+      <div style="display:flex;gap:8px;margin-bottom:6px">
+        <input class="inst-in" id="asg-email" type="email" placeholder="customer@email.com" style="flex:1;background:#f1f3f6;color:#555;cursor:not-allowed" readonly>
         <button class="inst-btn b-search" style="width:auto;padding:12px 16px;white-space:nowrap" onclick="asgCheck()">🔍 Check</button>
       </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.5">🔒 This email is fixed for the whole task. If it is wrong, ask your manager to change it in the task (Edit), then try again. This keeps all devices on one account.</div>
       <div id="asg-status" style="font-size:13px;margin-bottom:10px;font-weight:700"></div>
 
       <div id="asg-create-box" style="display:none;margin-bottom:8px">
@@ -1975,7 +1976,13 @@
     document.getElementById('asg-ref').textContent=(t.task_id||'')+' · '+(t.customer_name||'');
     document.getElementById('asg-email').value=t.email||'';
     document.getElementById('asg-pass').value='Bgt@1234';
-    document.getElementById('asg-status').innerHTML='';
+    // If the task has no email saved, the technician cannot set one here — manager must add it via Edit.
+    const st0=document.getElementById('asg-status');
+    if(!(t.email||'').trim()){
+      st0.innerHTML='<span style="color:var(--red)">⚠️ No customer email on this task. Ask your manager to add the email in the task (Edit) before giving access.</span>';
+    } else {
+      st0.innerHTML='';
+    }
     document.getElementById('asg-create-box').style.display='none';
     document.getElementById('asg-found-box').style.display='none';
     document.getElementById('asg-done').style.display='none';
@@ -1986,10 +1993,10 @@
   function closeAssign(){ document.getElementById('asg-ov').classList.remove('open'); document.getElementById('asg-sheet').classList.remove('open'); }
 
   async function asgCheck(){
-    const email=document.getElementById('asg-email').value.trim();
+    const email=(_curTask.email||'').trim();
     const st=document.getElementById('asg-status');
     const createB=document.getElementById('asg-create-box'), foundB=document.getElementById('asg-found-box');
-    if(!email){ st.innerHTML='<span style="color:var(--saffron)">⚠️ Enter email first</span>'; return; }
+    if(!email){ st.innerHTML='<span style="color:var(--red)">⚠️ No email on this task. Ask your manager to add it in the task (Edit).</span>'; return; }
     st.innerHTML='<span style="color:var(--text3)">🔍 Locating device(s)…</span>';
     const devs=await assignableDevices();
     if(!devs.length){ st.innerHTML='<span style="color:var(--red)">❌ No pushed device found — open the device on the GPS server first, then try again</span>'; return; }
@@ -2009,7 +2016,7 @@
   }
 
   async function asgCreateAndAssign(){
-    const email=document.getElementById('asg-email').value.trim();
+    const email=(_curTask.email||'').trim();
     const pass=document.getElementById('asg-pass').value.trim();
     const st=document.getElementById('asg-status');
     if(!pass||pass.length<6){ st.innerHTML='<span style="color:var(--red)">❌ Password must be at least 6 characters</span>'; return; }
@@ -2032,7 +2039,7 @@
   async function asgAssign(){
     const st=document.getElementById('asg-status');
     if(!_asgUserId){ st.innerHTML='<span style="color:var(--red)">❌ No account selected — check email first</span>'; return; }
-    const email=document.getElementById('asg-email').value.trim();
+    const email=(_curTask.email||'').trim();
     const devs=await assignableDevices();
     if(!devs.length){ st.innerHTML='<span style="color:var(--red)">❌ No device found to assign</span>'; return; }
     st.innerHTML='<span style="color:var(--text3)">⏳ Assigning '+devs.length+' device(s)…</span>';
