@@ -748,7 +748,7 @@ function viewEntry(id){
     + '<div style="font-size:11px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;padding:8px 0 4px">'+title+'</div>'
     + inner + '</div>';
 
-  const shot = _bsShot(e.payment_transaction_details);
+  const shot = _bsShot(e.payment_screenshot || e.payment_transaction_details);
   const hasDiscount = parseFloat(e.discount_given||0)>0;
 
   const hero =
