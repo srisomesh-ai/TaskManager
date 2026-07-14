@@ -1308,7 +1308,7 @@
       return;
     }
     if(_v2vMode && installed){
-      res.innerHTML='<div style="background:var(--accent-light,#E0EEEE);border:1.5px solid var(--accent2,#137272);border-radius:8px;padding:10px;font-size:12px;line-height:1.6;color:#0c4a4a"><strong>🚗 Device found — editing for vehicle change</strong><br>Current plate: <strong>'+esc(dd.plate_number||'–')+'</strong> · Update the details below and push.</div>';
+      res.innerHTML='<div style="background:var(--accent-light,#E0EEEE);border:1.5px solid var(--accent2,#137272);border-radius:8px;padding:10px;font-size:12px;line-height:1.6;color:#0c4a4a"><strong>🚗 Device found — editing for vehicle change</strong><br>Current plate: <strong>'+esc(dd.plate_number||'–')+'</strong><br>Edit name, vehicle, owner, icon &amp; details, then push. <strong>Install &amp; expiry dates stay the same (locked).</strong> You can give the customer access after pushing.</div>';
     }
     document.getElementById('iserverid-'+idx).value=device._server_id||'';
     document.getElementById('ideviceid-'+idx).value=dd.id||device.id||'';
@@ -1319,9 +1319,11 @@
     const today=new Date().toISOString().slice(0,10);
     document.getElementById('iinst-'+idx).value=(dd.installation_date&&dd.installation_date!=='0000-00-00')?dd.installation_date:today;
     if(_v2vMode){
-      // Preserve the existing expiry date — do NOT recompute for a vehicle change
+      // Vehicle-to-vehicle: keep the ORIGINAL install and expiry dates — lock both so the technician cannot change them.
+      const instEl=document.getElementById('iinst-'+idx);
+      if(instEl){ instEl.value=(dd.installation_date&&dd.installation_date!=='0000-00-00')?dd.installation_date:today; instEl.setAttribute('readonly','readonly'); instEl.removeAttribute('onchange'); instEl.style.background='#f1f3f6'; instEl.style.color='#555'; }
       const expEl=document.getElementById('iexp-'+idx);
-      if(expEl){ expEl.value=(dd.expiration_date&&dd.expiration_date!=='0000-00-00')?dd.expiration_date:(dd.expiration_date||''); }
+      if(expEl){ expEl.value=(dd.expiration_date&&dd.expiration_date!=='0000-00-00')?dd.expiration_date:(dd.expiration_date||''); expEl.setAttribute('readonly','readonly'); expEl.style.background='#f1f3f6'; expEl.style.color='#555'; }
     } else {
       autoExp(idx);
     }
