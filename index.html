@@ -1097,6 +1097,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
                 <div>Current server: <b id="mv-cur-server" style="color:var(--accent)">–</b></div>
                 <div>Status: <span id="mv-status">–</span></div>
                 <div>Plate: <b id="mv-plate">–</b> · Owner: <b id="mv-owner">–</b></div>
+                <div>Installed: <b id="mv-install">–</b> · Expiry: <b id="mv-expiry">–</b></div>
               </div>
               <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px">Move to server</label>
               <select id="mv-target" class="form-input" style="width:100%;margin:5px 0 16px">
@@ -7721,6 +7722,10 @@ async function mvSearch(){
     document.getElementById('mv-status').innerHTML=online?'<b style="color:var(--green)">🟢 ONLINE</b>':'<b style="color:var(--red)">🔴 OFFLINE</b>';
     document.getElementById('mv-plate').textContent=dd.plate_number||'–';
     document.getElementById('mv-owner').textContent=dd.object_owner||'–';
+    const _id=(dd.installation_date&&dd.installation_date!=='0000-00-00')?dd.installation_date:'–';
+    const _ed=(dd.expiration_date&&dd.expiration_date!=='0000-00-00')?dd.expiration_date:'–';
+    document.getElementById('mv-install').textContent=_id;
+    document.getElementById('mv-expiry').textContent=_ed;
     // hide the current server from the target list
     const tgt=document.getElementById('mv-target');
     const curId=String(dev._server_id||dev.server_id||'');
