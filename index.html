@@ -1202,15 +1202,16 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
             </select>
             <input type="date" id="rnw-date-custom" onchange="renderRenewalRequests()" class="form-input" style="width:150px;display:none" title="Pick a request date">
           </div>
+          <div id="rnw-count-boxes" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px"></div>
           <div class="card" style="overflow-x:auto">
             <table style="width:100%;border-collapse:collapse">
               <thead><tr style="background:var(--surface2);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)">
-                <th style="padding:10px 12px;text-align:left;font-weight:700">Device</th>
-                <th style="padding:10px 12px;text-align:left;font-weight:700">Period</th>
-                <th style="padding:10px 12px;text-align:left;font-weight:700">Expiry → New</th>
-                <th style="padding:10px 12px;text-align:left;font-weight:700">Amount</th>
-                <th style="padding:10px 12px;text-align:left;font-weight:700">Requested by</th>
-                <th style="padding:10px 12px;text-align:left;font-weight:700">Status / Action</th>
+                <th style="padding:7px 10px;text-align:left;font-weight:700">Device</th>
+                <th style="padding:7px 10px;text-align:left;font-weight:700">Period</th>
+                <th style="padding:7px 10px;text-align:left;font-weight:700">Expiry → New</th>
+                <th style="padding:7px 10px;text-align:left;font-weight:700">Amount</th>
+                <th style="padding:7px 10px;text-align:left;font-weight:700">Requested by</th>
+                <th style="padding:7px 10px;text-align:left;font-weight:700">Status / Action</th>
               </tr></thead>
               <tbody id="rnw-requests-tbody"><tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text3)">Loading...</td></tr></tbody>
             </table>
@@ -7305,12 +7306,37 @@ async function backfillRenewalNames(btn){
   }
   else { showToast('❌ '+((r&&r.error)||'Failed')); }
 }
+function rnwQuickDate(key){
+  const sel=document.getElementById('rnw-date-filter');
+  if(sel){ sel.value=key; }
+  renderRenewalRequests();
+}
 function renderRenewalRequests(){
   const tbody=document.getElementById('rnw-requests-tbody');
   if(!tbody) return;
   const filter=(document.getElementById('rnw-status-filter')||{}).value ?? 'pending';
   let rows=_rnwRequests.slice();
   if(filter) rows=rows.filter(function(r){ return (r.status||'')===filter; });
+
+  // ── Small count boxes (Today / Yesterday / Total) for the current status filter ──
+  (function(){
+    const box=document.getElementById('rnw-count-boxes'); if(!box) return;
+    const dayStr=function(d){ return new Date(d).toISOString().slice(0,10); };
+    const todayD=new Date(); const today=dayStr(todayD);
+    const yD=new Date(todayD); yD.setDate(yD.getDate()-1); const yday=dayStr(yD);
+    let cToday=0,cYday=0;
+    rows.forEach(function(r){ const rd=(r.requested_at||'').slice(0,10); if(rd===today)cToday++; else if(rd===yday)cYday++; });
+    const label = filter ? (filter.charAt(0).toUpperCase()+filter.slice(1)) : 'All';
+    const chip=function(val,lbl,col,key){
+      const active = (document.getElementById('rnw-date-filter')||{}).value===key;
+      return '<div onclick="rnwQuickDate(\''+key+'\')" style="flex:1;min-width:90px;cursor:pointer;background:'+(active?col:'var(--surface2)')+';color:'+(active?'#fff':'var(--text)')+';border:1.5px solid '+col+';border-radius:10px;padding:8px 12px;text-align:center">'
+        + '<div style="font-size:20px;font-weight:800;line-height:1">'+val+'</div>'
+        + '<div style="font-size:10px;font-weight:700;opacity:.85;margin-top:2px;text-transform:uppercase;letter-spacing:.3px">'+lbl+'</div></div>';
+    };
+    box.innerHTML = chip(cToday,'Today','var(--accent2)','today')
+                  + chip(cYday,'Yesterday','var(--saffron)','yesterday')
+                  + chip(rows.length,label+' total','var(--accent)','');
+  })();
 
   // Filter by request date (requested_at)
   const dfSel=document.getElementById('rnw-date-filter');
@@ -7356,12 +7382,12 @@ function renderRenewalRequests(){
     }
     const amt=parseFloat(r.amount||0);
     return '<tr style="border-bottom:1px solid var(--border)">'
-      + '<td style="padding:9px 12px;font-weight:700">'+escHtml(r.device_name)+'<br><span style="font-size:11px;color:var(--text3)">'+escHtml(r.plate||'')+' · '+escHtml(_RNW_SRV[r.server_id]||('S'+r.server_id))+'</span></td>'
-      + '<td style="padding:9px 12px;font-size:12px">'+escHtml(r.label||(r.months+'m'))+'</td>'
-      + '<td style="padding:9px 12px;font-size:12px"><span style="color:var(--red)">'+escHtml(r.current_expiry||'—')+'</span> → <span style="color:var(--green);font-weight:700">'+escHtml(r.new_expiry||'—')+'</span></td>'
-      + '<td style="padding:9px 12px;font-size:12px;font-weight:700">'+(amt>0?('₹'+amt.toLocaleString('en-IN')):'—')+'</td>'
-      + '<td style="padding:9px 12px;font-size:12px;color:var(--text2)">'+escHtml(r.requested_by_name||'—')+'<br><span style="font-size:10px;color:var(--text3);text-transform:capitalize">'+escHtml(r.requested_role||'')+'</span>'+(r.requested_at?('<br><span style="font-size:10px;color:var(--accent)">📅 '+escHtml((r.requested_at||'').slice(0,10))+'</span>'):'')+'</td>'
-      + '<td style="padding:9px 12px">'+action+'</td>'
+      + '<td style="padding:6px 10px;font-weight:700">'+escHtml(r.device_name)+'<br><span style="font-size:11px;color:var(--text3)">'+escHtml(r.plate||'')+' · '+escHtml(_RNW_SRV[r.server_id]||('S'+r.server_id))+'</span></td>'
+      + '<td style="padding:6px 10px;font-size:12px">'+escHtml(r.label||(r.months+'m'))+'</td>'
+      + '<td style="padding:6px 10px;font-size:12px"><span style="color:var(--red)">'+escHtml(r.current_expiry||'—')+'</span> → <span style="color:var(--green);font-weight:700">'+escHtml(r.new_expiry||'—')+'</span></td>'
+      + '<td style="padding:6px 10px;font-size:12px;font-weight:700">'+(amt>0?('₹'+amt.toLocaleString('en-IN')):'—')+'</td>'
+      + '<td style="padding:6px 10px;font-size:12px;color:var(--text2)">'+escHtml(r.requested_by_name||'—')+'<br><span style="font-size:10px;color:var(--text3);text-transform:capitalize">'+escHtml(r.requested_role||'')+'</span>'+(r.requested_at?('<br><span style="font-size:10px;color:var(--accent)">📅 '+escHtml((r.requested_at||'').slice(0,10))+'</span>'):'')+'</td>'
+      + '<td style="padding:6px 10px">'+action+'</td>'
     + '</tr>';
   }).join('');
 }
