@@ -7751,8 +7751,8 @@ async function mvMove(){
     const r=await fetch(GPS_PROXY+'?action=move_device',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd});
     const d=await r.json();
     if(d.success){
-      if(d.deleted){ _mvMsg('✅ Moved to '+d.added_to+' and removed from '+d.removed_from+'.',true); }
-      else { _mvMsg('⚠️ Added to '+d.added_to+', but could NOT auto-remove from '+d.removed_from+'. Please delete it there manually.',false); }
+      if(d.source_marked){ _mvMsg('✅ Moved to '+d.added_to+' (admin + support access + move comment added). On '+d.source+' it is marked (MOVED), inactive, access removed except admin + support.',true); }
+      else { _mvMsg('⚠️ Added to '+d.added_to+', but could NOT mark the source as moved. Please update '+(d.source||'the source server')+' manually.',false); }
       document.getElementById('mv-found').style.display='none';
       document.getElementById('mv-imei').value='';
     } else { _mvMsg('❌ '+(d.error||'Move failed'),false); }
