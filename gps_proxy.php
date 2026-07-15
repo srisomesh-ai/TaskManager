@@ -396,6 +396,10 @@ if($action === 'move_device'){
     $model = trim($_POST['model'] ?? ($dd['device_model'] ?? ''));
     if(!$name){ $name = $plate ?: $imei; }
 
+    // Note to stamp on both devices recording the move.
+    $moveNote = 'Device moved from '.$src['name'].' to '.$dst['name'].' on '.date('Y-m-d H:i').' via BharatGPS TaskManager';
+    $existingNotes = trim($dd['additional_notes'] ?? '');
+
     // 2) Add the device to the TARGET server.
     $addFields = [
         'user_api_hash'       => $dst['hash'],
@@ -407,6 +411,8 @@ if($action === 'move_device'){
         'registration_number' => $reg,
         'object_owner'        => $owner,
         'device_model'        => $model,
+        'additional_notes'    => ($existingNotes ? ($existingNotes.' | ') : '').$moveNote,
+        'comment'             => $moveNote,
         'fuel_measurement_id' => 1,
         'tail_length'         => 10,
         'min_moving_speed'    => 3,
@@ -426,31 +432,57 @@ if($action === 'move_device'){
         do_post($dst['base'].'/edit_device?lang=en&user_api_hash='.rawurlencode($dst['hash']), [
             'id'=>strval($newDeviceId),'lang'=>'en','name'=>$name,'plate_number'=>$plate,
             'registration_number'=>$reg,'object_owner'=>$owner,'vin'=>$vin,
+            'additional_notes'=>($existingNotes ? ($existingNotes.' | ') : '').$moveNote,'comment'=>$moveNote,
         ]);
     }
 
-    // 3) Delete the device from the SOURCE server.
+    // 3) On the SOURCE server: mark the device as MOVED (rename in brackets) and stamp the move note,
+    //    so it is clearly flagged and no longer active — instead of a hard delete, this keeps history.
     $srcDeviceId = $srcDev['id'] ?? ($dd['id'] ?? null);
-    $deleted = false; $delMsg = '';
+    $marked = false; $markMsg = '';
     if($srcDeviceId){
-        $delRes = do_post($src['base'].'/delete_device?lang=en&user_api_hash='.rawurlencode($src['hash']), [
-            'id'=>strval($srcDeviceId),'lang'=>'en',
+        $srcName = $srcDev['name'] ?? ($dd['name'] ?? $name);
+        // Avoid double-prefixing if it was already moved before.
+        $markedName = (stripos($srcName,'(MOVED')===0) ? $srcName : ('(MOVED) '.$srcName);
+        $srcNote = 'MOVED to '.$dst['name'].' on '.date('Y-m-d H:i').'. This entry is inactive. '.($existingNotes ? ($existingNotes) : '');
+        $mkRes = do_post($src['base'].'/edit_device?lang=en&user_api_hash='.rawurlencode($src['hash']), [
+            'id'=>strval($srcDeviceId),'lang'=>'en','name'=>$markedName,
+            'additional_notes'=>$srcNote,'comment'=>'MOVED to '.$dst['name'],
         ]);
-        $delJson = $delRes['json'];
-        $delStatus = $delJson['status'] ?? $delJson['success'] ?? null;
-        $deleted = ($delStatus == 1 || $delStatus === true);
-        if(!$deleted){ $delMsg = is_array($delJson) ? json_encode($delJson) : strval($delRes['raw']); }
+        $mkJson = $mkRes['json'];
+        $marked = (($mkJson['status'] ?? null) == 1 || ($mkJson['status'] ?? null) === true || stripos(strval($mkRes['raw']),'success')!==false);
+        if(!$marked){ $markMsg = is_array($mkJson) ? json_encode($mkJson) : strval($mkRes['raw']); }
+
+        // Remove OTHER users' access on the source, keeping admin (owner) + support only.
+        try {
+            $usersRes = do_get($src['base'].'/admin/device/'.$srcDeviceId.'/users?lang=en&user_api_hash='.rawurlencode($src['hash']));
+            $uj = $usersRes['json']; $ulist = [];
+            if(is_array($uj)){
+                if(isset($uj['data'])) $ulist=$uj['data']; elseif(isset($uj['items'])) $ulist=$uj['items']; elseif(isset($uj[0])) $ulist=$uj;
+            }
+            foreach($ulist as $u){
+                $uemail = strtolower(trim($u['email'] ?? ''));
+                $uid    = intval($u['id'] ?? 0);
+                if(!$uid) continue;
+                // keep support + any admin/manager accounts
+                if($uemail==='support@bharatgps.com') continue;
+                if(!empty($u['manager']) || ($u['group_id'] ?? 0)==1) continue; // admin-ish, keep
+                do_post($src['base'].'/admin/device/'.$srcDeviceId.'/user/'.$uid.'/delete?lang=en&user_api_hash='.rawurlencode($src['hash']), []);
+            }
+        } catch(Exception $e) {}
     } else {
-        $delMsg = 'Could not read source device id';
+        $markMsg = 'Could not read source device id';
     }
 
     echo json_encode([
         'success'      => true,
         'added_to'     => $dst['name'],
-        'removed_from' => $src['name'],
-        'deleted'      => $deleted,
+        'source'       => $src['name'],
+        'source_marked'=> $marked,
         'new_device_id'=> $newDeviceId,
-        'note'         => $deleted ? 'Device moved successfully.' : ('Added to target, but could NOT delete from source — please remove it manually. '.$delMsg),
+        'note'         => $marked
+            ? ('Device moved. Added to '.$dst['name'].' (with admin + support access and a move comment). On '.$src['name'].' it is marked (MOVED), flagged inactive, and access removed except admin + support.')
+            : ('Added to '.$dst['name'].', but could NOT mark the source device as moved — please update it manually. '.$markMsg),
     ]);
     exit;
 }
