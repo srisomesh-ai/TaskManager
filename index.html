@@ -7751,7 +7751,7 @@ async function mvMove(){
     const r=await fetch(GPS_PROXY+'?action=move_device',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd});
     const d=await r.json();
     if(d.success){
-      if(d.source_marked){ _mvMsg('✅ Moved to '+d.added_to+' (admin + support access + move comment added). On '+d.source+' it is marked (MOVED), inactive, access removed except admin + support.',true); }
+      if(d.source_marked){ _mvMsg('✅ Moved to '+d.added_to+'. '+(d.support_target?'Admin + support access granted':'Access granted (support access pending — verify on server)')+' and move comment added. On '+d.source+' it is marked (MOVED), inactive, access removed except admin + support.',true); }
       else { _mvMsg('⚠️ Added to '+d.added_to+', but could NOT mark the source as moved. Please update '+(d.source||'the source server')+' manually.',false); }
       document.getElementById('mv-found').style.display='none';
       document.getElementById('mv-imei').value='';
