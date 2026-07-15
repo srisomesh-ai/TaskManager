@@ -277,11 +277,34 @@ function resetExpense(){
 
 function editExpense(id){
   const e=allExpenses.find(x=>+x.id===+id); if(!e) return;
-  const nt=prompt('Edit title:', e.title||''); if(nt===null) return;
-  const na=prompt('Edit amount (₹):', e.amount||0); if(na===null) return;
-  const amt=parseFloat(na)||0;
-  expApi('exp_update_entry',{},'POST',{id, title:nt.trim(), amount:amt}).then(r=>{
-    if(r.success){ toast('✅ Updated'); loadExpenses(); } else toast('❌ '+(r.error||'Failed'));
+  document.getElementById('ee-id').value    = e.id;
+  document.getElementById('ee-date').value   = (e.date||'').slice(0,10);
+  document.getElementById('ee-cat').value    = e.category||'Other';
+  document.getElementById('ee-title').value  = e.title||'';
+  document.getElementById('ee-amount').value = e.amount||0;
+  document.getElementById('ee-vendor').value = e.vendor||'';
+  document.getElementById('ee-mode').value   = e.payment_mode||'Cash';
+  document.getElementById('ee-ref').value    = e.reference_no||'';
+  document.getElementById('ee-notes').value  = e.notes||'';
+  document.getElementById('exp-edit-ov').style.display='flex';
+}
+function closeExpEdit(){ document.getElementById('exp-edit-ov').style.display='none'; }
+function saveExpEdit(){
+  const id=document.getElementById('ee-id').value;
+  const upd={
+    id: id,
+    date:         document.getElementById('ee-date').value||null,
+    category:     document.getElementById('ee-cat').value||null,
+    title:        (document.getElementById('ee-title').value||'').trim(),
+    amount:       parseFloat(document.getElementById('ee-amount').value)||0,
+    vendor:       (document.getElementById('ee-vendor').value||'').trim(),
+    payment_mode: document.getElementById('ee-mode').value||null,
+    reference_no: (document.getElementById('ee-ref').value||'').trim(),
+    notes:        (document.getElementById('ee-notes').value||'').trim(),
+  };
+  if(!upd.title){ toast('⚠️ Title is required'); return; }
+  expApi('exp_update_entry',{},'POST',upd).then(r=>{
+    if(r.success){ toast('✅ Updated'); closeExpEdit(); loadExpenses(); } else toast('❌ '+(r.error||'Failed'));
   });
 }
 
@@ -299,5 +322,55 @@ expApi('me').then(r=>{ EXP_ROLE = (r && r.user && r.user.role) ? r.user.role : n
 setToday();
 loadExpenses();
 </script>
+<!-- EDIT EXPENSE MODAL -->
+<div id="exp-edit-ov" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:20px;max-width:460px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-weight:800;font-size:16px">✏️ Edit Expense</div>
+      <button onclick="closeExpEdit()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888;line-height:1">×</button>
+    </div>
+    <input type="hidden" id="ee-id">
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div><label style="font-size:11px;font-weight:700;color:#667;text-transform:uppercase;letter-spacing:.4px">Date</label>
+        <input type="date" id="ee-date" style="width:100%;padding:9px 12px;border:1.5px solid #dde;border-radius:7px;font-size:13px;margin-top:4px"></div>
+      <div><label style="font-size:11px;font-weight:700;color:#667;text-transform:uppercase;letter-spacing:.4px">Category</label>
+        <select id="ee-cat" style="width:100%;padding:9px 12px;border:1.5px solid #dde;border-radius:7px;font-size:13px;margin-top:4px">
+          <option value="Electricity Bill">⚡ Electricity Bill</option>
+          <option value="Wi-Fi / Internet">🌐 Wi-Fi / Internet</option>
+          <option value="Water Bill">💧 Water Bill</option>
+          <option value="Rent">🏠 Rent</option>
+          <option value="Maintenance">🔧 Maintenance</option>
+          <option value="Office Supplies">🖇️ Office Supplies</option>
+          <option value="Salary / Wages">👥 Salary / Wages</option>
+          <option value="Fuel / Travel">⛽ Fuel / Travel</option>
+          <option value="Marketing">📣 Marketing</option>
+          <option value="Bills">🧾 Bills</option>
+          <option value="Courier">📮 Courier</option>
+          <option value="Miscellaneous">🗂️ Miscellaneous</option>
+          <option value="Other">📦 Other</option>
+        </select></div>
+      <div><label style="font-size:11px;font-weight:700;color:#667;text-transform:uppercase;letter-spacing:.4px">Title / Description</label>
+        <input type="text" id="ee-title" style="width:100%;padding:9px 12px;border:1.5px solid #dde;border-radius:7px;font-size:13px;margin-top:4px"></div>
+      <div><label style="font-size:11px;font-weight:700;color:#667;text-transform:uppercase;letter-spacing:.4px">Amount (₹)</label>
+        <input type="number" id="ee-amount" min="0" step="0.01" style="width:100%;padding:9px 12px;border:1.5px solid #dde;border-radius:7px;font-size:13px;margin-top:4px"></div>
+      <div><label style="font-size:11px;font-weight:700;color:#667;text-transform:uppercase;letter-spacing:.4px">Paid To / Vendor</label>
+        <input type="text" id="ee-vendor" style="width:100%;padding:9px 12px;border:1.5px solid #dde;border-radius:7px;font-size:13px;margin-top:4px"></div>
+      <div><label style="font-size:11px;font-weight:700;color:#667;text-transform:uppercase;letter-spacing:.4px">Payment Mode</label>
+        <select id="ee-mode" style="width:100%;padding:9px 12px;border:1.5px solid #dde;border-radius:7px;font-size:13px;margin-top:4px">
+          <option value="Cash">Cash</option><option value="UPI">UPI</option><option value="Bank Transfer">Bank Transfer</option>
+          <option value="Card">Card</option><option value="Cheque">Cheque</option><option value="Auto Debit">Auto Debit</option>
+        </select></div>
+      <div><label style="font-size:11px;font-weight:700;color:#667;text-transform:uppercase;letter-spacing:.4px">Reference / Bill No</label>
+        <input type="text" id="ee-ref" style="width:100%;padding:9px 12px;border:1.5px solid #dde;border-radius:7px;font-size:13px;margin-top:4px"></div>
+      <div><label style="font-size:11px;font-weight:700;color:#667;text-transform:uppercase;letter-spacing:.4px">Notes</label>
+        <input type="text" id="ee-notes" style="width:100%;padding:9px 12px;border:1.5px solid #dde;border-radius:7px;font-size:13px;margin-top:4px"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button onclick="saveExpEdit()" style="flex:1;background:#137272;color:#fff;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:800;cursor:pointer">💾 Save Changes</button>
+      <button onclick="closeExpEdit()" style="background:#eef;color:#556;border:none;border-radius:8px;padding:11px 18px;font-size:14px;font-weight:700;cursor:pointer">Cancel</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
