@@ -601,6 +601,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
           <input type="date" id="ts-from" class="ts-input" onchange="filterTasks()" title="From date">
           <input type="date" id="ts-to" class="ts-input" onchange="filterTasks()" title="To date">
           <button class="ts-btn ts-btn-secondary" onclick="clearTaskFilters()">✕ Clear</button>
+          <button class="ts-btn" id="ts-active-toggle" onclick="toggleClosedTasks()" style="background:var(--accent);color:#fff">✅ Active only</button>
           <div class="ts-spacer"></div>
           <button class="ts-btn ts-btn-green admin-only" onclick="exportTasksCSV()">⬇ Export CSV</button>
         </div>
@@ -2661,9 +2662,8 @@ async function loadTasks(){
   if(window._pendingWorkflowFilter){
     allTasks = applyWorkflowFilter(allTasks);
   }
-  filteredTasks = allTasks;
-  taskCurrentPage = 1;
-  renderTasksTable();
+  // Apply the current filters (including the default hide-closed) instead of showing everything raw.
+  filterTasks();
 }
 
 function buildTaskParams(){
@@ -2681,11 +2681,27 @@ function buildTaskParams(){
   return p;
 }
 
+let _hideClosed = true;   // by default, hide Closed/Cancelled so only active tasks show
+const _CLOSED_STATUSES = ['Closed','Cancelled'];
+
+function toggleClosedTasks(){
+  _hideClosed = !_hideClosed;
+  const btn = document.getElementById('ts-active-toggle');
+  if(btn){
+    if(_hideClosed){ btn.textContent='✅ Active only'; btn.style.background='var(--accent)'; btn.style.color='#fff'; }
+    else { btn.textContent='👁 Showing all'; btn.style.background='var(--surface2)'; btn.style.color='var(--text)'; }
+  }
+  filterTasks();
+}
+
 function filterTasks(){
   const search = (document.getElementById('ts-search')?.value||'').toLowerCase();
   const status = document.getElementById('ts-status')?.value||'';
   const tech   = document.getElementById('ts-tech')?.value||'';
+  let hiddenClosed = 0;
   filteredTasks = allTasks.filter(t=>{
+    // Hide closed/cancelled unless the user explicitly picked that status or turned the toggle off.
+    if(_hideClosed && !status && _CLOSED_STATUSES.includes(t.task_status)){ hiddenClosed++; return false; }
     if(status && t.task_status !== status) return false;
     if(tech   && String(t.assigned_to) !== String(tech)) return false;
     if(search){
@@ -2694,6 +2710,7 @@ function filterTasks(){
     }
     return true;
   });
+  window._hiddenClosedCount = hiddenClosed;
   taskCurrentPage = 1;
   renderTasksTable();
 }
@@ -2703,9 +2720,7 @@ function clearTaskFilters(){
     const el = document.getElementById(id);
     if(el) el.value='';
   });
-  filteredTasks = allTasks;
-  taskCurrentPage = 1;
-  renderTasksTable();
+  filterTasks();
 }
 
 function tasksPage(dir){
@@ -2765,9 +2780,17 @@ function renderTasksTable(){
   const slice   = filteredTasks.slice(start, start+TASKS_PER_PAGE);
   const total   = Math.ceil(filteredTasks.length/TASKS_PER_PAGE)||1;
 
-  if(info) info.textContent = filteredTasks.length
-    ? `Showing ${start+1}–${Math.min(start+TASKS_PER_PAGE,filteredTasks.length)} of ${filteredTasks.length} tasks`
-    : 'No tasks found';
+  if(info){
+    const base = filteredTasks.length
+      ? `Showing ${start+1}–${Math.min(start+TASKS_PER_PAGE,filteredTasks.length)} of ${filteredTasks.length} tasks`
+      : 'No tasks found';
+    const hidden = window._hiddenClosedCount||0;
+    if(_hideClosed && hidden>0){
+      info.innerHTML = base + ` · <span style="color:var(--text3)">${hidden} closed hidden</span> <a href="#" onclick="toggleClosedTasks();return false;" style="color:var(--accent);font-weight:700;text-decoration:none">show all</a>`;
+    } else {
+      info.textContent = base;
+    }
+  }
   if(pinf) pinf.textContent = `Page ${taskCurrentPage} of ${total}`;
   if(prev) prev.disabled = taskCurrentPage===1;
   if(next) next.disabled = taskCurrentPage>=total;
