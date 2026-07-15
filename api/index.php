@@ -2429,6 +2429,20 @@ case 'exp_monthly_add':
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
+case 'exp_monthly_update':
+    if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        _ensureMonthlyTables($pdo);
+        $bid = intval($body['id'] ?? 0);
+        if (!$bid) { echo json_encode(['error'=>'Missing id']); break; }
+        $map = ['title'=>'title','category'=>'category','amount'=>'amount','due_day'=>'due_day','vendor'=>'vendor','payment_mode'=>'payment_mode'];
+        $sets=[]; $vals=[];
+        foreach ($map as $in=>$col) { if (array_key_exists($in,$body)) { $sets[]="$col=?"; $vals[]=($body[$in]===''?null:$body[$in]); } }
+        if ($sets) { $vals[]=$bid; $pdo->prepare("UPDATE monthly_bills SET ".implode(',',$sets)." WHERE id=?")->execute($vals); }
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'exp_monthly_list':
     if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     try {
