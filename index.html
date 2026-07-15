@@ -1201,8 +1201,15 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
               <option value="custom">Custom date…</option>
             </select>
             <input type="date" id="rnw-date-custom" onchange="renderRenewalRequests()" class="form-input" style="width:150px;display:none" title="Pick a request date">
+            <select id="rnw-server-filter" onchange="renderRenewalRequests()" class="form-input" style="width:170px" title="Filter by server">
+              <option value="">🖥 All servers</option>
+              <option value="1">Server 1 — bharatgps.com</option>
+              <option value="2">Server 2 — bharatgps.in</option>
+              <option value="3">Server 3 — bharatgps.school</option>
+            </select>
           </div>
-          <div id="rnw-count-boxes" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px"></div>
+          <div id="rnw-count-boxes" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px"></div>
+          <div id="rnw-server-boxes" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px"></div>
           <div class="card" style="overflow-x:auto">
             <table style="width:100%;border-collapse:collapse">
               <thead><tr style="background:var(--surface2);font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)">
@@ -7306,6 +7313,11 @@ async function backfillRenewalNames(btn){
   }
   else { showToast('❌ '+((r&&r.error)||'Failed')); }
 }
+function rnwQuickServer(sid){
+  const sel=document.getElementById('rnw-server-filter');
+  if(sel){ sel.value = (String(sel.value)===String(sid)) ? '' : sid; } // toggle off if same
+  renderRenewalRequests();
+}
 function rnwQuickDate(key){
   const sel=document.getElementById('rnw-date-filter');
   if(sel){ sel.value=key; }
@@ -7337,6 +7349,27 @@ function renderRenewalRequests(){
                   + chip(cYday,'Yesterday','var(--saffron)','yesterday')
                   + chip(rows.length,label+' total','var(--accent)','');
   })();
+
+  // ── Server-wise count boxes (Server 1 / 2 / 3), clickable to filter by server ──
+  (function(){
+    const sbox=document.getElementById('rnw-server-boxes'); if(!sbox) return;
+    const counts={1:0,2:0,3:0};
+    rows.forEach(function(r){ const s=parseInt(r.server_id); if(counts[s]!==undefined) counts[s]++; });
+    const curSrv=(document.getElementById('rnw-server-filter')||{}).value||'';
+    const cols={1:'var(--accent)',2:'var(--accent2)',3:'var(--saffron)'};
+    const names={1:'Server 1 · .com',2:'Server 2 · .in',3:'Server 3 · .school'};
+    const chip=function(sid){
+      const active=String(curSrv)===String(sid);
+      return '<div onclick="rnwQuickServer(\''+sid+'\')" style="flex:1;min-width:110px;cursor:pointer;background:'+(active?cols[sid]:'var(--surface2)')+';color:'+(active?'#fff':'var(--text)')+';border:1.5px solid '+cols[sid]+';border-radius:10px;padding:7px 12px;text-align:center">'
+        + '<div style="font-size:18px;font-weight:800;line-height:1">'+counts[sid]+'</div>'
+        + '<div style="font-size:10px;font-weight:700;opacity:.85;margin-top:2px">'+names[sid]+'</div></div>';
+    };
+    sbox.innerHTML = chip(1)+chip(2)+chip(3);
+  })();
+
+  // Apply the server filter to the visible rows
+  const srvVal=(document.getElementById('rnw-server-filter')||{}).value||'';
+  if(srvVal){ rows=rows.filter(function(r){ return String(r.server_id)===String(srvVal); }); }
 
   // Filter by request date (requested_at)
   const dfSel=document.getElementById('rnw-date-filter');
