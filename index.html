@@ -1192,6 +1192,15 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
               <option value="rejected">Rejected</option>
               <option value="">All</option>
             </select>
+            <select id="rnw-date-filter" onchange="renderRenewalRequests()" class="form-input" style="width:170px" title="Filter by request date">
+              <option value="">📅 All dates</option>
+              <option value="today">Today</option>
+              <option value="yesterday">Yesterday</option>
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="custom">Custom date…</option>
+            </select>
+            <input type="date" id="rnw-date-custom" onchange="renderRenewalRequests()" class="form-input" style="width:150px;display:none" title="Pick a request date">
           </div>
           <div class="card" style="overflow-x:auto">
             <table style="width:100%;border-collapse:collapse">
@@ -7302,6 +7311,27 @@ function renderRenewalRequests(){
   const filter=(document.getElementById('rnw-status-filter')||{}).value ?? 'pending';
   let rows=_rnwRequests.slice();
   if(filter) rows=rows.filter(function(r){ return (r.status||'')===filter; });
+
+  // Filter by request date (requested_at)
+  const dfSel=document.getElementById('rnw-date-filter');
+  const dfVal=dfSel?dfSel.value:'';
+  const customEl=document.getElementById('rnw-date-custom');
+  if(customEl) customEl.style.display = (dfVal==='custom') ? '' : 'none';
+  if(dfVal){
+    const dayStr=function(d){ return new Date(d).toISOString().slice(0,10); };
+    const todayD=new Date(); const today=dayStr(todayD);
+    const yD=new Date(todayD); yD.setDate(yD.getDate()-1); const yday=dayStr(yD);
+    rows=rows.filter(function(r){
+      const rd=(r.requested_at||'').slice(0,10);
+      if(!rd) return false;
+      if(dfVal==='today')     return rd===today;
+      if(dfVal==='yesterday') return rd===yday;
+      if(dfVal==='custom')    return customEl && customEl.value ? rd===customEl.value : true;
+      const n=parseInt(dfVal);   // last N days
+      if(!isNaN(n)){ const cut=new Date(todayD); cut.setDate(cut.getDate()-(n-1)); return new Date(rd) >= new Date(dayStr(cut)); }
+      return true;
+    });
+  }
   if(!rows.length){ tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:48px;color:var(--text3)"><div style="font-size:36px;margin-bottom:10px">🔄</div><div style="font-size:14px;font-weight:700">No '+(filter||'')+' requests</div></td></tr>'; return; }
   const canApprove=_isRenewApprover();
   tbody.innerHTML=rows.map(function(r){
@@ -7330,7 +7360,7 @@ function renderRenewalRequests(){
       + '<td style="padding:9px 12px;font-size:12px">'+escHtml(r.label||(r.months+'m'))+'</td>'
       + '<td style="padding:9px 12px;font-size:12px"><span style="color:var(--red)">'+escHtml(r.current_expiry||'—')+'</span> → <span style="color:var(--green);font-weight:700">'+escHtml(r.new_expiry||'—')+'</span></td>'
       + '<td style="padding:9px 12px;font-size:12px;font-weight:700">'+(amt>0?('₹'+amt.toLocaleString('en-IN')):'—')+'</td>'
-      + '<td style="padding:9px 12px;font-size:12px;color:var(--text2)">'+escHtml(r.requested_by_name||'—')+'<br><span style="font-size:10px;color:var(--text3);text-transform:capitalize">'+escHtml(r.requested_role||'')+'</span></td>'
+      + '<td style="padding:9px 12px;font-size:12px;color:var(--text2)">'+escHtml(r.requested_by_name||'—')+'<br><span style="font-size:10px;color:var(--text3);text-transform:capitalize">'+escHtml(r.requested_role||'')+'</span>'+(r.requested_at?('<br><span style="font-size:10px;color:var(--accent)">📅 '+escHtml((r.requested_at||'').slice(0,10))+'</span>'):'')+'</td>'
       + '<td style="padding:9px 12px">'+action+'</td>'
     + '</tr>';
   }).join('');
