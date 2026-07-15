@@ -273,7 +273,7 @@ function cash_oldest_pending_days($pdo, $techId){
     } catch(Exception $e){}
     try {
         $r2 = $pdo->prepare("SELECT MIN(date) FROM balance_sheet_entries
-            WHERE technician_id=? AND COALESCE(pending_payment,0)>0 AND (task_db_id IS NULL OR task_db_id=0)");
+            WHERE technician_id=? AND COALESCE(pending_payment,0)>0 AND COALESCE(customer_pending,0)=0 AND (task_db_id IS NULL OR task_db_id=0)");
         $r2->execute([$techId]); $v2=$r2->fetchColumn();
         if($v2){ if(!$oldest || $v2<$oldest) $oldest=$v2; }
     } catch(Exception $e){}
@@ -292,7 +292,7 @@ function apply_cash_penalty($pdo, $techId){
         $r->execute([$techId]); $ot=$r->fetchColumn();
         $om=null;
         $r2 = $pdo->prepare("SELECT MIN(date) FROM balance_sheet_entries
-            WHERE technician_id=? AND COALESCE(pending_payment,0)>0 AND (task_db_id IS NULL OR task_db_id=0)");
+            WHERE technician_id=? AND COALESCE(pending_payment,0)>0 AND COALESCE(customer_pending,0)=0 AND (task_db_id IS NULL OR task_db_id=0)");
         $r2->execute([$techId]); $om=$r2->fetchColumn();
         $oldest=null;
         if($ot) $oldest=$ot;
@@ -359,7 +359,7 @@ function is_tech_blocked($pdo, $techId){
     if($days <= 4) return false;
     $amt = 0.0;
     try { $r=$pdo->prepare("SELECT COALESCE(SUM(amount_collected),0) FROM tasks WHERE assigned_to=? AND LOWER(payment_mode)='cash' AND cash_deposit_status='pending' AND COALESCE(amount_collected,0)>0"); $r->execute([$techId]); $amt+=floatval($r->fetchColumn()); } catch(Exception $e){}
-    try { $r2=$pdo->prepare("SELECT COALESCE(SUM(pending_payment),0) FROM balance_sheet_entries WHERE technician_id=? AND COALESCE(pending_payment,0)>0 AND (task_db_id IS NULL OR task_db_id=0)"); $r2->execute([$techId]); $amt+=floatval($r2->fetchColumn()); } catch(Exception $e){}
+    try { $r2=$pdo->prepare("SELECT COALESCE(SUM(pending_payment),0) FROM balance_sheet_entries WHERE technician_id=? AND COALESCE(pending_payment,0)>0 AND COALESCE(customer_pending,0)=0 AND (task_db_id IS NULL OR task_db_id=0)"); $r2->execute([$techId]); $amt+=floatval($r2->fetchColumn()); } catch(Exception $e){}
     return ($amt > 0);
 }
 
@@ -1145,7 +1145,7 @@ case 'update_task':
                 try {
                     $lm = $pdo->prepare("SELECT COUNT(*) c, COALESCE(SUM(pending_payment),0) amt, MIN(date) oldest
                         FROM balance_sheet_entries WHERE technician_id=? AND COALESCE(pending_payment,0)>0
-                          AND (task_db_id IS NULL OR task_db_id=0) AND date < (CURDATE() - INTERVAL 4 DAY)");
+                          AND COALESCE(customer_pending,0)=0 AND (task_db_id IS NULL OR task_db_id=0) AND date < (CURDATE() - INTERVAL 4 DAY)");
                     $lm->execute([$existing['assigned_to']]); $lmr=$lm->fetch();
                     $cnt += intval($lmr['c']??0); $amt += floatval($lmr['amt']??0);
                     if (!empty($lmr['oldest']) && (!$oldest || $lmr['oldest']<$oldest)) $oldest=$lmr['oldest'];
@@ -2266,8 +2266,8 @@ case 'bs_add_entry':
     $recv  = floatval($b['payment_received']??0);
     $pend  = floatval($b['pending_payment']??($total-$recv));
     try { $pdo->exec("ALTER TABLE balance_sheet_entries ADD COLUMN technician_id INT DEFAULT NULL"); } catch(Exception $e){}
-    $pdo->prepare("INSERT INTO balance_sheet_entries
-        (type,profile,task_id,task_db_id,date,invoice_no,gps_serial_no,customer_type,
+    try { $pdo->exec("ALTER TABLE balance_sheet_entries ADD COLUMN customer_pending TINYINT(1) DEFAULT 0"); } catch(Exception $e){}
+    $isCustPending = (!empty($b['customer_pending']) && $b['customer_pending']!=='0') ? 1 : 0;
          name_on_server,server_name,device_model,service_type,license_plan,
          qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,
          payment_mode,payment_received_on,payment_transaction_details,
@@ -2295,6 +2295,7 @@ case 'bs_add_entry':
             $b['remarks']??null, $cu['name'],
         ]);
     $newId = $pdo->lastInsertId();
+    try { $pdo->prepare("UPDATE balance_sheet_entries SET customer_pending=? WHERE id=?")->execute([$isCustPending, $newId]); } catch(Exception $e){}
     // Link back to task if task_db_id provided
     if (!empty($b['task_db_id'])) {
         $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$newId, $b['task_db_id']]);
@@ -2308,11 +2309,12 @@ case 'bs_update_entry':
     if (!$id) { echo json_encode(['error'=>'Missing id']); break; }
     // Ensure technician_id column exists for linking manual entries to real technician accounts
     if (array_key_exists('technician_id',$body)) { try { $pdo->exec("ALTER TABLE balance_sheet_entries ADD COLUMN technician_id INT DEFAULT NULL"); } catch(Exception $e){} }
+    if (array_key_exists('customer_pending',$body)) { try { $pdo->exec("ALTER TABLE balance_sheet_entries ADD COLUMN customer_pending TINYINT(1) DEFAULT 0"); } catch(Exception $e){} }
     $allowed = ['date','invoice_no','gps_serial_no','customer_type','name_on_server','server_name',
                 'device_model','service_type','license_plan','qty','unit_price','gst','total_price',
                 'payment_status','payment_received','pending_payment','payment_mode','payment_received_on',
                 'payment_transaction_details','pending_reason','discount_given','discount_reason',
-                'discount_incharge','payment_reminder_date','technician_name','technician_id','location','remarks','profile'];
+                'discount_incharge','payment_reminder_date','technician_name','technician_id','location','remarks','profile','customer_pending'];
     $sets=[]; $vals=[];
     foreach ($allowed as $f) {
         if (array_key_exists($f,$body)) { $sets[]="$f=?"; $vals[]=($body[$f]===''?null:$body[$f]); }
@@ -3622,7 +3624,7 @@ case 'my_cash_lock_status':
         // Pending amount (tasks + manual)
         $amt = 0.0;
         try { $r=$pdo->prepare("SELECT COALESCE(SUM(amount_collected),0) FROM tasks WHERE assigned_to=? AND LOWER(payment_mode)='cash' AND cash_deposit_status='pending' AND COALESCE(amount_collected,0)>0"); $r->execute([$me2]); $amt+=floatval($r->fetchColumn()); } catch(Exception $e){}
-        try { $r2=$pdo->prepare("SELECT COALESCE(SUM(pending_payment),0) FROM balance_sheet_entries WHERE technician_id=? AND COALESCE(pending_payment,0)>0 AND (task_db_id IS NULL OR task_db_id=0)"); $r2->execute([$me2]); $amt+=floatval($r2->fetchColumn()); } catch(Exception $e){}
+        try { $r2=$pdo->prepare("SELECT COALESCE(SUM(pending_payment),0) FROM balance_sheet_entries WHERE technician_id=? AND COALESCE(pending_payment,0)>0 AND COALESCE(customer_pending,0)=0 AND (task_db_id IS NULL OR task_db_id=0)"); $r2->execute([$me2]); $amt+=floatval($r2->fetchColumn()); } catch(Exception $e){}
         $locked = ($days > 4 && $amt > 0);
         echo json_encode([
             'success'=>true,
@@ -3762,7 +3764,7 @@ case 'remind_cash_deposit':
             try {
                 $rm = $pdo->prepare("SELECT COALESCE(SUM(pending_payment),0) amt, COUNT(*) c, MIN(date) oldest
                         FROM balance_sheet_entries WHERE technician_id=?
-                          AND COALESCE(pending_payment,0)>0 AND (task_db_id IS NULL OR task_db_id=0)");
+                          AND COALESCE(pending_payment,0)>0 AND COALESCE(customer_pending,0)=0 AND (task_db_id IS NULL OR task_db_id=0)");
                 $rm->execute([$techId]); $aggM=$rm->fetch(PDO::FETCH_ASSOC);
                 $amt += floatval($aggM['amt']); $cnt += intval($aggM['c']);
                 if (!empty($aggM['oldest']) && (empty($oldest) || $aggM['oldest']<$oldest)) $oldest=$aggM['oldest'];
