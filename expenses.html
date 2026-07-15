@@ -186,7 +186,7 @@ tr:hover td{background:var(--surface2)}
     <div style="padding:12px 16px;font-weight:800;font-size:14px;border-bottom:1px solid var(--border)">This Month's Bills</div>
     <div class="table-scroll">
       <table>
-        <thead><tr><th>Due</th><th>Name</th><th>Category</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead>
+        <thead><tr style="font-size:10px;text-transform:uppercase;letter-spacing:.3px;color:var(--text3)"><th style="padding:6px 8px;text-align:left">Due</th><th style="padding:6px 8px;text-align:left">Name</th><th style="padding:6px 8px;text-align:left">Category</th><th style="padding:6px 8px;text-align:left">Amount</th><th style="padding:6px 8px;text-align:left">Status</th><th style="padding:6px 8px;text-align:left">Action</th></tr></thead>
         <tbody id="monthly-tbody"><tr><td colspan="6" style="text-align:center;padding:30px;color:var(--text3)">Loading…</td></tr></tbody>
       </table>
     </div>
@@ -263,23 +263,28 @@ async function loadMonthly(){
     const dueNum=m.due_day==='last'?31:parseInt(m.due_day);
     let statusHtml, actionHtml;
     if(paid){
-      statusHtml='<span style="background:#e8f5ec;color:#1a7a3a;font-weight:700;font-size:11px;padding:3px 10px;border-radius:20px">✅ Paid this month</span>';
-      actionHtml='<span style="color:var(--text3);font-size:12px">Done</span>';
+      statusHtml='<span style="background:#e8f5ec;color:#1a7a3a;font-weight:700;font-size:10px;padding:2px 8px;border-radius:12px">✅ Paid</span>';
+      actionHtml='';
     } else {
       const daysLeft=dueNum-todayDay;
       let due;
-      if(daysLeft<0) due='<span style="background:#fdecea;color:#c0392b;font-weight:700;font-size:11px;padding:3px 10px;border-radius:20px">⚠️ Overdue</span>';
-      else if(daysLeft<=3) due='<span style="background:#fff3e0;color:#e07b00;font-weight:700;font-size:11px;padding:3px 10px;border-radius:20px">⏰ Due in '+daysLeft+'d</span>';
-      else due='<span style="background:#eef;color:#557;font-weight:700;font-size:11px;padding:3px 10px;border-radius:20px">'+daysLeft+'d left</span>';
+      if(daysLeft<0) due='<span style="background:#fdecea;color:#c0392b;font-weight:700;font-size:10px;padding:2px 8px;border-radius:12px">⚠️ Overdue</span>';
+      else if(daysLeft<=3) due='<span style="background:#fff3e0;color:#e07b00;font-weight:700;font-size:10px;padding:2px 8px;border-radius:12px">⏰ '+daysLeft+'d</span>';
+      else due='<span style="background:#eef;color:#557;font-weight:700;font-size:10px;padding:2px 8px;border-radius:12px">'+daysLeft+'d</span>';
       statusHtml=due;
-      actionHtml='<button class="act-btn" style="background:#137272;color:#fff;padding:5px 12px;font-weight:700" onclick="markMonthlyPaid('+m.id+')">💰 Mark Paid</button>';
+      actionHtml='<button title="Mark Paid" onclick="markMonthlyPaid('+m.id+')" style="background:#137272;color:#fff;border:none;border-radius:5px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer">💰 Paid</button>';
     }
-    return '<tr><td style="font-weight:700">📅 '+dueDay+'</td><td>'+esc(m.title)+(m.vendor?'<br><span style="font-size:11px;color:var(--text3)">'+esc(m.vendor)+'</span>':'')+'</td>'
-      +'<td><span class="cat-badge">'+esc(m.category||'–')+'</span></td>'
-      +'<td style="font-weight:700">₹'+parseFloat(m.amount||0).toLocaleString('en-IN')+'</td>'
-      +'<td>'+statusHtml+'</td><td>'+actionHtml+'</td>'
-      +' <button class="act-btn" title="Edit" onclick="editMonthly('+m.id+')">✏️</button>'
-      +' <button class="act-btn" title="Delete" onclick="delMonthly('+m.id+')" style="opacity:.6">🗑️</button></tr>';
+    return '<tr style="border-bottom:1px solid var(--border)">'
+      +'<td style="padding:5px 8px;font-weight:700;white-space:nowrap">'+dueDay+'</td>'
+      +'<td style="padding:5px 8px">'+esc(m.title)+(m.vendor?' <span style="font-size:10px;color:var(--text3)">· '+esc(m.vendor)+'</span>':'')+'</td>'
+      +'<td style="padding:5px 8px"><span class="cat-badge" style="font-size:10px">'+esc(m.category||'–')+'</span></td>'
+      +'<td style="padding:5px 8px;font-weight:700;white-space:nowrap">₹'+parseFloat(m.amount||0).toLocaleString('en-IN')+'</td>'
+      +'<td style="padding:5px 8px">'+statusHtml+'</td>'
+      +'<td style="padding:5px 8px;white-space:nowrap"><span style="display:inline-flex;gap:4px;align-items:center">'
+        +actionHtml
+        +'<button title="Edit" onclick="editMonthly('+m.id+')" style="background:#eef;border:none;border-radius:5px;padding:3px 7px;font-size:12px;cursor:pointer">✏️</button>'
+        +'<button title="Delete" onclick="delMonthly('+m.id+')" style="background:#fdecea;border:none;border-radius:5px;padding:3px 7px;font-size:12px;cursor:pointer">🗑️</button>'
+      +'</span></td></tr>';
   }).join('');
 }
 async function markMonthlyPaid(id){
