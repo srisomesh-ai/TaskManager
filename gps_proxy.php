@@ -357,6 +357,104 @@ function parse_gps_err($json, $body){
     return substr($body,0,200);
 }
 
+// ── MOVE DEVICE — copy a device from one server to another, then delete from source ──
+if($action === 'move_device'){
+    $from_id = intval($_POST['from_server'] ?? 0);
+    $to_id   = intval($_POST['to_server'] ?? 0);
+    $imei    = trim($_POST['imei'] ?? '');
+    if(!$from_id || !$to_id){ echo json_encode(['success'=>false,'error'=>'Missing source or target server']); exit; }
+    if($from_id === $to_id){ echo json_encode(['success'=>false,'error'=>'Source and target servers are the same']); exit; }
+    if(!isset($servers[$from_id]) || !isset($servers[$to_id])){ echo json_encode(['success'=>false,'error'=>'Invalid server']); exit; }
+    if(!$imei){ echo json_encode(['success'=>false,'error'=>'IMEI required']); exit; }
+    $src = $servers[$from_id]; $dst = $servers[$to_id];
+
+    // 1) Find the device on the SOURCE server to read all its data.
+    $findRes = do_get($src['base'].'/get_devices?lang=en&user_api_hash='.rawurlencode($src['hash']));
+    $srcDev = null;
+    $list = $findRes['json'];
+    if(is_array($list)){
+        // GPSWOX may return groups with 'items' or a flat list
+        $flat = [];
+        foreach($list as $row){
+            if(isset($row['items']) && is_array($row['items'])){ foreach($row['items'] as $it){ $flat[] = $it; } }
+            else { $flat[] = $row; }
+        }
+        foreach($flat as $d){
+            $di = $d['device_data']['imei'] ?? $d['imei'] ?? '';
+            if($di === $imei){ $srcDev = $d; break; }
+        }
+    }
+    if(!$srcDev){ echo json_encode(['success'=>false,'error'=>'Device not found on the source server']); exit; }
+    $dd = $srcDev['device_data'] ?? $srcDev;
+
+    // Allow the caller to override the editable details (name, plate, owner, etc.)
+    $name  = trim($_POST['name'] ?? ($srcDev['name'] ?? ($dd['name'] ?? '')));
+    $plate = trim($_POST['plate_number'] ?? ($dd['plate_number'] ?? ''));
+    $reg   = trim($_POST['registration_number'] ?? ($dd['registration_number'] ?? ''));
+    $owner = trim($_POST['object_owner'] ?? ($dd['object_owner'] ?? ''));
+    $vin   = trim($_POST['vin'] ?? ($dd['vin'] ?? ''));
+    $model = trim($_POST['model'] ?? ($dd['device_model'] ?? ''));
+    if(!$name){ $name = $plate ?: $imei; }
+
+    // 2) Add the device to the TARGET server.
+    $addFields = [
+        'user_api_hash'       => $dst['hash'],
+        'lang'                => 'en',
+        'name'                => $name,
+        'imei'                => $imei,
+        'vin'                 => $vin,
+        'plate_number'        => $plate,
+        'registration_number' => $reg,
+        'object_owner'        => $owner,
+        'device_model'        => $model,
+        'fuel_measurement_id' => 1,
+        'tail_length'         => 10,
+        'min_moving_speed'    => 3,
+    ];
+    $addRes = do_post($dst['base'].'/add_device', $addFields);
+    $addJson = $addRes['json'];
+    if($addRes['error']){ echo json_encode(['success'=>false,'error'=>'Could not add on target server: '.$addRes['error']]); exit; }
+    $addStatus = $addJson['status'] ?? $addJson['success'] ?? null;
+    if(!($addStatus == 1 || $addStatus === true)){
+        $msg = $addJson['message'] ?? ($addJson['error'] ?? 'Add failed on target server');
+        // Common case: device already exists on target
+        echo json_encode(['success'=>false,'error'=>'Target server: '.(is_array($msg)?json_encode($msg):$msg)]); exit;
+    }
+    $newDeviceId = $addJson['id'] ?? ($addJson['device_id'] ?? ($addJson['data']['id'] ?? null));
+    // Ensure editable details are set on target
+    if($newDeviceId && ($plate!=='' || $reg!=='' || $owner!=='' || $vin!=='')){
+        do_post($dst['base'].'/edit_device?lang=en&user_api_hash='.rawurlencode($dst['hash']), [
+            'id'=>strval($newDeviceId),'lang'=>'en','name'=>$name,'plate_number'=>$plate,
+            'registration_number'=>$reg,'object_owner'=>$owner,'vin'=>$vin,
+        ]);
+    }
+
+    // 3) Delete the device from the SOURCE server.
+    $srcDeviceId = $srcDev['id'] ?? ($dd['id'] ?? null);
+    $deleted = false; $delMsg = '';
+    if($srcDeviceId){
+        $delRes = do_post($src['base'].'/delete_device?lang=en&user_api_hash='.rawurlencode($src['hash']), [
+            'id'=>strval($srcDeviceId),'lang'=>'en',
+        ]);
+        $delJson = $delRes['json'];
+        $delStatus = $delJson['status'] ?? $delJson['success'] ?? null;
+        $deleted = ($delStatus == 1 || $delStatus === true);
+        if(!$deleted){ $delMsg = is_array($delJson) ? json_encode($delJson) : strval($delRes['raw']); }
+    } else {
+        $delMsg = 'Could not read source device id';
+    }
+
+    echo json_encode([
+        'success'      => true,
+        'added_to'     => $dst['name'],
+        'removed_from' => $src['name'],
+        'deleted'      => $deleted,
+        'new_device_id'=> $newDeviceId,
+        'note'         => $deleted ? 'Device moved successfully.' : ('Added to target, but could NOT delete from source — please remove it manually. '.$delMsg),
+    ]);
+    exit;
+}
+
 // ── FIND USER — check if email exists on a GPS server ────────────────────
 if($action === 'find_user'){
     $server_id = intval($_GET['server_id'] ?? 0);
