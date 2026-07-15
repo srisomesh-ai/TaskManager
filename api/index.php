@@ -1837,6 +1837,64 @@ case 'push_task_reminder':
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
+// ---- ADMIN: MANUALLY ADJUST A TECHNICIAN'S COINS (add or remove) ----
+case 'admin_adjust_coins':
+    if ($userRole !== 'admin') { http_response_code(403); echo json_encode(['error'=>'Only admin can adjust coins']); break; }
+    $atech = intval($body['user_id'] ?? 0);
+    $acoins = intval($body['coins'] ?? 0);           // may be positive (add) or negative (remove)
+    $areason = trim($body['reason'] ?? '');
+    if (!$atech)  { echo json_encode(['error'=>'Select a technician']); break; }
+    if ($acoins === 0) { echo json_encode(['error'=>'Enter a non-zero coin amount']); break; }
+    if ($areason === '') { echo json_encode(['error'=>'A reason is required']); break; }
+    try {
+        _ensureCoinLedger($pdo);
+        // Direct ledger insert (not idempotent — a manual adjustment is a deliberate one-off entry).
+        $adjReason = 'Manual adjustment by '.($cu['name']??'admin').': '.$areason;
+        if (mb_strlen($adjReason) > 185) $adjReason = mb_substr($adjReason, 0, 185);
+        $pdo->prepare("INSERT INTO coin_ledger (user_id,task_id,coins,reason) VALUES (?,?,?,?)")
+            ->execute([$atech, null, $acoins, $adjReason]);
+        $newBal = coin_balance($pdo, $atech);
+        // Notify the technician of the change.
+        try {
+            require_once __DIR__.'/fcm_send.php';
+            if (function_exists('fcm_send_to_user')) {
+                $ttl = $acoins >= 0 ? ('🎉 +'.$acoins.' coins') : ('⚠️ '.$acoins.' coins');
+                fcm_send_to_user($pdo, $atech, $ttl, 'Admin adjusted your coins. New balance: '.$newBal.' coins.', [
+                    'type'=>'coins', 'coins'=>(string)$acoins
+                ]);
+            }
+        } catch(Exception $e){}
+        echo json_encode(['success'=>true, 'new_balance'=>$newBal]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// ---- ADMIN: LIST TECHNICIANS WITH COIN BALANCES ----
+case 'admin_coin_summary':
+    if (!in_array($userRole, ['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        _ensureCoinLedger($pdo);
+        $q = $pdo->query("SELECT u.id, u.name, u.role, COALESCE(SUM(c.coins),0) AS balance
+                          FROM users u LEFT JOIN coin_ledger c ON c.user_id=u.id
+                          WHERE u.role='technician'
+                          GROUP BY u.id, u.name, u.role
+                          ORDER BY u.name ASC");
+        echo json_encode(['success'=>true, 'technicians'=>$q->fetchAll(PDO::FETCH_ASSOC)]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// ---- ADMIN: RECENT COIN LEDGER FOR A TECHNICIAN ----
+case 'admin_coin_history':
+    if (!in_array($userRole, ['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    $htech = intval($_GET['user_id'] ?? $body['user_id'] ?? 0);
+    if (!$htech) { echo json_encode(['error'=>'Missing user_id']); break; }
+    try {
+        _ensureCoinLedger($pdo);
+        $h = $pdo->prepare("SELECT coins, reason, created_at FROM coin_ledger WHERE user_id=? ORDER BY id DESC LIMIT 40");
+        $h->execute([$htech]);
+        echo json_encode(['success'=>true, 'history'=>$h->fetchAll(PDO::FETCH_ASSOC), 'balance'=>coin_balance($pdo,$htech)]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'save_fcm_token':
     $fcm = trim($body['fcm_token'] ?? '');
     $platform = trim($body['platform'] ?? 'android');
