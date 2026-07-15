@@ -2366,7 +2366,7 @@ case 'bs_update_entry':
     if (!$id) { echo json_encode(['error'=>'Missing id']); break; }
     // Ensure technician_id column exists for linking manual entries to real technician accounts
     if (array_key_exists('technician_id',$body)) { try { $pdo->exec("ALTER TABLE balance_sheet_entries ADD COLUMN technician_id INT DEFAULT NULL"); } catch(Exception $e){} }
-    $allowed = ['date','invoice_no','gps_serial_no','customer_type','name_on_server','server_name',
+    $allowed = ['date','invoice_no','task_id','gps_serial_no','customer_type','name_on_server','server_name',
                 'device_model','service_type','license_plan','qty','unit_price','gst','total_price',
                 'payment_status','payment_received','pending_payment','payment_mode','payment_received_on',
                 'payment_transaction_details','pending_reason','discount_given','discount_reason',
