@@ -396,6 +396,17 @@ if($action === 'move_device'){
     $model = trim($_POST['model'] ?? ($dd['device_model'] ?? ''));
     if(!$name){ $name = $plate ?: $imei; }
 
+    // Carry over ALL important details from the source device — dates are critical.
+    $installDate = $dd['installation_date'] ?? '';
+    $expiryDate  = $dd['expiration_date']   ?? '';
+    if($installDate === '0000-00-00') $installDate = '';
+    if($expiryDate  === '0000-00-00') $expiryDate  = '';
+    $simNumber   = $dd['sim_number'] ?? '';
+    $iconId      = $dd['icon_id'] ?? ($srcDev['icon_id'] ?? '');
+    $iconColors  = $dd['icon_colors'] ?? ($srcDev['icon_colors'] ?? '');
+    $deviceModelId = $dd['device_model_id'] ?? '';
+    $simExpiry   = $dd['sim_expiration_date'] ?? '';
+
     // Note to stamp on both devices recording the move.
     $moveNote = 'Device moved from '.$src['name'].' to '.$dst['name'].' on '.date('Y-m-d H:i').' via BharatGPS TaskManager';
     $existingNotes = trim($dd['additional_notes'] ?? '');
@@ -411,12 +422,17 @@ if($action === 'move_device'){
         'registration_number' => $reg,
         'object_owner'        => $owner,
         'device_model'        => $model,
+        'sim_number'          => $simNumber,
+        'installation_date'   => $installDate,
+        'expiration_date'     => $expiryDate,
         'additional_notes'    => ($existingNotes ? ($existingNotes.' | ') : '').$moveNote,
         'comment'             => $moveNote,
         'fuel_measurement_id' => 1,
         'tail_length'         => 10,
         'min_moving_speed'    => 3,
     ];
+    if($iconId!=='')     $addFields['icon_id']     = $iconId;
+    if($iconColors!=='') $addFields['icon_colors'] = $iconColors;
     $addRes = do_post($dst['base'].'/add_device', $addFields);
     $addJson = $addRes['json'];
     $addStatus = $addJson['status'] ?? $addJson['success'] ?? null;
@@ -446,12 +462,17 @@ if($action === 'move_device'){
         echo json_encode(['success'=>false,'error'=>'Target server: '.(is_array($msg)?json_encode($msg):$msg)]); exit;
     }
 
-    // Ensure editable details + move note are set on target
-    do_post($dst['base'].'/edit_device?lang=en&user_api_hash='.rawurlencode($dst['hash']), [
+    // Ensure editable details + dates + move note are set on target (some servers only accept dates via edit_device).
+    $editFields = [
         'id'=>strval($newDeviceId),'lang'=>'en','name'=>$name,'plate_number'=>$plate,
         'registration_number'=>$reg,'object_owner'=>$owner,'vin'=>$vin,
+        'sim_number'=>$simNumber,'device_model'=>$model,
+        'installation_date'=>$installDate,'expiration_date'=>$expiryDate,
         'additional_notes'=>($existingNotes ? ($existingNotes.' | ') : '').$moveNote,'comment'=>$moveNote,
-    ]);
+    ];
+    if($iconId!=='')     $editFields['icon_id']     = $iconId;
+    if($iconColors!=='') $editFields['icon_colors'] = $iconColors;
+    do_post($dst['base'].'/edit_device?lang=en&user_api_hash='.rawurlencode($dst['hash']), $editFields);
 
     // Grant support@bharatgps.com access on the TARGET (admin/owner already has it as the API account holder).
     $supportAccessTarget = false;
