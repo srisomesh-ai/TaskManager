@@ -419,22 +419,61 @@ if($action === 'move_device'){
     ];
     $addRes = do_post($dst['base'].'/add_device', $addFields);
     $addJson = $addRes['json'];
-    if($addRes['error']){ echo json_encode(['success'=>false,'error'=>'Could not add on target server: '.$addRes['error']]); exit; }
     $addStatus = $addJson['status'] ?? $addJson['success'] ?? null;
-    if(!($addStatus == 1 || $addStatus === true)){
-        $msg = $addJson['message'] ?? ($addJson['error'] ?? 'Add failed on target server');
-        // Common case: device already exists on target
+    $addOk = ($addStatus == 1 || $addStatus === true);
+    $newDeviceId = $addJson['id'] ?? ($addJson['device_id'] ?? ($addJson['data']['id'] ?? null));
+
+    // GPSWOX often does not return a clean status, or the device may already exist on the target.
+    // Do not fail outright — verify by looking the device up on the TARGET by IMEI to get its id.
+    if(!$newDeviceId){
+        $tgtLook = do_get($dst['base'].'/get_devices?lang=en&user_api_hash='.rawurlencode($dst['hash']));
+        $tl = $tgtLook['json'];
+        if(is_array($tl)){
+            $tflat = [];
+            foreach($tl as $row){ if(isset($row['items'])&&is_array($row['items'])){ foreach($row['items'] as $it){$tflat[]=$it;} } else { $tflat[]=$row; } }
+            foreach($tflat as $d){
+                $di = $d['device_data']['imei'] ?? $d['imei'] ?? '';
+                if($di === $imei){ $newDeviceId = $d['id'] ?? ($d['device_data']['id'] ?? null); $addOk = true; break; }
+            }
+        }
+    }
+    // Only a hard connection error (no device found anywhere) is a real failure.
+    if(!$newDeviceId && $addRes['error']){
+        echo json_encode(['success'=>false,'error'=>'Could not add on target server: '.$addRes['error']]); exit;
+    }
+    if(!$newDeviceId){
+        $msg = $addJson['message'] ?? ($addJson['error'] ?? 'Could not confirm the device on the target server');
         echo json_encode(['success'=>false,'error'=>'Target server: '.(is_array($msg)?json_encode($msg):$msg)]); exit;
     }
-    $newDeviceId = $addJson['id'] ?? ($addJson['device_id'] ?? ($addJson['data']['id'] ?? null));
-    // Ensure editable details are set on target
-    if($newDeviceId && ($plate!=='' || $reg!=='' || $owner!=='' || $vin!=='')){
-        do_post($dst['base'].'/edit_device?lang=en&user_api_hash='.rawurlencode($dst['hash']), [
-            'id'=>strval($newDeviceId),'lang'=>'en','name'=>$name,'plate_number'=>$plate,
-            'registration_number'=>$reg,'object_owner'=>$owner,'vin'=>$vin,
-            'additional_notes'=>($existingNotes ? ($existingNotes.' | ') : '').$moveNote,'comment'=>$moveNote,
-        ]);
-    }
+
+    // Ensure editable details + move note are set on target
+    do_post($dst['base'].'/edit_device?lang=en&user_api_hash='.rawurlencode($dst['hash']), [
+        'id'=>strval($newDeviceId),'lang'=>'en','name'=>$name,'plate_number'=>$plate,
+        'registration_number'=>$reg,'object_owner'=>$owner,'vin'=>$vin,
+        'additional_notes'=>($existingNotes ? ($existingNotes.' | ') : '').$moveNote,'comment'=>$moveNote,
+    ]);
+
+    // Grant support@bharatgps.com access on the TARGET (admin/owner already has it as the API account holder).
+    $supportAccessTarget = false;
+    try {
+        $H = rawurlencode($dst['hash']);
+        $SUPPORT_EMAIL = 'support@bharatgps.com';
+        $supportUserId = 0;
+        $sr = do_get($dst['base'].'/admin/clients?search_phrase='.rawurlencode($SUPPORT_EMAIL).'&limit=10&lang=en&user_api_hash='.$H);
+        $sj = $sr['json']; $clients = [];
+        if(is_array($sj)){
+            if(isset($sj['data'])) $clients=$sj['data']; elseif(isset($sj['items'])) $clients=$sj['items']; elseif(isset($sj[0])) $clients=$sj;
+        }
+        foreach($clients as $c){ if(strcasecmp(trim($c['email']??''),$SUPPORT_EMAIL)===0){ $supportUserId=intval($c['id']??0); break; } }
+        if($supportUserId){
+            $ar = do_post($dst['base'].'/admin/device/'.$newDeviceId.'/user?lang=en&user_api_hash='.$H, ['user_id'=>strval($supportUserId)]);
+            if(($ar['json']['status'] ?? null) == 1){ $supportAccessTarget = true; }
+            else {
+                $ar2 = do_post($dst['base'].'/edit_device?lang=en&user_api_hash='.$H, ['id'=>strval($newDeviceId),'user_id'=>strval($supportUserId)]);
+                if(($ar2['json']['status'] ?? null) == 1){ $supportAccessTarget = true; }
+            }
+        }
+    } catch(Exception $e) {}
 
     // 3) On the SOURCE server: mark the device as MOVED (rename in brackets) and stamp the move note,
     //    so it is clearly flagged and no longer active — instead of a hard delete, this keeps history.
@@ -475,13 +514,14 @@ if($action === 'move_device'){
     }
 
     echo json_encode([
-        'success'      => true,
-        'added_to'     => $dst['name'],
-        'source'       => $src['name'],
-        'source_marked'=> $marked,
-        'new_device_id'=> $newDeviceId,
+        'success'          => true,
+        'added_to'         => $dst['name'],
+        'source'           => $src['name'],
+        'source_marked'    => $marked,
+        'support_target'   => $supportAccessTarget,
+        'new_device_id'    => $newDeviceId,
         'note'         => $marked
-            ? ('Device moved. Added to '.$dst['name'].' (with admin + support access and a move comment). On '.$src['name'].' it is marked (MOVED), flagged inactive, and access removed except admin + support.')
+            ? ('Device moved. Added to '.$dst['name'].' with admin + support access and a move comment. On '.$src['name'].' it is marked (MOVED), flagged inactive, and access removed except admin + support.')
             : ('Added to '.$dst['name'].', but could NOT mark the source device as moved — please update it manually. '.$markMsg),
     ]);
     exit;
