@@ -260,6 +260,10 @@ tr:hover td{background:#f7f9fc}
       </div>
       <div class="pend-box" id="s-pend-box" style="display:none">
         <div class="pend-box-title">⚠️ Pending Payment Details</div>
+        <label style="display:flex;align-items:flex-start;gap:8px;background:#fff7ed;border:1.5px solid #f59e0b;border-radius:8px;padding:10px 12px;margin-bottom:10px;cursor:pointer">
+          <input type="checkbox" id="s-cust-pending" style="margin-top:2px;width:16px;height:16px;flex-shrink:0">
+          <span style="font-size:12px;color:#92600a;line-height:1.5"><strong>Pending is FROM THE CUSTOMER</strong> — the technician did NOT collect this money. Tick this so the technician is not counted as holding cash and is not blocked for it.</span>
+        </label>
         <div class="bs-fg">
           <div class="fg"><label>Reason *</label>
             <select id="s-preason" onchange="calcSales()"><option value="">Select…</option>
@@ -675,13 +679,13 @@ function renderTable(){
       <td style="color:${(+e.pending_payment||0)>0?'var(--red)':'var(--green)'};font-weight:700">₹${parseFloat(e.pending_payment||0).toLocaleString('en-IN')}</td>
       <td style="color:var(--green);font-weight:700">₹${parseFloat(e.payment_received||0).toLocaleString('en-IN')}</td>
       <td>${e.payment_mode||'–'}</td><td>${ps}</td>
-      <td>${e.technician_name||'–'}</td><td>${e.location||'–'}</td>
+      <td>${e.technician_name||'–'}${(+e.customer_pending===1||e.customer_pending==='1')?' <span style="display:inline-block;background:#fff7ed;color:#b45309;border:1px solid #f59e0b;border-radius:10px;font-size:9px;font-weight:800;padding:1px 6px;white-space:nowrap" title="Payment pending from the customer - technician did not collect this. Technician is NOT blocked for it.">👤 CUST PENDING</span>':''}</td><td>${e.location||'–'}</td>
       <td>
         <button class="act-btn" onclick="viewEntry(${e.id})" title="View">👁</button>
         <button class="act-btn" onclick="editEntry(${e.id})" title="Edit">✏️</button>
         ${isAdmin?`<button class="act-btn" onclick="delEntry(${e.id})" title="Delete">🗑️</button>`:''}
         <button class="act-btn" onclick="waEntry(${e.id})" title="WhatsApp">📱</button>
-        ${((+e.pending_payment||0)>0 && e.technician_id)?`<button class="act-btn" onclick="remindEntry(${e.id},this)" title="Remind technician to deposit">🔔</button>`:''}
+        ${((+e.pending_payment||0)>0 && e.technician_id && !(+e.customer_pending===1||e.customer_pending==='1'))?`<button class="act-btn" onclick="remindEntry(${e.id},this)" title="Remind technician to deposit">🔔</button>`:''}
       </td>
     </tr>`;
   }).join('');
@@ -786,6 +790,7 @@ function viewEntry(id){
     + row('Received On', esc(e.payment_received_on))
     + row('Payment Screenshot', shot)
     + row('Pending Reason', esc(e.pending_reason))
+    + ((+e.customer_pending===1||e.customer_pending==='1') ? '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 0"><span style="font-size:12px;color:var(--text3);font-weight:600">Pending From</span><span style="font-size:12px;font-weight:800;color:#b45309">👤 CUSTOMER (technician not holding this)</span></div>' : '')
   );
 
   const discSec = hasDiscount ? section('Discount',
@@ -833,6 +838,10 @@ function editEntry(id){
           ${(window._bsTechs||[]).map(u=>`<option value="${u.id}" ${String(e.technician_id)===String(u.id)?'selected':''}>${String(u.name||'').replace(/</g,'&lt;')}</option>`).join('')}
         </select>
       </div>
+      <div class="fg span2"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;background:#fff7ed;border:1.5px solid #f59e0b;border-radius:8px;padding:9px 12px;margin-top:2px">
+        <input type="checkbox" id="ef-customer_pending" ${(+e.customer_pending===1||e.customer_pending==='1')?'checked':''} style="width:16px;height:16px">
+        <span style="font-size:12px;color:#92600a;font-weight:600">Pending is FROM THE CUSTOMER — technician did not collect this (do not block technician)</span>
+      </label></div>
       ${fields.map(f=>`<div class="fg"><label>${f.label}</label>
         ${f.type==='select'
           ?`<select id="ef-${f.id}"><option value="">–</option>${f.opts.map(o=>`<option value="${o}" ${e[f.id]===o?'selected':''}>${o}</option>`).join('')}</select>`
@@ -858,6 +867,8 @@ async function saveEdit(id){
     const u=(window._bsTechs||[]).find(x=>String(x.id)===String(tsel.value));
     if(u) updates.technician_name = u.name;
   }
+  const cp=document.getElementById('ef-customer_pending');
+  updates.customer_pending = (cp && cp.checked) ? 1 : 0;
   const res=await bsApi('bs_update_entry',{},'POST',{id,...updates}).catch(()=>({}));
   if(res.success){ closeEditModal(); toast('✅ Entry updated'); loadEntries(); }
   else toast('❌ '+(res.error||'Update failed'));
@@ -961,6 +972,7 @@ async function submitSales(e){
     pending_payment:parseFloat(v('s-pend'))||0, payment_mode:v('s-pmode'),
     payment_received_on:v('s-precon')||null, payment_transaction_details:v('s-ptxn'),
     pending_reason:v('s-preason'), payment_reminder_date:v('s-preminder')||null,
+    customer_pending:(document.getElementById('s-cust-pending')&&document.getElementById('s-cust-pending').checked)?1:0,
     discount_given:parseFloat(v('s-disc'))||0, discount_reason:v('s-dreason'),
     discount_incharge:v('s-dincharge'),
     technician_id:v('s-tech')||null, technician_name:techName('s-tech'),
