@@ -335,6 +335,13 @@ function _ensureExpensesTable($pdo){
     } catch(Exception $e){}
 }
 
+function _ensureMonthlyTables($pdo){
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS monthly_bills (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(150) NOT NULL, category VARCHAR(60), amount DECIMAL(12,2) DEFAULT 0, due_day VARCHAR(6) DEFAULT '1', vendor VARCHAR(150) NULL, payment_mode VARCHAR(50) NULL, active TINYINT(1) DEFAULT 1, created_by VARCHAR(60), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $pdo->exec("CREATE TABLE IF NOT EXISTS monthly_bill_payments (id INT AUTO_INCREMENT PRIMARY KEY, bill_id INT NOT NULL, ym VARCHAR(7) NOT NULL, expense_id INT NULL, paid_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uq_bill_month (bill_id, ym)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch(Exception $e){}
+}
+
 // ── Block-time tracking (for payroll absent calculation) ───────────────────────
 // When a technician crosses into the blocked state (cash > 4 days overdue) we stamp the exact
 // time the block STARTED (today onward — never backdated). When they deposit, the period closes.
@@ -2402,6 +2409,70 @@ case 'exp_get_entries':
                 FROM expenses".($where?" WHERE ".implode(" AND ",$where):"")." ORDER BY date DESC, id DESC LIMIT 2000";
         $st = $pdo->prepare($sql); $st->execute($params);
         echo json_encode(['success'=>true,'entries'=>$st->fetchAll(PDO::FETCH_ASSOC)]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// ── RECURRING MONTHLY BILLS ─────────────────────────────────────────
+case 'exp_monthly_add':
+    if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        _ensureMonthlyTables($pdo);
+        $title=trim($body['title'] ?? ''); $amount=floatval($body['amount'] ?? 0);
+        if ($title==='') { echo json_encode(['error'=>'Name required']); break; }
+        if ($amount<=0)  { echo json_encode(['error'=>'Amount must be greater than 0']); break; }
+        $pdo->prepare("INSERT INTO monthly_bills (title,category,amount,due_day,vendor,payment_mode,created_by)
+            VALUES (?,?,?,?,?,?,?)")
+            ->execute([$title, trim($body['category'] ?? 'Other'), $amount,
+                strval($body['due_day'] ?? '1'), trim($body['vendor'] ?? '') ?: null,
+                trim($body['payment_mode'] ?? '') ?: null, $cu['name'] ?? 'admin']);
+        echo json_encode(['success'=>true,'id'=>$pdo->lastInsertId()]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'exp_monthly_list':
+    if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        _ensureMonthlyTables($pdo);
+        $ym = date('Y-m');
+        // active bills + whether paid this month
+        $rows = $pdo->query("SELECT b.*, (SELECT COUNT(*) FROM monthly_bill_payments p WHERE p.bill_id=b.id AND p.ym='$ym') AS paid_this_month
+                             FROM monthly_bills b WHERE b.active=1 ORDER BY CAST(b.due_day AS UNSIGNED) ASC, b.title ASC")->fetchAll(PDO::FETCH_ASSOC);
+        echo json_encode(['success'=>true,'items'=>$rows,'month'=>$ym]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'exp_monthly_pay':
+    if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        _ensureMonthlyTables($pdo); _ensureExpensesTable($pdo);
+        $bid = intval($body['id'] ?? 0);
+        if (!$bid) { echo json_encode(['error'=>'Missing id']); break; }
+        $b = $pdo->prepare("SELECT * FROM monthly_bills WHERE id=?"); $b->execute([$bid]); $bill=$b->fetch(PDO::FETCH_ASSOC);
+        if (!$bill) { echo json_encode(['error'=>'Bill not found']); break; }
+        $ym = date('Y-m');
+        // already paid this month?
+        $chk = $pdo->prepare("SELECT id FROM monthly_bill_payments WHERE bill_id=? AND ym=?"); $chk->execute([$bid,$ym]);
+        if ($chk->fetch()) { echo json_encode(['error'=>'Already marked paid this month']); break; }
+        // 1) create the expense record
+        $pdo->prepare("INSERT INTO expenses (company,date,category,description,amount,payment_mode,paid_to,receipt_note,created_by)
+            VALUES (?,?,?,?,?,?,?,?,?)")
+            ->execute(['BGPT', date('Y-m-d'), $bill['category'], $bill['title'], $bill['amount'],
+                $bill['payment_mode'], $bill['vendor'], 'Monthly recurring bill', $cu['name'] ?? 'admin']);
+        $expId = $pdo->lastInsertId();
+        // 2) log the payment for this month so it disappears until next month
+        $pdo->prepare("INSERT INTO monthly_bill_payments (bill_id,ym,expense_id) VALUES (?,?,?)")->execute([$bid,$ym,$expId]);
+        echo json_encode(['success'=>true,'expense_id'=>$expId]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'exp_monthly_delete':
+    if ($userRole !== 'admin') { http_response_code(403); echo json_encode(['error'=>'Only admin can delete']); break; }
+    try {
+        _ensureMonthlyTables($pdo);
+        $bid = intval($body['id'] ?? 0);
+        // soft-remove so history/paid records stay intact
+        $pdo->prepare("UPDATE monthly_bills SET active=0 WHERE id=?")->execute([$bid]);
+        echo json_encode(['success'=>true]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
