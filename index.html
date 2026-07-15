@@ -2358,6 +2358,7 @@ async function loadDashboard(){
               <div class="urg-sub" style="color:${col}">${crit?'🚨 Critical':'⚠️ Warning'} · ${t.task_id||''}</div>
             </div>
             <div class="urg-age" style="color:${col}">${h}h</div>
+            <button onclick="event.stopPropagation();pushTaskReminder(${t.id},'${t.task_id||''}')" title="Send push reminder to technician" style="background:var(--red-bg);color:var(--red);border:none;border-radius:6px;width:30px;height:30px;font-size:15px;cursor:pointer;flex-shrink:0;margin-left:8px">🔔</button>
           </div>`;
         }).join('');
   }
