@@ -60,6 +60,7 @@ tr:hover td{background:var(--surface2)}
 <div class="tabs">
   <button class="tab active" id="tab-records" onclick="expTab('records')">📋 Expense Records</button>
   <button class="tab" id="tab-add" onclick="expTab('add')">➕ Add Expense</button>
+  <button class="tab" id="tab-monthly" onclick="expTab('monthly')">🔁 Monthly Expenses</button>
 </div>
 
 <!-- RECORDS -->
@@ -144,6 +145,54 @@ tr:hover td{background:var(--surface2)}
 
 <div id="toast"></div>
 
+<div class="pane" id="pane-monthly">
+  <div class="card" style="margin-bottom:16px">
+    <div style="font-weight:800;font-size:14px;margin-bottom:4px">🔁 Recurring Monthly Bills</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px">Add fixed monthly payments (rent, internet, salaries…). Each shows its due date every month. Tap <b>Mark Paid</b> and it moves into Expense Records; it reappears automatically next month.</div>
+    <div class="fg-grid">
+      <div class="fg"><label>Name / Title *</label><input type="text" class="in" id="m-title" placeholder="e.g. Office Rent"></div>
+      <div class="fg"><label>Category *</label>
+        <select class="sel" id="m-cat">
+          <option value="Rent">🏠 Rent</option>
+          <option value="Electricity Bill">⚡ Electricity Bill</option>
+          <option value="Wi-Fi / Internet">🌐 Wi-Fi / Internet</option>
+          <option value="Water Bill">💧 Water Bill</option>
+          <option value="Salary / Wages">👥 Salary / Wages</option>
+          <option value="Maintenance">🔧 Maintenance</option>
+          <option value="Bills">🧾 Bills</option>
+          <option value="Miscellaneous">🗂️ Miscellaneous</option>
+          <option value="Other">📦 Other</option>
+        </select>
+      </div>
+      <div class="fg"><label>Amount (₹) *</label><input type="number" class="in" id="m-amount" placeholder="0" min="0" step="0.01"></div>
+      <div class="fg"><label>Due day of month *</label>
+        <select class="sel" id="m-day"></select>
+      </div>
+      <div class="fg"><label>Paid To / Vendor</label><input type="text" class="in" id="m-vendor" placeholder="Optional"></div>
+      <div class="fg"><label>Payment Mode</label>
+        <select class="sel" id="m-mode">
+          <option value="Cash">Cash</option><option value="UPI">UPI</option><option value="Bank Transfer">Bank Transfer</option>
+          <option value="Card">Card</option><option value="Cheque">Cheque</option><option value="Auto Debit">Auto Debit</option>
+        </select>
+      </div>
+    </div>
+    <div class="row-btns">
+      <button class="btn btn-primary" id="m-save" onclick="saveMonthly()">➕ Add Monthly Bill</button>
+      <button class="btn btn-ghost" onclick="resetMonthly()">Reset</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <div style="padding:12px 16px;font-weight:800;font-size:14px;border-bottom:1px solid var(--border)">This Month's Bills</div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Due</th><th>Name</th><th>Category</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody id="monthly-tbody"><tr><td colspan="6" style="text-align:center;padding:30px;color:var(--text3)">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <script>
 const API = 'api/index.php';
 const AUTH_TOKEN = (()=>{
@@ -168,6 +217,82 @@ function expTab(which){
   document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
   document.getElementById('tab-'+which).classList.add('active');
   document.getElementById('pane-'+which).classList.add('active');
+  if(which==='monthly') loadMonthly();
+}
+
+// ── MONTHLY RECURRING BILLS ──────────────────────────────────
+let allMonthly = [];
+function fillDayDropdown(){
+  const sel=document.getElementById('m-day'); if(!sel||sel.options.length) return;
+  let h='';
+  for(let d=1; d<=28; d++){ h+='<option value="'+d+'">'+d+ (d===1?'st':d===2?'nd':d===3?'rd':'th') +'</option>'; }
+  h+='<option value="last">Last day</option>';
+  sel.innerHTML=h;
+}
+function resetMonthly(){
+  ['m-title','m-amount','m-vendor'].forEach(id=>{const e=document.getElementById(id); if(e)e.value='';});
+  const d=document.getElementById('m-day'); if(d)d.value='1';
+}
+async function saveMonthly(){
+  const body={
+    title:  (document.getElementById('m-title').value||'').trim(),
+    category:document.getElementById('m-cat').value,
+    amount: parseFloat(document.getElementById('m-amount').value)||0,
+    due_day:document.getElementById('m-day').value,
+    vendor: (document.getElementById('m-vendor').value||'').trim(),
+    payment_mode:document.getElementById('m-mode').value,
+  };
+  if(!body.title){ toast('⚠️ Enter a name'); return; }
+  if(!body.amount){ toast('⚠️ Enter an amount'); return; }
+  const btn=document.getElementById('m-save'); btn.disabled=true; btn.textContent='Saving…';
+  const r=await expApi('exp_monthly_add',{},'POST',body);
+  btn.disabled=false; btn.textContent='➕ Add Monthly Bill';
+  if(r.success){ toast('✅ Monthly bill added'); resetMonthly(); loadMonthly(); }
+  else toast('❌ '+(r.error||'Failed'));
+}
+async function loadMonthly(){
+  fillDayDropdown();
+  const tbody=document.getElementById('monthly-tbody'); if(!tbody) return;
+  const r=await expApi('exp_monthly_list');
+  allMonthly=(r&&r.items)?r.items:[];
+  if(!allMonthly.length){ tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--text3)">No monthly bills yet. Add one above.</td></tr>'; return; }
+  const todayDay=new Date().getDate();
+  tbody.innerHTML=allMonthly.map(m=>{
+    const paid=!!m.paid_this_month;
+    const dueDay=m.due_day==='last'?'Last':m.due_day;
+    const dueNum=m.due_day==='last'?31:parseInt(m.due_day);
+    let statusHtml, actionHtml;
+    if(paid){
+      statusHtml='<span style="background:#e8f5ec;color:#1a7a3a;font-weight:700;font-size:11px;padding:3px 10px;border-radius:20px">✅ Paid this month</span>';
+      actionHtml='<span style="color:var(--text3);font-size:12px">Done</span>';
+    } else {
+      const daysLeft=dueNum-todayDay;
+      let due;
+      if(daysLeft<0) due='<span style="background:#fdecea;color:#c0392b;font-weight:700;font-size:11px;padding:3px 10px;border-radius:20px">⚠️ Overdue</span>';
+      else if(daysLeft<=3) due='<span style="background:#fff3e0;color:#e07b00;font-weight:700;font-size:11px;padding:3px 10px;border-radius:20px">⏰ Due in '+daysLeft+'d</span>';
+      else due='<span style="background:#eef;color:#557;font-weight:700;font-size:11px;padding:3px 10px;border-radius:20px">'+daysLeft+'d left</span>';
+      statusHtml=due;
+      actionHtml='<button class="act-btn" style="background:#137272;color:#fff;padding:5px 12px;font-weight:700" onclick="markMonthlyPaid('+m.id+')">💰 Mark Paid</button>';
+    }
+    return '<tr><td style="font-weight:700">📅 '+dueDay+'</td><td>'+esc(m.title)+(m.vendor?'<br><span style="font-size:11px;color:var(--text3)">'+esc(m.vendor)+'</span>':'')+'</td>'
+      +'<td><span class="cat-badge">'+esc(m.category||'–')+'</span></td>'
+      +'<td style="font-weight:700">₹'+parseFloat(m.amount||0).toLocaleString('en-IN')+'</td>'
+      +'<td>'+statusHtml+'</td><td>'+actionHtml+'</td>'
+      +' <button class="act-btn" title="Delete" onclick="delMonthly('+m.id+')" style="opacity:.6">🗑️</button></tr>';
+  }).join('');
+}
+async function markMonthlyPaid(id){
+  const m=allMonthly.find(x=>+x.id===+id); if(!m) return;
+  if(!confirm('Mark "'+m.title+'" (₹'+parseFloat(m.amount).toLocaleString('en-IN')+') as paid?\n\nIt will be added to Expense Records and removed from this month\'s list (returns next month).')) return;
+  const r=await expApi('exp_monthly_pay',{},'POST',{id});
+  if(r.success){ toast('✅ Paid & moved to Expense Records'); loadMonthly(); loadExpenses(); }
+  else toast('❌ '+(r.error||'Failed'));
+}
+async function delMonthly(id){
+  const m=allMonthly.find(x=>+x.id===+id);
+  if(!confirm('Remove this recurring bill permanently: "'+((m&&m.title)||id)+'"?')) return;
+  const r=await expApi('exp_monthly_delete',{},'POST',{id});
+  if(r.success){ toast('🗑️ Removed'); loadMonthly(); } else toast('❌ '+(r.error||'Failed'));
 }
 
 let allExpenses = [];
