@@ -7648,7 +7648,7 @@ async function submitCoinAdjust(){
   if(!reason){ show('A reason is required.',false); return; }
   const coins=_coinMode==='remove'?-amtRaw:amtRaw;
   try{
-    const d=await api('admin_adjust_coins',{user_id:id, coins:coins, reason:reason},'POST');
+    const d=await api('admin_adjust_coins',{},'POST',{user_id:id, coins:coins, reason:reason});
     if(d&&d.success){
       show((coins>=0?'➕ Added ':'➖ Removed ')+Math.abs(coins)+' coins. New balance: '+d.new_balance+' coins.',true);
       document.getElementById('coin-amount').value='';
