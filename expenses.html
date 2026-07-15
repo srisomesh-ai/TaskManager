@@ -61,6 +61,7 @@ tr:hover td{background:var(--surface2)}
   <button class="tab active" id="tab-records" onclick="expTab('records')">📋 Expense Records</button>
   <button class="tab" id="tab-add" onclick="expTab('add')">➕ Add Expense</button>
   <button class="tab" id="tab-monthly" onclick="expTab('monthly')">🔁 Monthly Expenses</button>
+  <button class="tab" id="tab-yearly" onclick="expTab('yearly')">🗓️ Yearly Expenses</button>
 </div>
 
 <!-- RECORDS -->
@@ -193,6 +194,55 @@ tr:hover td{background:var(--surface2)}
   </div>
 </div>
 
+<div class="pane" id="pane-yearly">
+  <div class="card" style="margin-bottom:16px">
+    <div style="font-weight:800;font-size:14px;margin-bottom:4px">🗓️ Recurring Yearly Bills</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px">Add fixed yearly payments (insurance, licence renewals, AMC…). Each shows once a year on its due date. Tap <b>Mark Paid</b> and it moves into Expense Records; it reappears automatically next year.</div>
+    <div class="fg-grid">
+      <div class="fg"><label>Name / Title *</label><input type="text" class="in" id="y-title" placeholder="e.g. Vehicle Insurance"></div>
+      <div class="fg"><label>Category *</label>
+        <select class="sel" id="y-cat">
+          <option value="Bills">🧾 Bills</option>
+          <option value="Maintenance">🔧 Maintenance</option>
+          <option value="Office Supplies">🖇️ Office Supplies</option>
+          <option value="Marketing">📣 Marketing</option>
+          <option value="Rent">🏠 Rent</option>
+          <option value="Miscellaneous">🗂️ Miscellaneous</option>
+          <option value="Other">📦 Other</option>
+        </select>
+      </div>
+      <div class="fg"><label>Amount (₹) *</label><input type="number" class="in" id="y-amount" placeholder="0" min="0" step="0.01"></div>
+      <div class="fg"><label>Due month *</label>
+        <select class="sel" id="y-month"></select>
+      </div>
+      <div class="fg"><label>Due day *</label>
+        <select class="sel" id="y-day"></select>
+      </div>
+      <div class="fg"><label>Paid To / Vendor</label><input type="text" class="in" id="y-vendor" placeholder="Optional"></div>
+      <div class="fg"><label>Payment Mode</label>
+        <select class="sel" id="y-mode">
+          <option value="Cash">Cash</option><option value="UPI">UPI</option><option value="Bank Transfer">Bank Transfer</option>
+          <option value="Card">Card</option><option value="Cheque">Cheque</option><option value="Auto Debit">Auto Debit</option>
+        </select>
+      </div>
+    </div>
+    <div class="row-btns">
+      <button class="btn btn-primary" id="y-save" onclick="saveYearly()">➕ Add Yearly Bill</button>
+      <button class="btn btn-ghost" onclick="resetYearly()">Reset</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <div style="padding:12px 16px;font-weight:800;font-size:14px;border-bottom:1px solid var(--border)">Yearly Bills</div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr style="font-size:10px;text-transform:uppercase;letter-spacing:.3px;color:var(--text3)"><th style="padding:6px 8px;text-align:left">Due</th><th style="padding:6px 8px;text-align:left">Name</th><th style="padding:6px 8px;text-align:left">Category</th><th style="padding:6px 8px;text-align:left">Amount</th><th style="padding:6px 8px;text-align:left">Status</th><th style="padding:6px 8px;text-align:left">Action</th></tr></thead>
+        <tbody id="yearly-tbody"><tr><td colspan="6" style="text-align:center;padding:30px;color:var(--text3)">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <script>
 const API = 'api/index.php';
 const AUTH_TOKEN = (()=>{
@@ -218,6 +268,7 @@ function expTab(which){
   document.getElementById('tab-'+which).classList.add('active');
   document.getElementById('pane-'+which).classList.add('active');
   if(which==='monthly') loadMonthly();
+  if(which==='yearly') loadYearly();
 }
 
 // ── MONTHLY RECURRING BILLS ──────────────────────────────────
@@ -334,6 +385,127 @@ async function saveMoEdit(){
   if(!upd.amount){ toast('⚠️ Amount is required'); return; }
   const r=await expApi('exp_monthly_update',{},'POST',upd);
   if(r.success){ toast('✅ Updated'); closeMoEdit(); loadMonthly(); } else toast('❌ '+(r.error||'Failed'));
+}
+
+// ── YEARLY RECURRING BILLS ──────────────────────────────────
+let allYearly = [];
+const _MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+function fillYearDropdowns(){
+  const ms=document.getElementById('y-month'); const ds=document.getElementById('y-day');
+  if(ms && !ms.options.length){ ms.innerHTML=_MONTHS.map((m,i)=>'<option value="'+(i+1)+'">'+m+'</option>').join(''); }
+  if(ds && !ds.options.length){ let h=''; for(let d=1;d<=28;d++){h+='<option value="'+d+'">'+d+'</option>';} h+='<option value="last">Last day</option>'; ds.innerHTML=h; }
+}
+function resetYearly(){
+  ['y-title','y-amount','y-vendor'].forEach(id=>{const e=document.getElementById(id); if(e)e.value='';});
+  const mo=document.getElementById('y-month'); if(mo)mo.value='1';
+  const dy=document.getElementById('y-day'); if(dy)dy.value='1';
+}
+async function saveYearly(){
+  const body={
+    title:  (document.getElementById('y-title').value||'').trim(),
+    category:document.getElementById('y-cat').value,
+    amount: parseFloat(document.getElementById('y-amount').value)||0,
+    due_month:document.getElementById('y-month').value,
+    due_day:document.getElementById('y-day').value,
+    vendor: (document.getElementById('y-vendor').value||'').trim(),
+    payment_mode:document.getElementById('y-mode').value,
+  };
+  if(!body.title){ toast('⚠️ Enter a name'); return; }
+  if(!body.amount){ toast('⚠️ Enter an amount'); return; }
+  const btn=document.getElementById('y-save'); btn.disabled=true; btn.textContent='Saving…';
+  const r=await expApi('exp_yearly_add',{},'POST',body);
+  btn.disabled=false; btn.textContent='➕ Add Yearly Bill';
+  if(r.success){ toast('✅ Yearly bill added'); resetYearly(); loadYearly(); }
+  else toast('❌ '+(r.error||'Failed'));
+}
+async function loadYearly(){
+  fillYearDropdowns();
+  const tbody=document.getElementById('yearly-tbody'); if(!tbody) return;
+  const r=await expApi('exp_yearly_list');
+  allYearly=(r&&r.items)?r.items:[];
+  if(!allYearly.length){ tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--text3)">No yearly bills yet. Add one above.</td></tr>'; return; }
+  const now=new Date(); const todayD=now.getDate(); const curMonth=now.getMonth()+1;
+  tbody.innerHTML=allYearly.map(y=>{
+    const paid=!!y.paid_this_year;
+    const mNum=parseInt(y.due_month)||1;
+    const dueDay=y.due_day==='last'?'Last':y.due_day;
+    const dueLabel=(_MONTHS[mNum-1]||'').slice(0,3)+' '+dueDay;
+    let statusHtml, actionHtml;
+    if(paid){
+      statusHtml='<span style="background:#e8f5ec;color:#1a7a3a;font-weight:700;font-size:10px;padding:2px 8px;border-radius:12px">✅ Paid</span>';
+      actionHtml='';
+    } else {
+      // days until due this year
+      const dueNum=y.due_day==='last'?28:parseInt(y.due_day);
+      const dueDate=new Date(now.getFullYear(),mNum-1,dueNum);
+      const daysLeft=Math.ceil((dueDate-now)/86400000);
+      let due;
+      if(daysLeft<0) due='<span style="background:#fdecea;color:#c0392b;font-weight:700;font-size:10px;padding:2px 8px;border-radius:12px">⚠️ Overdue</span>';
+      else if(daysLeft<=15) due='<span style="background:#fff3e0;color:#e07b00;font-weight:700;font-size:10px;padding:2px 8px;border-radius:12px">⏰ '+daysLeft+'d</span>';
+      else due='<span style="background:#eef;color:#557;font-weight:700;font-size:10px;padding:2px 8px;border-radius:12px">'+daysLeft+'d</span>';
+      statusHtml=due;
+      actionHtml='<button title="Mark Paid" onclick="markYearlyPaid('+y.id+')" style="background:#137272;color:#fff;border:none;border-radius:5px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer">💰 Paid</button>';
+    }
+    return '<tr style="border-bottom:1px solid var(--border)">'
+      +'<td style="padding:5px 8px;font-weight:700;white-space:nowrap">'+dueLabel+'</td>'
+      +'<td style="padding:5px 8px">'+esc(y.title)+(y.vendor?' <span style="font-size:10px;color:var(--text3)">· '+esc(y.vendor)+'</span>':'')+'</td>'
+      +'<td style="padding:5px 8px"><span class="cat-badge" style="font-size:10px">'+esc(y.category||'–')+'</span></td>'
+      +'<td style="padding:5px 8px;font-weight:700;white-space:nowrap">₹'+parseFloat(y.amount||0).toLocaleString('en-IN')+'</td>'
+      +'<td style="padding:5px 8px">'+statusHtml+'</td>'
+      +'<td style="padding:5px 8px;white-space:nowrap"><span style="display:inline-flex;gap:4px;align-items:center">'
+        +actionHtml
+        +'<button title="Edit" onclick="editYearly('+y.id+')" style="background:#eef;border:none;border-radius:5px;padding:3px 7px;font-size:12px;cursor:pointer">✏️</button>'
+        +'<button title="Delete" onclick="delYearly('+y.id+')" style="background:#fdecea;border:none;border-radius:5px;padding:3px 7px;font-size:12px;cursor:pointer">🗑️</button>'
+      +'</span></td></tr>';
+  }).join('');
+}
+async function markYearlyPaid(id){
+  const y=allYearly.find(x=>+x.id===+id); if(!y) return;
+  if(!confirm('Mark "'+y.title+'" (₹'+parseFloat(y.amount).toLocaleString('en-IN')+') as paid?\n\nIt will be added to Expense Records and removed from this year\'s list (returns next year).')) return;
+  const r=await expApi('exp_yearly_pay',{},'POST',{id});
+  if(r.success){ toast('✅ Paid & moved to Expense Records'); loadYearly(); loadExpenses(); }
+  else toast('❌ '+(r.error||'Failed'));
+}
+async function delYearly(id){
+  const y=allYearly.find(x=>+x.id===+id);
+  if(!confirm('Remove this yearly bill permanently: "'+((y&&y.title)||id)+'"?')) return;
+  const r=await expApi('exp_yearly_delete',{},'POST',{id});
+  if(r.success){ toast('🗑️ Removed'); loadYearly(); } else toast('❌ '+(r.error||'Failed'));
+}
+function editYearly(id){
+  const y=allYearly.find(x=>+x.id===+id); if(!y) return;
+  _fillYoDropdowns();
+  document.getElementById('yo-id').value     = y.id;
+  document.getElementById('yo-title').value  = y.title||'';
+  document.getElementById('yo-cat').value    = y.category||'Other';
+  document.getElementById('yo-amount').value = y.amount||0;
+  document.getElementById('yo-month').value  = y.due_month||'1';
+  document.getElementById('yo-day').value    = y.due_day||'1';
+  document.getElementById('yo-vendor').value = y.vendor||'';
+  document.getElementById('yo-mode').value   = y.payment_mode||'Cash';
+  document.getElementById('yo-edit-ov').style.display='flex';
+}
+function _fillYoDropdowns(){
+  const ms=document.getElementById('yo-month'); const ds=document.getElementById('yo-day');
+  if(ms && !ms.options.length){ ms.innerHTML=_MONTHS.map((m,i)=>'<option value="'+(i+1)+'">'+m+'</option>').join(''); }
+  if(ds && !ds.options.length){ let h=''; for(let d=1;d<=28;d++){h+='<option value="'+d+'">'+d+'</option>';} h+='<option value="last">Last day</option>'; ds.innerHTML=h; }
+}
+function closeYoEdit(){ document.getElementById('yo-edit-ov').style.display='none'; }
+async function saveYoEdit(){
+  const upd={
+    id:      document.getElementById('yo-id').value,
+    title:   (document.getElementById('yo-title').value||'').trim(),
+    category:document.getElementById('yo-cat').value,
+    amount:  parseFloat(document.getElementById('yo-amount').value)||0,
+    due_month:document.getElementById('yo-month').value,
+    due_day: document.getElementById('yo-day').value,
+    vendor:  (document.getElementById('yo-vendor').value||'').trim(),
+    payment_mode:document.getElementById('yo-mode').value,
+  };
+  if(!upd.title){ toast('⚠️ Name is required'); return; }
+  if(!upd.amount){ toast('⚠️ Amount is required'); return; }
+  const r=await expApi('exp_yearly_update',{},'POST',upd);
+  if(r.success){ toast('✅ Updated'); closeYoEdit(); loadYearly(); } else toast('❌ '+(r.error||'Failed'));
 }
 
 let allExpenses = [];
@@ -576,6 +748,50 @@ loadExpenses();
     <div style="display:flex;gap:10px;margin-top:18px">
       <button onclick="saveMoEdit()" style="flex:1;background:#137272;color:#fff;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:800;cursor:pointer">💾 Save Changes</button>
       <button onclick="closeMoEdit()" style="background:#eef;color:#556;border:none;border-radius:8px;padding:11px 18px;font-size:14px;font-weight:700;cursor:pointer">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT YEARLY BILL MODAL -->
+<div id="yo-edit-ov" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:20px;max-width:460px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-weight:800;font-size:16px">✏️ Edit Yearly Bill</div>
+      <button onclick="closeYoEdit()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888;line-height:1">×</button>
+    </div>
+    <input type="hidden" id="yo-id">
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div><label style="font-size:11px;font-weight:700;color:#667;text-transform:uppercase;letter-spacing:.4px">Name / Title</label>
+        <input type="text" id="yo-title" style="width:100%;padding:9px 12px;border:1.5px solid #dde;border-radius:7px;font-size:13px;margin-top:4px"></div>
+      <div><label style="font-size:11px;font-weight:700;color:#667;text-transform:uppercase;letter-spacing:.4px">Category</label>
+        <select id="yo-cat" style="width:100%;padding:9px 12px;border:1.5px solid #dde;border-radius:7px;font-size:13px;margin-top:4px">
+          <option value="Bills">🧾 Bills</option>
+          <option value="Maintenance">🔧 Maintenance</option>
+          <option value="Office Supplies">🖇️ Office Supplies</option>
+          <option value="Marketing">📣 Marketing</option>
+          <option value="Rent">🏠 Rent</option>
+          <option value="Miscellaneous">🗂️ Miscellaneous</option>
+          <option value="Other">📦 Other</option>
+        </select></div>
+      <div><label style="font-size:11px;font-weight:700;color:#667;text-transform:uppercase;letter-spacing:.4px">Amount (₹)</label>
+        <input type="number" id="yo-amount" min="0" step="0.01" style="width:100%;padding:9px 12px;border:1.5px solid #dde;border-radius:7px;font-size:13px;margin-top:4px"></div>
+      <div style="display:flex;gap:10px">
+        <div style="flex:1"><label style="font-size:11px;font-weight:700;color:#667;text-transform:uppercase;letter-spacing:.4px">Due month</label>
+          <select id="yo-month" style="width:100%;padding:9px 12px;border:1.5px solid #dde;border-radius:7px;font-size:13px;margin-top:4px"></select></div>
+        <div style="flex:1"><label style="font-size:11px;font-weight:700;color:#667;text-transform:uppercase;letter-spacing:.4px">Due day</label>
+          <select id="yo-day" style="width:100%;padding:9px 12px;border:1.5px solid #dde;border-radius:7px;font-size:13px;margin-top:4px"></select></div>
+      </div>
+      <div><label style="font-size:11px;font-weight:700;color:#667;text-transform:uppercase;letter-spacing:.4px">Paid To / Vendor</label>
+        <input type="text" id="yo-vendor" style="width:100%;padding:9px 12px;border:1.5px solid #dde;border-radius:7px;font-size:13px;margin-top:4px"></div>
+      <div><label style="font-size:11px;font-weight:700;color:#667;text-transform:uppercase;letter-spacing:.4px">Payment Mode</label>
+        <select id="yo-mode" style="width:100%;padding:9px 12px;border:1.5px solid #dde;border-radius:7px;font-size:13px;margin-top:4px">
+          <option value="Cash">Cash</option><option value="UPI">UPI</option><option value="Bank Transfer">Bank Transfer</option>
+          <option value="Card">Card</option><option value="Cheque">Cheque</option><option value="Auto Debit">Auto Debit</option>
+        </select></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button onclick="saveYoEdit()" style="flex:1;background:#137272;color:#fff;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:800;cursor:pointer">💾 Save Changes</button>
+      <button onclick="closeYoEdit()" style="background:#eef;color:#556;border:none;border-radius:8px;padding:11px 18px;font-size:14px;font-weight:700;cursor:pointer">Cancel</button>
     </div>
   </div>
 </div>
