@@ -812,7 +812,11 @@ function closeView(){ document.getElementById('bs-view-ov').classList.remove('op
 // ── EDIT ────────────────────────────────────────────
 function editEntry(id){
   const e=allEntries.find(x=>+x.id===+id); if(!e) return;
+  // The auto-created entry may store the task number in task_id — mirror it to task_no so the field shows it.
+  if(!e.task_no && e.task_id) e.task_no = e.task_id;
   const fields=[
+    {id:'task_no',label:'Task Number',type:'text'},
+    {id:'invoice_no',label:'Invoice Number',type:'text'},
     {id:'payment_status',label:'Payment Status',type:'select',opts:['paid','partially_paid','pending']},
     {id:'payment_received',label:'Amount Received',type:'number'},
     {id:'pending_payment',label:'Pending Amount',type:'number'},
@@ -846,11 +850,13 @@ function editEntry(id){
   document.getElementById('bs-edit-ov').classList.add('open');
 }
 async function saveEdit(id){
-  const fields=['payment_status','payment_received','pending_payment','payment_mode',
+  const fields=['invoice_no','payment_status','payment_received','pending_payment','payment_mode',
                 'payment_received_on','payment_transaction_details','pending_reason',
                 'discount_given','discount_reason','discount_incharge','remarks'];
   const updates={};
   fields.forEach(f=>{ const v=document.getElementById('ef-'+f)?.value; updates[f]=v||null; });
+  // Task number is stored in the task_id column — save the edited value there.
+  if(document.getElementById('ef-task_no')){ updates.task_id = document.getElementById('ef-task_no').value||null; }
   // Technician link (id + display name)
   const tsel=document.getElementById('ef-technician_id');
   if(tsel){
