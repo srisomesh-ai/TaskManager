@@ -408,6 +408,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
       <div class="nav-item" id="nav-urgent" onclick="showPage('urgent')"><span class="nav-icon">🚨</span> Urgent Tasks <span class="nav-badge" id="urgent-badge">0</span></div>
       <div class="nav-item admin-only" id="nav-approvals" onclick="showPage('approvals')"><span class="nav-icon">✅</span> Approvals <span class="nav-badge" id="approval-badge">0</span></div>
       <div class="nav-item readding-approver" id="nav-readding" onclick="showPage('readding')" style="display:none"><span class="nav-icon">🔌</span> Re-Adding <span class="nav-badge" id="readding-badge" style="display:none;background:var(--red);color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:10px;margin-left:4px">0</span></div>
+      <div class="nav-item readding-approver" id="nav-move-device" onclick="showPage('move-device')" style="display:none"><span class="nav-icon">🔀</span> Move Device</div>
       <div class="nav-item renewal-staff" id="nav-renewals" onclick="showPage('renewals')" style="display:none"><span class="nav-icon">🔄</span> License / Renewals <span class="nav-badge" id="renewal-badge" style="display:none;background:var(--red);color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:10px;margin-left:4px">0</span></div>
       <div class="nav-sec">Reports</div>
       <div class="nav-item admin-only" id="nav-daily-report" onclick="showPage('daily-report')"><span class="nav-icon">📅</span> Daily Report</div>
@@ -1079,7 +1080,37 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
           </table>
         </div>
       </div>
-      <div class="page" id="page-renewals">
+
+      <div class="page" id="page-move-device" style="padding:20px">
+        <div class="pg-header"><div class="breadcrumb">Home / <b>Move Device</b></div><div class="pg-title">🔀 Move Device (Server to Server)</div><div class="pg-sub">Enter an IMEI to find the device, then move it from its current server to another server. The device details carry over; the old copy is removed automatically.</div></div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+          <div class="card" style="flex:1;min-width:320px;max-width:480px;padding:18px">
+            <div id="mv-msg" style="display:none;margin-bottom:12px;padding:10px 12px;border-radius:8px;font-size:13px;font-weight:600"></div>
+            <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px">IMEI Number</label>
+            <div style="display:flex;gap:8px;margin:5px 0 14px">
+              <input type="text" id="mv-imei" inputmode="numeric" class="form-input" style="flex:1" placeholder="Enter device IMEI…" onkeydown="if(event.key==='Enter')mvSearch()">
+              <button type="button" class="ts-btn" style="background:var(--accent2);color:#fff;white-space:nowrap" onclick="mvSearch()">🔍 Find</button>
+            </div>
+            <div id="mv-found" style="display:none">
+              <div style="background:var(--surface2);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;line-height:1.9">
+                <div style="font-weight:800;font-size:14px;margin-bottom:6px" id="mv-dev-name">–</div>
+                <div>Current server: <b id="mv-cur-server" style="color:var(--accent)">–</b></div>
+                <div>Status: <span id="mv-status">–</span></div>
+                <div>Plate: <b id="mv-plate">–</b> · Owner: <b id="mv-owner">–</b></div>
+              </div>
+              <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px">Move to server</label>
+              <select id="mv-target" class="form-input" style="width:100%;margin:5px 0 16px">
+                <option value="">Select target server…</option>
+                <option value="1">Server 1 — bharatgps.com</option>
+                <option value="2">Server 2 — bharatgps.in</option>
+                <option value="3">Server 3 — bharatgps.school</option>
+              </select>
+              <button type="button" class="ts-btn" style="width:100%;background:var(--accent);color:#fff" onclick="mvMove()">🔀 Move Device</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
         <div class="pg-header"><div class="breadcrumb">Home / <b>License / Renewals</b></div><div class="pg-title">🔄 License / Renewals</div><div class="pg-sub">Search expiring devices and raise renewal requests. Admin approves — expiry is extended on the server, billed, and the customer is emailed.</div></div>
         <div class="card" style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <button class="card-btn" id="rnw-tab-search" onclick="rnwTab('search')" style="background:var(--accent2);color:#fff">🔍 Search &amp; Request</button>
@@ -7661,6 +7692,72 @@ async function loadCoinHistory(){
     }).join('');
   }catch(e){}
 }
+// ── MOVE DEVICE (server to server) ──────────────────────────────
+let _mvDevice = null;
+function _mvMsg(txt, ok){
+  const m=document.getElementById('mv-msg'); if(!m) return;
+  m.style.display=''; m.textContent=txt;
+  m.style.background=ok?'var(--green-bg)':'var(--red-bg)'; m.style.color=ok?'var(--green)':'var(--red)';
+}
+async function mvSearch(){
+  const imei=(document.getElementById('mv-imei')?.value||'').trim();
+  const found=document.getElementById('mv-found');
+  if(found) found.style.display='none';
+  _mvDevice=null;
+  if(!imei){ _mvMsg('Enter an IMEI number.',false); return; }
+  _mvMsg('🔍 Searching all servers…',true);
+  try{
+    const r=await fetch(GPS_PROXY+'?action=find&keyword='+encodeURIComponent(imei),{headers:{'X-Auth-Token':authToken},cache:'no-store'});
+    const d=await r.json();
+    if(!d.success || !d.devices || !d.devices.length){ _mvMsg('❌ No device found with IMEI '+imei,false); return; }
+    const dev=d.devices[0];
+    _mvDevice={imei:imei, from_server:dev._server_id||dev.server_id, name:dev.name, dd:dev.device_data||{}};
+    const dd=dev.device_data||{};
+    const o=String(dev.online||'').toLowerCase();
+    const online=(o==='online'||o==='ack');
+    document.getElementById('mv-dev-name').textContent='📡 '+(dev.name||'–');
+    document.getElementById('mv-cur-server').textContent=dev._server_name||'–';
+    document.getElementById('mv-status').innerHTML=online?'<b style="color:var(--green)">🟢 ONLINE</b>':'<b style="color:var(--red)">🔴 OFFLINE</b>';
+    document.getElementById('mv-plate').textContent=dd.plate_number||'–';
+    document.getElementById('mv-owner').textContent=dd.object_owner||'–';
+    // hide the current server from the target list
+    const tgt=document.getElementById('mv-target');
+    const curId=String(dev._server_id||dev.server_id||'');
+    Array.from(tgt.options).forEach(op=>{ op.hidden = (op.value && op.value===curId); });
+    tgt.value='';
+    _mvMsg('✅ Device found. Choose a target server and move it.',true);
+    if(found) found.style.display='';
+  }catch(e){ _mvMsg('❌ '+e.message,false); }
+}
+async function mvMove(){
+  if(!_mvDevice){ _mvMsg('Search for a device first.',false); return; }
+  const to=document.getElementById('mv-target')?.value;
+  if(!to){ _mvMsg('Select a target server.',false); return; }
+  if(String(to)===String(_mvDevice.from_server)){ _mvMsg('The device is already on that server.',false); return; }
+  if(!confirm('Move this device to the selected server? The device will be added there and removed from the current server.')) return;
+  _mvMsg('🔀 Moving device… please wait.',true);
+  const dd=_mvDevice.dd||{};
+  const fd=new FormData();
+  fd.append('from_server', _mvDevice.from_server);
+  fd.append('to_server', to);
+  fd.append('imei', _mvDevice.imei);
+  fd.append('name', _mvDevice.name||'');
+  fd.append('plate_number', dd.plate_number||'');
+  fd.append('registration_number', dd.registration_number||'');
+  fd.append('object_owner', dd.object_owner||'');
+  fd.append('model', dd.device_model||'');
+  try{
+    const r=await fetch(GPS_PROXY+'?action=move_device',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd});
+    const d=await r.json();
+    if(d.success){
+      if(d.deleted){ _mvMsg('✅ Moved to '+d.added_to+' and removed from '+d.removed_from+'.',true); }
+      else { _mvMsg('⚠️ Added to '+d.added_to+', but could NOT auto-remove from '+d.removed_from+'. Please delete it there manually.',false); }
+      document.getElementById('mv-found').style.display='none';
+      document.getElementById('mv-imei').value='';
+    } else { _mvMsg('❌ '+(d.error||'Move failed'),false); }
+  }catch(e){ _mvMsg('❌ '+e.message,false); }
+}
+
 async function submitCoinAdjust(){
   const msg=document.getElementById('coin-msg');
   const show=(txt,ok)=>{ if(!msg)return; msg.style.display=''; msg.textContent=txt; msg.style.background=ok?'var(--green-bg)':'var(--red-bg)'; msg.style.color=ok?'var(--green)':'var(--red)'; };
