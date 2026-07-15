@@ -87,7 +87,7 @@ html,body{height:100%;font-family:'Segoe UI',Calibri,sans-serif;background:var(-
 /* CONTENT */
 .content{flex:1;height:100%;overflow:auto;background:var(--bg)}
 .page{display:none;padding:22px 24px}
-.page.active{display:block}#page-balance-sheet.active{display:flex}#page-expenses.active{display:flex}#page-admin.active{display:flex}#page-blacklist.active{display:flex}#page-staff-notes.active{display:block}
+.page.active{display:block}#page-balance-sheet.active{display:flex}#page-expenses.active{display:flex}#page-admin.active{display:flex}#page-blacklist.active{display:flex}#page-staff-notes.active{display:block}#page-coins.active{display:block}
 
 /* PAGE HEADER */
 .pg-header{margin-bottom:20px}
@@ -423,6 +423,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
       <div class="nav-item super-admin-only" id="nav-purchases" onclick="showPage('purchases')"><span class="nav-icon">🛒</span> Purchases</div>
       <div class="nav-item super-admin-only" id="nav-blacklist" onclick="showPage('blacklist')"><span class="nav-icon">🚫</span> Blacklist</div>
       <div class="nav-item super-admin-only" id="nav-staff-notes" onclick="showPage('staff-notes')"><span class="nav-icon">📋</span> Staff Notes</div>
+      <div class="nav-item super-admin-only" id="nav-coins" onclick="showPage('coins')"><span class="nav-icon">🪙</span> Coins</div>
       <div class="nav-item super-admin-only" id="nav-admin" onclick="showPage('admin')"><span class="nav-icon">⚙️</span> Admin Panel</div>
       <div class="sb-footer">
         <div class="sb-av" id="sb-avatar">?</div>
@@ -1357,7 +1358,35 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
           </div>
         </div>
       </div>
-      <div class="page" id="page-price-list" style="padding:0;flex-direction:column">
+
+      <div class="page" id="page-coins" style="padding:20px">
+        <h2 style="font-size:18px;font-weight:800;margin-bottom:4px">🪙 Manage Coins</h2>
+        <p style="color:var(--text3);font-size:13px;margin-bottom:16px">Add or remove coins for a technician — for corrections when coins were added by mistake or calculated wrongly. 1 coin = ₹1. Only admin can change coins.</p>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+          <div class="card" style="flex:1;min-width:300px;max-width:440px;padding:18px">
+            <div style="font-weight:800;font-size:14px;margin-bottom:12px">Adjust Coins</div>
+            <div id="coin-msg" style="display:none;margin-bottom:10px;padding:9px 12px;border-radius:7px;font-size:13px;font-weight:600"></div>
+            <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px">Technician</label>
+            <select id="coin-tech" class="form-input" style="width:100%;margin:5px 0 14px" onchange="loadCoinHistory()"><option value="">Select technician…</option></select>
+            <div id="coin-cur-bal" style="display:none;background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:13px">Current balance: <b id="coin-cur-bal-val">–</b> coins</div>
+            <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px">Action</label>
+            <div style="display:flex;gap:8px;margin:5px 0 14px">
+              <button type="button" id="coin-mode-add" class="ts-btn" style="flex:1;background:var(--green);color:#fff" onclick="setCoinMode('add')">➕ Add coins</button>
+              <button type="button" id="coin-mode-remove" class="ts-btn" style="flex:1;background:var(--surface2);color:var(--text)" onclick="setCoinMode('remove')">➖ Remove coins</button>
+            </div>
+            <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px">Number of coins</label>
+            <input type="number" id="coin-amount" min="1" step="1" class="form-input" style="width:100%;margin:5px 0 14px" placeholder="e.g. 50">
+            <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px">Reason (required)</label>
+            <input type="text" id="coin-reason" class="form-input" style="width:100%;margin:5px 0 16px" placeholder="e.g. Added by mistake, wrong penalty, correction…">
+            <button type="button" class="ts-btn" style="width:100%;background:var(--accent);color:#fff" onclick="submitCoinAdjust()">💾 Apply Adjustment</button>
+          </div>
+          <div class="card" style="flex:1;min-width:300px;padding:18px">
+            <div style="font-weight:800;font-size:14px;margin-bottom:12px">Recent Coin History</div>
+            <div id="coin-history"><div style="color:var(--text3);font-size:13px;padding:20px;text-align:center">Select a technician to see their coin history.</div></div>
+          </div>
+        </div>
+      </div>
+
         <iframe id="pl-iframe" src="about:blank"
           style="flex:1;width:100%;border:none;min-height:calc(100vh - 54px)">
         </iframe>
@@ -2038,6 +2067,7 @@ function showPage(name, opts={}){
     'admin':         syncAdminAuth,
     'blacklist':     syncBlacklistAuth,
     'staff-notes':   loadStaffNotesPage,
+    'coins':         loadCoinsPage,
      'price-list':    syncPlAuth,
      'purchases':     syncPurAuth,
      'discount-budgets': loadDiscountBudgets,
@@ -7570,6 +7600,64 @@ async function sendBroadcast(){
     showToast('\u274C '+((res&&res.error)||'Could not send'));
   }
 }
+// ── ADMIN: MANAGE COINS ─────────────────────────────────────────
+let _coinMode = 'add';
+function setCoinMode(m){
+  _coinMode = m;
+  const add=document.getElementById('coin-mode-add'), rem=document.getElementById('coin-mode-remove');
+  if(add&&rem){
+    if(m==='add'){ add.style.background='var(--green)'; add.style.color='#fff'; rem.style.background='var(--surface2)'; rem.style.color='var(--text)'; }
+    else { rem.style.background='var(--red)'; rem.style.color='#fff'; add.style.background='var(--surface2)'; add.style.color='var(--text)'; }
+  }
+}
+async function loadCoinsPage(){
+  const sel=document.getElementById('coin-tech'); if(!sel) return;
+  setCoinMode('add');
+  try{
+    const d=await api('admin_coin_summary');
+    const techs=(d&&d.technicians)?d.technicians:[];
+    sel.innerHTML='<option value="">Select technician…</option>'+techs.map(t=>`<option value="${t.id}">${escHtml(t.name)} (${t.balance} coins)</option>`).join('');
+  }catch(e){}
+}
+async function loadCoinHistory(){
+  const id=document.getElementById('coin-tech')?.value;
+  const hist=document.getElementById('coin-history'), balBox=document.getElementById('coin-cur-bal'), balVal=document.getElementById('coin-cur-bal-val');
+  if(!id){ if(hist) hist.innerHTML='<div style="color:var(--text3);font-size:13px;padding:20px;text-align:center">Select a technician to see their coin history.</div>'; if(balBox) balBox.style.display='none'; return; }
+  try{
+    const d=await api('admin_coin_history',{user_id:id});
+    if(balBox&&balVal){ balVal.textContent=(d&&typeof d.balance!=='undefined')?d.balance:'–'; balBox.style.display=''; }
+    const rows=(d&&d.history)?d.history:[];
+    if(!rows.length){ hist.innerHTML='<div style="color:var(--text3);font-size:13px;padding:20px;text-align:center">No coin history yet.</div>'; return; }
+    hist.innerHTML=rows.map(r=>{
+      const pos=(+r.coins)>=0; const col=pos?'var(--green)':'var(--red)';
+      return `<div style="display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+        <div style="min-width:0"><div style="font-size:12px;color:var(--text);line-height:1.4">${escHtml(r.reason||'')}</div>
+        <div style="font-size:10px;color:var(--text3)">${r.created_at?new Date(r.created_at).toLocaleString('en-IN'):''}</div></div>
+        <div style="font-weight:800;color:${col};white-space:nowrap">${pos?'+':''}${r.coins}</div></div>`;
+    }).join('');
+  }catch(e){}
+}
+async function submitCoinAdjust(){
+  const msg=document.getElementById('coin-msg');
+  const show=(txt,ok)=>{ if(!msg)return; msg.style.display=''; msg.textContent=txt; msg.style.background=ok?'var(--green-bg)':'var(--red-bg)'; msg.style.color=ok?'var(--green)':'var(--red)'; };
+  const id=document.getElementById('coin-tech')?.value;
+  const amtRaw=parseInt(document.getElementById('coin-amount')?.value||0);
+  const reason=(document.getElementById('coin-reason')?.value||'').trim();
+  if(!id){ show('Select a technician.',false); return; }
+  if(!amtRaw||amtRaw<=0){ show('Enter a number of coins greater than 0.',false); return; }
+  if(!reason){ show('A reason is required.',false); return; }
+  const coins=_coinMode==='remove'?-amtRaw:amtRaw;
+  try{
+    const d=await api('admin_adjust_coins',{user_id:id, coins:coins, reason:reason},'POST');
+    if(d&&d.success){
+      show((coins>=0?'➕ Added ':'➖ Removed ')+Math.abs(coins)+' coins. New balance: '+d.new_balance+' coins.',true);
+      document.getElementById('coin-amount').value='';
+      document.getElementById('coin-reason').value='';
+      loadCoinHistory(); loadCoinsPage();
+    } else { show('❌ '+((d&&d.error)||'Could not adjust coins'),false); }
+  }catch(e){ show('❌ '+e.message,false); }
+}
+
 async function submitStaffNote(){
   const uid = document.getElementById('sn-user').value;
   const type = document.getElementById('sn-type').value;
