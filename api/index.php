@@ -1555,8 +1555,38 @@ case 'approve_task':
 // ---- REJECT TASK ----
 case 'reject_task':
     $id=intval($body['id']??0);
-    $pdo->prepare("UPDATE tasks SET task_status='In Progress' WHERE id=?")->execute([$id]);
-    $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")->execute([$id,$userId,'Sent back to technician: '.($body['reason']??'Needs revision')]);
+    if(!$id){ echo json_encode(['error'=>'Missing id']); break; }
+    $rjReason = trim($body['reason'] ?? 'Needs revision');
+    // Send the task back to the technician as genuinely editable again.
+    // Flipping only the status leaves the collected amount + submission/cash flags in place,
+    // so the technician app still shows it as "done" and they cannot fix the amount.
+    // Reset the payment/submission state (but keep the install/device data) so they can redo it.
+    try {
+        $pdo->prepare("UPDATE tasks SET
+                task_status='In Progress',
+                amount_collected=NULL,
+                payment_status=NULL,
+                cash_deposit_status=NULL,
+                cash_submitted_at=NULL,
+                cash_pending_at=NULL,
+                admin_viewed_at=NULL
+            WHERE id=?")->execute([$id]);
+    } catch(Exception $e) {
+        // If some columns don't exist on this schema, fall back to the minimal reset.
+        try { $pdo->prepare("UPDATE tasks SET task_status='In Progress', amount_collected=NULL WHERE id=?")->execute([$id]); } catch(Exception $e2){}
+    }
+    $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")
+        ->execute([$id,$userId,'Sent back to technician (payment reset for correction): '.$rjReason]);
+    // Notify the technician
+    try {
+        $tt=$pdo->prepare("SELECT task_id, assigned_to FROM tasks WHERE id=?"); $tt->execute([$id]); $trow=$tt->fetch(PDO::FETCH_ASSOC);
+        if($trow && !empty($trow['assigned_to'])){
+            require_once __DIR__.'/fcm_send.php';
+            if(function_exists('fcm_send_to_user')){
+                fcm_send_to_user($pdo, intval($trow['assigned_to']), '↩️ Task sent back: '.($trow['task_id']??''), 'Please correct and resubmit. '.$rjReason, ['type'=>'task_returned','task_id'=>(string)$id]);
+            }
+        }
+    } catch(Exception $e){}
     echo json_encode(['success'=>true]);
     break;
 
