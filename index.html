@@ -603,6 +603,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
           <input type="date" id="ts-to" class="ts-input" onchange="filterTasks()" title="To date">
           <button class="ts-btn ts-btn-secondary" onclick="clearTaskFilters()">✕ Clear</button>
           <button class="ts-btn" id="ts-active-toggle" onclick="toggleClosedTasks()" style="background:var(--accent);color:#fff">✅ Active only</button>
+          <button class="ts-btn" id="ts-noaction-toggle" onclick="toggleNoAction()" style="background:var(--surface2);color:var(--text)">⏳ No-action only</button>
           <div class="ts-spacer"></div>
           <button class="ts-btn ts-btn-green admin-only" onclick="exportTasksCSV()">⬇ Export CSV</button>
         </div>
@@ -2743,6 +2744,16 @@ function toggleClosedTasks(){
   }
   filterTasks();
 }
+let _noActionOnly = false;
+function toggleNoAction(){
+  _noActionOnly = !_noActionOnly;
+  const btn = document.getElementById('ts-noaction-toggle');
+  if(btn){
+    if(_noActionOnly){ btn.style.background='#8b5cf6'; btn.style.color='#fff'; }
+    else { btn.style.background='var(--surface2)'; btn.style.color='var(--text)'; }
+  }
+  filterTasks();
+}
 
 function filterTasks(){
   const search = (document.getElementById('ts-search')?.value||'').toLowerCase();
@@ -2754,6 +2765,7 @@ function filterTasks(){
     if(_hideClosed && !status && _CLOSED_STATUSES.includes(t.task_status)){ hiddenClosed++; return false; }
     if(status && t.task_status !== status) return false;
     if(tech   && String(t.assigned_to) !== String(tech)) return false;
+    if(_noActionOnly && !(+t.opened_no_action===1 || t.opened_no_action==='1')) return false;
     if(search){
       const hay = [(t.customer_name||''),(t.task_id||''),(t.location||''),(t.contact_number||''),(t.device_details||'')].join(' ').toLowerCase();
       if(!hay.includes(search)) return false;
@@ -2860,6 +2872,8 @@ function renderTasksTable(){
     const isUrgent  = age>=24 && age<48;
     const rowStyle  = isCrit ? 'background:#fff5f5' : isUrgent ? 'background:#fffbf0' : '';
     const closedStyle = ['Closed','Cancelled'].includes(t.task_status) ? 'opacity:.55;' : '';
+    const noAction  = (+t.opened_no_action===1 || t.opened_no_action==='1');
+    const noActStyle= noAction ? 'background:#f3e8ff !important;box-shadow:inset 3px 0 0 #8b5cf6;' : '';
     const ageTxt    = isCrit  ? `<span class="age-badge" style="background:#fdecea;color:#c0392b">🚨 ${age}h</span>`
                     : isUrgent? `<span class="age-badge" style="background:#fff3e0;color:#e07b00">⚠️ ${age}h</span>`
                     : age>0   ? `<span style="color:var(--text3);font-size:11px">${age}h</span>` : '–';
@@ -2870,9 +2884,9 @@ function renderTasksTable(){
     if(thisDate !== prevDate){
       headingRow = `<tr class="date-group-row"><td colspan="13" style="background:var(--surface2,#f7f8fa);padding:8px 12px;font-weight:800;font-size:12px;color:var(--accent);border-top:2px solid var(--border);border-bottom:1px solid var(--border)">📅 ${taskDateLabel(thisDate)}</td></tr>`;
     }
-    return headingRow + `<tr class="${getRowClass(t)}" style="border-bottom:1px solid var(--border);cursor:pointer;${rowStyle}${closedStyle}" onclick="viewTask(${t.id})">
+    return headingRow + `<tr class="${getRowClass(t)}" style="border-bottom:1px solid var(--border);cursor:pointer;${rowStyle}${closedStyle}${noActStyle}" onclick="viewTask(${t.id})">
       <td style="color:var(--text3);font-size:11px;padding:9px 12px">${start+i+1}</td>
-      <td style="padding:9px 12px"><span class="task-id">${t.task_id||'–'}</span>${getWorkflowBadge(t)}</td>
+      <td style="padding:9px 12px"><span class="task-id">${t.task_id||'–'}</span>${getWorkflowBadge(t)}${noAction?'<br><span style="background:#8b5cf6;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:10px;white-space:nowrap">⏳ NO ACTION</span>':''}</td>
       <td style="padding:9px 12px"><div class="cust-name">${t.customer_name||'–'}</div></td>
       <td style="padding:9px 12px;color:var(--text2);font-size:12px">${t.contact_number||'–'}</td>
       <td style="padding:9px 12px;color:var(--text2);font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.location||'–'}</td>
@@ -3895,9 +3909,12 @@ function renderMyTasks(){
                    : age > 0 ? `<span style="color:var(--text3);font-size:11px">${age}h</span>` : '–';
     const urgentBadge = isUrgentTask ? `<span class="urgent-badge-row">🚨 Urgent</span>` : '';
     const closedStyle = ['Closed','Cancelled'].includes(t.task_status) ? 'opacity:.55;' : '';
-    return `<tr class="${rowClass}" style="border-bottom:1px solid var(--border);cursor:pointer;${rowStyle}${closedStyle}" onclick="viewTask(${t.id})">
+    const noAction  = (+t.opened_no_action===1 || t.opened_no_action==='1');
+    const noActStyle= noAction ? 'background:#f3e8ff;box-shadow:inset 3px 0 0 #8b5cf6;' : '';
+    const noActBadge= noAction ? '<br><span style="background:#8b5cf6;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:10px;white-space:nowrap">⚡ ACTION REQUIRED</span>' : '';
+    return `<tr class="${rowClass}" style="border-bottom:1px solid var(--border);cursor:pointer;${rowStyle}${closedStyle}${noActStyle}" onclick="viewTask(${t.id})">
       <td style="padding:9px 12px;color:var(--text3);font-size:11px">${start+i+1}</td>
-      <td style="padding:9px 12px"><span class="task-id">${t.task_id||'–'}</span>${urgentBadge}</td>
+      <td style="padding:9px 12px"><span class="task-id">${t.task_id||'–'}</span>${urgentBadge}${noActBadge}</td>
       <td style="padding:9px 12px"><div class="cust-name" style="max-width:130px">${t.customer_name||'–'}</div></td>
       <td style="padding:9px 12px;color:var(--text2);font-size:12px">${t.contact_number||'–'}</td>
       <td style="padding:9px 12px;color:var(--text2);font-size:12px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.location||'–'}</td>
