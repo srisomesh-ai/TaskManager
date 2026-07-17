@@ -431,6 +431,45 @@ function daytime_hours_between($fromTs, $toTs){
     return $secs / 3600.0;
 }
 
+// Penalise a technician if a task was OPENED but NO action was taken (no activity, still active).
+// A warning is sent first; penalties (-50 per 6 daytime-hour window) start only AFTER the warning,
+// and the clock never starts before the rollout date so pre-existing tasks are counted from today onward.
+define('OPENED_NOACTION_ROLLOUT', '2026-07-16 00:00:00');  // count from today onwards
+function apply_opened_no_action_penalty($pdo, $taskId){
+    try {
+        $t = $pdo->prepare("SELECT id, assigned_to, tech_viewed_at, task_status FROM tasks WHERE id=?");
+        $t->execute([$taskId]); $row = $t->fetch();
+        if(!$row) return;
+        if(empty($row['assigned_to'])) return;
+        if(empty($row['tech_viewed_at'])) return;                       // not opened yet — handled elsewhere
+        if(in_array($row['task_status'], ['Closed','Cancelled','Awaiting Approval','Task Pending'])) return;
+        // Any technician activity means action was taken → no penalty.
+        $ac = $pdo->prepare("SELECT COUNT(*) FROM task_activities WHERE task_id=? AND user_id=?");
+        $ac->execute([$taskId, $row['assigned_to']]);
+        if(intval($ac->fetchColumn()) > 0) return;
+        // Clock starts at the later of (opened time, rollout date).
+        $openedTs = strtotime($row['tech_viewed_at']);
+        $rolloutTs = strtotime(OPENED_NOACTION_ROLLOUT);
+        $startTs = max($openedTs, $rolloutTs);
+        $dh = daytime_hours_between($startTs, time());
+        // First: a one-time WARNING at 3 daytime hours (no coin deduction yet).
+        if($dh >= 3){
+            award_coins($pdo, intval($row['assigned_to']), 0, 'Warning: task opened but no action taken', $taskId, 'noact_warn_'.$taskId,
+                '⚠️ Action required', 'You opened a task but took no action. Update it now (call / status / install) or coins will start reducing.');
+        }
+        // Then: -50 per 6 daytime-hour window AFTER the warning point (starting 6h after the 3h warning = 9h+).
+        if($dh >= 9){
+            $windowsPassed = intval(floor(($dh - 3) / 6));   // windows after the 3h warning
+            for($w=1; $w<=$windowsPassed; $w++){
+                $winHour = 3 + ($w*6);
+                $key = 'noact_'.$taskId.'_w'.$w;
+                award_coins($pdo, intval($row['assigned_to']), -50, 'No action on opened task ('.$winHour.'h)', $taskId, $key,
+                    '⚠️ -50 coins', 'A task you opened still has no action. Please update it immediately to stop further penalty.');
+            }
+        }
+    } catch(Exception $e){ error_log('apply_opened_no_action_penalty: '.$e->getMessage()); }
+}
+
 // Penalise a technician -50 ONCE if a task assigned to them was not opened within 3 DAYTIME hours.
 // Idempotent per task via event_key. Only applies while the task is still unopened & active.
 function apply_unopened_penalty($pdo, $taskId){
@@ -462,6 +501,17 @@ function sweep_unopened_penalties($pdo){
               AND COALESCE(assigned_at, created_at) < (NOW() - INTERVAL 3 HOUR)")->fetchAll(PDO::FETCH_COLUMN);
         foreach($rows as $tid){ apply_unopened_penalty($pdo, intval($tid)); }
     } catch(Exception $e){ error_log('sweep_unopened_penalties: '.$e->getMessage()); }
+}
+
+// Sweep tasks that were OPENED but have no technician action yet (active statuses only).
+function sweep_opened_no_action($pdo){
+    try {
+        $rows = $pdo->query("SELECT id FROM tasks
+            WHERE assigned_to IS NOT NULL AND tech_viewed_at IS NOT NULL
+              AND task_status IN ('Open','In Progress')
+              AND tech_viewed_at < (NOW() - INTERVAL 3 HOUR)")->fetchAll(PDO::FETCH_COLUMN);
+        foreach($rows as $tid){ apply_opened_no_action_penalty($pdo, intval($tid)); }
+    } catch(Exception $e){ error_log('sweep_opened_no_action: '.$e->getMessage()); }
 }
 
 // ── Device sync helpers ──
@@ -776,6 +826,8 @@ case 'deactivate_user':
 case 'get_tasks':
     // Apply any due "not opened within 3 daytime hours" penalties (idempotent, cheap query).
     try { sweep_unopened_penalties($pdo); } catch(Exception $e){}
+    // Apply "opened but no action taken" warnings/penalties (idempotent).
+    try { sweep_opened_no_action($pdo); } catch(Exception $e){}
     $where=[]; $params=[];
 
     // ROLE-BASED FILTER — enforced server-side
@@ -819,6 +871,10 @@ case 'get_tasks':
 
     $sql = "SELECT t.*,u.name as tech_name,u.name as technician_name,u.phone as tech_phone,c.name as creator_name,
             (SELECT MAX(a.created_at) FROM task_activities a WHERE a.task_id=t.id AND a.activity_type='remark') as last_tech_activity,
+            (CASE WHEN t.assigned_to IS NOT NULL AND t.tech_viewed_at IS NOT NULL
+                   AND t.task_status IN ('Open','In Progress')
+                   AND (SELECT COUNT(*) FROM task_activities a2 WHERE a2.task_id=t.id AND a2.user_id=t.assigned_to)=0
+                  THEN 1 ELSE 0 END) as opened_no_action,
             t.admin_viewed_at,t.cash_deposit_status,t.cash_deposit_method,t.cash_handover_to,t.cash_deposit_date,t.cash_deposit_ref,t.cash_deposit_notes,t.cash_submitted_at
             FROM tasks t
             LEFT JOIN users u ON t.assigned_to=u.id
