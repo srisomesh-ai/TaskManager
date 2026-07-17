@@ -520,13 +520,18 @@
       const h=['Open','In Progress','Task Pending'].includes(t.task_status)?ageHours(t.created_at):0;
       const urg=isUrgent(t), done=['Closed','Cancelled'].includes(t.task_status);
       const isNew=isUnopened(t);
+      const noAction=(+t.opened_no_action===1 || t.opened_no_action==='1');
       const badge=STATUS[t.task_status]||'b-closed', price=parseFloat(t.price_to_collect||0);
-      return `<div class="task ${urg?'urgent':''} ${done?'done':''} ${isNew?'new-task':''}" onclick="openTask('${t.id}')">
+      const noActStyle = noAction ? 'border:2px solid #8b5cf6;background:#faf5ff;' : '';
+      const noActTag = noAction ? '<span style="background:#8b5cf6;color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;margin-left:6px">⚡ TAKE ACTION</span>' : '';
+      const noActNote = noAction ? '<div style="background:#f3e8ff;color:#6b21a8;font-size:11px;font-weight:700;padding:6px 10px;border-radius:6px;margin-top:8px;line-height:1.4">⚠️ You opened this but took no action. Update it now (call / status / install) or your coins will start reducing.</div>' : '';
+      return `<div class="task ${urg?'urgent':''} ${done?'done':''} ${isNew?'new-task':''}" style="${noActStyle}" onclick="openTask('${t.id}')">
         <div class="task-top"><div>
-          <div class="task-id">${t.task_id||'—'}${isNew?'<span class="new-tag">● NEW</span>':''}${urg?'<span class="urgent-tag">🚨 URGENT</span>':''}</div>
+          <div class="task-id">${t.task_id||'—'}${isNew?'<span class="new-tag">● NEW</span>':''}${urg?'<span class="urgent-tag">🚨 URGENT</span>':''}${noActTag}</div>
           <div class="task-cust">${esc(t.customer_name||'—')}</div></div>
           <span class="badge ${badge}">${t.task_status||'—'}</span></div>
         <div class="task-meta">📞 ${esc(t.contact_number||'—')}<br>📍 ${esc(t.location||'—')}<br>🔧 ${esc(t.device_details||t.lead_type||'—')}</div>
+        ${noActNote}
         <div class="task-foot"><div class="task-price">₹${price.toLocaleString('en-IN')}</div><div class="task-age">${h>0?ageText(h):(t.created_at||'').slice(0,10)}</div></div>
       </div>`;
     }).join('');
