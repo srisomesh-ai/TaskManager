@@ -680,7 +680,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
                   <label>Lead Type</label>
                   <select id="fm-leadtype" onchange="onLeadTypeChange(this.value)">
                     <option>New Lead</option><option>Demo</option><option>3rd Party Lead</option>
-                    <option>Troubleshoot</option><option>Existing Customer Lead</option><option>Outstation Lead</option>
+                    <option>Troubleshoot</option><option>Handover</option><option>Existing Customer Lead</option><option>Outstation Lead</option>
                   </select>
                 </div>
                 <div class="form-group" id="fm-profile-group">
@@ -2953,7 +2953,7 @@ async function saveTask(){
     device_details:    document.getElementById('fm-job')?.value||'',
     device_qty:        deviceQty,
     profile:           document.getElementById('fm-profile')?.value||'BGPT',
-    lead_type:         document.getElementById('fm-lead-type')?.value||'New Lead',
+    lead_type:         document.getElementById('fm-leadtype')?.value||'New Lead',
     task_status:       document.getElementById('fm-status')?.value||'Open',
     payment_mode:      document.getElementById('fm-paymode')?.value||'',
     price_to_collect:  totalPrice,   // ← qty × unit_price (+ GST if SBGT)
@@ -3548,6 +3548,17 @@ function renderVehiclePullRows(){
 
 function setModalJobPrice(job){
   updateVehicleFieldVisibility();
+  // Handover: price is fully manual — never auto-fill from the job, no GST, no discount.
+  if((document.getElementById('fm-leadtype')?.value||document.getElementById('fm-lead-type')?.value)==='Handover' || window._isHandover){
+    const priceEl = document.getElementById('fm-price');
+    const hintEl  = document.getElementById('fm-price-hint');
+    if(priceEl){ priceEl.value=''; priceEl.removeAttribute('readonly'); priceEl.style.background=''; }
+    if(hintEl) hintEl.textContent = '(handover — enter the final price)';
+    const gstBox = document.getElementById('fm-gst-box'); if(gstBox) gstBox.style.display='none';
+    const dsc = document.getElementById('fm-discount-section'); if(dsc) dsc.style.display='none';
+    checkTaskFormReady();
+    return;
+  }
   const base    = JOB_PRICES[job];
   const priceEl = document.getElementById('fm-price');
   const collectEl= document.getElementById('fm-price-collect');
@@ -3574,6 +3585,12 @@ function setModalJobPrice(job){
 }
 
 function getDrawerTotal(){
+  // Handover: the price the user enters IS the final total — no GST, no discount, no qty multiply.
+  if((document.getElementById('fm-leadtype')?.value||document.getElementById('fm-lead-type')?.value)==='Handover' || window._isHandover){
+    const manual = parseFloat(document.getElementById('fm-price-collect')?.value || document.getElementById('fm-price')?.value || 0);
+    const qtyH   = parseInt(document.getElementById('fm-qty')?.value||1) || 1;
+    return { price: manual, stdPrice: manual, qty: qtyH, gst: 0, total: manual, gstTotal: 0 };
+  }
   // Returns the true total using price-to-collect (may be discounted from standard)
   const profile     = document.getElementById('fm-profile')?.value||'BGPT';
   const stdPrice    = parseFloat(document.getElementById('fm-price')?.value||0);
@@ -8531,10 +8548,12 @@ function copyQtLink(e){
 function onLeadTypeChange(leadType){
   const isDemo = (leadType === 'Demo');
   const isTrouble = (leadType === 'Troubleshoot');
+  const isHandover = (leadType === 'Handover');
+  window._isHandover = isHandover;   // used by setModalJobPrice to skip auto-pricing
 
-  // Company profile — hide for Demo and Troubleshoot
+  // Company profile — hide for Demo, Troubleshoot and Handover (Handover price is manual, no GST)
   const pg = document.getElementById('fm-profile-group');
-  if(pg) pg.style.display = (isDemo || isTrouble) ? 'none' : '';
+  if(pg) pg.style.display = (isDemo || isTrouble || isHandover) ? 'none' : '';
 
   // Job type — auto-select and lock for Demo (Demonstration) and Troubleshoot (Troubleshoot/Offline)
   const job = document.getElementById('fm-job');
@@ -8548,6 +8567,11 @@ function onLeadTypeChange(leadType){
       job.disabled = true;
       setModalJobPrice('Troubleshoot/Offline');
       if(typeof toggleFreeService === 'function') toggleFreeService('Troubleshoot/Offline');
+    } else if(isHandover){
+      // Handover: technician picks the device model, but the price is fully manual (no auto-fill/GST/discount).
+      job.disabled = false;
+      if(job.value === 'Demonstration' || job.value === 'Troubleshoot/Offline'){ job.value = ''; }
+      // Do NOT set a price from the job — leave it for the user to type.
     } else {
       job.disabled = false;
       if(job.value === 'Demonstration' || job.value === 'Troubleshoot/Offline'){ job.value = ''; setModalJobPrice(''); }
