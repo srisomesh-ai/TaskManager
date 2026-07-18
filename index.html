@@ -4020,7 +4020,10 @@ function renderDocsPanel(t){
   const docs=(t.documents||[]);
   // Vehicle-number notes (no file) shown as text; actual files shown with thumbnail/link.
   const vehNotes=docs.filter(function(d){ return String(d.doc_type||'').indexOf('veh_no_v')===0; });
-  const files=docs.filter(function(d){ return d.filename && String(d.filename).trim()!==''; });
+  // Customer Documents = only customer-uploaded proofs (RC, ID, selfie, etc).
+  // Exclude payment/cash-deposit screenshots — those belong to the payment section, not here.
+  const _isPayDoc=function(dt){ dt=String(dt||'').toLowerCase(); return dt.indexOf('payment')>=0 || dt.indexOf('screenshot')>=0 || dt.indexOf('deposit')>=0 || dt.indexOf('cash')>=0; };
+  const files=docs.filter(function(d){ return d.filename && String(d.filename).trim()!=='' && String(d.doc_type||'').indexOf('veh_no_v')!==0 && !_isPayDoc(d.doc_type); });
   let html='<div style="background:'+(got?'#e8f5ec':'#eef5ff')+';border:1.5px solid '+(got?'#1a7a3a':'#93c5fd')+';border-radius:10px;padding:12px 14px">';
   html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
       + '<div style="font-size:12px;font-weight:800;color:'+(got?'#1a7a3a':'#2563eb')+'">'+(got?'\u{1F4C4} Customer Documents \u2705':'\u{1F4C4} Customer Documents')+'</div>'
