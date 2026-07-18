@@ -446,7 +446,13 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
           <div class="pg-sub" id="dash-welcome">Welcome back.</div>
           <button onclick="loadDashboard()" style="margin-top:8px;background:var(--accent);color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">🔄 Refresh</button>
           <span style="display:inline-flex;gap:6px;align-items:center;margin-top:8px;margin-left:8px;vertical-align:top">
-            <input id="dev-search-imei" type="text" inputmode="numeric" placeholder="Enter IMEI number…" onkeydown="if(event.key==='Enter')searchDeviceByImei()" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;outline:none;width:180px">
+            <select id="dev-search-field" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;outline:none" onchange="_devSearchFieldChanged()">
+              <option value="imei">IMEI number</option>
+              <option value="plate">Plate / Vehicle number</option>
+              <option value="email">Email ID</option>
+              <option value="registration">Registration / Asset no.</option>
+            </select>
+            <input id="dev-search-imei" type="text" placeholder="Enter IMEI number…" onkeydown="if(event.key==='Enter')searchDeviceByImei()" style="padding:6px 12px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;outline:none;width:180px">
             <button onclick="searchDeviceByImei()" style="background:var(--accent2);color:#fff;border:none;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">🔍 Search Device</button>
           </span>
         </div>
@@ -5691,17 +5697,25 @@ async function checkAndUpdateAttendBtn(taskId){
 const GPS_PROXY = 'gps_proxy.php';
 
 // ───────── DASHBOARD: SEARCH DEVICE BY IMEI (read-only popup) ─────────
+function _devSearchFieldChanged(){
+  const f=(document.getElementById('dev-search-field')||{}).value||'imei';
+  const inp=document.getElementById('dev-search-imei');
+  const ph={imei:'Enter IMEI number…',plate:'Enter plate / vehicle number…',email:'Enter email ID…',registration:'Enter registration / asset no.…'};
+  if(inp){ inp.placeholder=ph[f]||'Search…'; inp.value=''; }
+}
 async function searchDeviceByImei(){
   const inp = document.getElementById('dev-search-imei');
+  const field = (document.getElementById('dev-search-field')||{}).value || 'imei';
+  const fieldLabel = {imei:'IMEI',plate:'plate number',email:'email',registration:'registration number'}[field]||'value';
   const imei = (inp?.value||'').trim();
-  if(!imei){ if(typeof showToast==='function') showToast('⚠️ Enter an IMEI number'); else alert('Enter an IMEI number'); return; }
+  if(!imei){ if(typeof showToast==='function') showToast('⚠️ Enter a '+fieldLabel); else alert('Enter a '+fieldLabel); return; }
   _showDevicePopup('<div style="text-align:center;padding:30px 10px;color:var(--text3);font-size:13px">🔍 Searching all servers for <b>'+escHtml(imei)+'</b>…</div>');
   try{
-    const r = await fetch(GPS_PROXY+'?action=find&keyword='+encodeURIComponent(imei),{headers:{'X-Auth-Token':authToken},cache:'no-store'});
+    const r = await fetch(GPS_PROXY+'?action=find&field='+encodeURIComponent(field)+'&keyword='+encodeURIComponent(imei),{headers:{'X-Auth-Token':authToken},cache:'no-store'});
     const data = await r.json();
     if(!data.success){ _showDevicePopup('<div style="padding:24px;text-align:center;color:var(--red);font-size:13px">❌ '+escHtml(data.error||'Search failed')+'</div>'); return; }
     if(!data.devices || !data.devices.length){
-      _showDevicePopup('<div style="padding:28px 20px;text-align:center"><div style="font-size:34px;margin-bottom:8px">🔍</div><div style="color:var(--red);font-weight:700;font-size:14px">No device found</div><div style="color:var(--text3);font-size:12px;margin-top:6px">No device with IMEI <b>'+escHtml(imei)+'</b> on any server. Check the number and try again.</div></div>');
+      _showDevicePopup('<div style="padding:28px 20px;text-align:center"><div style="font-size:34px;margin-bottom:8px">🔍</div><div style="color:var(--red);font-weight:700;font-size:14px">No device found</div><div style="color:var(--text3);font-size:12px;margin-top:6px">No device matching '+fieldLabel+' <b>'+escHtml(imei)+'</b> on any server. Check and try again.</div></div>');
       return;
     }
     _showDevicePopup(data.devices.map(_deviceCardHtml).join(''), data.devices.length);
