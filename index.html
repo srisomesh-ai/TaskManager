@@ -409,6 +409,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
       <div class="nav-item admin-only" id="nav-approvals" onclick="showPage('approvals')"><span class="nav-icon">✅</span> Approvals <span class="nav-badge" id="approval-badge">0</span></div>
       <div class="nav-item readding-approver" id="nav-readding" onclick="showPage('readding')" style="display:none"><span class="nav-icon">🔌</span> Re-Adding <span class="nav-badge" id="readding-badge" style="display:none;background:var(--red);color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:10px;margin-left:4px">0</span></div>
       <div class="nav-item readding-approver" id="nav-move-device" onclick="showPage('move-device')" style="display:none"><span class="nav-icon">🔀</span> Move Device</div>
+      <div class="nav-item readding-approver" id="nav-bulk-upload" onclick="showPage('bulk-upload')" style="display:none"><span class="nav-icon">📤</span> Bulk Upload</div>
       <div class="nav-item renewal-staff" id="nav-renewals" onclick="showPage('renewals')" style="display:none"><span class="nav-icon">🔄</span> License / Renewals <span class="nav-badge" id="renewal-badge" style="display:none;background:var(--red);color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:10px;margin-left:4px">0</span></div>
       <div class="nav-sec">Reports</div>
       <div class="nav-item admin-only" id="nav-daily-report" onclick="showPage('daily-report')"><span class="nav-icon">📅</span> Daily Report</div>
@@ -1115,6 +1116,34 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
               </select>
               <button type="button" class="ts-btn" style="width:100%;background:var(--accent);color:#fff" onclick="mvMove()">🔀 Move Device</button>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="page" id="page-bulk-upload" style="padding:20px">
+        <div class="pg-header"><div class="breadcrumb">Home / <b>Bulk Upload</b></div><div class="pg-title">📤 Bulk Upload Devices</div><div class="pg-sub">Upload an Excel/CSV file of new devices and push them all to one server. Each device is added with admin + support access.</div></div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+          <div class="card" style="flex:1;min-width:320px;max-width:520px;padding:18px">
+            <div id="bulk-msg" style="display:none;margin-bottom:12px;padding:10px 12px;border-radius:8px;font-size:13px;font-weight:600"></div>
+            <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px">Target server</label>
+            <select id="bulk-server" class="form-input" style="width:100%;margin:5px 0 14px">
+              <option value="">Select server…</option>
+              <option value="1">Server 1 — bharatgps.com</option>
+              <option value="2">Server 2 — bharatgps.in</option>
+              <option value="3">Server 3 — bharatgps.school</option>
+            </select>
+            <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px">Device file (CSV or Excel)</label>
+            <input type="file" id="bulk-file" accept=".csv,.xlsx,.xls" class="form-input" style="width:100%;margin:5px 0 8px" onchange="bulkPreview()">
+            <div style="font-size:11px;color:var(--text3);margin-bottom:12px;line-height:1.6">
+              Required columns: <b>name</b>, <b>imei</b>. Optional: <b>plate_number</b>, <b>registration_number</b>, <b>object_owner</b>, <b>model</b>, <b>vin</b>.
+              <a href="#" onclick="bulkTemplate();return false;" style="color:var(--accent);font-weight:700;text-decoration:none">⬇ Download template</a>
+            </div>
+            <div id="bulk-preview" style="display:none;margin-bottom:12px"></div>
+            <button type="button" class="ts-btn" id="bulk-go" style="width:100%;background:var(--accent);color:#fff;display:none" onclick="bulkUpload()">🚀 Push devices to server</button>
+          </div>
+          <div class="card" style="flex:1;min-width:300px;padding:18px">
+            <div style="font-weight:800;font-size:14px;margin-bottom:12px">Upload Results</div>
+            <div id="bulk-results"><div style="color:var(--text3);font-size:13px;padding:20px;text-align:center">Results will appear here after upload.</div></div>
           </div>
         </div>
       </div>
@@ -7899,6 +7928,86 @@ async function mvMove(){
       document.getElementById('mv-imei').value='';
     } else { _mvMsg('❌ '+(d.error||'Move failed'),false); }
   }catch(e){ _mvMsg('❌ '+e.message,false); }
+}
+
+// ── BULK UPLOAD DEVICES ─────────────────────────────────────────
+let _bulkRows = [];
+function _bulkMsg(txt, ok){
+  const m=document.getElementById('bulk-msg'); if(!m) return;
+  m.style.display=''; m.textContent=txt;
+  m.style.background=ok?'var(--green-bg)':'var(--red-bg)'; m.style.color=ok?'var(--green)':'var(--red)';
+}
+function bulkTemplate(){
+  const csv='name,imei,plate_number,registration_number,object_owner,model,vin\nMy Vehicle,123456789012345,TG09B9966,REG12345,Owner Name,GT06,\n';
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='bulk_devices_template.csv'; a.click();
+}
+function _parseCsv(text){
+  const lines=text.split(/\r?\n/).filter(l=>l.trim()!=='');
+  if(!lines.length) return [];
+  const split=l=>{ const out=[]; let cur='',q=false; for(let i=0;i<l.length;i++){const c=l[i]; if(c==='"'){q=!q;} else if(c===','&&!q){out.push(cur);cur='';} else cur+=c;} out.push(cur); return out.map(s=>s.trim()); };
+  const headers=split(lines[0]).map(h=>h.toLowerCase().replace(/\s+/g,'_'));
+  return lines.slice(1).map(l=>{ const c=split(l); const o={}; headers.forEach((h,i)=>o[h]=c[i]||''); return o; });
+}
+async function bulkPreview(){
+  const f=document.getElementById('bulk-file').files[0];
+  const prev=document.getElementById('bulk-preview'); const go=document.getElementById('bulk-go');
+  _bulkRows=[]; if(prev) prev.style.display='none'; if(go) go.style.display='none';
+  if(!f) return;
+  try{
+    const isExcel=/\.(xlsx|xls)$/i.test(f.name);
+    if(isExcel){
+      if(!window.XLSX){ await new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
+      const buf=await f.arrayBuffer();
+      const wb=XLSX.read(buf,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+      _bulkRows=rows.map(r=>{ const o={}; Object.keys(r).forEach(k=>o[String(k).toLowerCase().replace(/\s+/g,'_')]=String(r[k]).trim()); return o; });
+    } else {
+      const text=await f.text();
+      _bulkRows=_parseCsv(text);
+    }
+  }catch(e){ _bulkMsg('❌ Could not read file: '+e.message,false); return; }
+  // validate
+  _bulkRows=_bulkRows.filter(r=>(r.name||'') && (r.imei||''));
+  if(!_bulkRows.length){ _bulkMsg('❌ No valid rows found. Each row needs at least name and imei.',false); return; }
+  _bulkMsg('✅ '+_bulkRows.length+' device(s) ready to upload.',true);
+  prev.style.display='';
+  prev.innerHTML='<div style="font-size:12px;color:var(--text2);max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:8px">'
+    + '<table style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr style="background:var(--surface2)"><th style="padding:5px 8px;text-align:left">#</th><th style="padding:5px 8px;text-align:left">Name</th><th style="padding:5px 8px;text-align:left">IMEI</th><th style="padding:5px 8px;text-align:left">Plate</th></tr></thead><tbody>'
+    + _bulkRows.map((r,i)=>'<tr style="border-top:1px solid var(--border)"><td style="padding:4px 8px">'+(i+1)+'</td><td style="padding:4px 8px">'+escHtml(r.name)+'</td><td style="padding:4px 8px">'+escHtml(r.imei)+'</td><td style="padding:4px 8px">'+escHtml(r.plate_number||r.plate||'')+'</td></tr>').join('')
+    + '</tbody></table></div>';
+  go.style.display='';
+}
+async function bulkUpload(){
+  const server=document.getElementById('bulk-server').value;
+  if(!server){ _bulkMsg('⚠️ Select a target server.',false); return; }
+  if(!_bulkRows.length){ _bulkMsg('⚠️ Choose a file first.',false); return; }
+  const go=document.getElementById('bulk-go'); go.disabled=true; go.textContent='Uploading… please wait';
+  const results=document.getElementById('bulk-results');
+  let ok=0, fail=0; const out=[];
+  for(let i=0;i<_bulkRows.length;i++){
+    const r=_bulkRows[i];
+    go.textContent='Uploading '+(i+1)+' of '+_bulkRows.length+'…';
+    const fd=new FormData();
+    fd.append('server_id', server);
+    fd.append('name', r.name||'');
+    fd.append('imei', r.imei||'');
+    fd.append('plate_number', r.plate_number||r.plate||'');
+    fd.append('registration_number', r.registration_number||r.registration||'');
+    fd.append('object_owner', r.object_owner||r.owner||'');
+    fd.append('model', r.model||r.device_model||'');
+    fd.append('vin', r.vin||'');
+    try{
+      const resp=await fetch(GPS_PROXY+'?action=add_device',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd});
+      const d=await resp.json();
+      if(d.success){ ok++; out.push('<div style="padding:5px 0;border-bottom:1px solid var(--border);font-size:12px"><span style="color:var(--green);font-weight:700">✅ '+escHtml(r.name)+'</span> <span style="color:var(--text3)">'+escHtml(r.imei)+'</span></div>'); }
+      else { fail++; out.push('<div style="padding:5px 0;border-bottom:1px solid var(--border);font-size:12px"><span style="color:var(--red);font-weight:700">❌ '+escHtml(r.name)+'</span> <span style="color:var(--text3)">'+escHtml(r.imei)+'</span><br><span style="color:var(--red);font-size:11px">'+escHtml(d.error||'Failed')+'</span></div>'); }
+    }catch(e){ fail++; out.push('<div style="padding:5px 0;border-bottom:1px solid var(--border);font-size:12px"><span style="color:var(--red);font-weight:700">❌ '+escHtml(r.name)+'</span><br><span style="color:var(--red);font-size:11px">'+escHtml(e.message)+'</span></div>'); }
+    if(results) results.innerHTML='<div style="font-weight:700;font-size:13px;margin-bottom:8px">✅ '+ok+' added · ❌ '+fail+' failed · '+(i+1)+'/'+_bulkRows.length+'</div>'+out.join('');
+  }
+  go.disabled=false; go.textContent='🚀 Push devices to server';
+  _bulkMsg('Done — '+ok+' added, '+fail+' failed.', fail===0);
 }
 
 async function submitCoinAdjust(){
