@@ -1107,6 +1107,39 @@ case 'create_task':
     try {
         if (!empty($at)) { $pdo->prepare("UPDATE tasks SET assigned_at=NOW() WHERE id=? AND assigned_at IS NULL")->execute([$newIdU]); }
     } catch(Exception $e){}
+
+    // ── HANDOVER: create the balance-sheet entry immediately at task creation ──
+    // Normal tasks only get a BS entry after the device is installed (_bsSyncInstalls). A Handover
+    // has no technician install, so we create its BS entry now using the manual price. When the
+    // receipt/cash is later collected, update_task updates payment_received/pending on this entry.
+    try {
+        if (strcasecmp(trim($body['lead_type'] ?? ''), 'Handover') === 0) {
+            $hoTotal = floatval($body['price_to_collect'] ?? 0);
+            if ($hoTotal > 0) {
+                $hoQty   = intval($body['device_qty'] ?? 1); if($hoQty<1) $hoQty=1;
+                $hoUnit  = round($hoTotal / $hoQty, 2);
+                $hoRecv  = floatval($body['amount_collected'] ?? 0);
+                // Cash is only "received" once deposited & confirmed — at creation it's pending.
+                if (strtolower((string)($body['payment_mode'] ?? '')) === 'cash') { $hoRecv = 0; }
+                if ($hoRecv > $hoTotal) $hoRecv = $hoTotal;
+                $hoPend  = max(0, $hoTotal - $hoRecv);
+                $hoStat  = ($hoRecv >= $hoTotal && $hoTotal > 0) ? 'paid' : ($hoRecv > 0 ? 'partially_paid' : 'pending');
+                $hoProfile = !empty($body['profile']) ? $body['profile'] : 'BGPT';
+                $hoTechName = null;
+                if (!empty($at)) { try { $tn=$pdo->prepare("SELECT name FROM users WHERE id=?"); $tn->execute([$at]); $hoTechName=$tn->fetchColumn() ?: null; } catch(Exception $e){} }
+                $pdo->prepare("INSERT INTO balance_sheet_entries (type,profile,task_id,task_db_id,date,customer_type,device_model,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_mode,technician_name,location,remarks,created_by_code) VALUES (?,?,?,?,CURDATE(),?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+                    ->execute([
+                        bs_type_for_task($body['device_details'] ?? ''), $hoProfile, $taskId, $newIdU,
+                        'Handover', trim($body['device_details'] ?? ''), $hoQty, $hoUnit, 0, $hoTotal,
+                        $hoStat, $hoRecv, $hoPend, $body['payment_mode'] ?? null, $hoTechName,
+                        trim($body['location'] ?? ''), trim($body['general_notes'] ?? ''), $cu['name'] ?? 'system',
+                    ]);
+                $hoBsId = $pdo->lastInsertId();
+                if ($hoBsId) { $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$hoBsId, $newIdU]); }
+            }
+        }
+    } catch(Exception $e){ error_log('Handover BS create: '.$e->getMessage()); }
+
     // Override status for yellow outstation
     if (!empty($body['outstation_travel_paid_by']) && $body['outstation_travel_paid_by']==='COMPANY') {
         $newId2 = $pdo->lastInsertId();
