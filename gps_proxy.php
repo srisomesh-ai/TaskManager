@@ -89,6 +89,8 @@ if($action === 'find'){
     $keyword = trim($_GET['keyword'] ?? '');
     if(!$keyword){ echo json_encode(['success'=>false,'error'=>'Enter an IMEI number']); exit; }
     $q = strtolower($keyword);
+    // Which field to search: imei (default), plate, email, registration. Additive — default unchanged.
+    $field = strtolower(trim($_GET['field'] ?? 'imei'));
 
     // Optional: restrict to a single server by host (e.g. server=bharatgps.in)
     $onlyHost = strtolower(trim($_GET['server'] ?? ''));
@@ -130,8 +132,20 @@ if($action === 'find'){
             if(!isset($group['items'])) continue;
             foreach($group['items'] as $device){
                 $dd   = $device['device_data'] ?? [];
-                $imei = strtolower($dd['imei'] ?? '');
-                if($imei && strpos($imei, $q) !== false){
+                // Build the haystack based on the chosen field.
+                $hay = '';
+                if($field === 'plate'){
+                    $hay = strtolower(($dd['plate_number'] ?? '').' '.($device['name'] ?? ''));
+                } elseif($field === 'email'){
+                    $hay = strtolower($dd['object_owner'] ?? '');
+                    // some setups store email under different keys — include a few
+                    $hay .= ' '.strtolower($device['email'] ?? '').' '.strtolower($dd['email'] ?? '');
+                } elseif($field === 'registration'){
+                    $hay = strtolower(($dd['registration_number'] ?? '').' '.($dd['vin'] ?? ''));
+                } else { // imei (default)
+                    $hay = strtolower($dd['imei'] ?? '');
+                }
+                if($hay !== '' && strpos($hay, $q) !== false){
                     $device['_server_id']   = $sid;
                     $device['_server_name'] = $servers[$sid]['name'];
                     $device['_group']       = $group['name'] ?? '';
