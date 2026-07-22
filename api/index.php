@@ -1417,6 +1417,57 @@ case 'update_task':
     if (isset($body['task_status'])&&$body['task_status']!==$existing['task_status'])
         $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")->execute([$id,$userId,"Status: {$existing['task_status']} → {$body['task_status']}"]);
 
+    // ── PUSH NOTIFICATIONS to the assigned technician on key task events ──
+    // Uses the same working fcm helper as messages/coins. Fully guarded so a push
+    // failure can never affect the task update. Only meaningful changes push.
+    try {
+        require_once __DIR__.'/fcm_send.php';
+        if (function_exists('fcm_send_to_user')) {
+            // Re-read the task to get the current assigned tech + task_id string.
+            $tpush = $pdo->prepare("SELECT task_id, assigned_to, customer_name FROM tasks WHERE id=?");
+            $tpush->execute([$id]); $tprow = $tpush->fetch(PDO::FETCH_ASSOC);
+            $techId = intval($tprow['assigned_to'] ?? 0);
+            $tno    = $tprow['task_id'] ?? '';
+            $cust   = $tprow['customer_name'] ?? '';
+            $pdata  = ['task_id'=>(string)$id, 'url'=>'task.html?id='.$id];
+
+            // 1) Reassigned to a DIFFERENT technician → notify the new tech.
+            if (array_key_exists('assigned_to',$body)) {
+                $newTech = intval($body['assigned_to']);
+                $oldTech = intval($existing['assigned_to'] ?? 0);
+                if ($newTech && $newTech !== $oldTech) {
+                    fcm_send_to_user($pdo, $newTech, '🔔 New Task Assigned', trim($cust.' · '.$tno), array_merge($pdata,['type'=>'new_task']));
+                }
+            }
+
+            // 2) Status change / close / cancel → notify the assigned technician.
+            if ($techId && isset($body['task_status']) && $body['task_status']!==$existing['task_status']) {
+                $ns = $body['task_status'];
+                if ($ns === 'Closed') {
+                    fcm_send_to_user($pdo, $techId, '✅ Task Closed', 'Task '.$tno.' has been closed.', array_merge($pdata,['type'=>'task_closed']));
+                } elseif ($ns === 'Cancelled') {
+                    fcm_send_to_user($pdo, $techId, '❌ Task Cancelled', 'Task '.$tno.' was cancelled.', array_merge($pdata,['type'=>'task_cancelled']));
+                } else {
+                    fcm_send_to_user($pdo, $techId, '🔄 Task Update', 'Task '.$tno.' is now '.$ns.'.', array_merge($pdata,['type'=>'status_change']));
+                }
+            }
+
+            // 3) Payment received/confirmed → notify the assigned technician.
+            if ($techId && array_key_exists('payment_status',$body)
+                && strtolower((string)$body['payment_status'])==='paid'
+                && strtolower((string)($existing['payment_status']??''))!=='paid') {
+                fcm_send_to_user($pdo, $techId, '💰 Payment Received', 'Payment recorded for task '.$tno.'.', array_merge($pdata,['type'=>'payment_received']));
+            }
+
+            // 4) Cash deposit confirmed by admin → notify the assigned technician.
+            if ($techId && array_key_exists('cash_deposit_status',$body)
+                && strtolower((string)$body['cash_deposit_status'])==='deposited'
+                && strtolower((string)($existing['cash_deposit_status']??''))!=='deposited') {
+                fcm_send_to_user($pdo, $techId, '✅ Cash Deposit Confirmed', 'Your cash deposit for task '.$tno.' is confirmed.', array_merge($pdata,['type'=>'cash_confirmed']));
+            }
+        }
+    } catch(Exception $e){ error_log('task-event push error: '.$e->getMessage()); }
+
     // Thank-you email if this update closes the task (only on transition into Closed)
     if (isset($body['task_status']) && $body['task_status']==='Closed' && $existing['task_status']!=='Closed') {
         try {
