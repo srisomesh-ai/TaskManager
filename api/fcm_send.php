@@ -131,6 +131,8 @@ if (!function_exists('fcm_send_to_token')) {
         $resp = curl_exec($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
+        $GLOBALS['_fcm_last_response'] = ['code'=>$code, 'body'=>substr((string)$resp,0,500)];
+        if ($code < 200 || $code >= 300) { error_log('FCM send failed ('.$code.'): '.substr((string)$resp,0,300)); }
         return $code >= 200 && $code < 300;
     }
 }
