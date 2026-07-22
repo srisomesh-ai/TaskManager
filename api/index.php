@@ -3012,6 +3012,38 @@ case 'fcm_diagnostic':
         if(!empty($mt) && function_exists('fcm_send_to_user')){
             $out['test_send_to_self'] = fcm_send_to_user($pdo,$userId,'🔔 Test','This is a test push from BharatGPS',['type'=>'test']) ? 'sent' : 'failed';
         } else { $out['test_send_to_self']='skipped (no token)'; }
+
+        // 6) Check a SPECIFIC technician (pass ?tech_id= or body tech_id) and test-send to them.
+        $diagTech = intval($_GET['tech_id'] ?? $body['tech_id'] ?? 0);
+        if ($diagTech) {
+            try {
+                $tq = $pdo->prepare("SELECT id,name,is_active,fcm_token FROM users WHERE id=?");
+                $tq->execute([$diagTech]); $tr = $tq->fetch(PDO::FETCH_ASSOC);
+                if (!$tr) { $out['tech_check'] = ['error'=>'technician not found']; }
+                else {
+                    $hasToken = !empty($tr['fcm_token']);
+                    $info = [
+                        'name'         => $tr['name'],
+                        'is_active'    => intval($tr['is_active']),
+                        'token_present'=> $hasToken,
+                        'token_tail'   => $hasToken ? ('…'.substr($tr['fcm_token'],-8)) : null,
+                    ];
+                    // Try sending regardless of is_active so we can see the real reason.
+                    if ($hasToken && function_exists('fcm_send_to_token')) {
+                        $sent = fcm_send_to_token($tr['fcm_token'], '🔔 Test to '.$tr['name'], 'If you see this, push works.', ['type'=>'test']);
+                        $info['direct_send'] = $sent ? 'sent' : 'failed';
+                        $info['fcm_response'] = $GLOBALS['_fcm_last_response'] ?? null;
+                    } else {
+                        $info['direct_send'] = 'skipped (no token)';
+                    }
+                    // Also test via the normal helper (which filters is_active=1) to reveal that filter.
+                    if (function_exists('fcm_send_to_user')) {
+                        $info['via_helper_is_active_filter'] = fcm_send_to_user($pdo,$diagTech,'🔔 Test (helper)','Helper path test.',['type'=>'test']) ? 'sent' : 'failed/blocked';
+                    }
+                    $out['tech_check'] = $info;
+                }
+            } catch(Exception $e){ $out['tech_check']=['error'=>$e->getMessage()]; }
+        }
         echo json_encode(['success'=>true,'diag'=>$out]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
