@@ -85,6 +85,17 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
         $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,0,?,'system')")
             ->execute([$task['id'], $actRemark]);
 
+        // ── Push the assigned technician: customer accepted consent / location ──
+        try {
+            @require_once __DIR__.'/api/fcm_send.php';
+            if (function_exists('fcm_send_to_user') && !empty($task['assigned_to'])) {
+                fcm_send_to_user($pdo, intval($task['assigned_to']),
+                    '✅ Customer Accepted',
+                    trim($cName.' confirmed for task '.($task['task_id'] ?? '').'. You can proceed.'),
+                    ['type'=>'consent_accepted','task_id'=>(string)$task['id'],'url'=>'task.html?id='.$task['id']]);
+            }
+        } catch(Exception $e){ error_log('consent push error: '.$e->getMessage()); }
+
         // ── Step 2: Trigger background email via non-blocking HTTP ───────
         // We call a separate endpoint that handles SMTP — fire and forget
         // This means the customer sees success instantly without waiting for SMTP
