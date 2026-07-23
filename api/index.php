@@ -2214,6 +2214,57 @@ case 'admin_leave_list':
     break;
 
 // ── ADMIN: mark a paid leave as USED (consumed by the technician) ──
+// ── ADMIN: manually adjust a technician's APPRECIATIONS (+/-) ──
+case 'admin_adjust_appreciation':
+    if ($userRole !== 'admin') { http_response_code(403); echo json_encode(['error'=>'Only admin can adjust appreciations']); break; }
+    try {
+        _ensureAppreciationTables($pdo);
+        $aU = intval($body['user_id'] ?? 0);
+        $aP = intval($body['points'] ?? 0);
+        $aR = trim($body['reason'] ?? '');
+        if (!$aU) { echo json_encode(['error'=>'Select a technician']); break; }
+        if ($aP === 0) { echo json_encode(['error'=>'Enter a non-zero number']); break; }
+        if ($aR === '') { echo json_encode(['error'=>'A reason is required']); break; }
+        // Direct ledger write (deliberate one-off, no event key) — auto-converts at 10.
+        award_appreciation($pdo, $aU, $aP, 'Manual adjustment by '.($cu['name'] ?? 'admin').': '.$aR, null, null);
+        echo json_encode(['success'=>true,'balance'=>appreciation_balance($pdo,$aU),'paid_leaves'=>paid_leave_total($pdo,$aU)]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// ── ADMIN: grant a paid leave manually (bonus / correction) ──
+case 'admin_leave_grant':
+    if ($userRole !== 'admin') { http_response_code(403); echo json_encode(['error'=>'Only admin can grant leave']); break; }
+    try {
+        _ensureAppreciationTables($pdo);
+        $gU = intval($body['user_id'] ?? 0);
+        $gD = floatval($body['days'] ?? 1); if ($gD <= 0) $gD = 1;
+        $gN = trim($body['note'] ?? '');
+        if (!$gU) { echo json_encode(['error'=>'Select a technician']); break; }
+        $pdo->prepare("INSERT INTO paid_leaves (user_id,days,source,note) VALUES (?,?,?,?)")
+            ->execute([$gU, $gD, 'admin', ($gN !== '' ? $gN : 'Granted by '.($cu['name'] ?? 'admin'))]);
+        try {
+            require_once __DIR__.'/fcm_send.php';
+            if (function_exists('fcm_send_to_user')) {
+                fcm_send_to_user($pdo,$gU,'🎁 Paid Leave Granted','You received '.$gD.' paid leave. Total available: '.paid_leave_total($pdo,$gU).'.',['type'=>'leave_granted','url'=>'earnings.html']);
+            }
+        } catch(Exception $e){}
+        echo json_encode(['success'=>true,'available'=>paid_leave_total($pdo,$gU)]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// ── ADMIN: delete a paid leave row (added by mistake) ──
+case 'admin_leave_delete':
+    if ($userRole !== 'admin') { http_response_code(403); echo json_encode(['error'=>'Only admin can delete']); break; }
+    try {
+        _ensureAppreciationTables($pdo);
+        $dId = intval($body['id'] ?? 0);
+        if (!$dId) { echo json_encode(['error'=>'Missing id']); break; }
+        $g=$pdo->prepare("SELECT user_id FROM paid_leaves WHERE id=?"); $g->execute([$dId]); $dU=intval($g->fetchColumn());
+        $pdo->prepare("DELETE FROM paid_leaves WHERE id=?")->execute([$dId]);
+        echo json_encode(['success'=>true,'available'=>paid_leave_total($pdo,$dU),'used'=>paid_leave_used_total($pdo,$dU)]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'admin_leave_mark_used':
     if ($userRole !== 'admin') { http_response_code(403); echo json_encode(['error'=>'Only admin can mark leave as used']); break; }
     try {
