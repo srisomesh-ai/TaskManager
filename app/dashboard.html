@@ -118,6 +118,7 @@
         <div class="name" id="h-name">Technician</div>
       </div>
       <div style="display:flex;align-items:center">
+        <button onclick="openNotifHistory()" title="Notification history" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:50%;width:34px;height:34px;font-size:16px;cursor:pointer;margin-right:8px;display:flex;align-items:center;justify-content:center;position:relative">🔔<span id="nh-badge" style="display:none;position:absolute;top:-2px;right:-2px;background:#e74c3c;color:#fff;font-size:9px;font-weight:800;min-width:16px;height:16px;border-radius:8px;display:none;align-items:center;justify-content:center;padding:0 3px">0</span></button>
         <button onclick="openGuidelines()" title="Guidelines" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:50%;width:34px;height:34px;font-size:16px;cursor:pointer;margin-right:8px;display:flex;align-items:center;justify-content:center">ℹ️</button>
         <button onclick="openMyNotes()" title="My Notes" style="position:relative;background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:50%;width:34px;height:34px;font-size:16px;cursor:pointer;margin-right:8px;display:flex;align-items:center;justify-content:center">📋<span id="notes-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#e74c3c;color:#fff;border-radius:10px;min-width:17px;height:17px;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px">0</span></button>
         <div class="avatar" id="h-avatar">T</div>
@@ -207,6 +208,17 @@
         <button onclick="closeGuidelines()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:9px;width:34px;height:34px;font-size:20px;cursor:pointer">×</button>
       </div>
       <div id="gl-body" style="padding:14px 14px 40px;max-width:560px;margin:0 auto"></div>
+    </div>
+  </div>
+
+  <!-- Notification history slide-in panel -->
+  <div id="nh-ov" onclick="if(event.target===this)closeNotifHistory()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000">
+    <div id="nh-sheet" style="position:absolute;inset:0;background:#eef1f5;overflow-y:auto;transform:translateY(100%);transition:transform .25s ease">
+      <div style="position:sticky;top:0;background:linear-gradient(135deg,#137272,#0d5555);color:#fff;padding:16px 18px;display:flex;justify-content:space-between;align-items:center;z-index:5">
+        <div><div style="font-size:18px;font-weight:800">🔔 Notification History</div><div style="font-size:12px;opacity:.9">All alerts you received · tap to open the task</div></div>
+        <button onclick="closeNotifHistory()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:9px;width:34px;height:34px;font-size:20px;cursor:pointer">×</button>
+      </div>
+      <div id="nh-body" style="padding:14px 14px 40px;max-width:560px;margin:0 auto"></div>
     </div>
   </div>
 
@@ -400,6 +412,51 @@
     if(r&&r.success){ openMyNotes(); loadNotesBadge(); }
     else if(btn){ btn.textContent='\u2713 Mark as read'; btn.disabled=false; }
   }
+  // ── NOTIFICATION HISTORY ──────────────────────────────────
+  async function openNotifHistory(){
+    const ov=document.getElementById('nh-ov'), sh=document.getElementById('nh-sheet'), b=document.getElementById('nh-body');
+    ov.style.display='block';
+    requestAnimationFrame(function(){ sh.style.transform='translateY(0)'; });
+    b.innerHTML='<div style="text-align:center;padding:30px;color:#889">Loading…</div>';
+    try{
+      const d=await api('my_notifications',{limit:150});
+      const rows=(d&&d.notifications)?d.notifications:[];
+      if(!rows.length){ b.innerHTML='<div style="text-align:center;padding:40px;color:#889"><div style="font-size:34px;margin-bottom:8px">🔔</div><div style="font-weight:700">No notifications yet</div></div>'; }
+      else {
+        const ico={new_task:'🔔',task_closed:'✅',task_cancelled:'❌',status_change:'🔄',payment_received:'💰',
+                   cash_confirmed:'✅',coins:'🪙',appreciation:'👏',consent_accepted:'✅',task_returned:'↩️',
+                   tech_note:'📋',leave_used:'🗓️',leave_granted:'🎁'};
+        b.innerHTML=rows.map(function(n){
+          const when=n.created_at?new Date(n.created_at.replace(' ','T')).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+          const tap=n.url?(' onclick="location.href=\''+n.url+'\'" style="cursor:pointer"'):'';
+          return '<div class="glc" style="margin-bottom:9px"'+tap+'><div style="padding:12px 14px">'
+            +'<div style="display:flex;gap:9px;align-items:flex-start">'
+              +'<div style="font-size:19px;line-height:1.2">'+(ico[n.type]||'🔔')+'</div>'
+              +'<div style="flex:1;min-width:0">'
+                +'<div style="font-weight:800;font-size:14px;color:#1d2b3a">'+esc(n.title||'')+'</div>'
+                +'<div style="font-size:13px;color:#4a5b6d;line-height:1.5;margin-top:3px;white-space:pre-wrap;word-break:break-word">'+esc(n.body||'')+'</div>'
+                +'<div style="font-size:10.5px;color:#9aa7b4;margin-top:5px">'+when+(n.url?' · tap to open':'')+'</div>'
+              +'</div></div></div></div>';
+        }).join('');
+      }
+      try{ await api('mark_notifications_read',{},'POST',{}); }catch(e){}
+      const bd=document.getElementById('nh-badge'); if(bd){ bd.style.display='none'; }
+    }catch(e){ b.innerHTML='<div style="padding:20px;color:#c0392b;font-size:13px">Could not load: '+esc(e.message)+'</div>'; }
+  }
+  function closeNotifHistory(){
+    const ov=document.getElementById('nh-ov'), sh=document.getElementById('nh-sheet');
+    sh.style.transform='translateY(100%)';
+    setTimeout(function(){ ov.style.display='none'; }, 250);
+  }
+  async function refreshNotifBadge(){
+    try{
+      const d=await api('my_notifications',{limit:50});
+      const u=(d&&d.unread)?d.unread:0;
+      const bd=document.getElementById('nh-badge');
+      if(bd){ if(u>0){ bd.textContent=u>99?'99+':u; bd.style.display='flex'; } else { bd.style.display='none'; } }
+    }catch(e){}
+  }
+
   function openGuidelines(){
     const b=document.getElementById('gl-body');
     if(b && !b.dataset.loaded){ b.innerHTML=GUIDELINES_HTML; b.dataset.loaded='1'; }
@@ -438,6 +495,24 @@
       </ul>
       <div class="glte">తెలుగు: 1 కాయిన్ = ₹1. 500 కాయిన్‌లు చేరితే విత్‌డ్రా అడగవచ్చు. టాస్క్ 24 గంటల్లో సబ్మిట్ చేస్తే +50, 3 గంటల్లో ఓపెన్ చేయకపోతే −50, క్యాష్ 4 రోజులు దాటితే ప్రతి 6 గంటలకు −50.</div>
       <div class="glnote">Daytime = 8:00 AM to 8:00 PM. Penalties apply only during daytime hours.</div>
+      <div class="glnote" style="background:#eef4ff;border-left-color:#3b6fd4;color:#1e3a6f;margin-top:8px">Coins apply to <b>paid tasks only</b>. Free (zero-value) tasks earn <b>Appreciations</b> instead — see below.</div>
+    </div></div>
+
+    <div class="glc"><div class="glc-h" style="color:#6b21a8">👏 Appreciations &amp; Paid Leave — Free Tasks</div><div class="glc-b">
+      Some tasks have <b>no charge</b> to the customer — troubleshoot, demo, and other free services.
+      These do <b>not</b> give coins, because no money is earned on them. Instead you earn <b>Appreciations</b>.
+      <ul>
+        <li class="good"><span class="glpill">+1 Appreciation</span> when you complete a <b>free task on time</b>.</li>
+        <li class="bad"><span class="glpill red">−1 Appreciation</span> if you do <b>not open</b> or take no action on a free task.</li>
+        <li><span class="glpill">10 Appreciations = 1 PAID LEAVE</span> — converted <b>automatically</b> as soon as you reach 10.</li>
+        <li>Your appreciation count and paid leaves are shown in <b>My Earnings</b>.</li>
+        <li>Free tasks <b>never reduce your coins</b> — only appreciations go down.</li>
+      </ul>
+      <div class="glte">తెలుగు: ఉచిత సేవలకు (ట్రబుల్‌షూట్, డెమో) కాయిన్‌లు రావు — బదులుగా అప్రిషియేషన్‌లు వస్తాయి. సమయానికి పూర్తి చేస్తే +1, ఓపెన్ చేయకపోతే −1. <b>10 అప్రిషియేషన్‌లు = 1 పెయిడ్ లీవ్</b> (ఆటోమేటిక్‌గా మారుతుంది). ఉచిత టాస్క్‌ల వల్ల కాయిన్‌లు తగ్గవు.</div>
+      <div class="glnote">Your paid leave is marked as used by the office when you actually take the leave.</div>
+    </div></div>
+
+    <div class="glc" style="display:none"><div class="glc-b">
     </div></div>
     <div class="glc"><div class="glc-h" style="color:#c76e00">💵 Cash &amp; Payment Rules</div><div class="glc-b"><ul>
       <li>Always collect the <b>exact amount</b> on the task. Entering more than the price is blocked.</li>
@@ -563,6 +638,7 @@
     const res=await api('get_tasks',{limit:500});
     if(res&&res.error&&/auth/i.test(res.error)){ logout(); return; }
     allTasks=res.tasks||[];
+    try{ refreshNotifBadge(); }catch(e){}
 
     const sRes=await api('get_stats'); const s=sRes.stats||{};
     const sv=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=(v??0);};
