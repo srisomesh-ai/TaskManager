@@ -2305,6 +2305,28 @@ case 'admin_leave_undo_used':
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
+// ── TECHNICIAN: full notification history (re-read missed/truncated pop-ups) ──
+case 'my_notifications':
+    try {
+        try { $pdo->exec("CREATE TABLE IF NOT EXISTS notification_log (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, title VARCHAR(200) DEFAULT NULL, body TEXT DEFAULT NULL, type VARCHAR(50) DEFAULT NULL, task_id VARCHAR(50) DEFAULT NULL, url VARCHAR(200) DEFAULT NULL, is_read TINYINT(1) NOT NULL DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_user_created (user_id, created_at)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch(Exception $e){}
+        $nUid = intval($_GET['user_id'] ?? $body['user_id'] ?? 0);
+        if (!$nUid || $userRole === 'technician') $nUid = $userId;
+        $lim = intval($_GET['limit'] ?? 100); if ($lim<1||$lim>300) $lim=100;
+        $q=$pdo->prepare("SELECT id,title,body,type,task_id,url,is_read,created_at FROM notification_log WHERE user_id=? ORDER BY id DESC LIMIT $lim");
+        $q->execute([$nUid]);
+        $rows=$q->fetchAll(PDO::FETCH_ASSOC);
+        $unread=0; foreach($rows as $r){ if(intval($r['is_read'])===0) $unread++; }
+        echo json_encode(['success'=>true,'notifications'=>$rows,'unread'=>$unread]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'mark_notifications_read':
+    try {
+        $pdo->prepare("UPDATE notification_log SET is_read=1 WHERE user_id=? AND is_read=0")->execute([$userId]);
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'my_appreciations':
     try {
         _ensureAppreciationTables($pdo);
