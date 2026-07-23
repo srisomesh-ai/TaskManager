@@ -1169,6 +1169,27 @@ case 'create_task':
         $tn=$pdo->prepare("SELECT name FROM users WHERE id=?"); $tn->execute([$at]);
         $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'assignment')")->execute([$newId,$userId,"Task assigned to ".$tn->fetchColumn()]);
     }
+
+    // ── PUSH the assigned technician FIRST — before the response and before the mailer.
+    // Previously this ran after echo + after require mailer.php, so a slow/failing mailer
+    // meant the push never fired (coins/messages worked because they push before any echo).
+    if ($at) {
+        try {
+            require_once __DIR__.'/fcm_send.php';
+            if (function_exists('fcm_send_to_user')) {
+                $pnRow = $pdo->prepare("SELECT customer_name,device_details,location FROM tasks WHERE id=?");
+                $pnRow->execute([$newId]); $pnT = $pnRow->fetch(PDO::FETCH_ASSOC);
+                $pnBody = trim(($pnT['customer_name'] ?? '').' · '.($pnT['device_details'] ?? 'GPS Installation'));
+                if (!empty($pnT['location'])) $pnBody .= ' · '.$pnT['location'];
+                fcm_send_to_user($pdo, $at, '🔔 New Task Assigned', $pnBody, [
+                    'type'    => 'new_task',
+                    'task_id' => (string)$newId,
+                    'url'     => 'task.html?id='.$newId,
+                ]);
+            }
+        } catch(Exception $e){ error_log('FCM new-task push error: '.$e->getMessage()); }
+    }
+
     echo json_encode(['success'=>true,'task_id'=>$taskId,'id'=>$newId]);
 
     // Send emails — independently (customer and tech are separate)
@@ -1187,17 +1208,6 @@ case 'create_task':
                 if($tc && !empty($tc['email'])){
                     sendTaskCreatedTech($td, $tc['email'], $tc['name']);
                 }
-                // Push notification to the assigned technician (safe no-op if no token)
-                try {
-                    require_once __DIR__.'/fcm_send.php';
-                    $pnBody = trim(($td['customer_name']??'').' · '.($td['device_details']??'GPS Installation'));
-                    if(!empty($td['location'])) $pnBody .= ' · '.$td['location'];
-                    fcm_send_to_user($pdo, $at, '🔔 New Task Assigned', $pnBody, [
-                        'type'    => 'new_task',
-                        'task_id' => (string)($td['id'] ?? ''),
-                        'url'     => 'task.html?id='.($td['id'] ?? ''),
-                    ]);
-                } catch(Exception $e){ error_log('FCM new-task push error: '.$e->getMessage()); }
             }
 
             // Email customer if email provided
