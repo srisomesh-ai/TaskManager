@@ -8037,7 +8037,8 @@ async function loadApprBox(techId){
   if(!techId){ box.innerHTML='<div style="color:var(--text3);font-size:13px;padding:20px;text-align:center">Select a technician above.</div>'; return; }
   box.innerHTML='<div style="color:var(--text3);font-size:13px;padding:16px;text-align:center">Loading…</div>';
   try{
-    const d=await api('admin_leave_list',{user_id:techId});
+    // cache-buster so the refreshed numbers are never served stale
+    const d=await api('admin_leave_list',{user_id:techId, _t:Date.now()});
     if(!d || d.error){ box.innerHTML='<div style="color:var(--red);font-size:12px;padding:12px">'+escHtml((d&&d.error)||'Could not load')+'</div>'; return; }
     const appr=+d.appreciations||0, avail=+d.available||0, used=+d.used||0;
     const toNext=(10-(appr%10))%10;
@@ -8087,7 +8088,7 @@ async function adjustAppr(sign){
   if(!reason){ showToast('⚠️ A reason is required'); return; }
   try{
     const d=await api('admin_adjust_appreciation',{},'POST',{user_id:tech, points:sign*n, reason:reason});
-    if(d&&d.success){ showToast((sign>0?'👏 Added ':'➖ Removed ')+n+' appreciation(s)'); loadApprBox(tech); }
+    if(d&&d.success){ showToast((sign>0?'👏 Added ':'➖ Removed ')+n+' appreciation(s)'); const nA=document.getElementById('appr-adj-n'); if(nA)nA.value=''; const rA=document.getElementById('appr-adj-reason'); if(rA)rA.value=''; setTimeout(function(){loadApprBox(tech);},350); }
     else showToast('❌ '+((d&&d.error)||'Failed'));
   }catch(e){ showToast('❌ '+e.message); }
 }
@@ -8099,7 +8100,7 @@ async function grantLeave(){
   const note=prompt('Note (optional) — why is this being granted?','')||'';
   try{
     const d=await api('admin_leave_grant',{},'POST',{user_id:tech, days:parseFloat(days)||1, note:note.trim()});
-    if(d&&d.success){ showToast('🎁 Paid leave granted'); loadApprBox(tech); }
+    if(d&&d.success){ showToast('🎁 Paid leave granted'); setTimeout(function(){loadApprBox(tech);},350); }
     else showToast('❌ '+((d&&d.error)||'Failed'));
   }catch(e){ showToast('❌ '+e.message); }
 }
@@ -8107,7 +8108,7 @@ async function deleteLeave(id){
   if(!confirm('Delete this paid leave record permanently?')) return;
   try{
     const d=await api('admin_leave_delete',{},'POST',{id:id});
-    if(d&&d.success){ showToast('🗑️ Deleted'); loadApprBox(document.getElementById('coin-tech')?.value); }
+    if(d&&d.success){ showToast('🗑️ Deleted'); const t=document.getElementById('coin-tech')?.value; setTimeout(function(){loadApprBox(t);},350); }
     else showToast('❌ '+((d&&d.error)||'Failed'));
   }catch(e){ showToast('❌ '+e.message); }
 }
@@ -8118,7 +8119,7 @@ async function markLeaveUsed(id){
   const note=prompt('Note (optional) — e.g. reason or approved by:','')||'';
   try{
     const d=await api('admin_leave_mark_used',{},'POST',{id:id, used_on:when.trim(), used_note:note.trim()});
-    if(d&&d.success){ showToast('✅ Leave marked as used'); loadApprBox(document.getElementById('coin-tech')?.value); }
+    if(d&&d.success){ showToast('✅ Leave marked as used'); const t=document.getElementById('coin-tech')?.value; setTimeout(function(){loadApprBox(t);},350); }
     else showToast('❌ '+((d&&d.error)||'Failed'));
   }catch(e){ showToast('❌ '+e.message); }
 }
@@ -8126,7 +8127,7 @@ async function undoLeaveUsed(id){
   if(!confirm('Put this leave back as available?')) return;
   try{
     const d=await api('admin_leave_undo_used',{},'POST',{id:id});
-    if(d&&d.success){ showToast('↩ Reverted to available'); loadApprBox(document.getElementById('coin-tech')?.value); }
+    if(d&&d.success){ showToast('↩ Reverted to available'); const t=document.getElementById('coin-tech')?.value; setTimeout(function(){loadApprBox(t);},350); }
     else showToast('❌ '+((d&&d.error)||'Failed'));
   }catch(e){ showToast('❌ '+e.message); }
 }
@@ -8147,7 +8148,8 @@ async function submitCoinAdjust(){
       show((coins>=0?'➕ Added ':'➖ Removed ')+Math.abs(coins)+' coins. New balance: '+d.new_balance+' coins.',true);
       document.getElementById('coin-amount').value='';
       document.getElementById('coin-reason').value='';
-      loadCoinHistory(); loadCoinsPage();
+      const _t=document.getElementById('coin-tech')?.value;
+      setTimeout(function(){ loadCoinsPage().then(function(){ const s=document.getElementById('coin-tech'); if(s&&_t){ s.value=_t; } loadCoinHistory(); }); },350);
     } else { show('❌ '+((d&&d.error)||'Could not adjust coins'),false); }
   }catch(e){ show('❌ '+e.message,false); }
 }
