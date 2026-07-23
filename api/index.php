@@ -221,6 +221,97 @@ function bs_type_for_task($deviceDetails){
     return 'sales';
 }
 
+// ── APPRECIATIONS (for ZERO-VALUE tasks) ───────────────────────────────────
+// Zero-price tasks (Troubleshoot / Demo / free service) earn NO coins, because coins are
+// real withdrawable money and those jobs bring no revenue. Instead they earn Appreciations:
+// +1 on-time, -1 when neglected. Every 10 appreciations auto-converts to 1 PAID LEAVE.
+function _ensureAppreciationTables($pdo){
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS appreciation_ledger (
+            id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, task_id INT NULL,
+            points INT NOT NULL DEFAULT 0, reason VARCHAR(200) DEFAULT NULL,
+            event_key VARCHAR(120) DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_appr_event (event_key)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $pdo->exec("CREATE TABLE IF NOT EXISTS paid_leaves (
+            id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, days DECIMAL(5,2) NOT NULL DEFAULT 1,
+            source VARCHAR(120) DEFAULT 'appreciations', note VARCHAR(200) DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch(Exception $e){}
+}
+function appreciation_balance($pdo, $userId){
+    try { _ensureAppreciationTables($pdo);
+        $s=$pdo->prepare("SELECT COALESCE(SUM(points),0) FROM appreciation_ledger WHERE user_id=?");
+        $s->execute([$userId]); return intval($s->fetchColumn());
+    } catch(Exception $e){ return 0; }
+}
+function paid_leave_total($pdo, $userId){
+    try { _ensureAppreciationTables($pdo);
+        $s=$pdo->prepare("SELECT COALESCE(SUM(days),0) FROM paid_leaves WHERE user_id=?");
+        $s->execute([$userId]); return floatval($s->fetchColumn());
+    } catch(Exception $e){ return 0; }
+}
+// Award (or deduct) appreciations. Auto-converts every 10 into 1 paid leave.
+function award_appreciation($pdo, $userId, $points, $reason, $taskId = null, $eventKey = null, $pushTitle = null, $pushBody = null){
+    try {
+        if (!$userId || !$points) return false;
+        _ensureAppreciationTables($pdo);
+        $inserted = false;
+        if ($eventKey) {
+            $st=$pdo->prepare("INSERT IGNORE INTO appreciation_ledger (user_id,task_id,points,reason,event_key) VALUES (?,?,?,?,?)");
+            $st->execute([$userId,$taskId,$points,$reason,$eventKey]);
+            $inserted = $st->rowCount() > 0;
+        } else {
+            $st=$pdo->prepare("INSERT INTO appreciation_ledger (user_id,task_id,points,reason) VALUES (?,?,?,?)");
+            $st->execute([$userId,$taskId,$points,$reason]);
+            $inserted = true;
+        }
+        if (!$inserted) return true; // duplicate event, already counted
+
+        $bal = appreciation_balance($pdo, $userId);
+        // Auto-convert: every 10 appreciations => 1 paid leave (deduct 10, add 1 leave)
+        $converted = 0;
+        while ($bal >= 10) {
+            $pdo->prepare("INSERT INTO appreciation_ledger (user_id,task_id,points,reason) VALUES (?,?,?,?)")
+                ->execute([$userId, null, -10, 'Converted 10 appreciations to 1 paid leave']);
+            $pdo->prepare("INSERT INTO paid_leaves (user_id,days,source,note) VALUES (?,?,?,?)")
+                ->execute([$userId, 1, 'appreciations', 'Earned from 10 appreciations']);
+            $converted++; $bal -= 10;
+        }
+        if (function_exists('fcm_send_to_user')) {
+            try {
+                if ($converted > 0) {
+                    fcm_send_to_user($pdo,$userId,'🏆 Paid Leave Earned!',
+                        'You earned '.$converted.' paid leave from 10 appreciations. Appreciations left: '.$bal.'.',
+                        ['type'=>'appreciation','url'=>'earnings.html']);
+                } else {
+                    if ($pushTitle === null) $pushTitle = $points>=0 ? ('👏 +'.$points.' Appreciation') : ('⚠️ '.$points.' Appreciation');
+                    if ($pushBody === null)  $pushBody  = $reason.' · Total: '.$bal.'/10 toward a paid leave';
+                    fcm_send_to_user($pdo,$userId,$pushTitle,$pushBody,['type'=>'appreciation','url'=>'earnings.html']);
+                }
+            } catch(Exception $e){}
+        }
+        return true;
+    } catch(Exception $e){ error_log('award_appreciation: '.$e->getMessage()); return false; }
+}
+// Is this task a zero-value (free) job? Zero price => appreciation instead of coins.
+function task_is_zero_value($pdo, $taskId){
+    try {
+        $s=$pdo->prepare("SELECT COALESCE(price_to_collect,0) FROM tasks WHERE id=?");
+        $s->execute([$taskId]);
+        return floatval($s->fetchColumn()) <= 0;
+    } catch(Exception $e){ return false; }
+}
+// Router: paid task -> coins (real money). Zero-value task -> appreciations (no money).
+function award_task_reward($pdo, $userId, $coins, $reason, $taskId = null, $eventKey = null, $pushTitle = null, $pushBody = null){
+    if ($taskId && task_is_zero_value($pdo, $taskId)) {
+        $pts = $coins > 0 ? 1 : ($coins < 0 ? -1 : 0);
+        if ($pts === 0) { return award_coins($pdo,$userId,0,$reason,$taskId,$eventKey,$pushTitle,$pushBody); } // warnings stay as-is
+        $ak = $eventKey ? ('appr_'.$eventKey) : null;
+        return award_appreciation($pdo,$userId,$pts,$reason.' (free service)',$taskId,$ak);
+    }
+    return award_coins($pdo,$userId,$coins,$reason,$taskId,$eventKey,$pushTitle,$pushBody);
+}
+
 function award_coins($pdo, $userId, $coins, $reason, $taskId = null, $eventKey = null, $pushTitle = null, $pushBody = null){
     try {
         if (!$userId) return false;
@@ -463,7 +554,7 @@ function apply_opened_no_action_penalty($pdo, $taskId){
             for($w=1; $w<=$windowsPassed; $w++){
                 $winHour = 3 + ($w*6);
                 $key = 'noact_'.$taskId.'_w'.$w;
-                award_coins($pdo, intval($row['assigned_to']), -50, 'No action on opened task ('.$winHour.'h)', $taskId, $key,
+                award_task_reward($pdo, intval($row['assigned_to']), -50, 'No action on opened task ('.$winHour.'h)', $taskId, $key,
                     '⚠️ -50 coins', 'A task you opened still has no action. Please update it immediately to stop further penalty.');
             }
         }
@@ -486,7 +577,7 @@ function apply_unopened_penalty($pdo, $taskId){
         $dh = daytime_hours_between($startTs, time());
         if($dh >= 3){
             $key = 'unopened_'.$taskId;   // one-time per task
-            award_coins($pdo, intval($row['assigned_to']), -50, 'Task not opened within 3 daytime hours', $taskId, $key,
+            award_task_reward($pdo, intval($row['assigned_to']), -50, 'Task not opened within 3 daytime hours', $taskId, $key,
                 '⚠️ -50 coins', 'A task assigned to you was not opened within 3 hours. Please check your tasks promptly.');
         }
     } catch(Exception $e){ error_log('apply_unopened_penalty: '.$e->getMessage()); }
@@ -1596,7 +1687,7 @@ case 'update_task':
             if ($ctr && $ctr['assigned_to'] && !empty($ctr['created_at'])) {
                 $hrs=(time()-strtotime($ctr['created_at']))/3600;
                 if ($hrs <= 24) {
-                    award_coins($pdo, intval($ctr['assigned_to']), 50, 'On-time submission (within 24h)', $id, 'submit24_'.$id, '🎉 Congratulations! +50 coins', 'Task submitted within 24 hours. Great work — keep it up!');
+                    award_task_reward($pdo, intval($ctr['assigned_to']), 50, 'On-time submission (within 24h)', $id, 'submit24_'.$id, '🎉 Congratulations! +50 coins', 'Task submitted within 24 hours. Great work — keep it up!');
                 }
             }
         } catch(Exception $e) { error_log('coin submit24 error: '.$e->getMessage()); }
@@ -1680,7 +1771,7 @@ case 'approve_task':
     // Awaiting-Approval step already gave them). Covers tasks that skipped that step.
     try {
         if (!empty($t['assigned_to']) && !empty($t['created_at']) && $hrs <= 24) {
-            award_coins($pdo, intval($t['assigned_to']), 50, 'On-time submission (within 24h)', $id, 'submit24_'.$id, '🎉 Congratulations! +50 coins', 'Task completed within 24 hours. Great work — keep it up!');
+            award_task_reward($pdo, intval($t['assigned_to']), 50, 'On-time submission (within 24h)', $id, 'submit24_'.$id, '🎉 Congratulations! +50 coins', 'Task completed within 24 hours. Great work — keep it up!');
         }
     } catch(Exception $e) { error_log('coin close24 error: '.$e->getMessage()); }
     // Update BS entry if exists — mark payment as received by company
@@ -2086,6 +2177,36 @@ case 'admin_coin_history':
         $h = $pdo->prepare("SELECT coins, reason, created_at FROM coin_ledger WHERE user_id=? ORDER BY id DESC LIMIT 40");
         $h->execute([$htech]);
         echo json_encode(['success'=>true, 'history'=>$h->fetchAll(PDO::FETCH_ASSOC), 'balance'=>coin_balance($pdo,$htech)]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'my_appreciations':
+    try {
+        _ensureAppreciationTables($pdo);
+        $aUid = intval($_GET['user_id'] ?? $body['user_id'] ?? 0);
+        // Technicians can only see their own; admin/manager may pass a user_id.
+        if (!$aUid || $userRole === 'technician') $aUid = $userId;
+        $h=$pdo->prepare("SELECT points, reason, created_at FROM appreciation_ledger WHERE user_id=? ORDER BY id DESC LIMIT 40");
+        $h->execute([$aUid]);
+        echo json_encode([
+            'success'      => true,
+            'balance'      => appreciation_balance($pdo,$aUid),
+            'paid_leaves'  => paid_leave_total($pdo,$aUid),
+            'next_leave_at'=> 10,
+            'history'      => $h->fetchAll(PDO::FETCH_ASSOC),
+        ]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'admin_appreciation_summary':
+    if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        _ensureAppreciationTables($pdo);
+        $rows=$pdo->query("SELECT u.id,u.name,
+                COALESCE((SELECT SUM(points) FROM appreciation_ledger a WHERE a.user_id=u.id),0) AS appreciations,
+                COALESCE((SELECT SUM(days) FROM paid_leaves p WHERE p.user_id=u.id),0) AS paid_leaves
+             FROM users u WHERE u.role='technician' ORDER BY u.name ASC")->fetchAll(PDO::FETCH_ASSOC);
+        echo json_encode(['success'=>true,'technicians'=>$rows]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
@@ -3996,7 +4117,7 @@ case 'confirm_cash_deposit':
         if (!empty($td['created_at']) && $td['assigned_to']) {
             $hrs=(time()-strtotime($td['created_at']))/3600;
             if ($hrs <= 24) {
-                award_coins($pdo, intval($td['assigned_to']), 50, 'On-time submission (within 24h)', $id, 'submit24_'.$id, '🎉 Congratulations! +50 coins', 'Task submitted within 24 hours. Great work — keep it up!');
+                award_task_reward($pdo, intval($td['assigned_to']), 50, 'On-time submission (within 24h)', $id, 'submit24_'.$id, '🎉 Congratulations! +50 coins', 'Task submitted within 24 hours. Great work — keep it up!');
             }
         }
     } catch(Exception $e) { error_log('coin submit24 cash error: '.$e->getMessage()); }
@@ -5818,7 +5939,7 @@ case 'coin_backfill_24h':
             if(!$doneAt){ $noTime++; $skipped++; continue; }
             $hrs=(strtotime($doneAt)-strtotime($t['created_at']))/3600;
             if($hrs < 0 || $hrs > 24){ $tooLate++; $skipped++; continue; }
-            award_coins($pdo, intval($t['assigned_to']), 50, 'On-time submission (within 24h)', $t['id'], 'submit24_'.$t['id'], '🎉 +50 coins', 'On-time submission bonus credited.');
+            award_task_reward($pdo, intval($t['assigned_to']), 50, 'On-time submission (within 24h)', $t['id'], 'submit24_'.$t['id'], '🎉 +50 coins', 'On-time submission bonus credited.');
             $awarded++;
         }
         echo json_encode([
