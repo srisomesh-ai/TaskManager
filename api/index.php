@@ -3329,6 +3329,18 @@ case 'get_accounts_summary':
     try{$q1=$pdo->prepare("SELECT COALESCE(SUM(total_price),0)ts,COALESCE(SUM(payment_received),0)tr,COALESCE(SUM(pending_payment),0)tp,COALESCE(SUM(CASE WHEN type='sales' THEN total_price ELSE 0 END),0)si,COALESCE(SUM(CASE WHEN type='license' THEN total_price ELSE 0 END),0)li,COALESCE(SUM(CASE WHEN type='sales' THEN qty ELSE 0 END),0)ds,COUNT(*)tc FROM balance_sheet_entries WHERE profile=? AND date BETWEEN ? AND ?");$q1->execute([$co,$from,$to]);$inc=$q1->fetch();}catch(Exception $e){$inc=['ts'=>0,'tr'=>0,'tp'=>0,'si'=>0,'li'=>0,'ds'=>0,'tc'=>0];}
     // ── Purchases (from Purchase Orders) — cash invested in stock this period ──
     $q2=$pdo->prepare("SELECT COALESCE(SUM(total_amount),0)tp,COALESCE(SUM(paid_amount),0)pp,COUNT(*)pc FROM purchase_orders WHERE company=? AND order_date BETWEEN ? AND ? AND status!='Cancelled'");$q2->execute([$co,$from,$to]);$pur=$q2->fetch();
+    // The Purchases page writes to the `purchases` table (not purchase_orders). Include it so the
+    // real dealer purchases (qty, unit price, GST) are reflected in purchase totals and inventory.
+    try {
+        $q2b=$pdo->prepare("SELECT COALESCE(SUM(total_incl),0) tp, COUNT(*) pc, COALESCE(SUM(qty),0) units FROM purchases WHERE purchase_date BETWEEN ? AND ?");
+        $q2b->execute([$from,$to]); $purB=$q2b->fetch(PDO::FETCH_ASSOC);
+        if ($purB) {
+            $pur['tp'] = floatval($pur['tp'] ?? 0) + floatval($purB['tp'] ?? 0);
+            $pur['pp'] = floatval($pur['pp'] ?? 0) + floatval($purB['tp'] ?? 0); // dealer purchases are paid on entry
+            $pur['pc'] = intval($pur['pc'] ?? 0) + intval($purB['pc'] ?? 0);
+            $pur['units'] = intval($purB['units'] ?? 0);
+        }
+    } catch(Exception $e){}
     // ── Operating expenses (from Expenses page) ──
     try{$q3=$pdo->prepare("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE company=? AND date BETWEEN ? AND ?");$q3->execute([$co,$from,$to]);$tex=floatval($q3->fetchColumn());}catch(Exception $e){$tex=0;}
     try{$q4=$pdo->prepare("SELECT category,COALESCE(SUM(amount),0)ct FROM expenses WHERE company=? AND date BETWEEN ? AND ? GROUP BY category ORDER BY ct DESC");$q4->execute([$co,$from,$to]);$cats=$q4->fetchAll();}catch(Exception $e){$cats=[];}
@@ -3351,8 +3363,21 @@ case 'get_accounts_summary':
             $cost = null;
             // 1) Price List buying_price
             try { $pc=$pdo->prepare("SELECT buying_price FROM price_list WHERE product_name=? AND buying_price>0 LIMIT 1"); $pc->execute([$model]); $bp=$pc->fetchColumn(); if($bp!==false && floatval($bp)>0) $cost=floatval($bp); } catch(Exception $e){}
-            // 2) Fallback: average purchase-order unit cost for this model
-            if ($cost===null) { try { $ac=$pdo->prepare("SELECT AVG(unit_cost) FROM purchase_order_items WHERE device_model=? AND unit_cost>0"); $ac->execute([$model]); $av=$ac->fetchColumn(); if($av!==false && floatval($av)>0) $cost=floatval($av); } catch(Exception $e){} }
+            // 2) Fallback: weighted-average unit cost from the ACTUAL purchases table (Purchases page).
+            //    purchases.item_id -> stock_items.name. Item names may be like "Engine Status GPS"
+            //    while the sold model is "Engine Status", so match loosely both ways.
+            if ($cost===null) {
+                try {
+                    $ap=$pdo->prepare("SELECT SUM(p.total_incl)/NULLIF(SUM(p.qty),0)
+                                       FROM purchases p JOIN stock_items s ON p.item_id=s.id
+                                       WHERE p.qty>0 AND (s.name=? OR s.name LIKE CONCAT(?, '%') OR ? LIKE CONCAT(s.name, '%'))");
+                    $ap->execute([$model,$model,$model]);
+                    $av=$ap->fetchColumn();
+                    if($av!==false && floatval($av)>0) $cost=floatval($av);
+                } catch(Exception $e){}
+            }
+            // 3) Fallback: legacy purchase-order items (older Purchase Orders feature)
+            if ($cost===null) { try { $ac=$pdo->prepare("SELECT AVG(unit_cost) FROM purchase_order_items WHERE device_model=? AND unit_cost>0"); $ac->execute([$model]); $av2=$ac->fetchColumn(); if($av2!==false && floatval($av2)>0) $cost=floatval($av2); } catch(Exception $e){} }
             if ($cost===null) $cost = 0.0; // unknown cost — counts as 0 so profit isn't overstated as negative
             $lineCogs = $cost * $sold;
             $cogs += $lineCogs;
