@@ -143,30 +143,62 @@ if (!function_exists('fcm_send_to_token')) {
  */
 if (!function_exists('fcm_send_to_user')) {
     function fcm_send_to_user($pdo, $userId, $title, $body, $data = []) {
+        $sent = false;
+        // 1) SEND FIRST — delivery must never depend on logging.
         try {
             if (!$userId) return false;
-            // Store EVERY notification so the technician can re-read it later in Notification History,
-            // even if the pop-up was missed or truncated on screen.
-            try {
-                $pdo->exec("CREATE TABLE IF NOT EXISTS notification_log (
-                    id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL,
-                    title VARCHAR(200) DEFAULT NULL, body TEXT DEFAULT NULL,
-                    type VARCHAR(50) DEFAULT NULL, task_id VARCHAR(50) DEFAULT NULL,
-                    url VARCHAR(200) DEFAULT NULL, is_read TINYINT(1) NOT NULL DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    INDEX idx_user_created (user_id, created_at)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-                $pdo->prepare("INSERT INTO notification_log (user_id,title,body,type,task_id,url) VALUES (?,?,?,?,?,?)")
-                    ->execute([$userId, (string)$title, (string)$body,
-                        (string)($data['type'] ?? ''), (string)($data['task_id'] ?? ''), (string)($data['url'] ?? '')]);
-            } catch (Exception $e) { /* logging must never block the push */ }
             $st = $pdo->prepare("SELECT fcm_token FROM users WHERE id=? AND is_active=1");
             $st->execute([$userId]);
             $row = $st->fetch();
             $token = $row['fcm_token'] ?? null;
-            if (!$token) return false;
-            return fcm_send_to_token($token, $title, $body, $data);
-        } catch (Exception $e) {
-            return false;
-        }
+            if ($token) { $sent = fcm_send_to_token($token, $title, $body, $data); }
+        } catch (Throwable $e) { error_log('fcm send: '.$e->getMessage()); }
+
+        // 2) LOG AFTER — fully isolated; any failure here is swallowed and cannot affect the push.
+        try {
+            if ($userId) { fcm_log_notification($pdo, $userId, $title, $body, $data); }
+        } catch (Throwable $e) { error_log('fcm log: '.$e->getMessage()); }
+
+        return $sent;
+    }
+}
+
+/**
+ * Store a notification for history. Isolated + defensive: creates the table only if missing
+ * (checked once per request) and never lets an error escape to the caller.
+ */
+if (!function_exists('fcm_log_notification')) {
+    function fcm_log_notification($pdo, $userId, $title, $body, $data = []) {
+        static $ready = null;
+        try {
+            if ($ready === null) {
+                $ready = false;
+                try {
+                    $chk = $pdo->query("SHOW TABLES LIKE 'notification_log'");
+                    if ($chk && $chk->fetchColumn()) { $ready = true; }
+                    else {
+                        $pdo->exec("CREATE TABLE IF NOT EXISTS notification_log (
+                            id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL,
+                            title VARCHAR(200) DEFAULT NULL, body TEXT DEFAULT NULL,
+                            type VARCHAR(50) DEFAULT NULL, task_id VARCHAR(50) DEFAULT NULL,
+                            url VARCHAR(200) DEFAULT NULL, is_read TINYINT(1) NOT NULL DEFAULT 0,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            INDEX idx_user_created (user_id, created_at)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+                        $ready = true;
+                    }
+                } catch (Throwable $e) { $ready = false; error_log('notification_log create: '.$e->getMessage()); }
+            }
+            if (!$ready) return false;
+            $st = $pdo->prepare("INSERT INTO notification_log (user_id,title,body,type,task_id,url) VALUES (?,?,?,?,?,?)");
+            $st->execute([
+                intval($userId),
+                mb_substr((string)$title, 0, 190),
+                (string)$body,
+                mb_substr((string)($data['type'] ?? ''), 0, 45),
+                mb_substr((string)($data['task_id'] ?? ''), 0, 45),
+                mb_substr((string)($data['url'] ?? ''), 0, 190),
+            ]);
+            return true;
+        } catch (Throwable $e) { error_log('notification_log insert: '.$e->getMessage()); return false; }
     }
 }
