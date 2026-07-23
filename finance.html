@@ -487,6 +487,7 @@ function renderAccounts(d) {
   const salesIncome  = parseFloat(inc.sales_income||0);
   const licIncome    = parseFloat(inc.license_income||0);
   const poTotal      = parseFloat(pur.total_po||0);
+  const cogsTotal    = parseFloat(d.cogs||0);
   const totalExp     = parseFloat(d.total_expenses||0);
   const grossProfit  = parseFloat(d.gross_profit||0);
   const netProfit    = parseFloat(d.net_profit||0);
@@ -514,8 +515,11 @@ function renderAccounts(d) {
           <div class="pl-row total"><span>Total Income</span><strong>${fmt(totalIncome)}</strong></div>
         </div>
         <div class="pl-section">
-          <div class="pl-head" style="background:var(--redb);color:var(--red)"><span>📤 Cost of Goods</span><strong>${fmt(poTotal)}</strong></div>
-          <div class="pl-row sub"><span>Purchase Orders (${pur.po_count||0} POs)</span><span>${fmt(poTotal)}</span></div>
+          <div class="pl-head" style="background:var(--redb);color:var(--red)"><span>📤 Cost of Goods Sold</span><strong>${fmt(cogsTotal)}</strong></div>
+          ${(d.cogs_breakdown||[]).length
+            ? (d.cogs_breakdown||[]).map(c=>`<div class="pl-row sub"><span>${c.model} — ${c.units_sold} sold × ${fmt(c.unit_cost)}</span><span>${fmt(c.cost)}</span></div>`).join('')
+            : `<div class="pl-row sub" style="color:var(--org)"><span>No device cost found — set a buying price in Price List or record purchases</span><span>${fmt(0)}</span></div>`}
+          <div class="pl-row sub" style="opacity:.75"><span>Purchases in period (${pur.po_count||0} lots${pur.units?(', '+pur.units+' units'):''})</span><span>${fmt(poTotal)}</span></div>
           <div class="pl-row total"><span>Gross Profit</span><strong style="color:${grossProfit>=0?'var(--grn)':'var(--red)'}">${fmt(grossProfit)}</strong></div>
         </div>
         <div class="pl-section">
