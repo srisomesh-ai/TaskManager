@@ -236,6 +236,12 @@ function _ensureAppreciationTables($pdo){
             id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, days DECIMAL(5,2) NOT NULL DEFAULT 1,
             source VARCHAR(120) DEFAULT 'appreciations', note VARCHAR(200) DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        // Track consumption: admin marks a leave as used when the technician actually takes it.
+        try { $pdo->exec("ALTER TABLE paid_leaves ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'available'"); } catch(Exception $e){}
+        try { $pdo->exec("ALTER TABLE paid_leaves ADD COLUMN used_on DATE DEFAULT NULL"); } catch(Exception $e){}
+        try { $pdo->exec("ALTER TABLE paid_leaves ADD COLUMN used_note VARCHAR(200) DEFAULT NULL"); } catch(Exception $e){}
+        try { $pdo->exec("ALTER TABLE paid_leaves ADD COLUMN marked_by VARCHAR(100) DEFAULT NULL"); } catch(Exception $e){}
+        try { $pdo->exec("ALTER TABLE paid_leaves ADD COLUMN marked_at DATETIME DEFAULT NULL"); } catch(Exception $e){}
     } catch(Exception $e){}
 }
 function appreciation_balance($pdo, $userId){
@@ -246,7 +252,14 @@ function appreciation_balance($pdo, $userId){
 }
 function paid_leave_total($pdo, $userId){
     try { _ensureAppreciationTables($pdo);
-        $s=$pdo->prepare("SELECT COALESCE(SUM(days),0) FROM paid_leaves WHERE user_id=?");
+        // Only leaves still AVAILABLE (not yet consumed) count as balance.
+        $s=$pdo->prepare("SELECT COALESCE(SUM(days),0) FROM paid_leaves WHERE user_id=? AND COALESCE(status,'available')<>'used'");
+        $s->execute([$userId]); return floatval($s->fetchColumn());
+    } catch(Exception $e){ return 0; }
+}
+function paid_leave_used_total($pdo, $userId){
+    try { _ensureAppreciationTables($pdo);
+        $s=$pdo->prepare("SELECT COALESCE(SUM(days),0) FROM paid_leaves WHERE user_id=? AND status='used'");
         $s->execute([$userId]); return floatval($s->fetchColumn());
     } catch(Exception $e){ return 0; }
 }
@@ -2180,6 +2193,67 @@ case 'admin_coin_history':
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
+// ── ADMIN: list a technician's paid leaves (available + used) ──
+case 'admin_leave_list':
+    if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        _ensureAppreciationTables($pdo);
+        $lUid = intval($_GET['user_id'] ?? $body['user_id'] ?? 0);
+        if (!$lUid) { echo json_encode(['error'=>'Select a technician']); break; }
+        $q=$pdo->prepare("SELECT id,days,source,note,status,used_on,used_note,marked_by,marked_at,created_at
+                          FROM paid_leaves WHERE user_id=? ORDER BY id DESC");
+        $q->execute([$lUid]);
+        echo json_encode([
+            'success'      => true,
+            'leaves'       => $q->fetchAll(PDO::FETCH_ASSOC),
+            'available'    => paid_leave_total($pdo,$lUid),
+            'used'         => paid_leave_used_total($pdo,$lUid),
+            'appreciations'=> appreciation_balance($pdo,$lUid),
+        ]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// ── ADMIN: mark a paid leave as USED (consumed by the technician) ──
+case 'admin_leave_mark_used':
+    if ($userRole !== 'admin') { http_response_code(403); echo json_encode(['error'=>'Only admin can mark leave as used']); break; }
+    try {
+        _ensureAppreciationTables($pdo);
+        $lid = intval($body['id'] ?? 0);
+        if (!$lid) { echo json_encode(['error'=>'Missing leave id']); break; }
+        $g=$pdo->prepare("SELECT * FROM paid_leaves WHERE id=?"); $g->execute([$lid]); $lv=$g->fetch(PDO::FETCH_ASSOC);
+        if (!$lv) { echo json_encode(['error'=>'Leave not found']); break; }
+        if (strtolower((string)($lv['status'] ?? '')) === 'used') { echo json_encode(['error'=>'This leave is already marked used']); break; }
+        $usedOn   = trim($body['used_on'] ?? '') ?: date('Y-m-d');
+        $usedNote = trim($body['used_note'] ?? '');
+        $pdo->prepare("UPDATE paid_leaves SET status='used', used_on=?, used_note=?, marked_by=?, marked_at=NOW() WHERE id=?")
+            ->execute([$usedOn, $usedNote ?: null, $cu['name'] ?? 'admin', $lid]);
+        // Notify the technician
+        try {
+            require_once __DIR__.'/fcm_send.php';
+            if (function_exists('fcm_send_to_user')) {
+                fcm_send_to_user($pdo, intval($lv['user_id']), '🗓️ Paid Leave Used',
+                    'Your paid leave was marked as taken on '.$usedOn.'. Remaining: '.paid_leave_total($pdo,intval($lv['user_id'])).'.',
+                    ['type'=>'leave_used','url'=>'earnings.html']);
+            }
+        } catch(Exception $e){}
+        echo json_encode(['success'=>true,'available'=>paid_leave_total($pdo,intval($lv['user_id'])),'used'=>paid_leave_used_total($pdo,intval($lv['user_id']))]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// ── ADMIN: undo a wrongly-marked leave (put it back to available) ──
+case 'admin_leave_undo_used':
+    if ($userRole !== 'admin') { http_response_code(403); echo json_encode(['error'=>'Only admin can undo']); break; }
+    try {
+        _ensureAppreciationTables($pdo);
+        $lid = intval($body['id'] ?? 0);
+        if (!$lid) { echo json_encode(['error'=>'Missing leave id']); break; }
+        $g=$pdo->prepare("SELECT user_id FROM paid_leaves WHERE id=?"); $g->execute([$lid]); $uidL=intval($g->fetchColumn());
+        $pdo->prepare("UPDATE paid_leaves SET status='available', used_on=NULL, used_note=NULL, marked_by=?, marked_at=NOW() WHERE id=?")
+            ->execute([($cu['name'] ?? 'admin').' (undo)', $lid]);
+        echo json_encode(['success'=>true,'available'=>paid_leave_total($pdo,$uidL),'used'=>paid_leave_used_total($pdo,$uidL)]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'my_appreciations':
     try {
         _ensureAppreciationTables($pdo);
@@ -2192,6 +2266,7 @@ case 'my_appreciations':
             'success'      => true,
             'balance'      => appreciation_balance($pdo,$aUid),
             'paid_leaves'  => paid_leave_total($pdo,$aUid),
+            'leaves_used'  => paid_leave_used_total($pdo,$aUid),
             'next_leave_at'=> 10,
             'history'      => $h->fetchAll(PDO::FETCH_ASSOC),
         ]);
@@ -2204,7 +2279,8 @@ case 'admin_appreciation_summary':
         _ensureAppreciationTables($pdo);
         $rows=$pdo->query("SELECT u.id,u.name,
                 COALESCE((SELECT SUM(points) FROM appreciation_ledger a WHERE a.user_id=u.id),0) AS appreciations,
-                COALESCE((SELECT SUM(days) FROM paid_leaves p WHERE p.user_id=u.id),0) AS paid_leaves
+                COALESCE((SELECT SUM(days) FROM paid_leaves p WHERE p.user_id=u.id AND COALESCE(p.status,'available')<>'used'),0) AS paid_leaves,
+                COALESCE((SELECT SUM(days) FROM paid_leaves p2 WHERE p2.user_id=u.id AND p2.status='used'),0) AS leaves_used
              FROM users u WHERE u.role='technician' ORDER BY u.name ASC")->fetchAll(PDO::FETCH_ASSOC);
         echo json_encode(['success'=>true,'technicians'=>$rows]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
