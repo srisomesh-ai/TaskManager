@@ -145,6 +145,20 @@ if (!function_exists('fcm_send_to_user')) {
     function fcm_send_to_user($pdo, $userId, $title, $body, $data = []) {
         try {
             if (!$userId) return false;
+            // Store EVERY notification so the technician can re-read it later in Notification History,
+            // even if the pop-up was missed or truncated on screen.
+            try {
+                $pdo->exec("CREATE TABLE IF NOT EXISTS notification_log (
+                    id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL,
+                    title VARCHAR(200) DEFAULT NULL, body TEXT DEFAULT NULL,
+                    type VARCHAR(50) DEFAULT NULL, task_id VARCHAR(50) DEFAULT NULL,
+                    url VARCHAR(200) DEFAULT NULL, is_read TINYINT(1) NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_user_created (user_id, created_at)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+                $pdo->prepare("INSERT INTO notification_log (user_id,title,body,type,task_id,url) VALUES (?,?,?,?,?,?)")
+                    ->execute([$userId, (string)$title, (string)$body,
+                        (string)($data['type'] ?? ''), (string)($data['task_id'] ?? ''), (string)($data['url'] ?? '')]);
+            } catch (Exception $e) { /* logging must never block the push */ }
             $st = $pdo->prepare("SELECT fcm_token FROM users WHERE id=? AND is_active=1");
             $st->execute([$userId]);
             $row = $st->fetch();
