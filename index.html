@@ -8048,6 +8048,18 @@ async function loadApprBox(techId){
       +'<div style="flex:1;background:var(--surface2);border-radius:8px;padding:8px;text-align:center"><div style="font-size:18px;font-weight:800;color:var(--text3)">'+used+'</div><div style="font-size:10px;color:var(--text3);font-weight:700">USED</div></div>'
       +'</div>';
     h+='<div style="font-size:11px;color:var(--text3);margin-bottom:10px">'+(toNext===0&&appr>0?'🎉 Ready to convert':(toNext+' more appreciation'+(toNext===1?'':'s')+' until the next paid leave'))+'</div>';
+    if(isAdmin){
+      h+='<div style="background:var(--surface2);border-radius:8px;padding:10px;margin-bottom:12px">'
+        +'<div style="font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.3px;margin-bottom:7px">Admin adjust</div>'
+        +'<div style="display:flex;gap:6px;margin-bottom:6px">'
+          +'<input type="number" id="appr-adj-n" placeholder="e.g. 2" style="flex:1;min-width:0;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">'
+          +'<button class="act-btn" style="background:var(--green);color:#fff;font-size:11px;font-weight:700;padding:4px 10px" onclick="adjustAppr(1)">+ Add</button>'
+          +'<button class="act-btn" style="background:var(--red);color:#fff;font-size:11px;font-weight:700;padding:4px 10px" onclick="adjustAppr(-1)">− Remove</button>'
+        +'</div>'
+        +'<input type="text" id="appr-adj-reason" placeholder="Reason (required)" style="width:100%;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;margin-bottom:8px">'
+        +'<button class="act-btn" style="width:100%;background:var(--accent);color:#fff;font-size:11px;font-weight:700;padding:6px" onclick="grantLeave()">🎁 Grant a paid leave directly</button>'
+      +'</div>';
+    }
     const lv=d.leaves||[];
     if(!lv.length){ h+='<div style="color:var(--text3);font-size:12px;padding:12px;text-align:center">No paid leaves earned yet.</div>'; }
     else {
@@ -8058,13 +8070,48 @@ async function loadApprBox(techId){
           +'<div style="font-size:10px;color:var(--text3)">Earned '+String(l.created_at||'').slice(0,10)+(isUsed&&l.used_on?(' · Taken '+String(l.used_on).slice(0,10)):'')+(isUsed&&l.used_note?(' · '+escHtml(l.used_note)):'')+'</div></div>'
           +(isAdmin?('<div style="white-space:nowrap">'+(isUsed
               ? '<button class="act-btn" title="Undo" onclick="undoLeaveUsed('+l.id+')" style="font-size:11px">↩ Undo</button>'
-              : '<button class="act-btn" onclick="markLeaveUsed('+l.id+')" style="background:var(--accent);color:#fff;font-size:11px;padding:3px 9px;font-weight:700">Mark used</button>')+'</div>'):'')
+              : '<button class="act-btn" onclick="markLeaveUsed('+l.id+')" style="background:var(--accent);color:#fff;font-size:11px;padding:3px 9px;font-weight:700">Mark used</button>')
+              +' <button class="act-btn" title="Delete this leave" onclick="deleteLeave('+l.id+')" style="font-size:11px;opacity:.6">🗑️</button></div>'):'')
           +'</div>';
       }).join('');
     }
     box.innerHTML=h;
   }catch(e){ box.innerHTML='<div style="color:var(--red);font-size:12px;padding:12px">'+escHtml(e.message)+'</div>'; }
 }
+async function adjustAppr(sign){
+  const tech=document.getElementById('coin-tech')?.value;
+  if(!tech){ showToast('⚠️ Select a technician'); return; }
+  const n=parseInt(document.getElementById('appr-adj-n')?.value||0);
+  const reason=(document.getElementById('appr-adj-reason')?.value||'').trim();
+  if(!n||n<=0){ showToast('⚠️ Enter a number greater than 0'); return; }
+  if(!reason){ showToast('⚠️ A reason is required'); return; }
+  try{
+    const d=await api('admin_adjust_appreciation',{},'POST',{user_id:tech, points:sign*n, reason:reason});
+    if(d&&d.success){ showToast((sign>0?'👏 Added ':'➖ Removed ')+n+' appreciation(s)'); loadApprBox(tech); }
+    else showToast('❌ '+((d&&d.error)||'Failed'));
+  }catch(e){ showToast('❌ '+e.message); }
+}
+async function grantLeave(){
+  const tech=document.getElementById('coin-tech')?.value;
+  if(!tech){ showToast('⚠️ Select a technician'); return; }
+  const days=prompt('How many paid leave days to grant?','1');
+  if(days===null) return;
+  const note=prompt('Note (optional) — why is this being granted?','')||'';
+  try{
+    const d=await api('admin_leave_grant',{},'POST',{user_id:tech, days:parseFloat(days)||1, note:note.trim()});
+    if(d&&d.success){ showToast('🎁 Paid leave granted'); loadApprBox(tech); }
+    else showToast('❌ '+((d&&d.error)||'Failed'));
+  }catch(e){ showToast('❌ '+e.message); }
+}
+async function deleteLeave(id){
+  if(!confirm('Delete this paid leave record permanently?')) return;
+  try{
+    const d=await api('admin_leave_delete',{},'POST',{id:id});
+    if(d&&d.success){ showToast('🗑️ Deleted'); loadApprBox(document.getElementById('coin-tech')?.value); }
+    else showToast('❌ '+((d&&d.error)||'Failed'));
+  }catch(e){ showToast('❌ '+e.message); }
+}
+
 async function markLeaveUsed(id){
   const when=prompt('Date the leave was taken (YYYY-MM-DD):', new Date().toISOString().slice(0,10));
   if(when===null) return;
