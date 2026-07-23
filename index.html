@@ -2531,6 +2531,7 @@ async function loadDashboard(){
 function _setDrawerMode(mode, isAdmin){
   const isView   = mode === 'view';
   const isCreate = mode === 'create';
+  window._drawerMode = mode;   // so other handlers know if we are creating, viewing or editing
 
   // Disable/enable all inputs
   document.querySelectorAll('#task-drawer input, #task-drawer select, #task-drawer textarea')
@@ -4778,6 +4779,7 @@ async function viewTaskInEditDrawer(id){
 
   // Sync form show/hide + lock state to the lead type, then restore the saved job value
   if(typeof onLeadTypeChange === 'function'){
+    window._drawerMode = 'edit';   // set before, so the profile field is not hidden on edit
     onLeadTypeChange(t.lead_type||'');
     const jobEl = document.getElementById('fm-job');
     if(jobEl && t.device_details){ jobEl.value = t.device_details; }
@@ -8786,9 +8788,12 @@ function onLeadTypeChange(leadType){
   const isHandover = (leadType === 'Handover');
   window._isHandover = isHandover;   // used by setModalJobPrice to skip auto-pricing
 
-  // Company profile — hide for Demo, Troubleshoot and Handover (Handover price is manual, no GST)
+  // Company profile — normally hidden for Demo/Troubleshoot/Handover (they are free or manually
+  // priced). BUT in EDIT mode it must stay available: a BGPT job often has to be switched to SBGT
+  // when the customer later asks for a GST bill, and the price then needs updating.
   const pg = document.getElementById('fm-profile-group');
-  if(pg) pg.style.display = (isDemo || isTrouble || isHandover) ? 'none' : '';
+  const _inEditMode = !!(window._drawerMode && window._drawerMode !== 'create');
+  if(pg) pg.style.display = ((isDemo || isTrouble || isHandover) && !_inEditMode) ? 'none' : '';
 
   // Job type — auto-select and lock for Demo (Demonstration) and Troubleshoot (Troubleshoot/Offline)
   const job = document.getElementById('fm-job');
