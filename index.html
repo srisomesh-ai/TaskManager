@@ -7841,11 +7841,26 @@ function setCoinMode(m){
 async function loadCoinsPage(){
   const sel=document.getElementById('coin-tech'); if(!sel) return;
   setCoinMode('add');
+  const msg=document.getElementById('coin-msg');
+  const showErr=(t)=>{ if(msg){ msg.style.display=''; msg.textContent=t; msg.style.background='var(--red-bg)'; msg.style.color='var(--red)'; } };
   try{
+    let techs=[];
     const d=await api('admin_coin_summary');
-    const techs=(d&&d.technicians)?d.technicians:[];
-    sel.innerHTML='<option value="">Select technician…</option>'+techs.map(t=>`<option value="${t.id}">${escHtml(t.name)} (${t.balance} coins)</option>`).join('');
-  }catch(e){}
+    if(d && d.error){ showErr('⚠️ '+d.error+' — falling back to the staff list.'); }
+    if(d && d.technicians && d.technicians.length){ techs=d.technicians; }
+    // Fallback: if the coin summary returned nothing (permission or empty), use the normal users list.
+    if(!techs.length){
+      try{
+        const u=await api('get_users');
+        const list=(u&&(u.users||u.data))||[];
+        techs=list.filter(x=>String(x.role||'').toLowerCase()==='technician')
+                  .map(x=>({id:x.id,name:x.name,balance:''}));
+      }catch(e2){}
+    }
+    if(!techs.length){ sel.innerHTML='<option value="">No technicians found</option>'; return; }
+    sel.innerHTML='<option value="">Select technician…</option>'+techs.map(t=>`<option value="${t.id}">${escHtml(t.name)}${(t.balance!==''&&t.balance!=null)?(' ('+t.balance+' coins)'):''}</option>`).join('');
+    if(msg && !(d&&d.error)) msg.style.display='none';
+  }catch(e){ showErr('❌ Could not load technicians: '+e.message); }
 }
 async function loadCoinHistory(){
   const id=document.getElementById('coin-tech')?.value;
