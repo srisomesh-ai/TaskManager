@@ -2168,7 +2168,7 @@ case 'admin_adjust_coins':
 
 // ---- ADMIN: LIST TECHNICIANS WITH COIN BALANCES ----
 case 'admin_coin_summary':
-    if (!in_array($userRole, ['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    if (!in_array($userRole, ['admin','assigner','manager'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     try {
         _ensureCoinLedger($pdo);
         $q = $pdo->query("SELECT u.id, u.name, u.role, COALESCE(SUM(c.coins),0) AS balance
@@ -2182,7 +2182,7 @@ case 'admin_coin_summary':
 
 // ---- ADMIN: RECENT COIN LEDGER FOR A TECHNICIAN ----
 case 'admin_coin_history':
-    if (!in_array($userRole, ['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    if (!in_array($userRole, ['admin','assigner','manager'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     $htech = intval($_GET['user_id'] ?? $body['user_id'] ?? 0);
     if (!$htech) { echo json_encode(['error'=>'Missing user_id']); break; }
     try {
@@ -2195,7 +2195,7 @@ case 'admin_coin_history':
 
 // ── ADMIN: list a technician's paid leaves (available + used) ──
 case 'admin_leave_list':
-    if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    if (!in_array($userRole,['admin','assigner','manager'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     try {
         _ensureAppreciationTables($pdo);
         $lUid = intval($_GET['user_id'] ?? $body['user_id'] ?? 0);
@@ -2274,7 +2274,7 @@ case 'my_appreciations':
     break;
 
 case 'admin_appreciation_summary':
-    if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    if (!in_array($userRole,['admin','assigner','manager'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     try {
         _ensureAppreciationTables($pdo);
         $rows=$pdo->query("SELECT u.id,u.name,
