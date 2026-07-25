@@ -198,6 +198,10 @@ tr:hover td{background:var(--surface2)}
           <label class="form-label">Buying Price ₹ <span style="color:var(--text3);font-weight:400;font-size:11px">(your purchase cost — not shown to customer)</span></label>
           <input class="form-input" id="m-buying" type="number" min="0" step="0.01" placeholder="0.00">
         </div>
+        <div class="form-group full">
+          <label class="form-label">Handover Price ₹ <span style="color:var(--text3);font-weight:400;font-size:11px">(fixed price when device is handed over to customer — excl GST)</span></label>
+          <input class="form-input" id="m-handover" type="number" min="0" step="0.01" placeholder="0.00">
+        </div>
         <div class="form-group">
           <label class="form-label">Selling Price (excl GST) ₹ <span style="color:var(--red)">*</span></label>
           <input class="form-input" id="m-price" type="number" min="0" step="0.01" placeholder="0.00" oninput="calcGst()">
@@ -426,6 +430,7 @@ function openModal(id){
   document.getElementById('m-server').value = item ? (item.server_name || '') : 'BharatGPS Server';
   document.getElementById('m-desc').value   = item ? (item.description || '') : '';
   document.getElementById('m-buying').value = item ? (item.buying_price || '') : '';
+  document.getElementById('m-handover').value = item ? (item.handover_price || '') : '';
   document.getElementById('m-price').value  = item ? item.price_excl_gst : '';
   document.getElementById('m-gst').value    = item ? String(item.gst_percent) : '18';
   document.getElementById('m-sort').value   = item ? item.sort_order : '0';
@@ -461,6 +466,7 @@ function saveItem(){
     server_name:    document.getElementById('m-server').value.trim(),
     description:    document.getElementById('m-desc').value.trim(),
     buying_price:   parseFloat(document.getElementById('m-buying').value) || 0,
+    handover_price: parseFloat(document.getElementById('m-handover').value) || 0,
     price_excl_gst: parseFloat(document.getElementById('m-price').value) || 0,
     gst_percent:    parseFloat(document.getElementById('m-gst').value) || 18,
     sort_order:     parseInt(document.getElementById('m-sort').value) || 0,
