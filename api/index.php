@@ -1737,6 +1737,49 @@ case 'transfer_task':
     break;
 
 // ---- APPROVE TASK ----
+// ── APPROVE PAYMENT but KEEP TASK OPEN (for partial installs) ──
+// Payment is fully collected, but not all devices are installed yet. Verify the payment,
+// mark it received (deposit confirmed, balance sheet updated), but DO NOT close the task —
+// the technician keeps installing the remaining devices and closes it manually when done.
+case 'approve_payment_keep_open':
+    if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    $id=intval($body['id']??0);
+    $h=$pdo->prepare("SELECT t.*,u.name as tech_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?"); $h->execute([$id]); $t=$h->fetch();
+    if (!$t) { echo json_encode(['error'=>'Task not found']); break; }
+    $totalPrice = floatval($t['price_to_collect']??0);
+    $collected  = floatval($t['amount_collected']??0);
+    $pendingPay = max(0, $totalPrice - $collected);
+    if ($pendingPay > 0) { echo json_encode(['error'=>'Cannot verify — ₹'.number_format($pendingPay,0).' still pending. Collect full payment first.']); break; }
+    $payMode = strtolower($t['payment_mode']??'');
+    // Cash must be deposited & confirmed first
+    if ($payMode === 'cash' && ($t['cash_deposit_status']??'') !== 'deposited' && $collected > 0){
+        echo json_encode(['error'=>'Cannot verify — cash collected but the deposit is not yet confirmed. Verify the cash deposit first.']); break;
+    }
+    // Mark non-cash payment verified
+    try { $pdo->exec("ALTER TABLE tasks ADD COLUMN payment_verify_status VARCHAR(20) DEFAULT NULL"); } catch(Exception $e){}
+    $pdo->prepare("UPDATE tasks SET payment_verify_status='verified' WHERE id=?")->execute([$id]);
+    // Move status to In Progress (open) so the technician can continue the remaining installs.
+    if (in_array($t['task_status'], ['Awaiting Approval','Task Pending'])) {
+        $pdo->prepare("UPDATE tasks SET task_status='In Progress' WHERE id=?")->execute([$id]);
+    }
+    $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")
+        ->execute([$id,$userId,'Payment verified & received in full. Task kept OPEN — remaining device installation pending; technician to close after finishing.']);
+    // Balance sheet: mark payment received (money is in), even though the task is still open.
+    if (!empty($t['bs_entry_id'])) {
+        $pdo->prepare("UPDATE balance_sheet_entries SET payment_status='paid',payment_received=?,pending_payment=0,payment_received_on=CURDATE() WHERE id=?")->execute([$collected,$t['bs_entry_id']]);
+    }
+    // Notify the technician to finish the remaining devices.
+    try {
+        require_once __DIR__.'/fcm_send.php';
+        if (function_exists('fcm_send_to_user') && !empty($t['assigned_to'])) {
+            fcm_send_to_user($pdo, intval($t['assigned_to']), '✅ Payment verified — task still open',
+                'Payment for '.($t['task_id']??'').' is confirmed. Please complete the remaining device installation and close the task.',
+                ['type'=>'status_change','task_id'=>(string)$id,'url'=>'task.html?id='.$id]);
+        }
+    } catch(Exception $e){}
+    echo json_encode(['success'=>true,'kept_open'=>true]);
+    break;
+
 case 'approve_task':
     if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     $id=intval($body['id']??0);
