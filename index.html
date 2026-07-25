@@ -3115,6 +3115,8 @@ var JOB_PRICES = {
   'Only Remove':                  0,
   'Demonstration':                0,
 };
+// Fixed handover price per device (set in Price List). Handover uses THIS, exactly, no change.
+var HANDOVER_PRICES = {};
 
 async function loadPricesFromPriceList(){
   try {
@@ -3122,6 +3124,7 @@ async function loadPricesFromPriceList(){
     (d.items||[]).forEach(function(item){
       // Match price list product_name to job type name
       JOB_PRICES[item.product_name] = parseFloat(item.price_excl_gst||0);
+      HANDOVER_PRICES[item.product_name] = parseFloat(item.handover_price||0);
     });
   } catch(e){}
 }
@@ -3583,13 +3586,24 @@ function renderVehiclePullRows(){
 
 function setModalJobPrice(job){
   updateVehicleFieldVisibility();
-  // Handover: price is fully manual — never auto-fill from the job, no GST, no discount.
+  // Handover: use the FIXED handover price for this device (set in Price List). Locked — no change.
   if((document.getElementById('fm-leadtype')?.value||document.getElementById('fm-lead-type')?.value)==='Handover' || window._isHandover){
     const priceEl = document.getElementById('fm-price');
+    const collectEl= document.getElementById('fm-price-collect');
     const hintEl  = document.getElementById('fm-price-hint');
-    if(priceEl){ priceEl.value=''; priceEl.removeAttribute('readonly'); priceEl.style.background=''; }
-    if(hintEl) hintEl.textContent = '(handover — enter the final price)';
-    const gstBox = document.getElementById('fm-gst-box'); if(gstBox) gstBox.style.display='none';
+    const fixed = parseFloat((HANDOVER_PRICES[job]!==undefined?HANDOVER_PRICES[job]:0))||0;
+    if(fixed > 0){
+      if(priceEl){ priceEl.value = fixed; priceEl.setAttribute('readonly','readonly'); priceEl.style.background='var(--surface2)'; }
+      if(collectEl){ collectEl.value = fixed; }
+      if(hintEl) hintEl.textContent = '(fixed handover price — locked)';
+      updateModalGST(); // applies 18% if SBGT profile is selected
+    } else {
+      // No handover price set for this device yet — tell the admin to set it in Price List.
+      if(priceEl){ priceEl.value=''; priceEl.setAttribute('readonly','readonly'); priceEl.style.background='var(--surface2)'; }
+      if(collectEl){ collectEl.value=''; }
+      if(hintEl) hintEl.textContent = '⚠️ No handover price set for this device — set it in Price List first';
+      const gstBox = document.getElementById('fm-gst-box'); if(gstBox) gstBox.style.display='none';
+    }
     const dsc = document.getElementById('fm-discount-section'); if(dsc) dsc.style.display='none';
     checkTaskFormReady();
     return;
@@ -3620,11 +3634,13 @@ function setModalJobPrice(job){
 }
 
 function getDrawerTotal(){
-  // Handover: the price the user enters IS the final total — no GST, no discount, no qty multiply.
+  // Handover: FIXED price per device (from Price List). Apply 18% GST if profile is SBGT. × qty.
   if((document.getElementById('fm-leadtype')?.value||document.getElementById('fm-lead-type')?.value)==='Handover' || window._isHandover){
-    const manual = parseFloat(document.getElementById('fm-price-collect')?.value || document.getElementById('fm-price')?.value || 0);
+    const unit   = parseFloat(document.getElementById('fm-price')?.value || document.getElementById('fm-price-collect')?.value || 0)||0;
     const qtyH   = parseInt(document.getElementById('fm-qty')?.value||1) || 1;
-    return { price: manual, stdPrice: manual, qty: qtyH, gst: 0, total: manual, gstTotal: 0 };
+    const profH  = document.getElementById('fm-profile')?.value||'BGPT';
+    const gstH   = profH==='SBGT' ? unit*0.18 : 0;
+    return { price: unit, stdPrice: unit, qty: qtyH, gst: gstH, total: (unit+gstH)*qtyH, gstTotal: gstH*qtyH };
   }
   // Returns the true total using price-to-collect (may be discounted from standard)
   const profile     = document.getElementById('fm-profile')?.value||'BGPT';
@@ -8847,7 +8863,7 @@ function onLeadTypeChange(leadType){
   // when the customer later asks for a GST bill, and the price then needs updating.
   const pg = document.getElementById('fm-profile-group');
   const _inEditMode = !!(window._drawerMode && window._drawerMode !== 'create');
-  if(pg) pg.style.display = ((isDemo || isTrouble || isHandover) && !_inEditMode) ? 'none' : '';
+  if(pg) pg.style.display = ((isDemo || isTrouble) && !isHandover && !_inEditMode) ? 'none' : '';
 
   // Job type — auto-select and lock for Demo (Demonstration) and Troubleshoot (Troubleshoot/Offline)
   const job = document.getElementById('fm-job');
