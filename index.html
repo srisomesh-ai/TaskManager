@@ -4600,12 +4600,33 @@ function openTaskDetail(id){ viewTask(id); }async function viewTask(id){
 
       // Approve & Close — block if payment pending OR cash not deposited
       if(taskFullyPaid && (!cashPending || cashDeposited)){
-        const approveBtn = document.createElement('button');
-        approveBtn.className = 'ts-btn';
-        approveBtn.style.cssText = 'background:var(--green);color:#fff;flex:2;min-width:140px';
-        approveBtn.innerHTML = '✅ Approve & Close';
-        approveBtn.onclick = () => adminApproveTask(t.id);
-        btnRow.appendChild(approveBtn);
+        // Are there devices still not installed? (partial installation)
+        const totalDev = parseInt(t.device_qty||1)||1;
+        const doneDev  = parseInt(t.installed_count||0)||0;
+        const devPending = totalDev > 1 && doneDev < totalDev;
+        if(devPending){
+          // Payment can be verified & received, but keep the task OPEN for the remaining installs.
+          const keepBtn = document.createElement('button');
+          keepBtn.className = 'ts-btn';
+          keepBtn.style.cssText = 'background:var(--green);color:#fff;flex:2;min-width:150px';
+          keepBtn.innerHTML = '✅ Verify payment · keep open ('+doneDev+'/'+totalDev+' installed)';
+          keepBtn.onclick = () => approvePaymentKeepOpen(t.id, doneDev, totalDev);
+          btnRow.appendChild(keepBtn);
+          // Still allow a deliberate full close if the office really wants to.
+          const closeBtn = document.createElement('button');
+          closeBtn.className = 'ts-btn';
+          closeBtn.style.cssText = 'background:var(--surface2);color:var(--text);border:1.5px solid var(--border);flex:1';
+          closeBtn.innerHTML = '🔒 Close anyway';
+          closeBtn.onclick = () => adminApproveTask(t.id, {pendingDev:totalDev-doneDev});
+          btnRow.appendChild(closeBtn);
+        } else {
+          const approveBtn = document.createElement('button');
+          approveBtn.className = 'ts-btn';
+          approveBtn.style.cssText = 'background:var(--green);color:#fff;flex:2;min-width:140px';
+          approveBtn.innerHTML = '✅ Approve & Close';
+          approveBtn.onclick = () => adminApproveTask(t.id);
+          btnRow.appendChild(approveBtn);
+        }
       } else {
         const blockBtn = document.createElement('button');
         blockBtn.className = 'ts-btn';
@@ -5423,6 +5444,23 @@ async function resolveDispute(taskId, verdict){
 
 // One-tap: verify the payment (if needed) then approve & close the task
 async function approvePaymentAndClose(taskId){
+  // If this task has devices still not installed, verify payment but keep it open instead of closing.
+  const _t = (typeof allTasks!=='undefined' && allTasks) ? allTasks.find(function(x){return +x.id===+taskId;}) : null;
+  if(_t){
+    const total=parseInt(_t.device_qty||1)||1, done=parseInt(_t.installed_count||0)||0;
+    if(total>1 && done<total){
+      if(!confirm('This task has '+done+' of '+total+' devices installed. Verify the payment and KEEP the task open for the remaining '+(total-done)+'?\n\n(Click Cancel if you want to fully close it instead.)')){ return; }
+      await api('verify_payment',{},'POST',{task_id:taskId, verdict:'verified'}).catch(()=>({}));
+      const rk = await api('approve_payment_keep_open',{},'POST',{id:taskId}).catch(()=>({}));
+      if(rk && rk.success){
+        if(typeof showToast==='function') showToast('✅ Payment verified — task kept open for remaining installs');
+        if(typeof closeTaskDetail==='function') closeTaskDetail();
+        if(typeof loadTasks==='function') loadTasks();
+        if(typeof loadDashboard==='function') loadDashboard();
+      } else { alert((rk&&rk.error) || 'Could not verify payment.'); }
+      return;
+    }
+  }
   if(!confirm('Approve this payment and close the task?')) return;
   // First mark the payment verified so the close block is lifted (safe if already verified)
   await api('verify_payment',{},'POST',{task_id:taskId, verdict:'verified'}).catch(()=>({}));
@@ -5449,8 +5487,24 @@ async function verifyPayment(taskId, verdict){
   } else { alert(res.error||'Failed'); }
 }
 
-async function adminApproveTask(taskId){
-  if(!confirm('Approve and close this task?')) return;
+async function approvePaymentKeepOpen(taskId, done, total){
+  if(!confirm('Verify payment as received and KEEP this task open?\n\n'+done+' of '+total+' devices installed. The payment will be confirmed, but the task stays open so the technician can finish the remaining '+(total-done)+' device(s) and close it manually.')) return;
+  const res = await api('approve_payment_keep_open',{},'POST',{id:taskId}).catch(()=>({}));
+  if(res && res.success){
+    showToast('✅ Payment verified — task kept open for remaining installs');
+    closeTaskDetail();
+    if(typeof loadTasks==='function') loadTasks();
+    if(typeof loadDashboard==='function') loadDashboard();
+  } else { alert((res&&res.error)||'Could not verify payment'); }
+}
+
+async function adminApproveTask(taskId, opts){
+  opts = opts || {};
+  let msg = 'Approve and close this task?';
+  if(opts.pendingDev && opts.pendingDev > 0){
+    msg = '⚠️ '+opts.pendingDev+' device(s) are still NOT installed.\n\nClosing now will finish the task with those devices uninstalled. Are you sure you want to close anyway?';
+  }
+  if(!confirm(msg)) return;
   const res = await api('approve_task',{},'POST',{id:taskId}).catch(()=>({}));
   if(res.success){
     closeTaskDetail();
