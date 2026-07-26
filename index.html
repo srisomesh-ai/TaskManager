@@ -7877,7 +7877,7 @@ let _snUsers = [];
 async function loadStaffNotesPage(){
   const res = await api('get_users',{role:'all'}).catch(()=>({}));
   _snUsers = (res.users||[]).filter(u=>u.is_active==1 || u.is_active===true || u.is_active==='1');
-  const opts = '<option value="">Select staff…</option>' + _snUsers.map(u=>'<option value="'+u.id+'">'+escHtml(u.name)+' ('+escHtml(u.role)+')</option>').join('');
+  const opts = '<option value="">Select staff…</option><option value="__ALL__">⭐ All Staff (send to everyone)</option>' + _snUsers.map(u=>'<option value="'+u.id+'">'+escHtml(u.name)+' ('+escHtml(u.role)+')</option>').join('');
   const sel = document.getElementById('sn-user'); if(sel) sel.innerHTML = opts;
   const fsel = document.getElementById('sn-filter-user'); if(fsel) fsel.innerHTML = '<option value="">Select staff to view…</option>' + _snUsers.map(u=>'<option value="'+u.id+'">'+escHtml(u.name)+'</option>').join('');
 }
@@ -8235,6 +8235,29 @@ async function submitStaffNote(){
   if(!bodyTxt){ showToast('\u26A0\uFE0F Write the note'); return; }
   const btn = document.querySelector('#page-staff-notes button[onclick="submitStaffNote()"]');
   const msg = document.getElementById('sn-msg');
+
+  // ── ALL STAFF: post the same note to every active staff member ──
+  if(uid === '__ALL__'){
+    const targets = (_snUsers||[]).filter(function(u){ return u.id; });
+    if(!targets.length){ showToast('⚠️ No staff found'); return; }
+    if(!confirm('Send this note to ALL '+targets.length+' staff members? Each will receive it and see it saved in their app.')) return;
+    if(btn){ btn.disabled=true; }
+    let ok=0, fail=0;
+    for(let i=0;i<targets.length;i++){
+      if(btn) btn.textContent='Sending '+(i+1)+'/'+targets.length+'…';
+      const r = await api('add_tech_note',{},'POST',{user_id:parseInt(targets[i].id),note_type:type,title:title,body:bodyTxt}).catch(()=>({}));
+      if(r && r.success) ok++; else fail++;
+    }
+    if(msg){ msg.style.display='block'; msg.style.color=fail?'#c0392b':'#1a7a3a'; msg.textContent='✅ Sent to '+ok+' staff'+(fail?(' · '+fail+' failed'):'')+'.'; setTimeout(function(){ if(msg) msg.style.display='none'; }, 5000); }
+    showToast('✅ Note sent to '+ok+' staff');
+    document.getElementById('sn-title').value='';
+    document.getElementById('sn-body').value='';
+    document.getElementById('sn-type').value='general';
+    document.getElementById('sn-user').value='';
+    if(btn){ btn.disabled=false; btn.textContent='📤 Post Note'; }
+    return;
+  }
+
   if(btn){ btn.disabled=true; btn.textContent='Posting…'; }
   const res = await api('add_tech_note',{},'POST',{user_id:parseInt(uid),note_type:type,title:title,body:bodyTxt}).catch(()=>({}));
   if(res && res.success){
