@@ -3116,10 +3116,11 @@ async function pushTaskReminder(id, taskId){
 
 // ── Export CSV ────────────────────────────────────────────────────────────
 function exportTasksCSV(){
-  const headers = ['#','Task ID','Customer','Contact','Location','Job Type','Tech','Price','Collected','Status','Created'];
+  const headers = ['#','Task ID','Customer','Contact','Location','Job Type','Lead Type','Profile','Tech','Assigned By','Price','Collected','Status','Created'];
   const rows = filteredTasks.map((t,i)=>[
     i+1, t.task_id, t.customer_name, t.contact_number, t.location||'',
-    t.device_details||'', t.tech_name||t.technician_name||'',
+    t.device_details||'', t.lead_type||'', t.profile||'BGPT',
+    t.tech_name||t.technician_name||'', t.creator_name||'',
     t.price_to_collect||0, t.amount_collected||0, t.task_status,
     (t.created_at||'').slice(0,10)
   ]);
