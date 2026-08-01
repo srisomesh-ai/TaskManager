@@ -1576,6 +1576,14 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
           <!-- ACTIVITY LOG (remarks history) -->
           <div style="padding:16px 20px;background:var(--surface)" id="td-activity-section">
             <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:12px">🕐 Activity Log</div>
+            <!-- Office → technician comment box -->
+            <div id="td-comment-box" style="display:none;margin-bottom:14px">
+              <div style="display:flex;gap:8px;align-items:flex-start">
+                <textarea id="td-comment-input" rows="2" placeholder="Message the technician… (they get a push + it is logged here)" style="flex:1;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;resize:vertical;outline:none;font-family:inherit"></textarea>
+                <button class="ts-btn" style="background:var(--accent2);color:#fff;font-weight:700;white-space:nowrap;align-self:stretch" onclick="postTaskComment()">💬 Send</button>
+              </div>
+              <div id="td-comment-msg" style="display:none;font-size:12px;font-weight:700;margin-top:6px"></div>
+            </div>
             <div id="td-activity"></div>
           </div>
 
@@ -2573,6 +2581,28 @@ function enableEditMode(){
 }
 
 
+
+// ── Office posts a comment/message to the technician on a task ──
+async function postTaskComment(){
+  const cb = document.getElementById('td-comment-box');
+  const taskId = cb ? cb.dataset.taskId : (_detailTask && _detailTask.id);
+  const inp = document.getElementById('td-comment-input');
+  const msg = document.getElementById('td-comment-msg');
+  const txt = (inp?.value||'').trim();
+  if(!taskId){ return; }
+  if(!txt){ if(inp) inp.focus(); return; }
+  const show=(t,ok)=>{ if(!msg)return; msg.style.display='block'; msg.textContent=t; msg.style.color=ok?'var(--green)':'var(--red)'; };
+  const res = await api('add_task_comment',{},'POST',{id:parseInt(taskId), comment:txt}).catch(()=>({}));
+  if(res && res.success){
+    if(inp) inp.value='';
+    show('✅ Sent to the technician', true);
+    setTimeout(function(){ if(msg) msg.style.display='none'; }, 3000);
+    // Refresh the task so the new comment shows immediately in the activity log
+    try { if(typeof viewTask==='function'){ viewTask(taskId); } } catch(e){}
+  } else {
+    show('❌ '+((res&&res.error)||'Could not send'), false);
+  }
+}
 
 // ── Render Activity Log ───────────────────────────────────────────────────
 function renderActivityLog(activities){
@@ -4290,6 +4320,19 @@ function openTaskDetail(id){ viewTask(id); }async function viewTask(id){
   }
 
   const isAdmin    = ['admin','assigner'].includes(currentUser?.role);
+  // Office → technician comment box: show for admin/manager on active tasks that have a technician.
+  try {
+    const cb = document.getElementById('td-comment-box');
+    if(cb){
+      const canComment = (['admin','assigner','manager'].includes(currentUser?.role))
+                         && !!t.assigned_to
+                         && !['Closed','Cancelled'].includes(t.task_status);
+      cb.style.display = canComment ? 'block' : 'none';
+      const ci=document.getElementById('td-comment-input'); if(ci) ci.value='';
+      const cm=document.getElementById('td-comment-msg'); if(cm) cm.style.display='none';
+      cb.dataset.taskId = id;
+    }
+  } catch(e){}
   const isTech     = currentUser?.role === 'technician';
   const isAssigned = String(t.assigned_to) === String(currentUser?.id);
   const isLocked   = ['Awaiting Approval','Closed','Cancelled'].includes(t.task_status);
