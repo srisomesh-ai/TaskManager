@@ -314,8 +314,18 @@ function task_is_zero_value($pdo, $taskId){
         return floatval($s->fetchColumn()) <= 0;
     } catch(Exception $e){ return false; }
 }
-// Router: paid task -> coins (real money). Zero-value task -> appreciations (no money).
+// Is this task a Handover? Handover = device given to customer to self-install; NO reward at all.
+function task_is_handover($pdo, $taskId){
+    try {
+        $s=$pdo->prepare("SELECT lead_type FROM tasks WHERE id=?");
+        $s->execute([$taskId]);
+        return strcasecmp(trim((string)$s->fetchColumn()), 'Handover') === 0;
+    } catch(Exception $e){ return false; }
+}
+// Router: paid task -> coins (real money). Zero-value task -> appreciations. Handover -> nothing.
 function award_task_reward($pdo, $userId, $coins, $reason, $taskId = null, $eventKey = null, $pushTitle = null, $pushBody = null){
+    // Handover tasks never award coins or appreciations to anyone (no visit, self-installed).
+    if ($taskId && task_is_handover($pdo, $taskId)) { return false; }
     if ($taskId && task_is_zero_value($pdo, $taskId)) {
         $pts = $coins > 0 ? 1 : ($coins < 0 ? -1 : 0);
         if ($pts === 0) { return award_coins($pdo,$userId,0,$reason,$taskId,$eventKey,$pushTitle,$pushBody); } // warnings stay as-is
