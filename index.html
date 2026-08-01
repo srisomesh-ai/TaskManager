@@ -4853,6 +4853,7 @@ async function viewTaskInEditDrawer(id){
   handleTechChange();
 
   _setDrawerMode('edit', isAdmin);
+  checkTaskFormReady();   // enable Save Changes now that the existing task data is loaded
   document.getElementById('task-modal').classList.add('open');
 }
 
@@ -6665,7 +6666,13 @@ function checkTaskFormReady(){
     discOk = !!(discReason && discApprover);
   }
 
-  const ready = !!(customer && contact && job && payMode && discOk && (window._discBudgetOk !== false));
+  // In EDIT mode an existing task is already valid — only require the essentials (customer + contact)
+  // so a legitimate edit (e.g. changing lead type to Handover) is never blocked by a transiently
+  // empty job/payment field.
+  const _editMode = !!(window._drawerMode && window._drawerMode !== 'create');
+  const ready = _editMode
+    ? !!(customer && contact && discOk && (window._discBudgetOk !== false))
+    : !!(customer && contact && job && payMode && discOk && (window._discBudgetOk !== false));
   const btn   = document.getElementById('task-save-btn');
   if(btn){
     btn.disabled    = !ready;
