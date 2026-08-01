@@ -1870,6 +1870,36 @@ case 'approve_task':
     break;
 
 // ---- REJECT TASK ----
+// ── ADMIN/MANAGER: post a comment/message to the technician on a task ──
+// Logs in the activity log AND pushes the assigned technician so they see it.
+case 'add_task_comment':
+    if (!in_array($userRole,['admin','assigner','manager'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    $id  = intval($body['id'] ?? $body['task_id'] ?? 0);
+    $txt = trim($body['comment'] ?? $body['message'] ?? '');
+    if (!$id)  { echo json_encode(['error'=>'Missing task id']); break; }
+    if ($txt === '') { echo json_encode(['error'=>'Write a message']); break; }
+    try {
+        $who = $cu['name'] ?? 'Office';
+        // Log to the activity log (shows in the task view for both office and technician)
+        $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'remark')")
+            ->execute([$id,$userId,'💬 '.$who.': '.$txt]);
+        // Push the assigned technician
+        $tq=$pdo->prepare("SELECT task_id, assigned_to FROM tasks WHERE id=?"); $tq->execute([$id]); $tr=$tq->fetch(PDO::FETCH_ASSOC);
+        if ($tr && !empty($tr['assigned_to'])) {
+            try {
+                require_once __DIR__.'/fcm_send.php';
+                if (function_exists('fcm_send_to_user')) {
+                    fcm_send_to_user($pdo, intval($tr['assigned_to']),
+                        '💬 Message from '.$who,
+                        $txt.' (Task '.($tr['task_id']??'').')',
+                        ['type'=>'tech_note','task_id'=>(string)$id,'url'=>'task.html?id='.$id]);
+                }
+            } catch(Exception $e){}
+        }
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'reject_task':
     $id=intval($body['id']??0);
     if(!$id){ echo json_encode(['error'=>'Missing id']); break; }
