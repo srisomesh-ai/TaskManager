@@ -1529,6 +1529,16 @@ case 'update_task':
                 payment_mode=?, total_price=?, updated_at=NOW()
                 WHERE id=?")
                 ->execute([$recv3, $pend3, $ps3, $pmode3, $total3, $bsRow['bs_entry_id']]);
+            // If the technician was reassigned, update the balance-sheet technician name/id too.
+            if (array_key_exists('assigned_to', $body)) {
+                try {
+                    $newTechId = intval($body['assigned_to']) ?: null;
+                    $newTechName = null;
+                    if ($newTechId) { $tnq=$pdo->prepare("SELECT name FROM users WHERE id=?"); $tnq->execute([$newTechId]); $newTechName=$tnq->fetchColumn() ?: null; }
+                    $pdo->prepare("UPDATE balance_sheet_entries SET technician_name=?, technician_id=? WHERE id=?")
+                        ->execute([$newTechName, $newTechId, $bsRow['bs_entry_id']]);
+                } catch(Exception $e){ error_log('BS tech sync: '.$e->getMessage()); }
+            }
             }
         }
     } catch(Exception $bsSync) {
