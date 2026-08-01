@@ -4376,11 +4376,22 @@ function openTaskDetail(id){ viewTask(id); }async function viewTask(id){
 
 
   // ── TASK INFO GRID ─────────────────────────────────────
+  // Customer type — new vs existing, derived from the lead type
+  const _lt = (t.lead_type||'').toString();
+  let custType = 'New Customer';
+  if(/existing/i.test(_lt)) custType = 'Existing Customer';
+  else if(/handover/i.test(_lt)) custType = 'Handover';
+  else if(/3rd|third/i.test(_lt)) custType = '3rd Party';
+  // Lead type label — never blank; fall back sensibly
+  const leadLabel = _lt.trim() ? _lt : 'New Lead';
+
   const infoItems = [
     ['👤 Assigned To',    t.tech_name || t.technician_name || '<span style="color:var(--text3)">Unassigned</span>'],
+    ['🧑‍💼 Assigned By',   t.creator_name || '<span style="color:var(--text3)">–</span>'],
     ['🔧 Job Type',       t.device_details || '–'],
     ['📍 Location',       t.location || '–'],
-    ['📊 Lead Type',      t.lead_type || '–'],
+    ['📊 Lead Type',      leadLabel],
+    ['🧾 Customer',       custType],
     ['🏢 Profile',        t.profile || 'BGPT'],
     ['📅 Created',        (t.created_at||'').slice(0,10) || '–'],
     ['⏰ Reminder',       t.reminder_date || '–'],
