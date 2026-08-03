@@ -3219,16 +3219,22 @@ case 'bs_from_task':
 case 'bs_resync_all':
     if ($userRole !== 'admin') { http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
     try {
-        // Get all BS entries that are linked to a task
-        $rows = $pdo->query("SELECT b.id, b.task_db_id, t.price_to_collect, t.amount_collected, t.payment_mode, t.task_status, t.device_details
+        // FIRST: create any MISSING entries for tasks that have installed devices but no BS entry yet.
+        $created = 0;
+        try { $syncRes = _bsSyncInstalls($pdo, $cu['name'] ?? 'system'); $created = intval($syncRes['created'] ?? 0); } catch(Exception $e){ error_log('resync create: '.$e->getMessage()); }
+        // THEN: refresh payment figures on all task-linked entries.
+        $rows = $pdo->query("SELECT b.id, b.task_db_id, t.price_to_collect, t.amount_collected, t.payment_mode, t.task_status, t.device_details, t.cash_deposit_status
             FROM balance_sheet_entries b
             JOIN tasks t ON b.task_db_id = t.id
             WHERE b.task_db_id IS NOT NULL")->fetchAll();
         $count = 0;
         foreach ($rows as $r) {
             $total = floatval($r['price_to_collect']??0);
-            // Received only confirmed when task is Closed
-            $recv  = ($r['task_status']==='Closed') ? floatval($r['amount_collected']??0) : 0;
+            // Cash counts as received only once deposited & confirmed; otherwise it is still pending.
+            $isCash = strtolower((string)($r['payment_mode']??''))==='cash';
+            $recv = floatval($r['amount_collected']??0);
+            if ($isCash && ($r['cash_deposit_status']??'') !== 'deposited') { $recv = 0; }
+            if ($recv > $total) $recv = $total;
             $pend  = max(0, $total - $recv);
             if ($total <= 0 || $recv <= 0)  $ps = 'pending';
             elseif ($recv >= $total - 15)   $ps = 'paid';
@@ -3241,7 +3247,7 @@ case 'bs_resync_all':
                 ->execute([$recv, $pend, $ps, $r['payment_mode'], $total, $bsType, $r['id']]);
             $count++;
         }
-        echo json_encode(['success'=>true, 'updated'=>$count]);
+        echo json_encode(['success'=>true, 'updated'=>$count, 'created'=>$created]);
     } catch(Exception $e) {
         echo json_encode(['error'=>$e->getMessage()]);
     }
