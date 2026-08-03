@@ -118,6 +118,7 @@ tr:hover td{background:#f7f9fc}
   <button class="bs-tab active" id="bstab-records"  onclick="bsTab('records')">📊 Records</button>
   <button class="bs-tab"        id="bstab-sales"    onclick="bsTab('sales')">➕ Sales Entry</button>
   <button class="bs-tab"        id="bstab-license"  onclick="bsTab('license')">🔄 License / Service</button>
+  <button class="bs-tab" onclick="resyncAll()" title="Rebuild any missing entries from installed tasks" style="color:var(--accent2);font-weight:700">🔁 Resync from Tasks</button>
   <div style="margin-left:auto;display:flex;align-items:center;padding:0 12px">
     <select class="bs-profile-sel" id="bs-profile" onchange="window._bsLoadAll=false;loadEntries()"
       style="padding:5px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-weight:700;color:var(--text);background:#fff;outline:none;cursor:pointer">
@@ -901,7 +902,7 @@ async function resyncAll(){
   if(!confirm('This will sync all payment data from Task Manager into Balance Sheet. Continue?')) return;
   const res = await bsApi('bs_resync_all',{},'POST',{}).catch(()=>({}));
   if(res.success){
-    toast('✅ Synced '+res.updated+' entries from Task Manager');
+    toast('✅ Synced — '+(res.created||0)+' new entries created, '+res.updated+' updated');
     loadEntries();
   } else {
     toast('❌ '+(res.error||'Sync failed'));
