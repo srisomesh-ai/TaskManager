@@ -1135,7 +1135,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
             <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px">Device file (CSV or Excel)</label>
             <input type="file" id="bulk-file" accept=".csv,.xlsx,.xls" class="form-input" style="width:100%;margin:5px 0 8px" onchange="bulkPreview()">
             <div style="font-size:11px;color:var(--text3);margin-bottom:12px;line-height:1.6">
-              Required columns: <b>name</b>, <b>imei</b>. Optional: <b>plate_number</b>, <b>registration_number</b>, <b>object_owner</b>, <b>model</b>, <b>vin</b>.
+              Required columns: <b>name</b>, <b>imei</b>. Optional: <b>sim_number</b>, <b>plate_number</b>, <b>registration_number</b>, <b>object_owner</b>, <b>model</b>, <b>vin</b>.
               <a href="#" onclick="bulkTemplate();return false;" style="color:var(--accent);font-weight:700;text-decoration:none">⬇ Download template</a>
             </div>
             <div id="bulk-preview" style="display:none;margin-bottom:12px"></div>
@@ -8093,7 +8093,7 @@ function _bulkMsg(txt, ok){
   m.style.background=ok?'var(--green-bg)':'var(--red-bg)'; m.style.color=ok?'var(--green)':'var(--red)';
 }
 function bulkTemplate(){
-  const csv='name,imei,plate_number,registration_number,object_owner,model,vin\nMy Vehicle,123456789012345,TG09B9966,REG12345,Owner Name,GT06,\n';
+  const csv='name,imei,sim_number,plate_number,registration_number,object_owner,model,vin\nMy Vehicle,123456789012345,9876543210,TG09B9966,REG12345,Owner Name,GT06,\n';
   const blob=new Blob([csv],{type:'text/csv'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='bulk_devices_template.csv'; a.click();
 }
@@ -8129,8 +8129,8 @@ async function bulkPreview(){
   _bulkMsg('✅ '+_bulkRows.length+' device(s) ready to upload.',true);
   prev.style.display='';
   prev.innerHTML='<div style="font-size:12px;color:var(--text2);max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:8px">'
-    + '<table style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr style="background:var(--surface2)"><th style="padding:5px 8px;text-align:left">#</th><th style="padding:5px 8px;text-align:left">Name</th><th style="padding:5px 8px;text-align:left">IMEI</th><th style="padding:5px 8px;text-align:left">Plate</th></tr></thead><tbody>'
-    + _bulkRows.map((r,i)=>'<tr style="border-top:1px solid var(--border)"><td style="padding:4px 8px">'+(i+1)+'</td><td style="padding:4px 8px">'+escHtml(r.name)+'</td><td style="padding:4px 8px">'+escHtml(r.imei)+'</td><td style="padding:4px 8px">'+escHtml(r.plate_number||r.plate||'')+'</td></tr>').join('')
+    + '<table style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr style="background:var(--surface2)"><th style="padding:5px 8px;text-align:left">#</th><th style="padding:5px 8px;text-align:left">Name</th><th style="padding:5px 8px;text-align:left">IMEI</th><th style="padding:5px 8px;text-align:left">SIM</th><th style="padding:5px 8px;text-align:left">Plate</th></tr></thead><tbody>'
+    + _bulkRows.map((r,i)=>'<tr style="border-top:1px solid var(--border)"><td style="padding:4px 8px">'+(i+1)+'</td><td style="padding:4px 8px">'+escHtml(r.name)+'</td><td style="padding:4px 8px">'+escHtml(r.imei)+'</td><td style="padding:4px 8px">'+escHtml(r.sim_number||r.sim||'')+'</td><td style="padding:4px 8px">'+escHtml(r.plate_number||r.plate||'')+'</td></tr>').join('')
     + '</tbody></table></div>';
   go.style.display='';
 }
@@ -8148,6 +8148,7 @@ async function bulkUpload(){
     fd.append('server_id', server);
     fd.append('name', r.name||'');
     fd.append('imei', r.imei||'');
+    fd.append('sim_number', r.sim_number||r.sim||r.sim_no||'');
     fd.append('plate_number', r.plate_number||r.plate||'');
     fd.append('registration_number', r.registration_number||r.registration||'');
     fd.append('object_owner', r.object_owner||r.owner||'');
