@@ -287,6 +287,7 @@ if($action === 'add_device'){
         'registration_number' => $reg,
         'object_owner'        => $owner,
         'device_model'        => trim($_POST['model'] ?? ''),
+        'sim_number'          => trim($_POST['sim_number'] ?? $_POST['sim'] ?? ''),
         'fuel_measurement_id' => 1,
         'tail_length'         => 10,
         'min_moving_speed'    => 3,
