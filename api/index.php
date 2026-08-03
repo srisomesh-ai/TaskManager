@@ -1532,11 +1532,13 @@ case 'update_task':
             // If the technician was reassigned, update the balance-sheet technician name/id too.
             if (array_key_exists('assigned_to', $body)) {
                 try {
+                    try { $pdo->exec("ALTER TABLE balance_sheet_entries ADD COLUMN technician_id INT DEFAULT NULL"); } catch(Exception $e){}
                     $newTechId = intval($body['assigned_to']) ?: null;
                     $newTechName = null;
                     if ($newTechId) { $tnq=$pdo->prepare("SELECT name FROM users WHERE id=?"); $tnq->execute([$newTechId]); $newTechName=$tnq->fetchColumn() ?: null; }
-                    $pdo->prepare("UPDATE balance_sheet_entries SET technician_name=?, technician_id=? WHERE id=?")
-                        ->execute([$newTechName, $newTechId, $bsRow['bs_entry_id']]);
+                    // Update name first (always exists); id separately so a missing column can't block the name.
+                    try { $pdo->prepare("UPDATE balance_sheet_entries SET technician_name=? WHERE id=?")->execute([$newTechName, $bsRow['bs_entry_id']]); } catch(Exception $e){}
+                    try { $pdo->prepare("UPDATE balance_sheet_entries SET technician_id=? WHERE id=?")->execute([$newTechId, $bsRow['bs_entry_id']]); } catch(Exception $e){}
                 } catch(Exception $e){ error_log('BS tech sync: '.$e->getMessage()); }
             }
             }
