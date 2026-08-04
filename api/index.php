@@ -3224,6 +3224,49 @@ case 'bs_from_task':
     break;
 
 // ── BS RESYNC ALL — fix existing entries from task data ──────
+// ── DIAGNOSE why a task is / isn't in the balance sheet ──
+case 'bs_task_diagnose':
+    if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        $q = trim($_GET['task'] ?? $body['task'] ?? '');
+        if ($q==='') { echo json_encode(['error'=>'Pass ?task=<task number or id>']); break; }
+        // Find by task_id string first, then by numeric id
+        $tt=$pdo->prepare("SELECT * FROM tasks WHERE task_id=? OR id=? LIMIT 1");
+        $tt->execute([$q, intval($q)]);
+        $t=$tt->fetch(PDO::FETCH_ASSOC);
+        if (!$t) { echo json_encode(['error'=>'Task not found for "'.$q.'"']); break; }
+        $tid = intval($t['id']);
+        // Installs with serials
+        $di=$pdo->prepare("SELECT device_index,gps_serial_no,name_on_server,server_name FROM task_device_installs WHERE task_id=?");
+        $di->execute([$tid]); $installs=$di->fetchAll(PDO::FETCH_ASSOC);
+        $withSerial = array_filter($installs, function($x){ return !empty($x['gps_serial_no']); });
+        // BS entry?
+        $be=$pdo->prepare("SELECT id,total_price,payment_status,payment_received,pending_payment FROM balance_sheet_entries WHERE task_db_id=?");
+        $be->execute([$tid]); $bs=$be->fetchAll(PDO::FETCH_ASSOC);
+        $lead = strtolower(trim((string)($t['lead_type']??'')));
+        $price= floatval($t['price_to_collect']??0);
+        $isFree = ($price<=0) || in_array($lead,['troubleshoot','demo']);
+        // Work out the verdict
+        $reasons=[];
+        if ($isFree) $reasons[]='Task is FREE/zero-value (price '.$price.', lead "'.$t['lead_type'].'") → excluded from balance sheet by design.';
+        if (count($withSerial)<1) $reasons[]='No installed device with a GPS serial number recorded → balance sheet entry is only created once a device is installed with a serial.';
+        if (!empty($bs)) $reasons[]='A balance-sheet entry DOES exist (id '.$bs[0]['id'].', total '.$bs[0]['total_price'].', status '.$bs[0]['payment_status'].') — it may be hidden by the current filter/date/profile on the page.';
+        if (empty($reasons)) $reasons[]='Task qualifies but has no entry — click Resync from Tasks to create it.';
+        echo json_encode(['success'=>true,'diagnosis'=>[
+            'task_id'=>$t['task_id'],'db_id'=>$tid,'status'=>$t['task_status'],
+            'lead_type'=>$t['lead_type'],'profile'=>$t['profile'],
+            'price_to_collect'=>$price,'amount_collected'=>$t['amount_collected'],
+            'payment_mode'=>$t['payment_mode'],'cash_deposit_status'=>$t['cash_deposit_status'],
+            'device_qty'=>$t['device_qty'],'installs_total'=>count($installs),
+            'installs_with_serial'=>count($withSerial),
+            'is_free_excluded'=>$isFree,
+            'bs_entry_exists'=>!empty($bs),
+            'bs_entry'=>$bs[0]??null,
+            'why'=>$reasons,
+        ]]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'bs_resync_all':
     if ($userRole !== 'admin') { http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
     try {
