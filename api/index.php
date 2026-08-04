@@ -682,6 +682,9 @@ function _bsSyncInstalls($pdo, $cuName){
         $di->execute([$tid]); $installs = $di->fetchAll();
         $installedCount = count($installs);
         if ($installedCount < 1) continue;
+        // Free services (zero price or Troubleshoot/Demo) never belong in the balance sheet.
+        $syncLead = strtolower(trim((string)($t2['lead_type'] ?? '')));
+        if (floatval($t2['price_to_collect'] ?? 0) <= 0 || in_array($syncLead, ['troubleshoot','demo'])) continue;
         $allSerials = implode(', ', array_filter(array_column($installs,'gps_serial_no')));
         $allNames   = implode(', ', array_filter(array_column($installs,'name_on_server')));
         $serverName = $installs[0]['server_name'] ?? $t2['server_name'] ?? null;
@@ -2626,7 +2629,12 @@ case 'save_device_install':
                 $t2['device_qty'] = $installedCount;
             }
 
-            if ($installedCount >= 1) {
+            // Free services (Troubleshoot / Demo / any zero-price task) must NOT appear in the
+            // balance sheet — there is no money to track. Skip BS creation for them.
+            $bsLead  = strtolower(trim((string)($t2['lead_type'] ?? '')));
+            $bsPrice = floatval($t2['price_to_collect'] ?? 0);
+            $bsIsFree = ($bsPrice <= 0) || in_array($bsLead, ['troubleshoot','demo']);
+            if ($installedCount >= 1 && !$bsIsFree) {
                 // Collect installed devices' serials/names for the entry
                 $diRows = $pdo->prepare("SELECT gps_serial_no, name_on_server, server_name FROM task_device_installs WHERE task_id=? AND gps_serial_no IS NOT NULL AND gps_serial_no != '' ORDER BY device_index ASC");
                 $diRows->execute([$tid]);
