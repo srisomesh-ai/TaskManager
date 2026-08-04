@@ -200,11 +200,13 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:#1a1f2e;min-heig
 .form-group label{display:block;font-size:11px;font-weight:700;color:#4a5568;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
 .form-group input{width:100%;padding:11px 13px;border:1.5px solid #d0d5dd;border-radius:8px;font-size:14px;outline:none;transition:border .2s;font-family:inherit}
 .form-group input:focus{border-color:#0E5C5C}
-.chk-item{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border:1.5px solid #e2e8f0;border-radius:8px;margin-bottom:10px;cursor:pointer;transition:all .15s}
+.chk-item{display:flex;align-items:flex-start;gap:12px;padding:14px;border:1.5px solid #e2e8f0;border-radius:8px;margin-bottom:10px;cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:rgba(14,92,92,.15)}
 .chk-item:hover{border-color:#0E5C5C;background:#f0f7f7}
-.chk-item input[type=checkbox]{width:20px;height:20px;flex-shrink:0;margin-top:1px;accent-color:#0E5C5C;cursor:pointer}
-.chk-item label{font-size:13px;color:#1a1f2e;line-height:1.5;cursor:pointer;font-weight:500}
-.chk-item label strong{color:#0E5C5C}
+.chk-item:active{background:#e6f2f2}
+.chk-item.checked{border-color:#0E5C5C;background:#f0f7f7}
+.chk-item input[type=checkbox]{width:24px;height:24px;flex-shrink:0;margin-top:0;accent-color:#0E5C5C;cursor:pointer;pointer-events:none}
+.chk-item span.chk-txt{font-size:13px;color:#1a1f2e;line-height:1.5;cursor:pointer;font-weight:500}
+.chk-item span.chk-txt strong{color:#0E5C5C}
 .btn-submit{width:100%;padding:15px;background:linear-gradient(135deg,#0E5C5C,#137272);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:800;cursor:pointer;letter-spacing:.3px;box-shadow:0 4px 12px rgba(14,92,92,.3)}
 .btn-submit:disabled{background:#718096;cursor:not-allowed;box-shadow:none}
 .error-box{background:#fdecea;border:1.5px solid #c0392b;border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:#c0392b;font-weight:600}
@@ -393,40 +395,40 @@ echo $subtitles[$consentType] ?? 'Service Consent & Payment Confirmation';
         <label>Your Mobile Number *</label>
         <input type="tel" name="c_mobile" id="c_mobile" value="<?=$mobile?>" placeholder="Mobile number" required>
       </div>
-      <div class="chk-item" onclick="this.querySelector('input').click()">
+      <label class="chk-item">
         <input type="checkbox" name="chk_terms" id="chk_terms">
-        <label for="chk_terms">I have <strong>read and understood</strong> all the Terms &amp; Conditions above, including Warranty Policy, Installation terms, Refund Policy, and Payment Recovery Rights.</label>
-      </div>
+        <span class="chk-txt">I have <strong>read and understood</strong> all the Terms &amp; Conditions above, including Warranty Policy, Installation terms, Refund Policy, and Payment Recovery Rights.</span>
+      </label>
       <?php if($consentType==='troubleshoot'): ?>
-      <div class="chk-item" onclick="this.querySelector('input').click()">
+      <label class="chk-item">
         <input type="checkbox" name="chk_pay" id="chk_pay">
-        <label for="chk_pay">I confirm my <strong>vehicle will be available and accessible</strong> when the technician arrives. I understand that if the vehicle is unavailable, a <strong>₹300 visit charge</strong> will apply.</label>
-      </div>
+        <span class="chk-txt">I confirm my <strong>vehicle will be available and accessible</strong> when the technician arrives. I understand that if the vehicle is unavailable, a <strong>₹300 visit charge</strong> will apply.</span>
+      </label>
       <?php elseif($consentType==='v2v'): ?>
-      <div class="chk-item" onclick="this.querySelector('input').click()">
+      <label class="chk-item">
         <input type="checkbox" name="chk_pay" id="chk_pay">
-        <label for="chk_pay">I confirm <strong>both vehicles will be available</strong> and I will pay <strong>₹<?=$price?></strong><?php if($payMode): ?> via <strong><?=$payMode?></strong><?php endif; ?> to the technician.</label>
-      </div>
+        <span class="chk-txt">I confirm <strong>both vehicles will be available</strong> and I will pay <strong>₹<?=$price?></strong><?php if($payMode): ?> via <strong><?=$payMode?></strong><?php endif; ?> to the technician.</span>
+      </label>
       <?php elseif($consentType==='readding'): ?>
-      <div class="chk-item" onclick="this.querySelector('input').click()">
+      <label class="chk-item">
         <input type="checkbox" name="chk_pay" id="chk_pay">
-        <label for="chk_pay">I confirm my <strong>vehicle will be available and running</strong> and I will pay <strong>₹<?=$price?></strong><?php if($payMode): ?> via <strong><?=$payMode?></strong><?php endif; ?> to the technician.</label>
-      </div>
+        <span class="chk-txt">I confirm my <strong>vehicle will be available and running</strong> and I will pay <strong>₹<?=$price?></strong><?php if($payMode): ?> via <strong><?=$payMode?></strong><?php endif; ?> to the technician.</span>
+      </label>
       <?php elseif($consentType==='remove'): ?>
-      <div class="chk-item" onclick="this.querySelector('input').click()">
+      <label class="chk-item">
         <input type="checkbox" name="chk_pay" id="chk_pay">
-        <label for="chk_pay">I confirm my <strong>vehicle will be available</strong> for GPS removal and I understand this is <strong>permanent</strong> — the device will be taken back.</label>
-      </div>
+        <span class="chk-txt">I confirm my <strong>vehicle will be available</strong> for GPS removal and I understand this is <strong>permanent</strong> — the device will be taken back.</span>
+      </label>
       <?php elseif($consentType==='demo'): ?>
-      <div class="chk-item" onclick="this.querySelector('input').click()">
+      <label class="chk-item">
         <input type="checkbox" name="chk_pay" id="chk_pay">
-        <label for="chk_pay">I confirm I will be <strong>available at the location</strong> for the demonstration. I understand <strong>no GPS will be installed</strong> during this visit.</label>
-      </div>
+        <span class="chk-txt">I confirm I will be <strong>available at the location</strong> for the demonstration. I understand <strong>no GPS will be installed</strong> during this visit.</span>
+      </label>
       <?php else: ?>
-      <div class="chk-item" onclick="this.querySelector('input').click()">
+      <label class="chk-item">
         <input type="checkbox" name="chk_pay" id="chk_pay">
-        <label for="chk_pay">I confirm that I will pay <strong>₹<?=$price?></strong><?php if($payMode): ?> via <strong><?=$payMode?></strong><?php endif; ?> <strong>immediately after installation</strong>.</label>
-      </div>
+        <span class="chk-txt">I confirm that I will pay <strong>₹<?=$price?></strong><?php if($payMode): ?> via <strong><?=$payMode?></strong><?php endif; ?> <strong>immediately after installation</strong>.</span>
+      </label>
       <?php endif; ?>
       <button type="button" id="consent-btn" class="btn-submit" onclick="submitConsent()">
         <?php
@@ -456,22 +458,33 @@ echo $subtitles[$consentType] ?? 'Service Consent & Payment Confirmation';
 </div>
 
 <script>
+// Reflect checked state on the row (visual) — checkbox has pointer-events:none so the label drives it.
+document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('.chk-item input[type=checkbox]').forEach(function(cb){
+    var row = cb.closest('.chk-item');
+    var sync = function(){ if(row) row.classList.toggle('checked', cb.checked); };
+    cb.addEventListener('change', sync);
+    sync();
+  });
+});
 function submitConsent(){
   var name   = document.getElementById('c_name').value.trim();
   var mobile = document.getElementById('c_mobile').value.trim();
-  var terms  = document.getElementById('chk_terms').checked;
-  var pay    = document.getElementById('chk_pay').checked;
+  var termsEl = document.getElementById('chk_terms');
+  var payEl   = document.getElementById('chk_pay');
+  var terms  = termsEl ? termsEl.checked : true;
+  var pay    = payEl ? payEl.checked : true;
 
   if(!name || !mobile){
     alert('Please enter your name and mobile number.');
     return;
   }
   if(!terms){
-    alert('Please read and accept the Terms & Conditions.');
+    alert('Please tap to accept the Terms & Conditions.');
     return;
   }
   if(!pay){
-    alert('Please confirm your payment commitment.');
+    alert('Please tap to confirm your agreement.');
     return;
   }
 
