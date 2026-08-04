@@ -134,7 +134,7 @@ tr:hover td{background:#f7f9fc}
   <div id="bs-cash-pending"></div>
   <div class="bs-toolbar">
     <div class="bs-tb-grp"><span class="bs-tb-lbl">Search</span>
-      <input class="bs-tb-in" id="bs-search" placeholder="Name, task, serial…" oninput="renderTable()" style="min-width:160px">
+      <input class="bs-tb-in" id="bs-search" placeholder="Search anything — name, task, serial, model, amount…" oninput="renderTable()" style="min-width:160px">
     </div>
     <div class="bs-tb-grp"><span class="bs-tb-lbl">Month</span>
       <select class="bs-tb-sel" id="bs-month" onchange="bsMonthChange()">
@@ -599,7 +599,9 @@ function getFiltered(){
     else if(from && !to && e.date<from) return false;
     else if(!from && to && e.date>to) return false;
     if(search){
-      const hay=[e.name_on_server,e.task_id,e.task_no,e.gps_serial_no,e.invoice_no,e.technician_name,e.location].join(' ').toLowerCase();
+      // Search across EVERY field of the entry so any key works (model, profile, customer,
+      // payment mode, remarks, amounts, dates, etc), not just a fixed few.
+      const hay = Object.values(e).map(function(v){ return (v===null||v===undefined)?'':String(v); }).join(' ').toLowerCase();
       if(!hay.includes(search)) return false;
     }
     return true;
