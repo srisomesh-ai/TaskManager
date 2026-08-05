@@ -1336,6 +1336,15 @@
       _lock('ivtype');   // vehicle type stays with the device
       // iname (Name on Server) and iplate (Plate) are intentionally left EDITABLE.
     } else {
+      // NEW device install: the installation date is the actual date it is being added today.
+      // Auto-set to today and LOCK it so it cannot be back/forward-dated.
+      const instEl=document.getElementById('iinst-'+idx);
+      if(instEl){
+        instEl.value = today;
+        instEl.setAttribute('readonly','readonly');
+        instEl.removeAttribute('onchange');
+        instEl.style.background='#f1f3f6'; instEl.style.color='#555'; instEl.style.cursor='not-allowed';
+      }
       autoExp(idx);
     }
     loadIcons(idx,device._server_id||'',dd.icon_id||'');
