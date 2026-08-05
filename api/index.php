@@ -5857,8 +5857,14 @@ case 'renewal_approve':
             if($bsId){ $pdo->prepare("UPDATE renewal_requests SET bs_entry_id=? WHERE id=?")->execute([$bsId,$id]); }
         }
 
-        // Email the customer (best-effort)
-        $emailed = false;
+        // Respond to the browser FIRST so the approval finishes instantly and the list refreshes.
+        // The customer email (SMTP) can be slow, so we send it AFTER flushing the response.
+        echo json_encode(['success'=>true,'bs_entry'=>$bsId?true:false,'emailed'=>($customerEmail?'queued':false),'customer_email'=>$customerEmail?:null]);
+        // Flush the response to the client now.
+        if (function_exists('fastcgi_finish_request')) { @session_write_close(); @fastcgi_finish_request(); }
+        else { @ob_end_flush(); @flush(); }
+
+        // Email the customer (best-effort, after the response — never blocks the UI)
         if($customerEmail && filter_var($customerEmail, FILTER_VALIDATE_EMAIL)){
             try {
                 require_once __DIR__.'/mailer.php';
@@ -5873,11 +5879,9 @@ case 'renewal_approve':
                       . '<p>Your device is now active and will continue tracking without interruption.</p>'
                       . '<p>For any assistance: support@bharatgps.com · +91 93818 74178</p>'
                       . '<p>Warm regards,<br>Team BharatGPS</p>';
-                $emailed = @sendMail($customerEmail, $r['owner'] ?: 'Customer', $subject, $html);
-            } catch(Exception $e){ $emailed = false; }
+                @sendMail($customerEmail, $r['owner'] ?: 'Customer', $subject, $html);
+            } catch(Exception $e){ /* email failure never affects the approval */ }
         }
-
-        echo json_encode(['success'=>true,'bs_entry'=>$bsId?true:false,'emailed'=>$emailed?true:false,'customer_email'=>$customerEmail?:null]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
