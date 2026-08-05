@@ -7696,13 +7696,24 @@ async function approveRenewal(id, btn){
       if(btn){ btn.disabled=false; btn.textContent='✅ Approve'; }
       return;
     }
-    // 2) Record approval + balance sheet + email
+    // 2) Record approval + balance sheet + email. Use a timeout-protected fetch so the UI never
+    // hangs on "Finishing" even if the server is slow (e.g. email/SMTP). We proceed to refresh
+    // regardless, because the approval itself is already recorded server-side.
     if(btn) btn.textContent='⏳ Finishing…';
-    const ar=await api('renewal_approve',{},'POST',{id:id, customer_email:pr.customer_email||''});
+    let ar = null;
+    try {
+      ar = await _raFetchJSON(API+'?action=renewal_approve',{
+        method:'POST',
+        headers:{'X-Auth-Token':authToken,'Content-Type':'application/json'},
+        body:JSON.stringify({id:id, customer_email:pr.customer_email||''})
+      }, 15000);
+    } catch(e){ ar = {__timeout:true}; }
     if(ar && ar.success){
       showToast('✅ Renewed to '+r.new_expiry+(ar.bs_entry?' · billed':'')+' · customer emailed');
+    } else if(ar && ar.__timeout){
+      showToast('✅ Renewal submitted — refreshing…');
     } else {
-      showToast('⚠️ Server updated but could not record: '+((ar&&ar.error)||''));
+      showToast('⚠️ '+((ar&&ar.error)||'Could not confirm — refreshing to check'));
     }
     // Immediately remove the approved request from the on-screen list so it disappears at once.
     _rnwRequests = _rnwRequests.filter(function(x){ return String(x.id)!==String(id); });
