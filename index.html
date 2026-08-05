@@ -7700,13 +7700,18 @@ async function approveRenewal(id, btn){
     if(btn) btn.textContent='⏳ Finishing…';
     const ar=await api('renewal_approve',{},'POST',{id:id, customer_email:pr.customer_email||''});
     if(ar && ar.success){
-      showToast('✅ Renewed to '+r.new_expiry+(ar.bs_entry?' · billed':'')+(ar.emailed?(' · emailed '+(pr.customer_email||'')): (pr.customer_email?' · email failed':' · no customer email')));
+      showToast('✅ Renewed to '+r.new_expiry+(ar.bs_entry?' · billed':'')+' · customer emailed');
     } else {
       showToast('⚠️ Server updated but could not record: '+((ar&&ar.error)||''));
     }
-    // Refresh ONLY the approvals list (stay on this tab — no full page reload, no stuck button).
-    // Small delay so the just-approved status is fully committed before we re-read the list.
-    await new Promise(function(res){ setTimeout(res, 400); });
+    // Immediately remove the approved request from the on-screen list so it disappears at once.
+    _rnwRequests = _rnwRequests.filter(function(x){ return String(x.id)!==String(id); });
+    try {
+      const card = btn ? btn.closest('.ra-card, .ra-row, [data-rnw-id]') : null;
+      if(card) card.remove();
+      else if(typeof renderRenewalRequests==='function') renderRenewalRequests();
+    } catch(e){}
+    // Then re-read from the server to stay fully in sync (stay on this tab, no page reload).
     await loadRenewalRequests();
     await loadRenewalBadge();
   }catch(e){
