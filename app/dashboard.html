@@ -372,9 +372,12 @@
   function openTask(id){ markOpened(id); location.href='task.html?id='+id; }
   if(!authToken){ location.href='login.html'; }
 
-  async function api(action,params={}){
-    const url=API+'?action='+action+'&'+new URLSearchParams(params);
-    const r=await fetch(url,{cache:'no-store',headers:{'X-Auth-Token':authToken}});
+  async function api(action,params={},method='GET',body=null){
+    let url=API+'?action='+action;
+    if(method==='GET') url+='&'+new URLSearchParams(params);
+    const opts={method,cache:'no-store',headers:{'X-Auth-Token':authToken}};
+    if(body){ opts.headers['Content-Type']='application/json'; opts.body=JSON.stringify(body); }
+    const r=await fetch(url,opts);
     const t=await r.text();
     try{return JSON.parse(t);}catch(e){console.error('non-JSON',action,t.slice(0,200));return {};}
   }
@@ -451,8 +454,9 @@
     b.innerHTML='<div style="text-align:center;padding:30px;color:#889">Loading your tasks…</div>';
     try{
       const d=await api('os_my_taskable',{});
+      if(d && d.error){ b.innerHTML='<div style="text-align:center;padding:30px;color:#c00;font-size:13px">⚠️ '+esc(d.error)+'</div>'; return; }
       const tasks=(d&&d.tasks)?d.tasks:[];
-      if(!tasks.length){ b.innerHTML='<div style="text-align:center;padding:40px;color:#889">No tasks found.</div>'; return; }
+      if(!tasks.length){ b.innerHTML='<div style="text-align:center;padding:40px;color:#889">No tasks assigned to you yet.</div>'; return; }
       b.innerHTML='<div style="font-size:12px;color:#667;margin-bottom:10px">Pick a task to claim outstation travel costs. One claim per task.</div>'
         + tasks.map(function(t){
           const st=t.claim_status;
