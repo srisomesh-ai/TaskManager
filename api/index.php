@@ -2499,15 +2499,22 @@ function _ensureOutstationTables($pdo){
 case 'os_my_taskable':
     try {
         _ensureOutstationTables($pdo);
-        $rows=$pdo->prepare("SELECT t.id, t.task_id, t.customer_name, t.location, t.task_status, t.lead_type,
-                    t.device_qty, (SELECT COUNT(*) FROM task_device_installs di WHERE di.task_id=t.id AND di.gps_serial_no IS NOT NULL AND di.gps_serial_no<>'') AS installed_count,
-                    c.id AS claim_id, c.status AS claim_status
-                FROM tasks t
-                LEFT JOIN outstation_claims c ON c.task_db_id=t.id AND c.technician_id=?
-                WHERE t.assigned_to=?
-                ORDER BY t.id DESC LIMIT 300");
-        $rows->execute([$userId,$userId]);
-        echo json_encode(['success'=>true,'tasks'=>$rows->fetchAll(PDO::FETCH_ASSOC)]);
+        // Resolve the technician id the same way as everywhere else.
+        $tuid = $userId;
+        if (in_array($userRole,['admin','assigner','manager']) && !empty($_GET['user_id'])) $tuid = intval($_GET['user_id']);
+        // Simple, robust query — same assigned_to filter the normal task list uses.
+        $rows=$pdo->prepare("SELECT id, task_id, customer_name, location, task_status, lead_type, device_qty
+                             FROM tasks WHERE assigned_to=? ORDER BY id DESC LIMIT 300");
+        $rows->execute([$tuid]);
+        $tasks=$rows->fetchAll(PDO::FETCH_ASSOC);
+        // Enrich each with claim status + installed count (in PHP, so a bad subquery can't blank the list).
+        foreach ($tasks as &$t) {
+            $t['installed_count']=0; $t['claim_id']=null; $t['claim_status']=null;
+            try { $ic=$pdo->prepare("SELECT COUNT(*) FROM task_device_installs WHERE task_id=? AND gps_serial_no IS NOT NULL AND gps_serial_no<>''"); $ic->execute([$t['id']]); $t['installed_count']=intval($ic->fetchColumn()); } catch(Exception $e){}
+            try { $cl=$pdo->prepare("SELECT id,status FROM outstation_claims WHERE task_db_id=? AND technician_id=? LIMIT 1"); $cl->execute([$t['id'],$tuid]); if($cr=$cl->fetch(PDO::FETCH_ASSOC)){ $t['claim_id']=$cr['id']; $t['claim_status']=$cr['status']; } } catch(Exception $e){}
+        }
+        unset($t);
+        echo json_encode(['success'=>true,'tasks'=>$tasks,'debug_uid'=>$tuid,'debug_count'=>count($tasks)]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
