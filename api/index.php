@@ -2457,6 +2457,258 @@ case 'admin_appreciation_summary':
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
+// ══════════════════════════════════════════════════════════════════════════
+// OUTSTATION CLAIMS — technician claims travel costs for a task, admin approves per line,
+// approved total is awarded as coins.
+// ══════════════════════════════════════════════════════════════════════════
+function _ensureOutstationTables($pdo){
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS outstation_claims (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            task_db_id INT NOT NULL,
+            task_id VARCHAR(50) DEFAULT NULL,
+            technician_id INT NOT NULL,
+            customer_location VARCHAR(255) DEFAULT NULL,
+            travel_distance VARCHAR(100) DEFAULT NULL,
+            notes TEXT DEFAULT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'draft',
+            claimed_total DECIMAL(10,2) NOT NULL DEFAULT 0,
+            approved_total DECIMAL(10,2) NOT NULL DEFAULT 0,
+            submitted_at DATETIME DEFAULT NULL,
+            decided_at DATETIME DEFAULT NULL,
+            decided_by VARCHAR(100) DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_task_claim (task_db_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $pdo->exec("CREATE TABLE IF NOT EXISTS outstation_claim_lines (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            claim_id INT NOT NULL,
+            transport_mode VARCHAR(60) DEFAULT NULL,
+            amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+            bill_file VARCHAR(255) DEFAULT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'pending',
+            approved_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+            note VARCHAR(255) DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_claim (claim_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch(Exception $e){ error_log('outstation tables: '.$e->getMessage()); }
+}
+
+// Technician: list MY tasks I can claim on (any task assigned to me, incl. closed), with claim status.
+case 'os_my_taskable':
+    try {
+        _ensureOutstationTables($pdo);
+        $rows=$pdo->prepare("SELECT t.id, t.task_id, t.customer_name, t.location, t.task_status, t.lead_type,
+                    t.device_qty, (SELECT COUNT(*) FROM task_device_installs di WHERE di.task_id=t.id AND di.gps_serial_no IS NOT NULL AND di.gps_serial_no<>'') AS installed_count,
+                    c.id AS claim_id, c.status AS claim_status
+                FROM tasks t
+                LEFT JOIN outstation_claims c ON c.task_db_id=t.id AND c.technician_id=?
+                WHERE t.assigned_to=?
+                ORDER BY t.id DESC LIMIT 300");
+        $rows->execute([$userId,$userId]);
+        echo json_encode(['success'=>true,'tasks'=>$rows->fetchAll(PDO::FETCH_ASSOC)]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// Technician: create or fetch the claim for a task (one per task).
+case 'os_get_or_create_claim':
+    try {
+        _ensureOutstationTables($pdo);
+        $tdb=intval($body['task_db_id']??$_GET['task_db_id']??0);
+        if(!$tdb){ echo json_encode(['error'=>'Missing task']); break; }
+        $tk=$pdo->prepare("SELECT id,task_id,customer_name,location,assigned_to FROM tasks WHERE id=?"); $tk->execute([$tdb]); $tinfo=$tk->fetch(PDO::FETCH_ASSOC);
+        if(!$tinfo){ echo json_encode(['error'=>'Task not found']); break; }
+        if($userRole==='technician' && intval($tinfo['assigned_to'])!==intval($userId)){ echo json_encode(['error'=>'Not your task']); break; }
+        $ex=$pdo->prepare("SELECT * FROM outstation_claims WHERE task_db_id=?"); $ex->execute([$tdb]); $claim=$ex->fetch(PDO::FETCH_ASSOC);
+        if(!$claim){
+            $pdo->prepare("INSERT INTO outstation_claims (task_db_id,task_id,technician_id,customer_location,status) VALUES (?,?,?,?, 'draft')")
+                ->execute([$tdb,$tinfo['task_id'],$userId,$tinfo['location']??'']);
+            $cid=$pdo->lastInsertId();
+            $ex->execute([$tdb]); $claim=$ex->fetch(PDO::FETCH_ASSOC);
+        }
+        $ln=$pdo->prepare("SELECT * FROM outstation_claim_lines WHERE claim_id=? ORDER BY id ASC"); $ln->execute([$claim['id']]); 
+        $installed=$pdo->prepare("SELECT COUNT(*) FROM task_device_installs WHERE task_id=? AND gps_serial_no IS NOT NULL AND gps_serial_no<>''"); $installed->execute([$tdb]);
+        echo json_encode(['success'=>true,'claim'=>$claim,'lines'=>$ln->fetchAll(PDO::FETCH_ASSOC),'task'=>$tinfo,'installed_count'=>intval($installed->fetchColumn())]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// Technician: save claim header (location, distance, notes) — only while draft.
+case 'os_save_claim':
+    try {
+        _ensureOutstationTables($pdo);
+        $cid=intval($body['claim_id']??0);
+        $c=$pdo->prepare("SELECT * FROM outstation_claims WHERE id=?"); $c->execute([$cid]); $claim=$c->fetch(PDO::FETCH_ASSOC);
+        if(!$claim){ echo json_encode(['error'=>'Claim not found']); break; }
+        if($userRole==='technician' && intval($claim['technician_id'])!==intval($userId)){ echo json_encode(['error'=>'Not your claim']); break; }
+        if($claim['status']!=='draft'){ echo json_encode(['error'=>'Claim already submitted']); break; }
+        $pdo->prepare("UPDATE outstation_claims SET customer_location=?, travel_distance=?, notes=? WHERE id=?")
+            ->execute([trim($body['customer_location']??''),trim($body['travel_distance']??''),trim($body['notes']??''),$cid]);
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// Technician: add a transport line (mode + amount + optional bill image as base64).
+case 'os_add_line':
+    try {
+        _ensureOutstationTables($pdo);
+        $cid=intval($body['claim_id']??0);
+        $c=$pdo->prepare("SELECT * FROM outstation_claims WHERE id=?"); $c->execute([$cid]); $claim=$c->fetch(PDO::FETCH_ASSOC);
+        if(!$claim){ echo json_encode(['error'=>'Claim not found']); break; }
+        if($userRole==='technician' && intval($claim['technician_id'])!==intval($userId)){ echo json_encode(['error'=>'Not your claim']); break; }
+        if($claim['status']!=='draft'){ echo json_encode(['error'=>'Claim already submitted']); break; }
+        $mode=trim($body['transport_mode']??''); $amt=floatval($body['amount']??0);
+        if($mode===''){ echo json_encode(['error'=>'Select a transport mode']); break; }
+        if($amt<=0){ echo json_encode(['error'=>'Enter the amount']); break; }
+        // Save bill image if provided (base64)
+        $billFile=null;
+        if(!empty($body['bill_base64'])){
+            $dir=__DIR__.'/../uploads/outstation/'.$cid;
+            if(!is_dir($dir)) @mkdir($dir,0775,true);
+            $data=$body['bill_base64']; if(strpos($data,',')!==false) $data=substr($data,strpos($data,',')+1);
+            $bin=base64_decode($data);
+            if($bin!==false){ $fn='bill_'.time().'_'.rand(100,999).'.jpg'; if(@file_put_contents($dir.'/'.$fn,$bin)){ $billFile='outstation/'.$cid.'/'.$fn; } }
+        }
+        $pdo->prepare("INSERT INTO outstation_claim_lines (claim_id,transport_mode,amount,bill_file,status) VALUES (?,?,?,?, 'pending')")
+            ->execute([$cid,$mode,$amt,$billFile]);
+        // Recompute claimed total
+        $pdo->prepare("UPDATE outstation_claims SET claimed_total=(SELECT COALESCE(SUM(amount),0) FROM outstation_claim_lines WHERE claim_id=?) WHERE id=?")->execute([$cid,$cid]);
+        echo json_encode(['success'=>true,'line_id'=>intval($pdo->lastInsertId()),'bill_file'=>$billFile]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// Technician: delete a transport line (draft only).
+case 'os_delete_line':
+    try {
+        _ensureOutstationTables($pdo);
+        $lid=intval($body['line_id']??0);
+        $l=$pdo->prepare("SELECT ln.*, cl.technician_id, cl.status AS claim_status FROM outstation_claim_lines ln JOIN outstation_claims cl ON ln.claim_id=cl.id WHERE ln.id=?");
+        $l->execute([$lid]); $line=$l->fetch(PDO::FETCH_ASSOC);
+        if(!$line){ echo json_encode(['error'=>'Line not found']); break; }
+        if($userRole==='technician' && intval($line['technician_id'])!==intval($userId)){ echo json_encode(['error'=>'Not your claim']); break; }
+        if($line['claim_status']!=='draft'){ echo json_encode(['error'=>'Claim already submitted']); break; }
+        $cid=intval($line['claim_id']);
+        $pdo->prepare("DELETE FROM outstation_claim_lines WHERE id=?")->execute([$lid]);
+        $pdo->prepare("UPDATE outstation_claims SET claimed_total=(SELECT COALESCE(SUM(amount),0) FROM outstation_claim_lines WHERE claim_id=?) WHERE id=?")->execute([$cid,$cid]);
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// Technician: submit the claim for approval.
+case 'os_submit_claim':
+    try {
+        _ensureOutstationTables($pdo);
+        $cid=intval($body['claim_id']??0);
+        $c=$pdo->prepare("SELECT * FROM outstation_claims WHERE id=?"); $c->execute([$cid]); $claim=$c->fetch(PDO::FETCH_ASSOC);
+        if(!$claim){ echo json_encode(['error'=>'Claim not found']); break; }
+        if($userRole==='technician' && intval($claim['technician_id'])!==intval($userId)){ echo json_encode(['error'=>'Not your claim']); break; }
+        if($claim['status']!=='draft'){ echo json_encode(['error'=>'Already submitted']); break; }
+        $lc=$pdo->prepare("SELECT COUNT(*) FROM outstation_claim_lines WHERE claim_id=?"); $lc->execute([$cid]);
+        if(intval($lc->fetchColumn())<1){ echo json_encode(['error'=>'Add at least one transport line first']); break; }
+        $pdo->prepare("UPDATE outstation_claims SET status='submitted', submitted_at=NOW() WHERE id=?")->execute([$cid]);
+        // Notify admins/managers
+        try {
+            require_once __DIR__.'/fcm_send.php';
+            if(function_exists('fcm_send_to_user')){
+                $techName=$currentUser['name']??'Technician';
+                $admins=$pdo->query("SELECT id FROM users WHERE role IN ('admin','assigner','manager') AND is_active=1")->fetchAll(PDO::FETCH_COLUMN);
+                foreach($admins as $aid){ fcm_send_to_user($pdo,intval($aid),'📍 Outstation claim submitted', $techName.' submitted an outstation claim for task '.($claim['task_id']??'').' (₹'.number_format($claim['claimed_total'],0).')', ['type'=>'outstation','url'=>'index.html']); }
+            }
+        } catch(Exception $e){}
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// Admin/Manager: list submitted claims (with counts).
+case 'os_admin_list':
+    if(!in_array($userRole,['admin','assigner','manager'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        _ensureOutstationTables($pdo);
+        $filter=$_GET['status']??'submitted';
+        $where = $filter==='all' ? "c.status<>'draft'" : "c.status=".$pdo->quote($filter);
+        $rows=$pdo->query("SELECT c.*, u.name AS tech_name, t.customer_name, t.task_status,
+                    (SELECT COUNT(*) FROM outstation_claim_lines l WHERE l.claim_id=c.id) AS line_count
+                FROM outstation_claims c
+                JOIN users u ON c.technician_id=u.id
+                LEFT JOIN tasks t ON c.task_db_id=t.id
+                WHERE $where ORDER BY c.submitted_at DESC, c.id DESC")->fetchAll(PDO::FETCH_ASSOC);
+        $pending=$pdo->query("SELECT COUNT(*) FROM outstation_claims WHERE status='submitted'")->fetchColumn();
+        echo json_encode(['success'=>true,'claims'=>$rows,'pending_count'=>intval($pending)]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// Admin/Manager: full detail of one claim (header + lines + task info).
+case 'os_admin_detail':
+    if(!in_array($userRole,['admin','assigner','manager'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        _ensureOutstationTables($pdo);
+        $cid=intval($_GET['claim_id']??$body['claim_id']??0);
+        $c=$pdo->prepare("SELECT c.*, u.name AS tech_name, t.customer_name, t.location AS task_location, t.task_status, t.device_qty,
+                    (SELECT COUNT(*) FROM task_device_installs di WHERE di.task_id=c.task_db_id AND di.gps_serial_no IS NOT NULL AND di.gps_serial_no<>'') AS installed_count
+                FROM outstation_claims c JOIN users u ON c.technician_id=u.id LEFT JOIN tasks t ON c.task_db_id=t.id WHERE c.id=?");
+        $c->execute([$cid]); $claim=$c->fetch(PDO::FETCH_ASSOC);
+        if(!$claim){ echo json_encode(['error'=>'Claim not found']); break; }
+        $ln=$pdo->prepare("SELECT * FROM outstation_claim_lines WHERE claim_id=? ORDER BY id ASC"); $ln->execute([$cid]);
+        echo json_encode(['success'=>true,'claim'=>$claim,'lines'=>$ln->fetchAll(PDO::FETCH_ASSOC)]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// Admin: approve or reject a single bill line (with an approved amount).
+case 'os_decide_line':
+    if($userRole!=='admin'){ http_response_code(403); echo json_encode(['error'=>'Only admin can decide']); break; }
+    try {
+        _ensureOutstationTables($pdo);
+        $lid=intval($body['line_id']??0);
+        $decision=$body['decision']??'';
+        $l=$pdo->prepare("SELECT * FROM outstation_claim_lines WHERE id=?"); $l->execute([$lid]); $line=$l->fetch(PDO::FETCH_ASSOC);
+        if(!$line){ echo json_encode(['error'=>'Line not found']); break; }
+        if($decision==='approve'){
+            $appr=floatval($body['approved_amount']??$line['amount']);
+            if($appr<0) $appr=0; if($appr>floatval($line['amount'])) $appr=floatval($line['amount']);
+            $pdo->prepare("UPDATE outstation_claim_lines SET status='approved', approved_amount=?, note=? WHERE id=?")->execute([$appr,trim($body['note']??''),$lid]);
+        } else {
+            $pdo->prepare("UPDATE outstation_claim_lines SET status='rejected', approved_amount=0, note=? WHERE id=?")->execute([trim($body['note']??''),$lid]);
+        }
+        echo json_encode(['success'=>true]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// Admin: finalize the claim — sum approved lines, award that as coins to the technician.
+case 'os_finalize_claim':
+    if($userRole!=='admin'){ http_response_code(403); echo json_encode(['error'=>'Only admin can finalize']); break; }
+    try {
+        _ensureOutstationTables($pdo);
+        $cid=intval($body['claim_id']??0);
+        $c=$pdo->prepare("SELECT * FROM outstation_claims WHERE id=?"); $c->execute([$cid]); $claim=$c->fetch(PDO::FETCH_ASSOC);
+        if(!$claim){ echo json_encode(['error'=>'Claim not found']); break; }
+        if($claim['status']==='approved'){ echo json_encode(['error'=>'Already finalized']); break; }
+        // Any line still pending?
+        $pend=$pdo->prepare("SELECT COUNT(*) FROM outstation_claim_lines WHERE claim_id=? AND status='pending'"); $pend->execute([$cid]);
+        if(intval($pend->fetchColumn())>0){ echo json_encode(['error'=>'Decide all lines first (some are still pending)']); break; }
+        $sum=$pdo->prepare("SELECT COALESCE(SUM(approved_amount),0) FROM outstation_claim_lines WHERE claim_id=? AND status='approved'"); $sum->execute([$cid]);
+        $approvedTotal=floatval($sum->fetchColumn());
+        $pdo->prepare("UPDATE outstation_claims SET status='approved', approved_total=?, decided_at=NOW(), decided_by=? WHERE id=?")
+            ->execute([$approvedTotal,$currentUser['name']??'admin',$cid]);
+        // Award the approved total as coins (1 rupee = 1 coin), idempotent per claim.
+        if($approvedTotal>0 && function_exists('award_coins')){
+            award_coins($pdo, intval($claim['technician_id']), intval(round($approvedTotal)),
+                'Outstation claim approved for task '.($claim['task_id']??''), null, 'os_claim_'.$cid,
+                '🧾 Outstation approved: +'.intval(round($approvedTotal)).' coins', 'Your outstation claim for task '.($claim['task_id']??'').' was approved.');
+        }
+        echo json_encode(['success'=>true,'approved_total'=>$approvedTotal]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// Technician: view my submitted claims + their status.
+case 'os_my_claims':
+    try {
+        _ensureOutstationTables($pdo);
+        $rows=$pdo->prepare("SELECT c.*, (SELECT COUNT(*) FROM outstation_claim_lines l WHERE l.claim_id=c.id) AS line_count FROM outstation_claims c WHERE c.technician_id=? ORDER BY c.id DESC LIMIT 100");
+        $rows->execute([$userId]);
+        echo json_encode(['success'=>true,'claims'=>$rows->fetchAll(PDO::FETCH_ASSOC)]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'save_fcm_token':
     $fcm = trim($body['fcm_token'] ?? '');
     $platform = trim($body['platform'] ?? 'android');
