@@ -15,10 +15,10 @@ function sendMail(string $toEmail, string $toName, string $subject, string $html
     if (!$toEmail || !filter_var($toEmail, FILTER_VALIDATE_EMAIL)) return false;
 
     try {
-        $socket = fsockopen(MAIL_HOST, MAIL_PORT, $errno, $errstr, 15);
+        $socket = fsockopen(MAIL_HOST, MAIL_PORT, $errno, $errstr, 6);
         if (!$socket) throw new Exception("Connect failed: $errstr ($errno)");
 
-        stream_set_timeout($socket, 15);
+        stream_set_timeout($socket, 6);
 
         smtpRead($socket);
         smtpCmd($socket, "EHLO bharatgps.com");
