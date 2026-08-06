@@ -2496,6 +2496,44 @@ function _ensureOutstationTables($pdo){
 }
 
 // Technician: list MY tasks I can claim on (any task assigned to me, incl. closed), with claim status.
+// DEBUG: create a complete fake outstation claim in one call, so we can verify the tech->admin
+// pipeline end to end. Also returns how many tasks the technician has (to diagnose empty lists).
+case 'os_debug_create':
+    try {
+        _ensureOutstationTables($pdo);
+        $tuid = $userId;
+        // Count this technician's tasks (same filter as the normal list)
+        $cnt=$pdo->prepare("SELECT COUNT(*) FROM tasks WHERE assigned_to=?"); $cnt->execute([$tuid]); $taskCount=intval($cnt->fetchColumn());
+        // Pick one of their real tasks if any; else use a synthetic id 0 so the claim still shows.
+        $one=$pdo->prepare("SELECT id, task_id FROM tasks WHERE assigned_to=? ORDER BY id DESC LIMIT 1"); $one->execute([$tuid]); $rt=$one->fetch(PDO::FETCH_ASSOC);
+        $tdb = $rt ? intval($rt['id']) : 0;
+        $tlabel = $rt ? $rt['task_id'] : ('DEBUG-'.$tuid.'-'.date('His'));
+        // Avoid the one-per-task unique constraint for the synthetic case by using a unique negative id.
+        if ($tdb===0) { $tdb = -1 * (intval($tuid)*1000 + rand(1,999)); }
+        // Create the claim
+        $pdo->prepare("INSERT INTO outstation_claims (task_db_id,task_id,technician_id,customer_location,travel_distance,notes,status,claimed_total,submitted_at)
+                       VALUES (?,?,?,?,?,?, 'submitted', 700, NOW())
+                       ON DUPLICATE KEY UPDATE status='submitted', submitted_at=NOW()")
+            ->execute([$tdb,$tlabel,$tuid,'DEBUG customer location','100 km (debug)','This is a DEBUG test claim to verify the flow.']);
+        $cid = $pdo->lastInsertId();
+        if (!$cid) { $q=$pdo->prepare("SELECT id FROM outstation_claims WHERE task_db_id=? AND technician_id=?"); $q->execute([$tdb,$tuid]); $cid=intval($q->fetchColumn()); }
+        // Add two transport lines
+        $pdo->prepare("INSERT INTO outstation_claim_lines (claim_id,transport_mode,amount,status) VALUES (?, 'Bus', 500, 'pending')")->execute([$cid]);
+        $pdo->prepare("INSERT INTO outstation_claim_lines (claim_id,transport_mode,amount,status) VALUES (?, 'Auto', 200, 'pending')")->execute([$cid]);
+        $pdo->prepare("UPDATE outstation_claims SET claimed_total=(SELECT COALESCE(SUM(amount),0) FROM outstation_claim_lines WHERE claim_id=?) WHERE id=?")->execute([$cid,$cid]);
+        // Notify admins
+        try {
+            require_once __DIR__.'/fcm_send.php';
+            if(function_exists('fcm_send_to_user')){
+                $admins=$pdo->query("SELECT id FROM users WHERE role IN ('admin','assigner','manager') AND is_active=1")->fetchAll(PDO::FETCH_COLUMN);
+                foreach($admins as $aid){ fcm_send_to_user($pdo,intval($aid),'📍 DEBUG outstation claim', ($currentUser['name']??'Technician').' created a DEBUG outstation claim (₹700)', ['type'=>'outstation','url'=>'index.html']); }
+            }
+        } catch(Exception $e){}
+        echo json_encode(['success'=>true,'claim_id'=>$cid,'technician_id'=>$tuid,'your_task_count'=>$taskCount,
+            'message'=>'Debug claim created and submitted. Ask admin to open Outstation Claims.']);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'os_my_taskable':
     try {
         _ensureOutstationTables($pdo);
