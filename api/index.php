@@ -5857,49 +5857,34 @@ case 'renewal_approve':
             if($bsId){ $pdo->prepare("UPDATE renewal_requests SET bs_entry_id=? WHERE id=?")->execute([$bsId,$id]); }
         }
 
-        // Respond to the browser FIRST so the approval finishes instantly.
-        $emailData = null;
-        if($customerEmail && filter_var($customerEmail, FILTER_VALIDATE_EMAIL)){
-            $emailData = [
-                'to'    => $customerEmail,
-                'name'  => $r['owner'] ?: 'Customer',
-                'expiry'=> $r['new_expiry'],
-                'device'=> $r['device_name'],
-                'plate' => $r['plate'],
-            ];
-        }
-        $payload = json_encode(['success'=>true,'bs_entry'=>$bsId?true:false,'emailed'=>($emailData?'queued':false),'customer_email'=>$customerEmail?:null]);
-
-        // Keep running after the client disconnects, and send the email in the shutdown phase so
-        // the browser gets its response immediately regardless of SMTP speed or FPM availability.
-        @ignore_user_abort(true);
-        if ($emailData) {
-            register_shutdown_function(function() use ($emailData) {
-                try {
-                    require_once __DIR__.'/mailer.php';
-                    $subject = 'GPS Tracker Renewed Successfully — BharatGPS';
-                    $html = '<p>Hi,</p><p>Greetings from BharatGPS Tracker. Thank you for your payment — we truly appreciate your trust.</p>'
-                          . '<p>We are happy to inform you that your GPS tracker subscription has been <b>successfully renewed</b>.</p>'
-                          . '<table cellpadding="6" style="border-collapse:collapse">'
-                          . '<tr><td><b>Next Expiry Date</b></td><td>'.htmlspecialchars($emailData['expiry']).'</td></tr>'
-                          . '<tr><td><b>Device</b></td><td>'.htmlspecialchars($emailData['device']).'</td></tr>'
-                          . (($emailData['plate'] && $emailData['plate']!=='—')?('<tr><td><b>Vehicle</b></td><td>'.htmlspecialchars($emailData['plate']).'</td></tr>'):'')
-                          . '</table>'
-                          . '<p>Your device is now active and will continue tracking without interruption.</p>'
-                          . '<p>For any assistance: support@bharatgps.com · +91 93818 74178</p>'
-                          . '<p>Warm regards,<br>Team BharatGPS</p>';
-                    @sendMail($emailData['to'], $emailData['name'], $subject, $html);
-                } catch(Throwable $e) { error_log('renewal email: '.$e->getMessage()); }
-            });
-        }
-
-        // Flush the response now. Try the fastest method available.
-        header('Content-Length: '.strlen($payload));
-        header('Connection: close');
-        echo $payload;
-        @ob_end_flush(); @flush();
-        if (function_exists('fastcgi_finish_request')) { @session_write_close(); @fastcgi_finish_request(); }
+        // Approval is fully recorded. Return immediately — NO email here (it is sent by a separate
+        // background call from the browser after this responds, so SMTP can never block approval).
+        echo json_encode(['success'=>true,'bs_entry'=>$bsId?true:false,'customer_email'=>$customerEmail?:null,
+                          'device_name'=>$r['device_name'],'new_expiry'=>$r['new_expiry'],'plate'=>$r['plate'],'owner'=>$r['owner']]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// Send the renewal confirmation email (called separately by the browser, so SMTP never blocks approval)
+case 'renewal_send_email':
+    try {
+        if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
+        $to = trim($body['customer_email'] ?? '');
+        if(!$to || !filter_var($to, FILTER_VALIDATE_EMAIL)){ echo json_encode(['success'=>false,'error'=>'no email']); break; }
+        require_once __DIR__.'/mailer.php';
+        $subject = 'GPS Tracker Renewed Successfully — BharatGPS';
+        $html = '<p>Hi,</p><p>Greetings from BharatGPS Tracker. Thank you for your payment — we truly appreciate your trust.</p>'
+              . '<p>We are happy to inform you that your GPS tracker subscription has been <b>successfully renewed</b>.</p>'
+              . '<table cellpadding="6" style="border-collapse:collapse">'
+              . '<tr><td><b>Next Expiry Date</b></td><td>'.htmlspecialchars($body['new_expiry'] ?? '').'</td></tr>'
+              . '<tr><td><b>Device</b></td><td>'.htmlspecialchars($body['device_name'] ?? '').'</td></tr>'
+              . ((!empty($body['plate']) && $body['plate']!=='—')?('<tr><td><b>Vehicle</b></td><td>'.htmlspecialchars($body['plate']).'</td></tr>'):'')
+              . '</table>'
+              . '<p>Your device is now active and will continue tracking without interruption.</p>'
+              . '<p>For any assistance: support@bharatgps.com · +91 93818 74178</p>'
+              . '<p>Warm regards,<br>Team BharatGPS</p>';
+        $ok = @sendMail($to, $body['owner'] ?? 'Customer', $subject, $html);
+        echo json_encode(['success'=>$ok?true:false]);
+    } catch(Throwable $e){ echo json_encode(['success'=>false,'error'=>$e->getMessage()]); }
     break;
 
 case 'daily_report_data':
