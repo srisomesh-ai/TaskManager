@@ -2534,6 +2534,35 @@ case 'os_debug_create':
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
+// DEBUG: create a fully-formed test outstation claim (submitted) so the admin flow can be verified
+// without needing a real task. Safe: uses task_db_id=0 and is clearly labelled TEST.
+case 'os_debug_create':
+    try {
+        _ensureOutstationTables($pdo);
+        $tuid = $userId;
+        if (in_array($userRole,['admin','assigner','manager']) && !empty($body['user_id'])) $tuid = intval($body['user_id']);
+        // Reuse an existing debug claim if present (avoid piling up)
+        $pdo->prepare("INSERT INTO outstation_claims (task_db_id,task_id,technician_id,customer_location,travel_distance,notes,status,claimed_total,submitted_at)
+                       VALUES (0, ?, ?, ?, ?, ?, 'submitted', ?, NOW())")
+            ->execute([ 'TEST-'.date('His'), $tuid, 'Test Village (debug)', '85 km', 'This is a DEBUG test claim to verify the flow.', 700 ]);
+        $cid = intval($pdo->lastInsertId());
+        $pdo->prepare("INSERT INTO outstation_claim_lines (claim_id,transport_mode,amount,status) VALUES (?,?,?,'pending'),(?,?,?,'pending')")
+            ->execute([$cid,'Bus',500,$cid,'Auto',200]);
+        // Notify admins so the signal/badge shows
+        try {
+            require_once __DIR__.'/fcm_send.php';
+            if(function_exists('fcm_send_to_user')){
+                $techName=$currentUser['name']??'Technician';
+                $admins=$pdo->query("SELECT id FROM users WHERE role IN ('admin','assigner','manager') AND is_active=1")->fetchAll(PDO::FETCH_COLUMN);
+                foreach($admins as $aid){ fcm_send_to_user($pdo,intval($aid),'📍 TEST outstation claim', $techName.' submitted a DEBUG outstation claim (Rs 700)', ['type'=>'outstation','url'=>'index.html']); }
+            }
+        } catch(Exception $e){}
+        // Count how many tasks are assigned to this technician (to diagnose the empty-list issue)
+        $tc=$pdo->prepare("SELECT COUNT(*) FROM tasks WHERE assigned_to=?"); $tc->execute([$tuid]);
+        echo json_encode(['success'=>true,'claim_id'=>$cid,'technician_id'=>$tuid,'your_task_count'=>intval($tc->fetchColumn()),'message'=>'Test claim created and submitted for approval.']);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'os_my_taskable':
     try {
         _ensureOutstationTables($pdo);
