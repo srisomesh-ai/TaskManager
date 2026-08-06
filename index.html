@@ -410,6 +410,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
       <div class="nav-item readding-approver" id="nav-readding" onclick="showPage('readding')" style="display:none"><span class="nav-icon">🔌</span> Re-Adding <span class="nav-badge" id="readding-badge" style="display:none;background:var(--red);color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:10px;margin-left:4px">0</span></div>
       <div class="nav-item readding-approver" id="nav-move-device" onclick="showPage('move-device')" style="display:none"><span class="nav-icon">🔀</span> Move Device</div>
       <div class="nav-item readding-approver" id="nav-bulk-upload" onclick="showPage('bulk-upload')" style="display:none"><span class="nav-icon">📤</span> Bulk Upload</div>
+      <div class="nav-item readding-approver" id="nav-outstation" onclick="showPage('outstation')" style="display:none"><span class="nav-icon">🧾</span> Outstation Claims <span class="nav-badge" id="os-badge" style="display:none;background:var(--red);color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:10px;margin-left:4px">0</span></div>
       <div class="nav-item renewal-staff" id="nav-renewals" onclick="showPage('renewals')" style="display:none"><span class="nav-icon">🔄</span> License / Renewals <span class="nav-badge" id="renewal-badge" style="display:none;background:var(--red);color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:10px;margin-left:4px">0</span></div>
       <div class="nav-sec">Reports</div>
       <div class="nav-item admin-only" id="nav-daily-report" onclick="showPage('daily-report')"><span class="nav-icon">📅</span> Daily Report</div>
@@ -1146,6 +1147,16 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
             <div id="bulk-results"><div style="color:var(--text3);font-size:13px;padding:20px;text-align:center">Results will appear here after upload.</div></div>
           </div>
         </div>
+      </div>
+
+      <div class="page" id="page-outstation" style="padding:20px">
+        <div class="pg-header"><div class="breadcrumb">Home / <b>Outstation Claims</b></div><div class="pg-title">🧾 Outstation Claims</div><div class="pg-sub">Technicians claim travel costs per task. Approve each bill line, then finalize — the approved total is paid to the technician as coins.</div></div>
+        <div style="display:flex;gap:8px;margin-bottom:14px">
+          <button class="ts-btn" id="os-tab-pending" onclick="loadOutstationClaims('submitted')" style="background:var(--accent);color:#fff">⏳ Pending</button>
+          <button class="ts-btn" id="os-tab-approved" onclick="loadOutstationClaims('approved')" style="background:var(--surface2);color:var(--text)">✅ Approved</button>
+          <button class="ts-btn" id="os-tab-all" onclick="loadOutstationClaims('all')" style="background:var(--surface2);color:var(--text)">All</button>
+        </div>
+        <div id="os-list"><div style="color:var(--text3);padding:20px;text-align:center">Loading…</div></div>
       </div>
 
       <div class="page" id="page-renewals">
@@ -2169,6 +2180,7 @@ function showPage(name, opts={}){
     'blacklist':     syncBlacklistAuth,
     'staff-notes':   loadStaffNotesPage,
     'coins':         loadCoinsPage,
+    'outstation':    function(){ loadOutstationClaims('submitted'); },
      'price-list':    syncPlAuth,
      'purchases':     syncPurAuth,
      'discount-budgets': loadDiscountBudgets,
@@ -2210,6 +2222,10 @@ function startApp(){
   document.querySelectorAll('.renewal-staff').forEach(el=>el.style.display = isRenewalStaff ? '' : 'none');
   document.querySelectorAll('.renewal-admin-only').forEach(el=>el.style.display = (currentUser.role==='admin') ? '' : 'none');
   if(isRenewalStaff) loadRenewalBadge();
+  // Outstation pending badge for admin/manager
+  if(['admin','assigner','manager'].includes(currentUser?.role)){
+    api('os_admin_list',{status:'submitted'}).then(function(d){ if(d&&typeof d.pending_count!=='undefined') updateOutstationBadge(d.pending_count); }).catch(function(){});
+  }
 
   // Hide Dashboard nav for technicians — they have My Tasks as home
   const dashNav = document.getElementById('nav-dashboard');
@@ -8004,6 +8020,125 @@ function setCoinMode(m){
     else { rem.style.background='var(--red)'; rem.style.color='#fff'; add.style.background='var(--surface2)'; add.style.color='var(--text)'; }
   }
 }
+// ── OUTSTATION CLAIMS (admin/manager) ───────────────────────────
+let _osCurrentFilter='submitted';
+async function loadOutstationClaims(filter){
+  _osCurrentFilter=filter||'submitted';
+  ['pending','approved','all'].forEach(function(t){
+    const b=document.getElementById('os-tab-'+t); if(!b)return;
+    const on=(t==='pending'&&_osCurrentFilter==='submitted')||(t==='approved'&&_osCurrentFilter==='approved')||(t==='all'&&_osCurrentFilter==='all');
+    b.style.background=on?'var(--accent)':'var(--surface2)'; b.style.color=on?'#fff':'var(--text)';
+  });
+  const list=document.getElementById('os-list'); if(!list)return;
+  list.innerHTML='<div style="color:var(--text3);padding:20px;text-align:center">Loading…</div>';
+  try{
+    const d=await api('os_admin_list',{status:_osCurrentFilter});
+    const claims=(d&&d.claims)?d.claims:[];
+    if(d&&typeof d.pending_count!=='undefined') updateOutstationBadge(d.pending_count);
+    if(!claims.length){ list.innerHTML='<div style="color:var(--text3);padding:30px;text-align:center">No claims here.</div>'; return; }
+    list.innerHTML=claims.map(function(c){
+      const st=c.status==='approved'?'<span style="background:var(--green-bg);color:var(--green);font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px">✅ Approved ₹'+(+c.approved_total||0)+'</span>':'<span style="background:var(--amber-bg,#fef3c7);color:#b45309;font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px">⏳ Submitted</span>';
+      return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;cursor:pointer" onclick="openOutstationDetail('+c.id+')">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:800">'+escHtml(c.tech_name||'')+' · '+escHtml(c.task_id||'')+'</div>'+st+'</div>'
+        +'<div style="font-size:13px;color:var(--text2);margin-top:3px">'+escHtml(c.customer_name||'')+' · '+escHtml(c.customer_location||'')+'</div>'
+        +'<div style="font-size:12px;color:var(--text3);margin-top:3px">'+(c.line_count||0)+' transport line(s) · claimed ₹'+(+c.claimed_total||0)+' · '+String(c.submitted_at||'').slice(0,16)+'</div>'
+        +'</div>';
+    }).join('');
+  }catch(e){ list.innerHTML='<div style="padding:20px;color:var(--red)">'+escHtml(e.message)+'</div>'; }
+}
+function updateOutstationBadge(n){
+  const b=document.getElementById('os-badge'); if(!b)return;
+  if(n>0){ b.textContent=n; b.style.display='inline-block'; } else b.style.display='none';
+}
+async function openOutstationDetail(cid){
+  const d=await api('os_admin_detail',{claim_id:cid});
+  if(!d||!d.success){ showToast('❌ '+((d&&d.error)||'Error')); return; }
+  const c=d.claim, lines=d.lines||[];
+  const isAdmin=(currentUser&&currentUser.role==='admin');
+  const final=(c.status==='approved');
+  let h='<div style="padding:4px 0 14px"><div style="font-weight:800;font-size:16px">'+escHtml(c.tech_name||'')+' — '
+    +'<a href="#" onclick="closeModal();viewTask('+c.task_db_id+');return false;" style="color:var(--accent2);text-decoration:none">'+escHtml(c.task_id||'')+' ↗</a></div>'
+    +'<div style="font-size:13px;color:var(--text2);margin-top:4px">Customer: '+escHtml(c.customer_name||'')+' · Reached: '+escHtml(c.customer_location||'–')+'</div>'
+    +'<div style="font-size:12px;color:var(--text3);margin-top:2px">Distance: '+escHtml(c.travel_distance||'–')+' · '+(c.installed_count||0)+'/'+(c.device_qty||1)+' installed · '+escHtml(c.task_status||'')+'</div>'
+    +(c.notes?'<div style="font-size:12px;color:var(--text2);margin-top:4px;font-style:italic">"'+escHtml(c.notes)+'"</div>':'')
+    +'</div>';
+  h+=lines.map(function(l){
+    const badge=l.status==='approved'?'<span style="color:var(--green);font-weight:700">✅ ₹'+(+l.approved_amount||0)+'</span>':l.status==='rejected'?'<span style="color:var(--red);font-weight:700">❌ Rejected</span>':'<span style="color:#b45309;font-weight:700">⏳ Pending</span>';
+    let block='<div style="border:1px solid var(--border);border-radius:9px;padding:11px;margin-bottom:9px">'
+      +'<div style="display:flex;justify-content:space-between"><div style="font-weight:700">🚏 '+escHtml(l.transport_mode||'')+' — claimed ₹'+(+l.amount||0)+'</div>'+badge+'</div>'
+      +(l.bill_file?'<a href="https://salmon-goldfish-110661.hostingersite.com/uploads/'+escHtml(l.bill_file)+'" target="_blank" style="font-size:12px;color:var(--accent2)">📎 View bill</a>':'<span style="font-size:12px;color:var(--red)">no bill uploaded</span>');
+    if(isAdmin && !final && l.status==='pending'){
+      block+='<div style="display:flex;gap:6px;margin-top:9px;align-items:center">'
+        +'<input type="number" id="os-appr-'+l.id+'" value="'+(+l.amount||0)+'" style="width:90px;padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">'
+        +'<button class="act-btn" style="background:var(--green);color:#fff;font-size:12px;font-weight:700" onclick="osDecideLine('+l.id+',\'approve\','+cid+')">Approve</button>'
+        +'<button class="act-btn" style="background:var(--red);color:#fff;font-size:12px;font-weight:700" onclick="osDecideLine('+l.id+',\'reject\','+cid+')">Reject</button>'
+        +'</div>';
+    } else if(l.note){ block+='<div style="font-size:11px;color:var(--text3);margin-top:4px">Note: '+escHtml(l.note)+'</div>'; }
+    return block+'</div>';
+  }).join('');
+  const approvedSum=lines.filter(l=>l.status==='approved').reduce((s,l)=>s+parseFloat(l.approved_amount||0),0);
+  const anyPending=lines.some(l=>l.status==='pending');
+  h+='<div style="font-weight:800;text-align:right;margin:8px 0">Approved so far: ₹'+approvedSum.toFixed(0)+'</div>';
+  if(isAdmin && !final){
+    h+='<button class="ts-btn" style="width:100%;background:'+(anyPending?'var(--surface2)':'var(--green)')+';color:'+(anyPending?'var(--text3)':'#fff')+';font-weight:800" '
+      +(anyPending?'disabled title="Decide all lines first"':'onclick="osFinalize('+cid+')"')+'>'
+      +(anyPending?'Decide all lines to finalize':'✅ Finalize &amp; pay ₹'+approvedSum.toFixed(0)+' as coins')+'</button>';
+  } else if(final){
+    h+='<div style="text-align:center;color:var(--green);font-weight:800;padding:8px">✅ Finalized — ₹'+(+c.approved_total||0)+' paid as coins</div>';
+  }
+  openOutstationDetailInline(c, lines, cid, isAdmin, final);
+}
+function openOutstationDetailInline(c, lines, cid, isAdmin, final){
+  const list=document.getElementById('os-list'); if(!list) return;
+  let h='<button class="ts-btn" style="background:var(--surface2);color:var(--text);margin-bottom:12px" onclick="loadOutstationClaims(_osCurrentFilter)">‹ Back to list</button>';
+  h+='<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px">';
+  h+='<div style="font-weight:800;font-size:16px">'+escHtml(c.tech_name||'')+' — '
+    +'<a href="#" onclick="viewTask('+c.task_db_id+');return false;" style="color:var(--accent2);text-decoration:none">'+escHtml(c.task_id||'')+' ↗</a></div>'
+    +'<div style="font-size:13px;color:var(--text2);margin-top:4px">Customer: '+escHtml(c.customer_name||'')+' · Reached: '+escHtml(c.customer_location||'–')+'</div>'
+    +'<div style="font-size:12px;color:var(--text3);margin-top:2px">Distance: '+escHtml(c.travel_distance||'–')+' · '+(c.installed_count||0)+'/'+(c.device_qty||1)+' installed · '+escHtml(c.task_status||'')+'</div>'
+    +(c.notes?'<div style="font-size:12px;color:var(--text2);margin-top:4px;font-style:italic">"'+escHtml(c.notes)+'"</div>':'')
+    +'<hr style="border:none;border-top:1px solid var(--border);margin:12px 0">';
+  h+=lines.map(function(l){
+    const badge=l.status==='approved'?'<span style="color:var(--green);font-weight:700">✅ ₹'+(+l.approved_amount||0)+'</span>':l.status==='rejected'?'<span style="color:var(--red);font-weight:700">❌ Rejected</span>':'<span style="color:#b45309;font-weight:700">⏳ Pending</span>';
+    let block='<div style="border:1px solid var(--border);border-radius:9px;padding:11px;margin-bottom:9px">'
+      +'<div style="display:flex;justify-content:space-between"><div style="font-weight:700">🚏 '+escHtml(l.transport_mode||'')+' — claimed ₹'+(+l.amount||0)+'</div>'+badge+'</div>'
+      +(l.bill_file?'<a href="https://salmon-goldfish-110661.hostingersite.com/uploads/'+escHtml(l.bill_file)+'" target="_blank" style="font-size:12px;color:var(--accent2)">📎 View bill</a>':'<span style="font-size:12px;color:var(--red)">no bill uploaded</span>');
+    if(isAdmin && !final && l.status==='pending'){
+      block+='<div style="display:flex;gap:6px;margin-top:9px;align-items:center">'
+        +'<input type="number" id="os-appr-'+l.id+'" value="'+(+l.amount||0)+'" style="width:90px;padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">'
+        +'<button class="act-btn" style="background:var(--green);color:#fff;font-size:12px;font-weight:700" onclick="osDecideLine('+l.id+',\'approve\','+cid+')">Approve</button>'
+        +'<button class="act-btn" style="background:var(--red);color:#fff;font-size:12px;font-weight:700" onclick="osDecideLine('+l.id+',\'reject\','+cid+')">Reject</button>'
+        +'</div>';
+    } else if(l.note){ block+='<div style="font-size:11px;color:var(--text3);margin-top:4px">Note: '+escHtml(l.note)+'</div>'; }
+    return block+'</div>';
+  }).join('');
+  const approvedSum=lines.filter(l=>l.status==='approved').reduce((s,l)=>s+parseFloat(l.approved_amount||0),0);
+  const anyPending=lines.some(l=>l.status==='pending');
+  h+='<div style="font-weight:800;text-align:right;margin:8px 0">Approved so far: ₹'+approvedSum.toFixed(0)+'</div>';
+  if(isAdmin && !final){
+    h+='<button class="ts-btn" style="width:100%;background:'+(anyPending?'var(--surface2)':'var(--green)')+';color:'+(anyPending?'var(--text3)':'#fff')+';font-weight:800" '
+      +(anyPending?'disabled':'onclick="osFinalize('+cid+')"')+'>'
+      +(anyPending?'Decide all lines to finalize':'✅ Finalize &amp; pay ₹'+approvedSum.toFixed(0)+' as coins')+'</button>';
+  } else if(final){
+    h+='<div style="text-align:center;color:var(--green);font-weight:800;padding:8px">✅ Finalized — ₹'+(+c.approved_total||0)+' paid as coins</div>';
+  }
+  h+='</div>';
+  list.innerHTML=h;
+}
+async function osDecideLine(lineId, decision, cid){
+  let approved=0, note='';
+  if(decision==='approve'){ approved=parseFloat((document.getElementById('os-appr-'+lineId)||{}).value||0); }
+  else { note=prompt('Reason for rejecting (optional):','')||''; }
+  const d=await api('os_decide_line',{},'POST',{line_id:lineId,decision:decision,approved_amount:approved,note:note}).catch(()=>({}));
+  if(d&&d.success){ openOutstationDetail(cid); } else showToast('❌ '+((d&&d.error)||'Error'));
+}
+async function osFinalize(cid){
+  if(!confirm('Finalize this claim? The approved total will be paid to the technician as coins. This cannot be undone.')) return;
+  const d=await api('os_finalize_claim',{},'POST',{claim_id:cid}).catch(()=>({}));
+  if(d&&d.success){ showToast('✅ Finalized — ₹'+(d.approved_total||0)+' paid as coins'); loadOutstationClaims(_osCurrentFilter); }
+  else showToast('❌ '+((d&&d.error)||'Error'));
+}
+
 async function loadCoinsPage(){
   const sel=document.getElementById('coin-tech'); if(!sel) return;
   setCoinMode('add');
