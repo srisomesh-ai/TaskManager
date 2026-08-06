@@ -7709,7 +7709,17 @@ async function approveRenewal(id, btn){
       }, 15000);
     } catch(e){ ar = {__timeout:true}; }
     if(ar && ar.success){
-      showToast('✅ Renewed to '+r.new_expiry+(ar.bs_entry?' · billed':'')+' · customer emailed');
+      showToast('✅ Renewed to '+r.new_expiry+(ar.bs_entry?' · billed':''));
+      // Send the customer email as a separate fire-and-forget call — never block the UI on SMTP.
+      if(ar.customer_email){
+        api('renewal_send_email',{},'POST',{
+          customer_email: ar.customer_email,
+          new_expiry: ar.new_expiry||r.new_expiry,
+          device_name: ar.device_name||r.device_name,
+          plate: ar.plate||r.plate,
+          owner: ar.owner||r.owner||''
+        }).catch(function(){});
+      }
     } else if(ar && ar.__timeout){
       showToast('✅ Renewal submitted — refreshing…');
     } else {
