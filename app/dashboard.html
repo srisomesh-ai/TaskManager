@@ -453,6 +453,17 @@
     const ov=document.getElementById('os-ov'), sh=document.getElementById('os-sheet');
     sh.style.transform='translateY(100%)'; setTimeout(function(){ ov.style.display='none'; }, 250);
   }
+  async function osDebugCreate(){
+    if(!confirm('Create a DEBUG test claim (₹700) and submit it to admin?')) return;
+    const d=await api('os_debug_create',{},'POST',{}).catch(function(e){ return {error:String(e.message||e)}; });
+    if(d && d.success){
+      showToast('✅ Debug claim #'+d.claim_id+' created · your tasks: '+d.your_task_count);
+      alert('Debug claim created!\n\nClaim ID: '+d.claim_id+'\nYour technician id: '+d.technician_id+'\nTasks assigned to you: '+d.your_task_count+'\n\nNow open the ADMIN panel → Outstation Claims → Pending. It should appear there.');
+    } else {
+      alert('Debug failed: '+((d&&d.error)||'unknown error'));
+    }
+  }
+
   async function osShowTaskList(){
     const b=document.getElementById('os-body');
     b.innerHTML='<div style="text-align:center;padding:30px;color:#889">Loading your tasks…</div>';
@@ -460,8 +471,12 @@
       const d=await api('os_my_taskable',{});
       if(d && d.error){ b.innerHTML='<div style="text-align:center;padding:30px;color:#c00;font-size:13px">⚠️ '+esc(d.error)+'</div>'; return; }
       const tasks=(d&&d.tasks)?d.tasks:[];
-      if(!tasks.length){ b.innerHTML='<div style="text-align:center;padding:40px;color:#889">No tasks assigned to you yet.</div>'; return; }
-      b.innerHTML='<div style="font-size:12px;color:#667;margin-bottom:10px">Pick a task to claim outstation travel costs. One claim per task.</div>'
+      const dbg='<div style="background:#fff7ed;border:1px dashed #b45309;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#7c2d12">'
+        +'🐞 <b>Debug:</b> found '+(typeof d.debug_count!=="undefined"?d.debug_count:tasks.length)+' task(s) for you (id '+(d.debug_uid||'?')+').<br>'
+        +'<button onclick="osDebugCreate()" style="margin-top:6px;background:#b45309;color:#fff;border:none;border-radius:8px;padding:7px 12px;font-weight:700;font-size:12px;cursor:pointer">➕ Create a DEBUG test claim (₹700)</button>'
+        +' <span style="color:#9a3412">— then ask admin to open Outstation Claims</span></div>';
+      if(!tasks.length){ b.innerHTML=dbg+'<div style="text-align:center;padding:30px;color:#889">No tasks assigned to you yet.</div>'; return; }
+      b.innerHTML=dbg+'<div style="font-size:12px;color:#667;margin-bottom:10px">Pick a task to claim outstation travel costs. One claim per task.</div>'
         + tasks.map(function(t){
           const st=t.claim_status;
           const badge = st==='approved'?'<span style="background:#1a7a3a;color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:9px">✅ Approved</span>'
