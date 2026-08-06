@@ -174,6 +174,17 @@
   </div>
 
   <div style="padding:10px 14px 0">
+    <div class="dev-open-card" onclick="openOutstation()">
+      <div class="doc-ic">🧾</div>
+      <div class="doc-main">
+        <div class="doc-n">Outstation Claims</div>
+        <div class="doc-l">Claim your travel costs for a task · admin approves &amp; pays as coins</div>
+      </div>
+      <div class="doc-arrow">›</div>
+    </div>
+  </div>
+
+  <div style="padding:10px 14px 0">
     <div class="dev-open-card" onclick="location.href='readding.html'">
       <div class="doc-ic">🔌</div>
       <div class="doc-main">
@@ -208,6 +219,17 @@
         <button onclick="closeGuidelines()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:9px;width:34px;height:34px;font-size:20px;cursor:pointer">×</button>
       </div>
       <div id="gl-body" style="padding:14px 14px 40px;max-width:560px;margin:0 auto"></div>
+    </div>
+  </div>
+
+  <!-- Outstation claims slide-in panel -->
+  <div id="os-ov" onclick="if(event.target===this)closeOutstation()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000">
+    <div id="os-sheet" style="position:absolute;inset:0;background:#eef1f5;overflow-y:auto;transform:translateY(100%);transition:transform .25s ease">
+      <div style="position:sticky;top:0;background:linear-gradient(135deg,#b45309,#92400e);color:#fff;padding:16px 18px;display:flex;justify-content:space-between;align-items:center;z-index:5">
+        <div><div style="font-size:18px;font-weight:800">🧾 Outstation Claims</div><div style="font-size:12px;opacity:.9">Claim travel costs for a task · paid as coins after approval</div></div>
+        <button onclick="closeOutstation()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:9px;width:34px;height:34px;font-size:20px;cursor:pointer">×</button>
+      </div>
+      <div id="os-body" style="padding:14px 14px 60px;max-width:600px;margin:0 auto"></div>
     </div>
   </div>
 
@@ -413,6 +435,130 @@
     else if(btn){ btn.textContent='\u2713 Mark as read'; btn.disabled=false; }
   }
   // ── NOTIFICATION HISTORY ──────────────────────────────────
+  // ── OUTSTATION CLAIMS (technician) ─────────────────────────────
+  let _osClaim=null, _osLines=[];
+  function openOutstation(){
+    const ov=document.getElementById('os-ov'), sh=document.getElementById('os-sheet');
+    ov.style.display='block'; requestAnimationFrame(function(){ sh.style.transform='translateY(0)'; });
+    osShowTaskList();
+  }
+  function closeOutstation(){
+    const ov=document.getElementById('os-ov'), sh=document.getElementById('os-sheet');
+    sh.style.transform='translateY(100%)'; setTimeout(function(){ ov.style.display='none'; }, 250);
+  }
+  async function osShowTaskList(){
+    const b=document.getElementById('os-body');
+    b.innerHTML='<div style="text-align:center;padding:30px;color:#889">Loading your tasks…</div>';
+    try{
+      const d=await api('os_my_taskable',{});
+      const tasks=(d&&d.tasks)?d.tasks:[];
+      if(!tasks.length){ b.innerHTML='<div style="text-align:center;padding:40px;color:#889">No tasks found.</div>'; return; }
+      b.innerHTML='<div style="font-size:12px;color:#667;margin-bottom:10px">Pick a task to claim outstation travel costs. One claim per task.</div>'
+        + tasks.map(function(t){
+          const st=t.claim_status;
+          const badge = st==='approved'?'<span style="background:#1a7a3a;color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:9px">✅ Approved</span>'
+                     : st==='submitted'?'<span style="background:#b45309;color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:9px">⏳ Submitted</span>'
+                     : st==='draft'?'<span style="background:#64748b;color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:9px">✍️ Draft</span>':'';
+          return '<div onclick="osOpenClaim('+t.id+')" style="background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);cursor:pointer">'
+            +'<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:800;font-size:14px">'+esc(t.task_id||'')+'</div>'+badge+'</div>'
+            +'<div style="font-size:13px;color:#334;margin-top:2px">'+esc(t.customer_name||'')+'</div>'
+            +'<div style="font-size:11px;color:#889;margin-top:3px">📍 '+esc(t.location||'–')+' · '+esc(t.task_status||'')+' · '+(t.installed_count||0)+'/'+(t.device_qty||1)+' installed</div>'
+            +'</div>';
+        }).join('');
+    }catch(e){ b.innerHTML='<div style="padding:20px;color:#c00">'+esc(e.message)+'</div>'; }
+  }
+  async function osOpenClaim(taskDbId){
+    const b=document.getElementById('os-body');
+    b.innerHTML='<div style="text-align:center;padding:30px;color:#889">Loading claim…</div>';
+    try{
+      const d=await api('os_get_or_create_claim',{},'POST',{task_db_id:taskDbId});
+      if(!d||!d.success){ b.innerHTML='<div style="padding:20px;color:#c00">'+esc((d&&d.error)||'Error')+'</div>'; return; }
+      _osClaim=d.claim; _osLines=d.lines||[];
+      osRenderClaim(d.task, d.installed_count);
+    }catch(e){ b.innerHTML='<div style="padding:20px;color:#c00">'+esc(e.message)+'</div>'; }
+  }
+  function osRenderClaim(task, installed){
+    const b=document.getElementById('os-body');
+    const c=_osClaim, editable=(c.status==='draft');
+    const total=_osLines.reduce(function(s,l){ return s+parseFloat(l.amount||0); },0);
+    let h='<button onclick="osShowTaskList()" style="background:none;border:none;color:#b45309;font-weight:700;font-size:13px;padding:0 0 10px;cursor:pointer">‹ Back to tasks</button>';
+    h+='<div style="background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:12px">'
+      +'<div style="font-weight:800;font-size:15px">'+esc(c.task_id||'')+'</div>'
+      +'<div style="font-size:13px;color:#334">'+esc(task.customer_name||'')+'</div>'
+      +'<div style="font-size:11px;color:#889;margin-top:3px">'+(installed||0)+' device(s) installed · '+esc(task.location||'')+'</div>'
+      + (c.status!=='draft' ? '<div style="margin-top:8px;font-size:12px;font-weight:700;color:'+(c.status==='approved'?'#1a7a3a':'#b45309')+'">Status: '+(c.status==='approved'?('✅ Approved — ₹'+(+c.approved_total||0)+' paid as coins'):'⏳ Submitted, awaiting approval')+'</div>':'')
+      +'</div>';
+    if(editable){
+      h+='<div style="background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:12px">'
+        +'<div style="font-weight:700;font-size:13px;margin-bottom:8px">Trip details</div>'
+        +'<input id="os-loc" placeholder="Customer location you reached" value="'+esc(c.customer_location||'')+'" style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px">'
+        +'<input id="os-dist" placeholder="Travel distance (e.g. 120 km)" value="'+esc(c.travel_distance||'')+'" style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px">'
+        +'<textarea id="os-notes" rows="2" placeholder="Notes (optional)" style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;resize:vertical">'+esc(c.notes||'')+'</textarea>'
+        +'</div>';
+    }
+    // Lines
+    h+='<div style="font-weight:700;font-size:13px;margin-bottom:8px">Transport modes &amp; bills</div>';
+    if(!_osLines.length){ h+='<div style="color:#889;font-size:12px;margin-bottom:10px">No transport added yet.</div>'; }
+    else {
+      h+=_osLines.map(function(l){
+        const st=l.status==='approved'?'<span style="color:#1a7a3a;font-weight:700">✅ ₹'+(+l.approved_amount||0)+'</span>':l.status==='rejected'?'<span style="color:#c00;font-weight:700">❌ Rejected</span>':'<span style="color:#b45309">⏳ Pending</span>';
+        return '<div style="background:#fff;border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">'
+          +'<div><div style="font-weight:700;font-size:13px">🚏 '+esc(l.transport_mode||'')+' — ₹'+(+l.amount||0)+'</div>'
+          +(l.bill_file?'<a href="../uploads/'+esc(l.bill_file)+'" target="_blank" style="font-size:11px;color:#2563eb">📎 View bill</a>':'<span style="font-size:11px;color:#c00">no bill</span>')
+          +' · <span style="font-size:11px">'+st+'</span></div>'
+          +(editable?'<button onclick="osDeleteLine('+l.id+')" style="background:none;border:none;color:#c00;font-size:16px;cursor:pointer">🗑️</button>':'')
+          +'</div>';
+      }).join('');
+    }
+    if(editable){
+      h+='<div style="background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:12px">'
+        +'<div style="font-weight:700;font-size:12px;margin-bottom:8px;color:#667">Add a transport mode</div>'
+        +'<select id="os-mode" style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px"><option value="">Select mode…</option><option>Bus</option><option>Auto</option><option>Train</option><option>Taxi/Cab</option><option>Bike/Petrol</option><option>Flight</option><option>Other</option></select>'
+        +'<input id="os-amt" type="number" placeholder="Amount ₹" style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px">'
+        +'<label style="font-size:12px;color:#667;display:block;margin-bottom:4px">Upload bill photo</label>'
+        +'<input id="os-bill" type="file" accept="image/*" style="width:100%;font-size:12px;margin-bottom:8px">'
+        +'<button onclick="osAddLine()" style="width:100%;background:#b45309;color:#fff;border:none;border-radius:8px;padding:9px;font-weight:700;font-size:13px;cursor:pointer">+ Add transport</button>'
+        +'</div>';
+      h+='<div style="font-weight:800;font-size:15px;text-align:right;margin-bottom:10px">Total claimed: ₹'+total.toFixed(0)+'</div>';
+      h+='<button onclick="osSubmit()" style="width:100%;background:#1a7a3a;color:#fff;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:15px;cursor:pointer">📤 Submit for approval</button>';
+    } else {
+      h+='<div style="font-weight:800;font-size:15px;text-align:right">Total claimed: ₹'+total.toFixed(0)+'</div>';
+    }
+    b.innerHTML=h;
+  }
+  async function osSaveHeader(){
+    if(!_osClaim||_osClaim.status!=='draft') return;
+    await api('os_save_claim',{},'POST',{claim_id:_osClaim.id,
+      customer_location:(document.getElementById('os-loc')||{}).value||'',
+      travel_distance:(document.getElementById('os-dist')||{}).value||'',
+      notes:(document.getElementById('os-notes')||{}).value||''}).catch(function(){});
+  }
+  async function osAddLine(){
+    const mode=(document.getElementById('os-mode')||{}).value||'';
+    const amt=parseFloat((document.getElementById('os-amt')||{}).value||0);
+    if(!mode){ alert('Select a transport mode'); return; }
+    if(!amt||amt<=0){ alert('Enter the amount'); return; }
+    await osSaveHeader();
+    const f=(document.getElementById('os-bill')||{}).files;
+    let bill64='';
+    if(f && f[0]){ bill64=await new Promise(function(res){ const r=new FileReader(); r.onload=function(){res(r.result);}; r.onerror=function(){res('');}; r.readAsDataURL(f[0]); }); }
+    const d=await api('os_add_line',{},'POST',{claim_id:_osClaim.id,transport_mode:mode,amount:amt,bill_base64:bill64}).catch(()=>({}));
+    if(d&&d.success){ osOpenClaim(_osClaim.task_db_id); }
+    else alert((d&&d.error)||'Could not add');
+  }
+  async function osDeleteLine(id){
+    if(!confirm('Remove this transport line?')) return;
+    const d=await api('os_delete_line',{},'POST',{line_id:id}).catch(()=>({}));
+    if(d&&d.success){ osOpenClaim(_osClaim.task_db_id); } else alert((d&&d.error)||'Error');
+  }
+  async function osSubmit(){
+    await osSaveHeader();
+    if(!confirm('Submit this outstation claim for approval? You cannot edit it after submitting.')) return;
+    const d=await api('os_submit_claim',{},'POST',{claim_id:_osClaim.id}).catch(()=>({}));
+    if(d&&d.success){ showToast('✅ Submitted for approval'); osShowTaskList(); }
+    else alert((d&&d.error)||'Could not submit');
+  }
+
   async function openNotifHistory(){
     const ov=document.getElementById('nh-ov'), sh=document.getElementById('nh-sheet'), b=document.getElementById('nh-body');
     ov.style.display='block';
