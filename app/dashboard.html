@@ -442,8 +442,12 @@
   let _osClaim=null, _osLines=[];
   function openOutstation(){
     const ov=document.getElementById('os-ov'), sh=document.getElementById('os-sheet');
+    if(!ov||!sh){ alert('Outstation panel not found — please update the app.'); return; }
     ov.style.display='block'; requestAnimationFrame(function(){ sh.style.transform='translateY(0)'; });
-    osShowTaskList();
+    const b=document.getElementById('os-body');
+    if(b) b.innerHTML='<div style="text-align:center;padding:30px;color:#889">Loading your tasks…</div>';
+    try { osShowTaskList(); }
+    catch(e){ if(b) b.innerHTML='<div style="padding:20px;color:#c00;font-size:13px">Error: '+String(e.message||e)+'</div>'; }
   }
   function closeOutstation(){
     const ov=document.getElementById('os-ov'), sh=document.getElementById('os-sheet');
