@@ -50,7 +50,7 @@ try {
 
 
 // Auth
-$skipAuth = ['login','ping','verify_pin'];
+$skipAuth = ['login','ping','verify_pin','whoami'];
 $cu = null; $userId = null; $userRole = null;
 if (!in_array($action, $skipAuth)) {
     if ($token) {
@@ -763,6 +763,26 @@ switch ($action) {
 // ---- PING ----
 case 'ping':
     echo json_encode(['ok'=>true]);
+    break;
+
+// DEBUG: report who the server thinks you are + version marker. Confirms deploy + auth in one call.
+case 'whoami':
+    $wUser=null;
+    if($token){
+        try{ $ws=$pdo->prepare("SELECT u.* FROM auth_sessions s JOIN users u ON u.id=s.user_id WHERE s.token=? AND u.is_active=1 LIMIT 1"); $ws->execute([$token]); $wUser=$ws->fetch(PDO::FETCH_ASSOC)?:null; }catch(Exception $e){}
+        if(!$wUser){ try{ $ws=$pdo->prepare("SELECT * FROM users WHERE auth_token=? AND is_active=1"); $ws->execute([$token]); $wUser=$ws->fetch(PDO::FETCH_ASSOC)?:null; }catch(Exception $e){} }
+    }
+    $wCount=0;
+    if($wUser){ try{ $wc=$pdo->prepare("SELECT COUNT(*) FROM tasks WHERE assigned_to=?"); $wc->execute([$wUser['id']]); $wCount=intval($wc->fetchColumn()); }catch(Exception $e){} }
+    echo json_encode([
+        'version' => 'outstation-debug-v3-2026',
+        'authenticated' => $wUser ? true : false,
+        'user_id' => $wUser['id'] ?? null,
+        'role' => $wUser['role'] ?? null,
+        'name' => $wUser['name'] ?? null,
+        'tasks_assigned' => $wCount,
+        'token_seen' => $token ? (substr($token,0,6).'…') : 'NO TOKEN SENT',
+    ]);
     break;
 
 // ---- LOGIN ----
