@@ -466,6 +466,48 @@
     }
   }
 
+  function osExpenseForm(kind){
+    const b=document.getElementById('os-body');
+    const title = kind==='courier'?'📦 Courier Charges':'💼 Personal / Office Expense';
+    const hint = kind==='courier'?'Claim courier charges for devices you sent. Attach the courier receipt.':'Claim money you paid personally for office work (e.g. courier, purchases). Attach the bill/transaction proof.';
+    b.innerHTML='<button onclick="osShowTaskList()" style="background:none;border:none;color:#b45309;font-weight:700;font-size:13px;padding:0 0 10px;cursor:pointer">‹ Back</button>'
+      +'<div style="background:#fff;border-radius:10px;padding:14px">'
+      +'<div style="font-weight:800;font-size:15px;margin-bottom:4px">'+title+'</div>'
+      +'<div style="font-size:12px;color:#889;margin-bottom:12px">'+hint+'</div>'
+      +'<label style="font-size:12px;color:#667;display:block;margin-bottom:4px">Amount ₹ <span style="color:#c00">*</span></label>'
+      +'<input id="ex-amt" type="number" placeholder="e.g. 250" style="width:100%;padding:9px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:10px">'
+      +'<label style="font-size:12px;color:#667;display:block;margin-bottom:4px">Date of expense</label>'
+      +'<input id="ex-date" type="date" value="'+new Date().toISOString().slice(0,10)+'" style="width:100%;padding:9px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:10px">'
+      +'<label style="font-size:12px;color:#667;display:block;margin-bottom:4px">Description</label>'
+      +'<textarea id="ex-desc" rows="2" placeholder="What was this for? (e.g. Couriered 2 devices to Kakinada)" style="width:100%;padding:9px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;resize:vertical;margin-bottom:10px"></textarea>'
+      +'<label style="font-size:12px;color:#667;display:block;margin-bottom:4px">Link to a task (optional)</label>'
+      +'<input id="ex-task" placeholder="Task number, e.g. 1547 (leave blank if none)" style="width:100%;padding:9px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:10px">'
+      +'<label style="font-size:12px;color:#667;display:block;margin-bottom:4px">Bill / receipt / transaction proof <span style="color:#c00">*required</span></label>'
+      +'<input id="ex-bill" type="file" accept="image/*" style="width:100%;font-size:12px;margin-bottom:12px">'
+      +'<button onclick="osSubmitExpense(\''+kind+'\')" style="width:100%;background:#1a7a3a;color:#fff;border:none;border-radius:10px;padding:12px;font-weight:800;font-size:14px;cursor:pointer">📤 Submit for approval</button>'
+      +'</div>';
+  }
+  async function osSubmitExpense(kind){
+    const amt=parseFloat((document.getElementById('ex-amt')||{}).value||0);
+    const date=(document.getElementById('ex-date')||{}).value||'';
+    const desc=(document.getElementById('ex-desc')||{}).value||'';
+    const taskNo=(document.getElementById('ex-task')||{}).value||'';
+    const f=(document.getElementById('ex-bill')||{}).files;
+    if(!amt||amt<=0){ alert('Enter the amount'); return; }
+    if(!f||!f[0]){ alert('📎 Please attach the bill/receipt — it is required.'); return; }
+    if(f[0].size>4*1024*1024){ alert('Image too large — use under 4 MB.'); return; }
+    const bill64=await new Promise(function(res){ const r=new FileReader(); r.onload=function(){res(r.result);}; r.onerror=function(){res('');}; r.readAsDataURL(f[0]); });
+    if(!bill64){ alert('Could not read the image. Try again.'); return; }
+    // Resolve optional task number to its db id
+    let taskDb=0;
+    if(taskNo.trim()){
+      try{ const td=await api('os_my_taskable',{}); const match=(td.tasks||[]).find(function(t){ return String(t.task_id)===taskNo.trim()||String(t.id)===taskNo.trim(); }); if(match) taskDb=match.id; }catch(e){}
+    }
+    const d=await api('os_create_expense',{},'POST',{expense_type:kind,amount:amt,expense_date:date,description:desc,task_db_id:taskDb,task_id:taskNo.trim(),bill_base64:bill64}).catch(()=>({}));
+    if(d&&d.success){ showToast('✅ Expense claim submitted'); osShowTaskList(); }
+    else alert((d&&d.error)||'Could not submit');
+  }
+
   async function osShowTaskList(){
     const b=document.getElementById('os-body');
     b.innerHTML='<div style="text-align:center;padding:30px;color:#889">Loading your tasks…</div>';
@@ -475,7 +517,11 @@
       const tasks=(d&&d.tasks)?d.tasks:[];
       const dbg='';
       if(!tasks.length){ b.innerHTML='<div style="text-align:center;padding:30px;color:#889">No tasks assigned to you yet.</div>'; return; }
-      b.innerHTML='<div style="font-size:12px;color:#667;margin-bottom:10px">Pick a task to claim outstation travel costs. One claim per task.</div>'
+      const expenseBtns='<div style="display:flex;gap:8px;margin-bottom:12px">'
+        +'<button onclick="osExpenseForm(\'courier\')" style="flex:1;background:#fff;border:1.5px solid #b45309;color:#b45309;border-radius:9px;padding:10px;font-weight:700;font-size:12px;cursor:pointer">📦 Courier Charges</button>'
+        +'<button onclick="osExpenseForm(\'personal_office\')" style="flex:1;background:#fff;border:1.5px solid #b45309;color:#b45309;border-radius:9px;padding:10px;font-weight:700;font-size:12px;cursor:pointer">💼 Office Expense</button>'
+        +'</div>';
+      b.innerHTML=expenseBtns+'<div style="font-size:12px;color:#667;margin-bottom:10px">Or pick a task to claim outstation travel costs. One claim per task.</div>'
         + tasks.map(function(t){
           const st=t.claim_status;
           const badge = st==='approved'?'<span style="background:#1a7a3a;color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:9px">✅ Approved</span>'
