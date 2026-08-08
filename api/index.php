@@ -758,6 +758,41 @@ function _haversineKm($la1,$lo1,$la2,$lo2){
     return round($R*2*atan2(sqrt($a),sqrt(1-$a)),2);
 }
 
+// OUTSTATION helper (must be top-level, not inside the switch)
+function _ensureOutstationTables($pdo){
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS outstation_claims (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            task_db_id INT NOT NULL,
+            task_id VARCHAR(50) DEFAULT NULL,
+            technician_id INT NOT NULL,
+            customer_location VARCHAR(255) DEFAULT NULL,
+            travel_distance VARCHAR(100) DEFAULT NULL,
+            notes TEXT DEFAULT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'draft',
+            claimed_total DECIMAL(10,2) NOT NULL DEFAULT 0,
+            approved_total DECIMAL(10,2) NOT NULL DEFAULT 0,
+            submitted_at DATETIME DEFAULT NULL,
+            decided_at DATETIME DEFAULT NULL,
+            decided_by VARCHAR(100) DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_task_claim (task_db_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $pdo->exec("CREATE TABLE IF NOT EXISTS outstation_claim_lines (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            claim_id INT NOT NULL,
+            transport_mode VARCHAR(60) DEFAULT NULL,
+            amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+            bill_file VARCHAR(255) DEFAULT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'pending',
+            approved_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+            note VARCHAR(255) DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_claim (claim_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch(Exception $e){ error_log('outstation tables: '.$e->getMessage()); }
+}
+
 switch ($action) {
 
 // ---- PING ----
@@ -2477,43 +2512,6 @@ case 'admin_appreciation_summary':
     } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
-// ══════════════════════════════════════════════════════════════════════════
-// OUTSTATION CLAIMS — technician claims travel costs for a task, admin approves per line,
-// approved total is awarded as coins.
-// ══════════════════════════════════════════════════════════════════════════
-function _ensureOutstationTables($pdo){
-    try {
-        $pdo->exec("CREATE TABLE IF NOT EXISTS outstation_claims (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            task_db_id INT NOT NULL,
-            task_id VARCHAR(50) DEFAULT NULL,
-            technician_id INT NOT NULL,
-            customer_location VARCHAR(255) DEFAULT NULL,
-            travel_distance VARCHAR(100) DEFAULT NULL,
-            notes TEXT DEFAULT NULL,
-            status VARCHAR(20) NOT NULL DEFAULT 'draft',
-            claimed_total DECIMAL(10,2) NOT NULL DEFAULT 0,
-            approved_total DECIMAL(10,2) NOT NULL DEFAULT 0,
-            submitted_at DATETIME DEFAULT NULL,
-            decided_at DATETIME DEFAULT NULL,
-            decided_by VARCHAR(100) DEFAULT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE KEY uq_task_claim (task_db_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-        $pdo->exec("CREATE TABLE IF NOT EXISTS outstation_claim_lines (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            claim_id INT NOT NULL,
-            transport_mode VARCHAR(60) DEFAULT NULL,
-            amount DECIMAL(10,2) NOT NULL DEFAULT 0,
-            bill_file VARCHAR(255) DEFAULT NULL,
-            status VARCHAR(20) NOT NULL DEFAULT 'pending',
-            approved_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
-            note VARCHAR(255) DEFAULT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            INDEX idx_claim (claim_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-    } catch(Exception $e){ error_log('outstation tables: '.$e->getMessage()); }
-}
 
 // Technician: list MY tasks I can claim on (any task assigned to me, incl. closed), with claim status.
 // DEBUG: create a complete fake outstation claim in one call, so we can verify the tech->admin
