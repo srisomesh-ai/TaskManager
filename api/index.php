@@ -2650,6 +2650,7 @@ case 'os_add_line':
         $mode=trim($body['transport_mode']??''); $amt=floatval($body['amount']??0);
         if($mode===''){ echo json_encode(['error'=>'Select a transport mode']); break; }
         if($amt<=0){ echo json_encode(['error'=>'Enter the amount']); break; }
+        if(empty($body['bill_base64'])){ echo json_encode(['error'=>'Bill photo is required for each transport']); break; }
         // Save bill image if provided (base64)
         $billFile=null;
         if(!empty($body['bill_base64'])){
@@ -2734,6 +2735,7 @@ case 'os_admin_detail':
         _ensureOutstationTables($pdo);
         $cid=intval($_GET['claim_id']??$body['claim_id']??0);
         $c=$pdo->prepare("SELECT c.*, u.name AS tech_name, t.customer_name, t.location AS task_location, t.task_status, t.device_qty,
+                    t.price_to_collect AS task_price, t.amount_collected AS task_collected, t.lead_type, t.outstation_travel_paid_by,
                     (SELECT COUNT(*) FROM task_device_installs di WHERE di.task_id=c.task_db_id AND di.gps_serial_no IS NOT NULL AND di.gps_serial_no<>'') AS installed_count
                 FROM outstation_claims c JOIN users u ON c.technician_id=u.id LEFT JOIN tasks t ON c.task_db_id=t.id WHERE c.id=?");
         $c->execute([$cid]); $claim=$c->fetch(PDO::FETCH_ASSOC);
@@ -2745,7 +2747,7 @@ case 'os_admin_detail':
 
 // Admin: approve or reject a single bill line (with an approved amount).
 case 'os_decide_line':
-    if($userRole!=='admin'){ http_response_code(403); echo json_encode(['error'=>'Only admin can decide']); break; }
+    if(!in_array($userRole,['admin','manager'])){ http_response_code(403); echo json_encode(['error'=>'Only admin or manager can decide']); break; }
     try {
         _ensureOutstationTables($pdo);
         $lid=intval($body['line_id']??0);
@@ -2765,7 +2767,7 @@ case 'os_decide_line':
 
 // Admin: finalize the claim — sum approved lines, award that as coins to the technician.
 case 'os_finalize_claim':
-    if($userRole!=='admin'){ http_response_code(403); echo json_encode(['error'=>'Only admin can finalize']); break; }
+    if(!in_array($userRole,['admin','manager'])){ http_response_code(403); echo json_encode(['error'=>'Only admin or manager can finalize']); break; }
     try {
         _ensureOutstationTables($pdo);
         $cid=intval($body['claim_id']??0);
