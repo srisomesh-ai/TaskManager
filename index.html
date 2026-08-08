@@ -8039,7 +8039,7 @@ async function loadOutstationClaims(filter){
     list.innerHTML=claims.map(function(c){
       const st=c.status==='approved'?'<span style="background:var(--green-bg);color:var(--green);font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px">✅ Approved ₹'+(+c.approved_total||0)+'</span>':'<span style="background:var(--amber-bg,#fef3c7);color:#b45309;font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px">⏳ Submitted</span>';
       return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;cursor:pointer" onclick="openOutstationDetail('+c.id+')">'
-        +'<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:800">'+escHtml(c.tech_name||'')+' · '+escHtml(c.task_id||'')+'</div>'+st+'</div>'
+        +'<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:800">'+({courier:'📦 ',expense:'💼 '}[c.claim_type]||'📍 ')+escHtml(c.tech_name||'')+' · '+escHtml(c.task_id||'')+'</div>'+st+'</div>'
         +'<div style="font-size:13px;color:var(--text2);margin-top:3px">'+escHtml(c.customer_name||'')+' · '+escHtml(c.customer_location||'')+'</div>'
         +'<div style="font-size:12px;color:var(--text3);margin-top:3px">'+(c.line_count||0)+' transport line(s) · claimed ₹'+(+c.claimed_total||0)+' · '+String(c.submitted_at||'').slice(0,16)+'</div>'
         +'</div>';
@@ -8097,6 +8097,7 @@ function openOutstationDetailInline(c, lines, cid, isAdmin, final){
     +'<div style="font-size:13px;color:var(--text2);margin-top:4px">Customer: '+escHtml(c.customer_name||'')+' · Reached: '+escHtml(c.customer_location||'–')+'</div>'
     +'<div style="font-size:12px;color:var(--text3);margin-top:2px">Distance: '+escHtml(c.travel_distance||'–')+' · '+(c.installed_count||0)+'/'+(c.device_qty||1)+' installed · '+escHtml(c.task_status||'')+'</div>'
     +(c.notes?'<div style="font-size:12px;color:var(--text2);margin-top:4px;font-style:italic">"'+escHtml(c.notes)+'"</div>':'')
+    +((c.claim_type&&c.claim_type!=='outstation')?('<div style="margin-top:6px;font-size:12px;color:var(--text2)"><b>'+({courier:'📦 Courier Charges',expense:'💼 Personal/Office Expense'}[c.claim_type]||c.claim_type)+'</b>'+(c.expense_date?(' · '+String(c.expense_date).slice(0,10)):'')+(c.expense_description?('<br>'+escHtml(c.expense_description)):'')+'</div>'):'')
     + (function(){
         // Highlight for the admin: task value vs claimed amount vs difference/margin.
         const tv = parseFloat(c.task_price||0);
