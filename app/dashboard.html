@@ -473,8 +473,11 @@
       const d=await api('os_my_taskable',{});
       if(d && d.error){ b.innerHTML='<div style="text-align:center;padding:30px;color:#c00;font-size:13px">⚠️ '+esc(d.error)+'</div>'; return; }
       const tasks=(d&&d.tasks)?d.tasks:[];
+      let whoLine='';
+      try{ const w=await api('whoami',{}); whoLine='👤 Server sees: id='+(w.user_id||'NULL')+', role='+(w.role||'?')+', name='+(w.name||'?')+', token='+(w.token_seen||'?')+'<br>'; }catch(e){ whoLine='👤 whoami failed: '+esc(e.message)+'<br>'; }
       const dbg='<div style="background:#fff7ed;border:1px dashed #b45309;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#7c2d12">'
-        +'🐞 <b>Debug:</b> found '+(typeof d.debug_count!=="undefined"?d.debug_count:tasks.length)+' task(s) for you (id '+(d.debug_uid||'?')+').<br>'
+        +'🐞 <b>Debug:</b> '+whoLine
+        +'found '+(typeof d.debug_count!=="undefined"?d.debug_count:tasks.length)+' task(s) for you (id '+(d.debug_uid||'?')+').<br>'
         +'<button onclick="osDebugCreate()" style="margin-top:6px;background:#b45309;color:#fff;border:none;border-radius:8px;padding:7px 12px;font-weight:700;font-size:12px;cursor:pointer">➕ Create a DEBUG test claim (₹700)</button>'
         +' <span style="color:#9a3412">— then ask admin to open Outstation Claims</span></div>';
       if(!tasks.length){ b.innerHTML=dbg+'<div style="text-align:center;padding:30px;color:#889">No tasks assigned to you yet.</div>'; return; }
