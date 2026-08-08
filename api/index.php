@@ -1922,7 +1922,7 @@ case 'add_task_comment':
             } catch(Exception $e){}
         }
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'reject_task':
@@ -2147,7 +2147,7 @@ case 'delete_document':
         }
         $pdo->prepare("DELETE FROM task_documents WHERE id=?")->execute([$docId]);
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ---- GENERATE CUSTOMER DOCUMENT-UPLOAD LINK ----
@@ -2169,7 +2169,7 @@ case 'gen_docs_token':
         }
         $base = 'https://salmon-goldfish-110661.hostingersite.com/customer-docs.php?token='.$token;
         echo json_encode(['success'=>true,'token'=>$token,'link'=>$base,'phone'=>preg_replace('/\D/','',(string)($tk['contact_number']??'')),'customer'=>$tk['customer_name']??'']);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ---- UPLOAD DOCUMENT ----
@@ -2215,7 +2215,7 @@ case 'mark_access_given':
             $pdo->prepare("UPDATE task_device_installs SET access_given=1, access_email=? WHERE task_id=? AND gps_serial_no IS NOT NULL AND gps_serial_no != ''")->execute([$email?:null,$tid]);
         }
         echo json_encode(['success'=>true,'marked'=>$done]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ---- SAVE FCM DEVICE TOKEN (for push notifications) ----
@@ -2250,7 +2250,7 @@ case 'push_task_reminder':
         }
         if ($ok) echo json_encode(['success'=>true]);
         else echo json_encode(['error'=>'Could not send — the technician may not have the app installed or notifications enabled.']);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ---- ADMIN: MANUALLY ADJUST A TECHNICIAN'S COINS (add or remove) ----
@@ -2281,7 +2281,7 @@ case 'admin_adjust_coins':
             }
         } catch(Exception $e){}
         echo json_encode(['success'=>true, 'new_balance'=>$newBal]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ---- ADMIN: LIST TECHNICIANS WITH COIN BALANCES ----
@@ -2295,7 +2295,7 @@ case 'admin_coin_summary':
                           GROUP BY u.id, u.name, u.role
                           ORDER BY u.name ASC");
         echo json_encode(['success'=>true, 'technicians'=>$q->fetchAll(PDO::FETCH_ASSOC)]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ---- ADMIN: RECENT COIN LEDGER FOR A TECHNICIAN ----
@@ -2308,7 +2308,7 @@ case 'admin_coin_history':
         $h = $pdo->prepare("SELECT coins, reason, created_at FROM coin_ledger WHERE user_id=? ORDER BY id DESC LIMIT 40");
         $h->execute([$htech]);
         echo json_encode(['success'=>true, 'history'=>$h->fetchAll(PDO::FETCH_ASSOC), 'balance'=>coin_balance($pdo,$htech)]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ── ADMIN: list a technician's paid leaves (available + used) ──
@@ -2328,7 +2328,7 @@ case 'admin_leave_list':
             'used'         => paid_leave_used_total($pdo,$lUid),
             'appreciations'=> appreciation_balance($pdo,$lUid),
         ]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ── ADMIN: mark a paid leave as USED (consumed by the technician) ──
@@ -2346,7 +2346,7 @@ case 'admin_adjust_appreciation':
         // Direct ledger write (deliberate one-off, no event key) — auto-converts at 10.
         award_appreciation($pdo, $aU, $aP, 'Manual adjustment by '.($cu['name'] ?? 'admin').': '.$aR, null, null);
         echo json_encode(['success'=>true,'balance'=>appreciation_balance($pdo,$aU),'paid_leaves'=>paid_leave_total($pdo,$aU)]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ── ADMIN: grant a paid leave manually (bonus / correction) ──
@@ -2367,7 +2367,7 @@ case 'admin_leave_grant':
             }
         } catch(Exception $e){}
         echo json_encode(['success'=>true,'available'=>paid_leave_total($pdo,$gU)]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ── ADMIN: delete a paid leave row (added by mistake) ──
@@ -2380,7 +2380,7 @@ case 'admin_leave_delete':
         $g=$pdo->prepare("SELECT user_id FROM paid_leaves WHERE id=?"); $g->execute([$dId]); $dU=intval($g->fetchColumn());
         $pdo->prepare("DELETE FROM paid_leaves WHERE id=?")->execute([$dId]);
         echo json_encode(['success'=>true,'available'=>paid_leave_total($pdo,$dU),'used'=>paid_leave_used_total($pdo,$dU)]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'admin_leave_mark_used':
@@ -2406,7 +2406,7 @@ case 'admin_leave_mark_used':
             }
         } catch(Exception $e){}
         echo json_encode(['success'=>true,'available'=>paid_leave_total($pdo,intval($lv['user_id'])),'used'=>paid_leave_used_total($pdo,intval($lv['user_id']))]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ── ADMIN: undo a wrongly-marked leave (put it back to available) ──
@@ -2420,7 +2420,7 @@ case 'admin_leave_undo_used':
         $pdo->prepare("UPDATE paid_leaves SET status='available', used_on=NULL, used_note=NULL, marked_by=?, marked_at=NOW() WHERE id=?")
             ->execute([($cu['name'] ?? 'admin').' (undo)', $lid]);
         echo json_encode(['success'=>true,'available'=>paid_leave_total($pdo,$uidL),'used'=>paid_leave_used_total($pdo,$uidL)]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ── TECHNICIAN: full notification history (re-read missed/truncated pop-ups) ──
@@ -2435,14 +2435,14 @@ case 'my_notifications':
         $rows=$q->fetchAll(PDO::FETCH_ASSOC);
         $unread=0; foreach($rows as $r){ if(intval($r['is_read'])===0) $unread++; }
         echo json_encode(['success'=>true,'notifications'=>$rows,'unread'=>$unread]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'mark_notifications_read':
     try {
         $pdo->prepare("UPDATE notification_log SET is_read=1 WHERE user_id=? AND is_read=0")->execute([$userId]);
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'my_appreciations':
@@ -2461,7 +2461,7 @@ case 'my_appreciations':
             'next_leave_at'=> 10,
             'history'      => $h->fetchAll(PDO::FETCH_ASSOC),
         ]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'admin_appreciation_summary':
@@ -2474,7 +2474,7 @@ case 'admin_appreciation_summary':
                 COALESCE((SELECT SUM(days) FROM paid_leaves p2 WHERE p2.user_id=u.id AND p2.status='used'),0) AS leaves_used
              FROM users u WHERE u.role='technician' ORDER BY u.name ASC")->fetchAll(PDO::FETCH_ASSOC);
         echo json_encode(['success'=>true,'technicians'=>$rows]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -2576,7 +2576,7 @@ case 'os_debug_create':
         } catch(Exception $e){}
         echo json_encode(['success'=>true,'claim_id'=>$cid,'technician_id'=>$tuid,'your_task_count'=>$taskCount,
             'message'=>'Debug claim created and submitted. Ask admin to open Outstation Claims.']);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // DEBUG: (single canonical os_debug_create above)
@@ -2600,7 +2600,7 @@ case 'os_my_taskable':
         }
         unset($t);
         echo json_encode(['success'=>true,'tasks'=>$tasks,'debug_uid'=>$tuid,'debug_count'=>count($tasks)]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // Technician: create or fetch the claim for a task (one per task).
@@ -2622,7 +2622,7 @@ case 'os_get_or_create_claim':
         $ln=$pdo->prepare("SELECT * FROM outstation_claim_lines WHERE claim_id=? ORDER BY id ASC"); $ln->execute([$claim['id']]); 
         $installed=$pdo->prepare("SELECT COUNT(*) FROM task_device_installs WHERE task_id=? AND gps_serial_no IS NOT NULL AND gps_serial_no<>''"); $installed->execute([$tdb]);
         echo json_encode(['success'=>true,'claim'=>$claim,'lines'=>$ln->fetchAll(PDO::FETCH_ASSOC),'task'=>$tinfo,'installed_count'=>intval($installed->fetchColumn())]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // Technician: save claim header (location, distance, notes) — only while draft.
@@ -2637,7 +2637,7 @@ case 'os_save_claim':
         $pdo->prepare("UPDATE outstation_claims SET customer_location=?, travel_distance=?, notes=? WHERE id=?")
             ->execute([trim($body['customer_location']??''),trim($body['travel_distance']??''),trim($body['notes']??''),$cid]);
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // Technician: add a transport line (mode + amount + optional bill image as base64).
@@ -2666,7 +2666,7 @@ case 'os_add_line':
         // Recompute claimed total
         $pdo->prepare("UPDATE outstation_claims SET claimed_total=(SELECT COALESCE(SUM(amount),0) FROM outstation_claim_lines WHERE claim_id=?) WHERE id=?")->execute([$cid,$cid]);
         echo json_encode(['success'=>true,'line_id'=>intval($pdo->lastInsertId()),'bill_file'=>$billFile]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // Technician: delete a transport line (draft only).
@@ -2683,7 +2683,7 @@ case 'os_delete_line':
         $pdo->prepare("DELETE FROM outstation_claim_lines WHERE id=?")->execute([$lid]);
         $pdo->prepare("UPDATE outstation_claims SET claimed_total=(SELECT COALESCE(SUM(amount),0) FROM outstation_claim_lines WHERE claim_id=?) WHERE id=?")->execute([$cid,$cid]);
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // Technician: submit the claim for approval.
@@ -2708,7 +2708,7 @@ case 'os_submit_claim':
             }
         } catch(Exception $e){}
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // Admin/Manager: list submitted claims (with counts).
@@ -2726,7 +2726,7 @@ case 'os_admin_list':
                 WHERE $where ORDER BY c.submitted_at DESC, c.id DESC")->fetchAll(PDO::FETCH_ASSOC);
         $pending=$pdo->query("SELECT COUNT(*) FROM outstation_claims WHERE status='submitted'")->fetchColumn();
         echo json_encode(['success'=>true,'claims'=>$rows,'pending_count'=>intval($pending)]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // Admin/Manager: full detail of one claim (header + lines + task info).
@@ -2742,7 +2742,7 @@ case 'os_admin_detail':
         if(!$claim){ echo json_encode(['error'=>'Claim not found']); break; }
         $ln=$pdo->prepare("SELECT * FROM outstation_claim_lines WHERE claim_id=? ORDER BY id ASC"); $ln->execute([$cid]);
         echo json_encode(['success'=>true,'claim'=>$claim,'lines'=>$ln->fetchAll(PDO::FETCH_ASSOC)]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // Admin: approve or reject a single bill line (with an approved amount).
@@ -2762,7 +2762,7 @@ case 'os_decide_line':
             $pdo->prepare("UPDATE outstation_claim_lines SET status='rejected', approved_amount=0, note=? WHERE id=?")->execute([trim($body['note']??''),$lid]);
         }
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // Admin: finalize the claim — sum approved lines, award that as coins to the technician.
@@ -2788,7 +2788,7 @@ case 'os_finalize_claim':
                 '🧾 Outstation approved: +'.intval(round($approvedTotal)).' coins', 'Your outstation claim for task '.($claim['task_id']??'').' was approved.');
         }
         echo json_encode(['success'=>true,'approved_total'=>$approvedTotal]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // Technician: view my submitted claims + their status.
@@ -2798,7 +2798,7 @@ case 'os_my_claims':
         $rows=$pdo->prepare("SELECT c.*, (SELECT COUNT(*) FROM outstation_claim_lines l WHERE l.claim_id=c.id) AS line_count FROM outstation_claims c WHERE c.technician_id=? ORDER BY c.id DESC LIMIT 100");
         $rows->execute([$userId]);
         echo json_encode(['success'=>true,'claims'=>$rows->fetchAll(PDO::FETCH_ASSOC)]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'save_fcm_token':
@@ -2812,7 +2812,7 @@ case 'save_fcm_token':
         $pdo->prepare("UPDATE users SET fcm_token=?, fcm_platform=?, fcm_updated_at=NOW() WHERE id=?")
             ->execute([$fcm, $platform, $userId]);
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ---- CLEAR FCM TOKEN (on logout) ----
@@ -2821,7 +2821,7 @@ case 'clear_fcm_token':
         try { $pdo->exec("ALTER TABLE users ADD COLUMN fcm_token VARCHAR(255) NULL"); } catch(Exception $e){}
         $pdo->prepare("UPDATE users SET fcm_token=NULL WHERE id=?")->execute([$userId]);
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ---- MARK TASK OPENED (technician opened it — stops unopened reminders) ----
@@ -2834,7 +2834,7 @@ case 'mark_task_opened':
         $pdo->prepare("UPDATE tasks SET opened_at=NOW() WHERE id=? AND opened_at IS NULL AND (assigned_to=? OR ?=1)")
             ->execute([$id, $userId, in_array($userRole,['admin','assigner'])?1:0]);
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ---- MY EARNINGS (technician coin ledger) ----
@@ -2861,7 +2861,7 @@ case 'get_earnings':
             'total_lost'   => abs($lost),
             'history'      => $rows->fetchAll(),
         ]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ---- ADMIN: resolve a customer dispute (valid = deduct 50 coins from technician) ----
@@ -2887,7 +2887,7 @@ case 'resolve_dispute':
                 ->execute([$id,$userId,'Customer report reviewed and dismissed — no penalty.']);
         }
         echo json_encode(['success'=>true,'dispute_status'=>$verdict==='valid'?'confirmed':'dismissed']);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ---- ADMIN: list tasks with pending disputes ----
@@ -2901,7 +2901,7 @@ case 'get_disputes':
                            WHERE t.dispute_status='pending' ORDER BY t.updated_at DESC");
         $st->execute();
         echo json_encode(['success'=>true,'disputes'=>$st->fetchAll()]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ---- ADMIN: verify (or reject) a non-cash payment screenshot ----
@@ -2919,7 +2919,7 @@ case 'verify_payment':
             : '❌ Payment screenshot rejected by admin — please re-collect proof.';
         $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")->execute([$id,$userId,$note]);
         echo json_encode(['success'=>true,'payment_verify_status'=>$newStatus]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'save_device_install':
@@ -3313,7 +3313,7 @@ case 'exp_get_entries':
                 FROM expenses".($where?" WHERE ".implode(" AND ",$where):"")." ORDER BY date DESC, id DESC LIMIT 2000";
         $st = $pdo->prepare($sql); $st->execute($params);
         echo json_encode(['success'=>true,'entries'=>$st->fetchAll(PDO::FETCH_ASSOC)]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ── RECURRING MONTHLY BILLS ─────────────────────────────────────────
@@ -3330,7 +3330,7 @@ case 'exp_yearly_add':
                 strval($body['due_month'] ?? '1'), strval($body['due_day'] ?? '1'),
                 trim($body['vendor'] ?? '') ?: null, trim($body['payment_mode'] ?? '') ?: null, $cu['name'] ?? 'admin']);
         echo json_encode(['success'=>true,'id'=>$pdo->lastInsertId()]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'exp_yearly_list':
@@ -3341,7 +3341,7 @@ case 'exp_yearly_list':
         $rows = $pdo->query("SELECT b.*, (SELECT COUNT(*) FROM yearly_bill_payments p WHERE p.bill_id=b.id AND p.yr='$yr') AS paid_this_year
                              FROM yearly_bills b WHERE b.active=1 ORDER BY CAST(b.due_month AS UNSIGNED) ASC, CAST(b.due_day AS UNSIGNED) ASC, b.title ASC")->fetchAll(PDO::FETCH_ASSOC);
         echo json_encode(['success'=>true,'items'=>$rows,'year'=>$yr]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'exp_yearly_update':
@@ -3355,7 +3355,7 @@ case 'exp_yearly_update':
         foreach ($map as $in=>$col) { if (array_key_exists($in,$body)) { $sets[]="$col=?"; $vals[]=($body[$in]===''?null:$body[$in]); } }
         if ($sets) { $vals[]=$bid; $pdo->prepare("UPDATE yearly_bills SET ".implode(',',$sets)." WHERE id=?")->execute($vals); }
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'exp_yearly_pay':
@@ -3375,7 +3375,7 @@ case 'exp_yearly_pay':
         $expId = $pdo->lastInsertId();
         $pdo->prepare("INSERT INTO yearly_bill_payments (bill_id,yr,expense_id) VALUES (?,?,?)")->execute([$bid,$yr,$expId]);
         echo json_encode(['success'=>true,'expense_id'=>$expId]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'exp_yearly_delete':
@@ -3385,7 +3385,7 @@ case 'exp_yearly_delete':
         $bid = intval($body['id'] ?? 0);
         $pdo->prepare("UPDATE yearly_bills SET active=0 WHERE id=?")->execute([$bid]);
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'exp_monthly_add':
@@ -3401,7 +3401,7 @@ case 'exp_monthly_add':
                 strval($body['due_day'] ?? '1'), trim($body['vendor'] ?? '') ?: null,
                 trim($body['payment_mode'] ?? '') ?: null, $cu['name'] ?? 'admin']);
         echo json_encode(['success'=>true,'id'=>$pdo->lastInsertId()]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'exp_monthly_update':
@@ -3415,7 +3415,7 @@ case 'exp_monthly_update':
         foreach ($map as $in=>$col) { if (array_key_exists($in,$body)) { $sets[]="$col=?"; $vals[]=($body[$in]===''?null:$body[$in]); } }
         if ($sets) { $vals[]=$bid; $pdo->prepare("UPDATE monthly_bills SET ".implode(',',$sets)." WHERE id=?")->execute($vals); }
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'exp_monthly_list':
@@ -3427,7 +3427,7 @@ case 'exp_monthly_list':
         $rows = $pdo->query("SELECT b.*, (SELECT COUNT(*) FROM monthly_bill_payments p WHERE p.bill_id=b.id AND p.ym='$ym') AS paid_this_month
                              FROM monthly_bills b WHERE b.active=1 ORDER BY CAST(b.due_day AS UNSIGNED) ASC, b.title ASC")->fetchAll(PDO::FETCH_ASSOC);
         echo json_encode(['success'=>true,'items'=>$rows,'month'=>$ym]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'exp_monthly_pay':
@@ -3451,7 +3451,7 @@ case 'exp_monthly_pay':
         // 2) log the payment for this month so it disappears until next month
         $pdo->prepare("INSERT INTO monthly_bill_payments (bill_id,ym,expense_id) VALUES (?,?,?)")->execute([$bid,$ym,$expId]);
         echo json_encode(['success'=>true,'expense_id'=>$expId]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'exp_monthly_delete':
@@ -3462,7 +3462,7 @@ case 'exp_monthly_delete':
         // soft-remove so history/paid records stay intact
         $pdo->prepare("UPDATE monthly_bills SET active=0 WHERE id=?")->execute([$bid]);
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'exp_add_entry':
@@ -3488,7 +3488,7 @@ case 'exp_add_entry':
                 $cu['name'] ?? 'admin',
             ]);
         echo json_encode(['success'=>true,'id'=>$pdo->lastInsertId()]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'exp_update_entry':
@@ -3504,7 +3504,7 @@ case 'exp_update_entry':
         foreach ($map as $in=>$col) { if (array_key_exists($in,$body)) { $sets[]="$col=?"; $vals[]=($body[$in]===''?null:$body[$in]); } }
         if ($sets) { $vals[]=$id; $pdo->prepare("UPDATE expenses SET ".implode(',',$sets)." WHERE id=?")->execute($vals); }
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'exp_delete_entry':
@@ -3514,7 +3514,7 @@ case 'exp_delete_entry':
         $id = intval($body['id'] ?? 0);
         $pdo->prepare("DELETE FROM expenses WHERE id=?")->execute([$id]);
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'bs_from_task':
@@ -3608,7 +3608,7 @@ case 'bs_task_diagnose':
             'bs_entry'=>$bs[0]??null,
             'why'=>$reasons,
         ]]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'bs_resync_all':
@@ -3738,7 +3738,7 @@ case 'add_tech_note':
             if(function_exists('fcm_send_to_user')){ fcm_send_to_user($pdo,$uid,$titles[$type]??'📝 New note', ($ttl!==''?$ttl:mb_substr($bdy,0,80)), ['type'=>'tech_note']); }
         } catch(Exception $e){}
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'list_tech_notes':
@@ -3754,7 +3754,7 @@ case 'list_tech_notes':
         $st = $pdo->prepare("SELECT * FROM tech_notes WHERE user_id=? ORDER BY created_at DESC");
         $st->execute([$uid]);
         echo json_encode(['success'=>true,'notes'=>$st->fetchAll()]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'fcm_diagnostic':
@@ -3821,7 +3821,7 @@ case 'fcm_diagnostic':
             } catch(Exception $e){ $out['tech_check']=['error'=>$e->getMessage()]; }
         }
         echo json_encode(['success'=>true,'diag'=>$out]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'broadcast_push':
@@ -3849,7 +3849,7 @@ case 'broadcast_push':
             }
         }
         echo json_encode(['success'=>true,'sent'=>$sent,'failed'=>$failed,'total'=>count($ids)]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'delete_tech_note':
@@ -3860,7 +3860,7 @@ case 'delete_tech_note':
         if(!$nid){ echo json_encode(['error'=>'note_id required']); break; }
         $pdo->prepare("DELETE FROM tech_notes WHERE id=?")->execute([$nid]);
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'ack_all_notes':
@@ -3869,7 +3869,7 @@ case 'ack_all_notes':
         $pdo->prepare("UPDATE tech_notes SET acknowledged_at=NOW() WHERE user_id=? AND acknowledged_at IS NULL")
             ->execute([intval($userId)]);
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'ack_tech_note':
@@ -3880,7 +3880,7 @@ case 'ack_tech_note':
         $pdo->prepare("UPDATE tech_notes SET acknowledged_at=NOW() WHERE id=? AND user_id=? AND acknowledged_at IS NULL")
             ->execute([$nid, intval($userId)]);
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'my_notes_unread':
@@ -4495,7 +4495,7 @@ case 'skip_consent':
         $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'system')")
             ->execute([$id, $userId, "⏭️ Consent SKIPPED by {$techName} (existing customer) — technician takes responsibility for proceeding without customer confirmation."]);
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ============================================================
@@ -4833,7 +4833,7 @@ case 'tech_coins':
                     WHERE u.role='technician'
                     GROUP BY u.id, u.name ORDER BY u.name")->fetchAll(PDO::FETCH_ASSOC);
         echo json_encode(['success'=>true,'coins'=>$rows]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ── Technician: my cash lock + coin status (for the red banner on app home) ──
@@ -4856,7 +4856,7 @@ case 'my_cash_lock_status':
             'coins'=>coin_balance($pdo,$me2),
             'message'=>$locked ? ('🔒 Tasks locked — please deposit your pending cash. ₹'.number_format($amt).' pending for '.$days.' days. Deposit it and your tasks unlock automatically.'."\n".'🔒 మీ టాస్క్‌లు లాక్ అయ్యాయి — దయచేసి మీ దగ్గర ఉన్న క్యాష్ డిపాజిట్ చేయండి. ₹'.number_format($amt).', '.$days.' రోజులుగా పెండింగ్‌లో ఉంది. డిపాజిట్ చేయగానే మీ టాస్క్‌లు ఆటోమేటిక్‌గా అన్‌లాక్ అవుతాయి.') : ''
         ]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ── ADMIN: Cash pending-deposit summary (per technician + per task) ──
@@ -4925,7 +4925,7 @@ case 'cash_pending_summary':
         }
         unset($tt);
         echo json_encode(['success'=>true,'lock_days'=>$LOCK_DAYS,'tasks'=>$tasks,'by_technician'=>$techList]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ── ADMIN: Test the reminder (push + WhatsApp) on any user, WITHOUT touching tasks/balance sheet ──
@@ -4953,7 +4953,7 @@ case 'test_reminder':
             'whatsapp'=>$wa,
             'note'=> ($hasToken ? 'Push attempted.' : 'No app token saved for this user — they must log into the technician app on their phone for push to work. WhatsApp still works.')
         ]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ── ADMIN: Remind technician(s) to deposit pending cash (push + WhatsApp link) ──
@@ -5004,7 +5004,7 @@ case 'remind_cash_deposit':
             try { $pdo->prepare("UPDATE tasks SET cash_reminder_at=NOW() WHERE assigned_to=? AND LOWER(payment_mode)='cash' AND cash_deposit_status='pending'")->execute([$techId]); } catch(Exception $e){}
         } else { echo json_encode(['error'=>'Provide task_id or tech_id']); break; }
         echo json_encode(['success'=>true,'push_sent'=>in_array('push',$sent),'whatsapp'=>$waLinks]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ── ADMIN: Verify cash deposit (approve → 'deposited' / reject → back to 'pending') ──
@@ -5166,7 +5166,7 @@ case 'pl_seed_services':
             }
         }
         echo json_encode(['success'=>true,'added'=>$added,'note'=>$added?('Added '.$added.' service plan(s). Edit prices in the Price List.'):'All service plans already exist.']);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'pl_seed_renewals':
@@ -5202,7 +5202,7 @@ case 'pl_seed_renewals':
             $added++;
         }
         echo json_encode(['success'=>true,'added'=>$added,'note'=>$added?'Added '.$added.' renewal plan(s). Edit prices in the Price List page.':'All renewal plans already exist.']);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'pl_get':
@@ -5298,7 +5298,7 @@ case 'pl_save':
                     ->execute([$savedName]);
             }
         }
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'pl_delete':
@@ -5332,7 +5332,7 @@ case 'pl_delete':
         } else {
             echo json_encode(['success'=>true, 'stock_removed'=>false]);
         }
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'pl_get_public':
@@ -5350,7 +5350,7 @@ case 'stock_reset_movements':
         $deleted = $pdo->exec("DELETE FROM stock_movements");
         $pdo->prepare("INSERT INTO stock_movements (item_id, move_type, qty, ref_note, move_date, done_by) SELECT id, 'adjustment', 0, 'Reset by admin', CURDATE(), ? FROM stock_items WHERE 1=0")->execute([$cu['name']]);
         echo json_encode(['success'=>true, 'deleted'=>$deleted]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ── PURCHASES API (admin only) ───────────────────────────────────────
@@ -5408,7 +5408,7 @@ case 'pur_save':
         $purId = intval($pdo->lastInsertId());
         // Stock NOT added yet — added only when marked as received
         echo json_encode(['success'=>true,'id'=>$purId]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'pur_mark_received':
@@ -5447,7 +5447,7 @@ case 'pur_mark_received':
         $pdo->prepare("UPDATE purchases SET stock_added=1, received_date=?, received_qty=?, received_by=? WHERE id=?")
             ->execute([$recDate,$recQty,$cu['name'],$id]);
         echo json_encode(['success'=>true,'imeis_saved'=>count($normImeis)]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'pur_delete':
@@ -5463,7 +5463,7 @@ case 'pur_delete':
         }
         $pdo->prepare("DELETE FROM purchases WHERE id=?")->execute([$id]);
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ── SET OPENING BALANCE ──────────────────────────────────────────────
@@ -5475,7 +5475,7 @@ case 'stock_set_opening':
     try {
         $pdo->prepare("UPDATE stock_items SET opening_bal=? WHERE id=?")->execute([$opening, $itemId]);
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ── GPS STOCK INVENTORY API (stock_ prefix, no collision with inv_ invoicing) ──
@@ -5649,7 +5649,7 @@ case 'stock_save_item':
                 ->execute([$name,$cat,$model,$unit,$opening,$minStk,$notes,$cu['name']]);
             echo json_encode(['success'=>true,'id'=>intval($pdo->lastInsertId())]);
         }
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'stock_delete_item':
@@ -5660,7 +5660,7 @@ case 'stock_delete_item':
         if($cnt->fetchColumn()>0){ echo json_encode(['error'=>'Cannot delete — item has movement history']); break; }
         $pdo->prepare("DELETE FROM stock_items WHERE id=?")->execute([$iid]);
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'stock_save_movement':
@@ -5685,7 +5685,7 @@ case 'stock_save_movement':
         $pdo->prepare("INSERT INTO stock_movements (item_id,move_type,qty,tech_name,ref_note,move_date,done_by) VALUES (?,?,?,?,?,?,?)")
             ->execute([$itemId,$type,$qty,$tech?:null,$ref?:null,$date,$cu['name']]);
         echo json_encode(['success'=>true,'id'=>intval($pdo->lastInsertId())]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ══════════════════════════════════════════════════════════════════════
@@ -5720,7 +5720,7 @@ case 'dev_save_pull':
             $n++;
         }
         echo json_encode(['success'=>true,'saved'=>$n]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'dev_upload_received':
@@ -5740,7 +5740,7 @@ case 'dev_upload_received':
         }
         $total = $pdo->query("SELECT COUNT(*) FROM received_devices")->fetchColumn();
         echo json_encode(['success'=>true,'added'=>$added,'skipped'=>$skipped,'total_received'=>intval($total)]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'dev_match_report':
@@ -5779,7 +5779,7 @@ case 'dev_match_report':
             'with_tech'=>$withTech,
             'by_tech'=>$byTech
         ]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'dev_received_delete':
@@ -5797,7 +5797,7 @@ case 'dev_received_delete':
             $n=0; foreach($imeis as $raw){ $im=preg_replace('/\D/','',(string)$raw); if($im===''){continue;} $del->execute([$im]); $n+=$del->rowCount(); }
             echo json_encode(['success'=>true,'removed'=>$n]);
         } else { echo json_encode(['error'=>'Provide which=all or imeis[]']); }
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'dev_received_list':
@@ -5816,7 +5816,7 @@ case 'dev_received_list':
             else { $r['status']='not_uploaded'; }
         } unset($r);
         echo json_encode(['success'=>true,'received'=>$recv,'total'=>count($recv)]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'dev_get':
@@ -5826,7 +5826,7 @@ case 'dev_get':
         $server = $pdo->query("SELECT imei,device_name,status,technician,server,device_id FROM server_devices ORDER BY status,technician")->fetchAll(PDO::FETCH_ASSOC);
         $recv = intval($pdo->query("SELECT COUNT(*) FROM received_devices")->fetchColumn());
         echo json_encode(['success'=>true,'server_devices'=>$server,'received_total'=>$recv]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'dev_delete_all':
@@ -5840,7 +5840,7 @@ case 'dev_delete_all':
         if($which === 'received' || $which === 'all') $pdo->exec("DELETE FROM received_devices");
         if($which === 'assignments' || $which === 'all') $pdo->exec("DELETE FROM device_assignments");
         echo json_encode(['success'=>true,'cleared'=>$which]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'dev_assign':
@@ -5881,7 +5881,7 @@ case 'dev_assign':
             $n++;
         }
         echo json_encode(['success'=>true,'assigned'=>$n,'technician'=>$tech]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'dev_assignments_get':
@@ -5900,7 +5900,7 @@ case 'dev_assignments_get':
             $s = $pdo->query("SELECT imei,device_name,model,server,technician,technician_id,status,assigned_at FROM device_assignments WHERE status='with_tech' ORDER BY technician,device_name");
         }
         echo json_encode(['success'=>true,'assignments'=>$s->fetchAll(PDO::FETCH_ASSOC)]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'dev_assigned_imeis':
@@ -5911,7 +5911,7 @@ case 'dev_assigned_imeis':
         $map = [];
         foreach($rows as $r){ $map[$r['imei']] = $r['technician']; }
         echo json_encode(['success'=>true,'assigned'=>$map]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'dev_unassign':
@@ -5923,7 +5923,7 @@ case 'dev_unassign':
         $del = $pdo->prepare("DELETE FROM device_assignments WHERE imei=?");
         $n=0; foreach($imeis as $raw){ $imei=_devNorm($raw); if($imei===''){continue;} $del->execute([$imei]); $n+=$del->rowCount(); }
         echo json_encode(['success'=>true,'removed'=>$n]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ═══════════════════════════════════════════════════════════════════
@@ -5948,7 +5948,7 @@ case 'readding_submit':
             VALUES (?,'pending',?,?,?,?,?,?,?,?,?,?)")
             ->execute([$ref,$name,$imei,$vin,$plate,$reg,$owner,$server_id,$userId,$cu['name']??'',$userRole]);
         echo json_encode(['success'=>true,'ref'=>$ref,'id'=>$pdo->lastInsertId()]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'readding_list':
@@ -5965,7 +5965,7 @@ case 'readding_list':
         $sql .= " ORDER BY created_at DESC LIMIT 300";
         $st = $pdo->prepare($sql); $st->execute($params);
         echo json_encode(['success'=>true,'requests'=>$st->fetchAll()]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'readding_count':
@@ -5986,7 +5986,7 @@ case 'readding_get':
         $r = $st->fetch();
         if(!$r){ echo json_encode(['error'=>'Not found']); break; }
         echo json_encode(['success'=>true,'request'=>$r]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'readding_approve':
@@ -6024,7 +6024,7 @@ case 'readding_approve':
         } catch(Exception $e){ /* assignment is best-effort; approval already recorded */ }
 
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'readding_cancel':
@@ -6039,7 +6039,7 @@ case 'readding_cancel':
         $pdo->prepare("UPDATE readding_requests SET status='cancelled', cancelled_by=?, cancelled_at=NOW() WHERE id=?")
             ->execute([$cu['name']??'Admin', $id]);
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // ═══════════════════════════════════════════════════════════════════
@@ -6060,7 +6060,7 @@ case 'renewal_upload_screenshot':
         } else {
             echo json_encode(['error'=>'Upload failed']);
         }
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'renewal_request':
@@ -6092,7 +6092,7 @@ case 'renewal_request':
                        ($curExpiry && $curExpiry!=='0000-00-00')?$curExpiry:null,$months,$label,$newExpiry,
                        trim($body['price_item']??''),$amount,$gst,$userId,$cu['name']??'',$userRole,$screenshot]);
         echo json_encode(['success'=>true,'ref'=>$ref,'new_expiry'=>$newExpiry,'id'=>$pdo->lastInsertId()]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'renewal_list':
@@ -6105,7 +6105,7 @@ case 'renewal_list':
         $sql .= " ORDER BY requested_at DESC LIMIT 500";
         $st = $pdo->prepare($sql); $st->execute($params);
         echo json_encode(['success'=>true,'requests'=>$st->fetchAll()]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'renewal_count':
@@ -6205,7 +6205,7 @@ case 'renewal_approve':
         // background call from the browser after this responds, so SMTP can never block approval).
         echo json_encode(['success'=>true,'bs_entry'=>$bsId?true:false,'customer_email'=>$customerEmail?:null,
                           'device_name'=>$r['device_name'],'new_expiry'=>$r['new_expiry'],'plate'=>$r['plate'],'owner'=>$r['owner']]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 // Send the renewal confirmation email (called separately by the browser, so SMTP never blocks approval)
@@ -6341,7 +6341,7 @@ case 'daily_report_data':
         } catch(Exception $e){}
 
         echo json_encode(['success'=>true,'date'=>$date,'items'=>$out,'readds'=>$readds,'licenses'=>$licenses,'created_count'=>$createdCount,'created_list'=>$createdList,'half_day'=>$halfDay]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'renewal_backfill_names':
@@ -6368,7 +6368,7 @@ case 'renewal_backfill_names':
             if(count($sample) < 8){ $sample[] = ['bs_id'=>intval($rr['bs_entry_id']),'was'=>$curName,'now'=>$newName,'owner'=>trim($rr['owner']??'')]; }
         }
         echo json_encode(['success'=>true,'updated'=>$updated,'skipped'=>$skipped,'checked'=>count($rows),'sample'=>$sample]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'renewal_bs_check':
@@ -6405,7 +6405,7 @@ case 'renewal_bs_check':
             ];
         }
         echo json_encode(['success'=>true,'approved_renewals'=>count($rows),'details'=>$out]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'renewal_bs_repair':
@@ -6461,7 +6461,7 @@ case 'renewal_bs_repair':
             }
         }
         echo json_encode(['success'=>true,'fixed'=>$fixed,'created'=>$created]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'renewal_delete':
@@ -6480,7 +6480,7 @@ case 'renewal_delete':
         }
         $pdo->prepare("DELETE FROM renewal_requests WHERE id=?")->execute([$id]);
         echo json_encode(['success'=>true,'bs_deleted'=>$bsDeleted]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'renewal_reject':
@@ -6495,7 +6495,7 @@ case 'renewal_reject':
         $pdo->prepare("UPDATE renewal_requests SET status='rejected', approved_by=?, approved_at=NOW(), notes=? WHERE id=?")
             ->execute([$cu['name']??'Admin', trim($body['notes']??''), $id]);
         echo json_encode(['success'=>true]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'renewal_fix_missing_bs':
@@ -6530,7 +6530,7 @@ case 'renewal_fix_missing_bs':
             if($bsId){ $pdo->prepare("UPDATE renewal_requests SET bs_entry_id=?, amount=?, gst=? WHERE id=?")->execute([$bsId,$amount,$gstAmt,$r['id']]); $fixed++; }
         }
         echo json_encode(['success'=>true,'fixed'=>$fixed]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'coin_diagnose':
@@ -6560,7 +6560,7 @@ case 'coin_diagnose':
             'coins_awarded'=>$coinRow?intval($coinRow['coins']):0,
             'has_coin_entry'=>$coinRow?true:false,
         ]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'coin_backfill_24h':
@@ -6604,7 +6604,7 @@ case 'coin_backfill_24h':
             'checked'=>count($tasks),
             'breakdown'=>['already_had_coins'=>$already,'no_timestamp'=>$noTime,'over_24h'=>$tooLate],
         ]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'discount_budget_list':
@@ -6630,7 +6630,7 @@ case 'discount_budget_list':
             ];
         }
         echo json_encode(['success'=>true,'budgets'=>$out]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'discount_budget_set':
@@ -6650,7 +6650,7 @@ case 'discount_budget_set':
                 ->execute([$nm,$lim,$cu['name']??'admin']);
             echo json_encode(['success'=>true,'monthly_limit'=>$lim,'weekly_cap'=>round($lim/4,2)]);
         }
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'discount_check':
@@ -6660,7 +6660,7 @@ case 'discount_check':
         $amt = floatval($body['amount'] ?? $_GET['amount'] ?? 0);
         list($ok, $reason, $info) = _discountCheck($pdo, $nm, $amt);
         echo json_encode(['success'=>true,'allowed'=>$ok,'reason'=>$reason,'info'=>$info]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'quotation_create':
@@ -6729,7 +6729,7 @@ case 'quotation_create':
             }
         }
         echo json_encode(['success'=>true,'task_id'=>$taskId,'task_db_id'=>$taskDbId,'quote_no'=>$quoteNo,'emailed'=>$emailed]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 case 'quotation_list':
@@ -6738,7 +6738,7 @@ case 'quotation_list':
         $pdo->exec("CREATE TABLE IF NOT EXISTS quotations (id INT AUTO_INCREMENT PRIMARY KEY, quote_no VARCHAR(50), task_db_id INT NULL, task_id VARCHAR(20) NULL, customer_name VARCHAR(200), email VARCHAR(200), contact_number VARCHAR(30), items_json TEXT, grand_total DECIMAL(10,2) DEFAULT 0, notes TEXT, emailed TINYINT(1) DEFAULT 0, created_by VARCHAR(100), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         $rows = $pdo->query("SELECT * FROM quotations ORDER BY created_at DESC LIMIT 300")->fetchAll();
         echo json_encode(['success'=>true,'quotations'=>$rows]);
-    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
 default:
