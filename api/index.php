@@ -790,6 +790,12 @@ function _ensureOutstationTables($pdo){
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_claim (claim_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        // Columns for the expanded claim types (courier / personal-office expense).
+        try { $pdo->exec("ALTER TABLE outstation_claims ADD COLUMN claim_type VARCHAR(30) NOT NULL DEFAULT 'outstation'"); } catch(Exception $e){}
+        try { $pdo->exec("ALTER TABLE outstation_claims ADD COLUMN expense_date DATE DEFAULT NULL"); } catch(Exception $e){}
+        try { $pdo->exec("ALTER TABLE outstation_claims ADD COLUMN expense_description TEXT DEFAULT NULL"); } catch(Exception $e){}
+        // The old UNIQUE(task_db_id) blocks multiple expense claims (all task_db_id=0). Drop it if present.
+        try { $pdo->exec("ALTER TABLE outstation_claims DROP INDEX uq_task_claim"); } catch(Exception $e){}
     } catch(Exception $e){ error_log('outstation tables: '.$e->getMessage()); }
 }
 
@@ -2792,6 +2798,53 @@ case 'os_finalize_claim':
     break;
 
 // Technician: view my submitted claims + their status.
+// Technician: create an EXPENSE claim (courier / personal-office expense), optionally linked to a task.
+// Submitted immediately with one bill line so the admin flow is identical to outstation.
+case 'os_create_expense':
+    try {
+        _ensureOutstationTables($pdo);
+        $type = trim($body['expense_type']??'');          // 'courier' | 'personal_office' | other label
+        $amount = floatval($body['amount']??0);
+        $desc = trim($body['description']??'');
+        $edate = trim($body['expense_date']??'');
+        $taskDb = intval($body['task_db_id']??0);          // optional
+        $taskIdStr = trim($body['task_id']??'');
+        if($type===''){ echo json_encode(['error'=>'Select an expense type']); break; }
+        if($amount<=0){ echo json_encode(['error'=>'Enter the amount']); break; }
+        if(empty($body['bill_base64'])){ echo json_encode(['error'=>'Bill / proof photo is required']); break; }
+        if($edate===''){ $edate=date('Y-m-d'); }
+        // If a task was linked, verify it is the technician's (unless admin/manager)
+        if($taskDb>0){
+            $tk=$pdo->prepare("SELECT task_id,assigned_to FROM tasks WHERE id=?"); $tk->execute([$taskDb]); $ti=$tk->fetch(PDO::FETCH_ASSOC);
+            if($ti){ $taskIdStr=$ti['task_id']; if($userRole==='technician' && intval($ti['assigned_to'])!==intval($userId)){ echo json_encode(['error'=>'Not your task']); break; } }
+        }
+        $label = ($type==='courier'?'Courier charges':($type==='personal_office'?'Personal/Office expense':$type));
+        $pdo->prepare("INSERT INTO outstation_claims (task_db_id,task_id,technician_id,claim_type,expense_date,expense_description,notes,status,claimed_total,submitted_at)
+                       VALUES (?,?,?,?,?,?,?, 'submitted', ?, NOW())")
+            ->execute([$taskDb, $taskIdStr?:('EXP-'.date('His')), $userId, ($type==='courier'?'courier':'expense'), $edate, $desc, $label, $amount]);
+        $cid=$pdo->lastInsertId();
+        // Save the bill
+        $billFile=null;
+        $dir=__DIR__.'/../uploads/outstation/'.$cid;
+        if(!is_dir($dir)) @mkdir($dir,0775,true);
+        $data=$body['bill_base64']; if(strpos($data,',')!==false) $data=substr($data,strpos($data,',')+1);
+        $bin=base64_decode($data);
+        if($bin!==false){ $fn='bill_'.time().'_'.rand(100,999).'.jpg'; if(@file_put_contents($dir.'/'.$fn,$bin)){ $billFile='outstation/'.$cid.'/'.$fn; } }
+        $pdo->prepare("INSERT INTO outstation_claim_lines (claim_id,transport_mode,amount,bill_file,status) VALUES (?,?,?,?, 'pending')")
+            ->execute([$cid, $label, $amount, $billFile]);
+        // Notify admins/managers
+        try {
+            require_once __DIR__.'/fcm_send.php';
+            if(function_exists('fcm_send_to_user')){
+                $techName=$currentUser['name']??'Technician';
+                $admins=$pdo->query("SELECT id FROM users WHERE role IN ('admin','assigner','manager') AND is_active=1")->fetchAll(PDO::FETCH_COLUMN);
+                foreach($admins as $aid){ fcm_send_to_user($pdo,intval($aid),'🧾 Expense claim submitted', $techName.' submitted a '.$label.' claim (Rs '.number_format($amount,0).')', ['type'=>'outstation','url'=>'index.html']); }
+            }
+        } catch(Exception $e){}
+        echo json_encode(['success'=>true,'claim_id'=>$cid]);
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
+    break;
+
 case 'os_my_claims':
     try {
         _ensureOutstationTables($pdo);
