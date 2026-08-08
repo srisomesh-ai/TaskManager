@@ -444,15 +444,25 @@
     const ov=document.getElementById('os-ov'), sh=document.getElementById('os-sheet');
     if(!ov||!sh){ alert('Outstation panel not found — please update the app.'); return; }
     ov.style.display='block'; requestAnimationFrame(function(){ sh.style.transform='translateY(0)'; });
+    try{ history.pushState({panel:'outstation'},''); }catch(e){}
     const b=document.getElementById('os-body');
     if(b) b.innerHTML='<div style="text-align:center;padding:30px;color:#889">Loading your tasks…</div>';
     try { osShowTaskList(); }
     catch(e){ if(b) b.innerHTML='<div style="padding:20px;color:#c00;font-size:13px">Error: '+String(e.message||e)+'</div>'; }
   }
-  function closeOutstation(){
+  function closeOutstation(_fromPop){
     const ov=document.getElementById('os-ov'), sh=document.getElementById('os-sheet');
     sh.style.transform='translateY(100%)'; setTimeout(function(){ ov.style.display='none'; }, 250);
+    if(!_fromPop){ try{ history.back(); }catch(e){} }
   }
+
+  // Hardware/browser BACK: if any slide-in panel is open, just close it (don't exit the app).
+  window.addEventListener('popstate', function(){
+    const os=document.getElementById('os-ov'), nh=document.getElementById('nh-ov'), gl=document.getElementById('gl-ov');
+    if(os && getComputedStyle(os).display!=='none'){ closeOutstation(true); return; }
+    if(nh && getComputedStyle(nh).display!=='none' && typeof closeNotifHistory==='function'){ closeNotifHistory(true); return; }
+    if(gl && getComputedStyle(gl).display!=='none' && typeof closeGuidelines==='function'){ closeGuidelines(true); return; }
+  });
   async function osDebugCreate(){
     const who=await api('os_whoami',{}).catch(function(e){ return {error:String(e.message||e)}; });
     let whoTxt='Server sees -> id: '+(who&&who.user_id!=null?who.user_id:'NULL')+' | role: '+((who&&who.user_role)||'NULL')+' | name: '+((who&&who.user_name)||'NULL')+' | token: '+((who&&who.token_seen)||'NONE')+' | authed: '+((who&&who.authenticated)?'YES':'NO');
@@ -634,6 +644,7 @@
   async function openNotifHistory(){
     const ov=document.getElementById('nh-ov'), sh=document.getElementById('nh-sheet'), b=document.getElementById('nh-body');
     ov.style.display='block';
+    try{ history.pushState({panel:'notif'},''); }catch(e){}
     requestAnimationFrame(function(){ sh.style.transform='translateY(0)'; });
     b.innerHTML='<div style="text-align:center;padding:30px;color:#889">Loading…</div>';
     try{
@@ -661,10 +672,11 @@
       const bd=document.getElementById('nh-badge'); if(bd){ bd.style.display='none'; }
     }catch(e){ b.innerHTML='<div style="padding:20px;color:#c0392b;font-size:13px">Could not load: '+esc(e.message)+'</div>'; }
   }
-  function closeNotifHistory(){
+  function closeNotifHistory(_fromPop){
     const ov=document.getElementById('nh-ov'), sh=document.getElementById('nh-sheet');
     sh.style.transform='translateY(100%)';
     setTimeout(function(){ ov.style.display='none'; }, 250);
+    if(!_fromPop){ try{ history.back(); }catch(e){} }
   }
   async function refreshNotifBadge(){
     try{
@@ -680,12 +692,14 @@
     if(b && !b.dataset.loaded){ b.innerHTML=GUIDELINES_HTML; b.dataset.loaded='1'; }
     const ov=document.getElementById('gl-ov'); const sh=document.getElementById('gl-sheet');
     ov.style.display='block';
+    try{ history.pushState({panel:'guidelines'},''); }catch(e){}
     requestAnimationFrame(function(){ sh.style.transform='translateY(0)'; });
   }
-  function closeGuidelines(){
+  function closeGuidelines(_fromPop){
     const ov=document.getElementById('gl-ov'); const sh=document.getElementById('gl-sheet');
     sh.style.transform='translateY(100%)';
     setTimeout(function(){ ov.style.display='none'; }, 250);
+    if(!_fromPop){ try{ history.back(); }catch(e){} }
   }
   const GUIDELINES_HTML = `
     <style>
