@@ -2518,6 +2518,18 @@ function _ensureOutstationTables($pdo){
 // Technician: list MY tasks I can claim on (any task assigned to me, incl. closed), with claim status.
 // DEBUG: create a complete fake outstation claim in one call, so we can verify the tech->admin
 // pipeline end to end. Also returns how many tasks the technician has (to diagnose empty lists).
+case 'os_whoami':
+    // Dead-simple diagnostic: echo exactly who the server thinks is calling.
+    echo json_encode([
+        'success'=>true,
+        'user_id'=>$userId,
+        'user_role'=>$userRole,
+        'user_name'=>$cu['name'] ?? null,
+        'token_seen'=>$token ? (substr($token,0,6).'…') : 'NONE',
+        'authenticated'=>$cu ? true : false,
+    ]);
+    break;
+
 case 'os_debug_create':
     try {
         _ensureOutstationTables($pdo);
