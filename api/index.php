@@ -2530,6 +2530,19 @@ case 'os_whoami':
     ]);
     break;
 
+// DEBUG: echo exactly who the server thinks is calling (to diagnose the id ? issue)
+case 'whoami':
+    echo json_encode([
+        'success'=>true,
+        'user_id'=>$userId,
+        'role'=>$userRole,
+        'name'=>$cu['name']??null,
+        'email'=>$cu['email']??null,
+        'authenticated'=>($cu?true:false),
+        'token_seen'=>($token?substr($token,0,6).'…':'NONE')
+    ]);
+    break;
+
 case 'os_debug_create':
     try {
         _ensureOutstationTables($pdo);
