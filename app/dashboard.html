@@ -454,13 +454,15 @@
     sh.style.transform='translateY(100%)'; setTimeout(function(){ ov.style.display='none'; }, 250);
   }
   async function osDebugCreate(){
-    if(!confirm('Create a DEBUG test claim (₹700) and submit it to admin?')) return;
+    const who=await api('os_whoami',{}).catch(function(e){ return {error:String(e.message||e)}; });
+    let whoTxt='Server sees -> id: '+(who&&who.user_id!=null?who.user_id:'NULL')+' | role: '+((who&&who.user_role)||'NULL')+' | name: '+((who&&who.user_name)||'NULL')+' | token: '+((who&&who.token_seen)||'NONE')+' | authed: '+((who&&who.authenticated)?'YES':'NO');
+    if(!confirm(whoTxt+'\n\nCreate a DEBUG test claim and submit to admin?')) return;
     const d=await api('os_debug_create',{},'POST',{}).catch(function(e){ return {error:String(e.message||e)}; });
     if(d && d.success){
-      showToast('✅ Debug claim #'+d.claim_id+' created · your tasks: '+d.your_task_count);
-      alert('Debug claim created!\n\nClaim ID: '+d.claim_id+'\nYour technician id: '+d.technician_id+'\nTasks assigned to you: '+d.your_task_count+'\n\nNow open the ADMIN panel → Outstation Claims → Pending. It should appear there.');
+      showToast('✅ Debug claim #'+d.claim_id+' created');
+      alert('Debug claim created!\n\n'+whoTxt+'\n\nClaim ID: '+d.claim_id+'\nTasks assigned to you: '+d.your_task_count+'\n\nNow open ADMIN -> Outstation Claims -> Pending.');
     } else {
-      alert('Debug failed: '+((d&&d.error)||'unknown error'));
+      alert('Debug create failed: '+((d&&d.error)||'unknown error')+'\n\n'+whoTxt);
     }
   }
 
