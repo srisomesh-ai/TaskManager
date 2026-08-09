@@ -8144,8 +8144,18 @@ function openOutstationDetailInline(c, lines, cid, isAdmin, final){
   } else if(final){
     h+='<div style="text-align:center;color:var(--green);font-weight:800;padding:8px">✅ Finalized — ₹'+(+c.approved_total||0)+' paid as coins</div>';
   }
+  // Admin-only: delete this claim entirely
+  if(currentUser && currentUser.role==='admin'){
+    h+='<button class="ts-btn" style="width:100%;background:none;color:var(--red);border:1.5px solid var(--red);font-weight:700;margin-top:10px" onclick="osDeleteClaim('+cid+')">🗑️ Delete this claim</button>';
+  }
   h+='</div>';
   list.innerHTML=h;
+}
+async function osDeleteClaim(cid){
+  if(!confirm('Delete this claim permanently? This removes the claim, all its lines and uploaded bills. This cannot be undone.')) return;
+  const d=await api('os_delete_claim',{},'POST',{claim_id:cid}).catch(()=>({}));
+  if(d&&d.success){ showToast('🗑️ Claim deleted'); loadOutstationClaims(_osCurrentFilter); }
+  else showToast('❌ '+((d&&d.error)||'Could not delete'));
 }
 async function osDecideLine(lineId, decision, cid){
   let approved=0, note='';
