@@ -917,9 +917,13 @@ function exportXLS(){
     'Name on Server':e.name_on_server,'Server':e.server_name,'Model/Service':e.device_model||e.service_type,
     'Qty':e.qty,'Unit Price':e.unit_price,'GST':e.gst,'Total':e.total_price,
     'Received':e.payment_received,'Pending':e.pending_payment,'Mode':e.payment_mode,
-    'Status':e.payment_status,'Tech':e.technician_name,'Location':e.location,
+    'Status':e.payment_status,
+    'Payment Received On':e.payment_received_on?new Date(e.payment_received_on).toLocaleDateString('en-IN'):'',
+    'Transaction Details / Payment Remarks':e.payment_transaction_details||'',
+    'Tech':e.technician_name,'Location':e.location,
     'GPS Serial':e.gps_serial_no,'Remarks':e.remarks,'Created By':e.created_by_code,
-    'Created At':e.created_at?new Date(e.created_at).toLocaleString('en-IN'):''}));
+    'Task Created At':e.created_at?new Date(e.created_at).toLocaleString('en-IN'):'',
+    'Last Updated':e.updated_at?new Date(e.updated_at).toLocaleString('en-IN'):''}));
   const ws=XLSX.utils.json_to_sheet(rows);
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Balance Sheet');
