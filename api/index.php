@@ -3708,9 +3708,10 @@ case 'bs_resync_all':
             $bsType = bs_type_for_task($r['device_details']??'');
             $pdo->prepare("UPDATE balance_sheet_entries SET
                 payment_received=?, pending_payment=?, payment_status=?,
-                payment_mode=?, total_price=?, type=?, updated_at=NOW()
+                payment_mode=?, total_price=?, type=?, updated_at=NOW(),
+                payment_received_on = CASE WHEN ?='paid' AND payment_received_on IS NULL THEN CURDATE() ELSE payment_received_on END
                 WHERE id=?")
-                ->execute([$recv, $pend, $ps, $r['payment_mode'], $total, $bsType, $r['id']]);
+                ->execute([$recv, $pend, $ps, $r['payment_mode'], $total, $bsType, $ps, $r['id']]);
             $count++;
         }
         echo json_encode(['success'=>true, 'updated'=>$count, 'created'=>$created]);
