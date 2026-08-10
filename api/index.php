@@ -3226,6 +3226,53 @@ case 'bs_get_entries':
     $sql = "SELECT * FROM balance_sheet_entries" . ($where?" WHERE ".implode(" AND ",$where):"") . " ORDER BY date DESC, created_at DESC LIMIT 1000";
     $s = $pdo->prepare($sql); $s->execute($params);
     $entries = $s->fetchAll();
+    // Enrich each task-linked entry with the ACTUAL payment received time + transaction reference
+    // from the payments table (payments record when money was actually collected, which can be
+    // long after the task/installation date). This fills the export's "Payment Received On" (with
+    // time) and "Transaction Details" columns.
+    try {
+        // Map entry -> numeric task id (task_db_id, else resolve string task_id)
+        $tidByEntry = []; $needStr = [];
+        foreach ($entries as $i => $e) {
+            if (!empty($e['task_db_id'])) { $tidByEntry[$i] = (int)$e['task_db_id']; }
+            else if (!empty($e['task_id'])) { $needStr[$e['task_id']][] = $i; }
+        }
+        if ($needStr) {
+            $strs = array_keys($needStr); $ph = implode(',', array_fill(0, count($strs), '?'));
+            $rq = $pdo->prepare("SELECT id, task_id FROM tasks WHERE task_id IN ($ph)");
+            $rq->execute($strs);
+            foreach ($rq->fetchAll(PDO::FETCH_ASSOC) as $tr) {
+                foreach (($needStr[$tr['task_id']] ?? []) as $idx) { $tidByEntry[$idx] = (int)$tr['id']; }
+            }
+        }
+        $allTids = array_values(array_unique($tidByEntry));
+        if ($allTids) {
+            $ph = implode(',', array_fill(0, count($allTids), '?'));
+            // Latest payment per task (most recent transaction_ref + time)
+            $pq = $pdo->prepare("SELECT task_id, amount, payment_mode, transaction_ref, created_at
+                                 FROM payments WHERE task_id IN ($ph) ORDER BY created_at ASC");
+            $pq->execute($allTids);
+            $payByTask = [];
+            foreach ($pq->fetchAll(PDO::FETCH_ASSOC) as $p) {
+                $t = (int)$p['task_id'];
+                if (!isset($payByTask[$t])) $payByTask[$t] = ['last'=>null,'refs'=>[]];
+                $payByTask[$t]['last'] = $p['created_at'];                 // last (latest) payment time
+                if (!empty($p['transaction_ref'])) $payByTask[$t]['refs'][] = trim($p['payment_mode'].' '.$p['transaction_ref']);
+            }
+            foreach ($entries as $i => &$e) {
+                $t = $tidByEntry[$i] ?? 0;
+                if ($t && isset($payByTask[$t])) {
+                    // Exact received timestamp (date + time)
+                    if (!empty($payByTask[$t]['last'])) $e['payment_received_at'] = $payByTask[$t]['last'];
+                    // Transaction details (join all refs) — only if the entry doesn't already carry one
+                    if (empty($e['payment_transaction_details']) && !empty($payByTask[$t]['refs'])) {
+                        $e['payment_transaction_details'] = implode(' | ', array_unique($payByTask[$t]['refs']));
+                    }
+                }
+            }
+            unset($e);
+        }
+    } catch(Exception $e) { error_log('bs payment enrich: '.$e->getMessage()); }
     // Attach the task's payment screenshot (for sales/task entries) from task_documents.
     // License/renewal entries already carry their proof in payment_transaction_details.
     try {
