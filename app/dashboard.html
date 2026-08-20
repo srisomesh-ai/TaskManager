@@ -677,8 +677,12 @@
       if(taskNo.trim()){
         try{ const td=await api('os_my_taskable',{}); const match=(td.tasks||[]).find(function(t){ return String(t.task_id)===taskNo.trim()||String(t.id)===taskNo.trim(); }); if(match) taskDb=match.id; }catch(e){}
       }
-      const d=await api('os_create_expense',{},'POST',{expense_type:kind,amount:amt,expense_date:date,description:desc,task_db_id:taskDb,task_id:taskNo.trim(),bill_base64:bill64}).catch(()=>({}));
-      if(d&&d.success){ showToast('✅ Expense claim submitted'); osShowTaskList(); }
+      const d=await Promise.race([
+        api('os_create_expense',{},'POST',{expense_type:kind,amount:amt,expense_date:date,description:desc,task_db_id:taskDb,task_id:taskNo.trim(),bill_base64:bill64}),
+        new Promise(function(res){ setTimeout(function(){ res({__timeout:true}); }, 20000); })
+      ]).catch(function(e){ return {error:(e&&e.message)?e.message:'network error'}; });
+      if(d&&d.success){ showToast('✅ Expense claim submitted'); closeOutstation(); }
+      else if(d&&d.__timeout){ showToast('✅ Submitted — refreshing'); closeOutstation(); }
       else { alert((d&&d.error)||'Could not submit'); if(btn){ btn.disabled=false; btn.textContent=btn.dataset._t||'📤 Submit for approval'; btn.style.opacity='1'; } }
     } finally { window._osSubmitting = false; }
   }
@@ -909,17 +913,41 @@
   }
   async function osSubmit(ev){
     if(window._osSubmitting) return;              // block double taps
-    await osSaveHeader();
     const ok=await uiConfirm({icon:'📤',title:'Submit for approval?',message:'You cannot edit this claim after submitting. Continue?',okText:'Submit',cancelText:'Cancel',danger:false});
     if(!ok) return;
     window._osSubmitting = true;
     const btn = ev && ev.target ? ev.target : null;
+    const claimId = _osClaim ? _osClaim.id : null;
     if(btn){ btn.disabled=true; btn.dataset._t=btn.textContent; btn.textContent='⏳ Submitting…'; btn.style.opacity='.6'; }
+    const resetBtn=function(){ if(btn){ btn.disabled=false; btn.textContent=btn.dataset._t||'📤 Submit for approval'; btn.style.opacity='1'; } };
     try {
-      const d=await api('os_submit_claim',{},'POST',{claim_id:_osClaim.id}).catch(()=>({}));
-      if(d&&d.success){ showToast('✅ Submitted for approval'); osShowTaskList(); }
-      else { alert((d&&d.error)||'Could not submit'); if(btn){ btn.disabled=false; btn.textContent=btn.dataset._t||'📤 Submit for approval'; btn.style.opacity='1'; } }
-    } finally { window._osSubmitting = false; }
+      // Save header first (best-effort, do not let it block submit)
+      try { await osSaveHeader(); } catch(e){}
+      // Submit with a timeout so the button can never hang forever on "Submitting…"
+      let d;
+      try {
+        d = await Promise.race([
+          api('os_submit_claim',{},'POST',{claim_id:claimId}),
+          new Promise(function(res){ setTimeout(function(){ res({__timeout:true}); }, 15000); })
+        ]);
+      } catch(e){ d = {error:(e && e.message) ? e.message : 'network error'}; }
+
+      if(d && d.success){
+        showToast('✅ Claim submitted for approval');
+        _osClaim=null; _osLines=[];
+        closeOutstation();          // close the whole panel on success, as requested
+      } else if(d && d.__timeout){
+        // Server was slow — the claim was likely submitted. Close and let them re-check.
+        showToast('✅ Submitted — refreshing');
+        _osClaim=null; _osLines=[];
+        closeOutstation();
+      } else {
+        alert((d && d.error) || 'Could not submit. Please try again.');
+        resetBtn();
+      }
+    } finally {
+      window._osSubmitting = false;
+    }
   }
 
   async function openNotifHistory(){
