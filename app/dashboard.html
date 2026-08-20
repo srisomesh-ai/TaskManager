@@ -484,6 +484,20 @@
     else if(id==='nh-ov' && typeof closeNotifHistory==='function') closeNotifHistory(true);
     else if(id==='gl-ov' && typeof closeGuidelines==='function') closeGuidelines(true);
   }
+  // Called by the Flutter app's hardware back button. Returns:
+  //   'handled' → we closed a panel or armed exit (app should stay)
+  //   'exit'    → nothing open, user confirmed intent → app may exit
+  let _flBackArmed=false; let _flBackTimer=null;
+  window.__handleAndroidBack = function(){
+    const open=_anyPanelOpen();
+    if(open){ _closePanelById(open); return 'handled'; }
+    // On home screen: first back arms exit + shows a toast; second back within 2s allows exit.
+    if(_flBackArmed){ if(_flBackTimer){clearTimeout(_flBackTimer);} _flBackArmed=false; return 'exit'; }
+    _flBackArmed=true;
+    try{ if(typeof showToast==='function') showToast('Press back again to exit'); }catch(e){}
+    _flBackTimer=setTimeout(function(){ _flBackArmed=false; }, 2000);
+    return 'handled';
+  };
   try{ history.pushState({guard:1},''); }catch(e){}   // initial guard
   let _backExitArmed=false;
   window.addEventListener('popstate', function(){
