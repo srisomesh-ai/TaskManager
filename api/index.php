@@ -2717,6 +2717,42 @@ case 'os_submit_claim':
     break;
 
 // Admin/Manager: list submitted claims (with counts).
+// Admin/Manager: per-employee claim summary (claimed, approved, counts) + overall all-time total.
+case 'os_admin_summary':
+    if(!in_array($userRole,['admin','assigner','manager'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        _ensureOutstationTables($pdo);
+        $rows=$pdo->query("SELECT c.technician_id, u.name AS tech_name,
+                    COUNT(*) AS total_claims,
+                    SUM(CASE WHEN c.status='submitted' THEN 1 ELSE 0 END) AS pending_claims,
+                    SUM(CASE WHEN c.status='approved' THEN 1 ELSE 0 END) AS approved_claims,
+                    COALESCE(SUM(c.claimed_total),0) AS total_claimed,
+                    COALESCE(SUM(CASE WHEN c.status='approved' THEN c.approved_total ELSE 0 END),0) AS total_approved
+                FROM outstation_claims c JOIN users u ON c.technician_id=u.id
+                WHERE c.status<>'draft'
+                GROUP BY c.technician_id, u.name
+                ORDER BY total_approved DESC")->fetchAll(PDO::FETCH_ASSOC);
+        $overall=$pdo->query("SELECT COALESCE(SUM(approved_total),0) FROM outstation_claims WHERE status='approved'")->fetchColumn();
+        $overallClaimed=$pdo->query("SELECT COALESCE(SUM(claimed_total),0) FROM outstation_claims WHERE status<>'draft'")->fetchColumn();
+        echo json_encode(['success'=>true,'employees'=>$rows,'overall_approved'=>floatval($overall),'overall_claimed'=>floatval($overallClaimed)]);
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// Admin/Manager: all claims for one technician (their task+claim history).
+case 'os_admin_by_tech':
+    if(!in_array($userRole,['admin','assigner','manager'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        _ensureOutstationTables($pdo);
+        $tid=intval($_GET['technician_id']??$body['technician_id']??0);
+        $rows=$pdo->prepare("SELECT c.*, t.customer_name, t.task_status, t.price_to_collect AS task_price,
+                    (SELECT COUNT(*) FROM outstation_claim_lines l WHERE l.claim_id=c.id) AS line_count
+                FROM outstation_claims c LEFT JOIN tasks t ON c.task_db_id=t.id
+                WHERE c.technician_id=? AND c.status<>'draft' ORDER BY c.id DESC");
+        $rows->execute([$tid]);
+        echo json_encode(['success'=>true,'claims'=>$rows->fetchAll(PDO::FETCH_ASSOC)]);
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'os_admin_list':
     if(!in_array($userRole,['admin','assigner','manager'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     try {
@@ -2786,6 +2822,7 @@ case 'os_delete_claim':
         } catch(Exception $e){}
         $pdo->prepare("DELETE FROM outstation_claim_lines WHERE claim_id=?")->execute([$cid]);
         $pdo->prepare("DELETE FROM outstation_claims WHERE id=?")->execute([$cid]);
+        try { $pdo->prepare("DELETE FROM expenses WHERE reference=?")->execute(['OSCLAIM-'.$cid]); } catch(Exception $e){}
         echo json_encode(['success'=>true]);
     } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
@@ -2811,6 +2848,24 @@ case 'os_finalize_claim':
                 'Outstation claim approved for task '.($claim['task_id']??''), null, 'os_claim_'.$cid,
                 '🧾 Outstation approved: +'.intval(round($approvedTotal)).' coins', 'Your outstation claim for task '.($claim['task_id']??'').' was approved.');
         }
+        // Record the approved claim as an EXPENSE so it flows into the P&L. Idempotent via reference.
+        if($approvedTotal>0){
+            try {
+                _ensureExpensesTable($pdo);
+                $ref='OSCLAIM-'.$cid;
+                $exists=$pdo->prepare("SELECT id FROM expenses WHERE reference=? LIMIT 1"); $exists->execute([$ref]);
+                if(!$exists->fetchColumn()){
+                    $ctype = ($claim['claim_type']??'outstation');
+                    $cat = $ctype==='courier' ? 'Courier Charges' : ($ctype==='expense' ? 'Staff Reimbursement' : 'Outstation Travel');
+                    $techNm = '';
+                    try { $tn=$pdo->prepare("SELECT name FROM users WHERE id=?"); $tn->execute([$claim['technician_id']]); $techNm=$tn->fetchColumn()?:''; } catch(Exception $e){}
+                    $co = 'BGPT';
+                    $pdo->prepare("INSERT INTO expenses (company,date,category,description,amount,payment_mode,paid_to,reference,created_by)
+                                   VALUES (?,CURDATE(),?,?,?,?,?,?,?)")
+                        ->execute([$co, $cat, ($cat.' — task '.($claim['task_id']??'').' ('.$techNm.')'), $approvedTotal, 'Coins', $techNm, $ref, $currentUser['name']??'admin']);
+                }
+            } catch(Exception $e){ error_log('os expense record: '.$e->getMessage()); }
+        }
         echo json_encode(['success'=>true,'approved_total'=>$approvedTotal]);
     } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
@@ -2831,6 +2886,13 @@ case 'os_create_expense':
         if($amount<=0){ echo json_encode(['error'=>'Enter the amount']); break; }
         if(empty($body['bill_base64'])){ echo json_encode(['error'=>'Bill / proof photo is required']); break; }
         if($edate===''){ $edate=date('Y-m-d'); }
+        // Prevent accidental duplicate submissions: block an identical claim from the same
+        // technician (same amount + type) created in the last 60 seconds.
+        try {
+            $dup=$pdo->prepare("SELECT id FROM outstation_claims WHERE technician_id=? AND claim_type=? AND claimed_total=? AND created_at > (NOW() - INTERVAL 60 SECOND) LIMIT 1");
+            $dup->execute([$userId, ($type==='courier'?'courier':'expense'), $amount]);
+            if($dup->fetchColumn()){ echo json_encode(['error'=>'This looks like a duplicate — a similar claim was just submitted. Please check your claims.']); break; }
+        } catch(Exception $e){}
         // If a task was linked, verify it is the technician's (unless admin/manager)
         if($taskDb>0){
             $tk=$pdo->prepare("SELECT task_id,assigned_to FROM tasks WHERE id=?"); $tk->execute([$taskDb]); $ti=$tk->fetch(PDO::FETCH_ASSOC);
