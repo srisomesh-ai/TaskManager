@@ -741,15 +741,16 @@
   async function osTechDeleteClaim(cid){
     const ok=await uiConfirm({icon:'🗑️',title:'Delete this claim?',message:'This removes the claim and all its uploaded bills. This action cannot be undone.',okText:'Delete',cancelText:'Cancel'});
     if(!ok) return;
+    if(!cid){ alert('Delete error: no claim id (cid='+cid+'). Reopen the claim and try again.'); return; }
     let d;
     try { d=await api('os_tech_delete_claim',{},'POST',{claim_id:cid}); }
-    catch(e){ alert('Delete failed: '+(e.message||e)); return; }
+    catch(e){ alert('Delete request failed: '+(e.message||e)); return; }
     if(d && d.success){
       showToast('🗑️ Claim deleted');
       _osClaim=null; _osLines=[];
       osShowTaskList();
     } else {
-      alert('Could not delete: '+((d&&d.error)||'unknown error')+(d&&d.where?('\nAt: '+d.where):''));
+      alert('Delete did not succeed.\nClaim id: '+cid+'\nServer said: '+JSON.stringify(d));
     }
   }
   async function osSaveHeader(){
