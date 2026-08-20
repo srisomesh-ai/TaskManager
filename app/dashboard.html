@@ -567,6 +567,47 @@
     } finally { window._osSubmitting = false; }
   }
 
+  async function osMyClaimsView(){
+    const b=document.getElementById('os-body');
+    b.innerHTML='<div style="text-align:center;padding:30px;color:#889">Loading your claims…</div>';
+    try{
+      const d=await api('os_my_claims',{});
+      const claims=(d&&d.claims)?d.claims:[];
+      let h='<button onclick="osShowTaskList()" style="background:none;border:none;color:#0e5c5c;font-weight:700;font-size:13px;padding:0 0 10px;cursor:pointer">‹ Back</button>'
+        +'<div style="font-weight:800;font-size:16px;margin-bottom:12px">📅 My Claims</div>';
+      if(!claims.length){ b.innerHTML=h+'<div style="text-align:center;padding:30px;color:#889">No claims yet.</div>'; return; }
+      // Group by month (YYYY-MM from submitted_at/created_at)
+      const groups={};
+      claims.forEach(function(c){
+        const dt=(c.submitted_at||c.created_at||'').slice(0,7)||'—';
+        (groups[dt]=groups[dt]||[]).push(c);
+      });
+      const months=Object.keys(groups).sort().reverse();
+      const monthName=function(ym){ if(ym==='—')return 'Other'; const p=ym.split('-'); const mn=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return mn[parseInt(p[1])]+' '+p[0]; };
+      months.forEach(function(m){
+        const list=groups[m];
+        const total=list.reduce(function(s,c){ return s+parseFloat(c.claimed_total||0); },0);
+        const appr=list.reduce(function(s,c){ return s+(c.status==='approved'?parseFloat(c.approved_total||0):0); },0);
+        h+='<div style="margin:6px 0 8px;display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #0e5c5c;padding-bottom:4px">'
+          +'<span style="font-weight:800;font-size:14px;color:#0e5c5c">'+monthName(m)+'</span>'
+          +'<span style="font-size:12px;color:#667">Claimed ₹'+total.toFixed(0)+' · Approved ₹'+appr.toFixed(0)+'</span></div>';
+        h+=list.map(function(c){
+          const icon={courier:'📦',expense:'💼'}[c.claim_type]||'📍';
+          const st=c.status==='approved'?'<span style="background:#dcfce7;color:#166534;font-size:10px;font-weight:800;padding:2px 7px;border-radius:8px">✅ ₹'+(+c.approved_total||0)+'</span>':'<span style="background:#fef3c7;color:#b45309;font-size:10px;font-weight:800;padding:2px 7px;border-radius:8px">⏳ Submitted</span>';
+          const label = c.claim_type==='courier'?'Courier': c.claim_type==='expense'?'Office expense':'Outstation';
+          const title = (c.task_id&&c.task_id.indexOf('EXP-')!==0)? (esc(c.task_id)+(c.customer_name?(' · '+esc(c.customer_name)):'')) : label;
+          return '<div style="background:#fff;border-radius:10px;padding:11px 13px;margin-bottom:7px;box-shadow:0 1px 3px rgba(0,0,0,.05)">'
+            +'<div style="display:flex;justify-content:space-between;align-items:center">'
+              +'<div style="font-weight:700;font-size:13px">'+icon+' '+title+'</div>'+st+'</div>'
+            +'<div style="font-size:12px;color:#667;margin-top:3px">'+label+' · Claimed <b>₹'+(+c.claimed_total||0)+'</b> · '+(c.line_count||0)+' item(s)'
+              +((c.submitted_at||c.created_at)?(' · '+String(c.submitted_at||c.created_at).slice(0,10)):'')+'</div>'
+            +'</div>';
+        }).join('');
+      });
+      b.innerHTML=h;
+    }catch(e){ b.innerHTML='<div style="padding:20px;color:#c00">'+esc(e.message)+'</div>'; }
+  }
+
   async function osShowTaskList(){
     const b=document.getElementById('os-body');
     b.innerHTML='<div style="text-align:center;padding:30px;color:#889">Loading your tasks…</div>';
@@ -580,7 +621,8 @@
         +'<button onclick="osExpenseForm(\'courier\')" style="flex:1;background:#fff;border:1.5px solid #b45309;color:#b45309;border-radius:9px;padding:10px;font-weight:700;font-size:12px;cursor:pointer">📦 Courier Charges</button>'
         +'<button onclick="osExpenseForm(\'personal_office\')" style="flex:1;background:#fff;border:1.5px solid #b45309;color:#b45309;border-radius:9px;padding:10px;font-weight:700;font-size:12px;cursor:pointer">💼 Office Expense</button>'
         +'</div>';
-      b.innerHTML=expenseBtns+'<div style="font-size:12px;color:#667;margin-bottom:10px">Or pick a task to claim outstation travel costs. One claim per task.</div>'
+      const myClaimsBtn='<button onclick="osMyClaimsView()" style="width:100%;background:#0e5c5c;color:#fff;border:none;border-radius:9px;padding:11px;font-weight:700;font-size:13px;cursor:pointer;margin-bottom:12px">📅 My Claims — by month</button>';
+      b.innerHTML=expenseBtns+myClaimsBtn+'<div style="font-size:12px;color:#667;margin-bottom:10px">Or pick a task to claim outstation travel costs. One claim per task.</div>'
         + tasks.map(function(t){
           const st=t.claim_status;
           const badge = st==='approved'?'<span style="background:#1a7a3a;color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:9px">✅ Approved</span>'
@@ -685,9 +727,16 @@
   async function osTechDeleteClaim(cid){
     const ok=await uiConfirm({icon:'🗑️',title:'Delete this claim?',message:'This removes the claim and all its uploaded bills. This action cannot be undone.',okText:'Delete',cancelText:'Cancel'});
     if(!ok) return;
-    const d=await api('os_tech_delete_claim',{},'POST',{claim_id:cid}).catch(()=>({}));
-    if(d&&d.success){ showToast('🗑️ Claim deleted'); osShowTaskList(); }
-    else alert((d&&d.error)||'Could not delete');
+    let d;
+    try { d=await api('os_tech_delete_claim',{},'POST',{claim_id:cid}); }
+    catch(e){ alert('Delete failed: '+(e.message||e)); return; }
+    if(d && d.success){
+      showToast('🗑️ Claim deleted');
+      _osClaim=null; _osLines=[];
+      osShowTaskList();
+    } else {
+      alert('Could not delete: '+((d&&d.error)||'unknown error')+(d&&d.where?('\nAt: '+d.where):''));
+    }
   }
   async function osSaveHeader(){
     if(!_osClaim||_osClaim.status!=='draft') return;
