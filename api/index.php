@@ -891,8 +891,12 @@ function _ensureTomorrowTable($pdo){
 function _tomorrowNightlyReset($pdo){
     try {
         _ensureTomorrowTable($pdo);
-        // Clear everything created before today 06:00 (previous night's plans have served their purpose).
-        $pdo->exec("DELETE FROM tomorrow_plans WHERE created_at < CONCAT(CURDATE(),' 06:00:00')");
+        // Clear yesterday's plans ONLY at/after 9 PM. This way a plan made today (6 AM–6 PM for the
+        // next day) stays visible all through the day it is meant for, and is cleared at 9 PM that day.
+        // Rule: at 9 PM or later, delete anything created before today 06:00.
+        if((int)date('H') >= 21){
+            $pdo->exec("DELETE FROM tomorrow_plans WHERE created_at < CONCAT(CURDATE(),' 06:00:00')");
+        }
     } catch(Exception $e){ error_log('tomorrow reset: '.$e->getMessage()); }
 }
 
@@ -2698,7 +2702,7 @@ case 'tm_add':
         if(!$ti){ echo json_encode(['error'=>'Task not found']); break; }
         if($userRole==='technician' && intval($ti['assigned_to'])!==intval($userId)){ echo json_encode(['error'=>'Not your task']); break; }
         // Avoid duplicate of same task in the current cycle
-        $dup = $pdo->prepare("SELECT id FROM tomorrow_plans WHERE technician_id=? AND task_db_id=? AND created_at >= CONCAT(CURDATE(),' 06:00:00') LIMIT 1");
+        $dup = $pdo->prepare("SELECT id FROM tomorrow_plans WHERE technician_id=? AND task_db_id=? LIMIT 1");
         $dup->execute([$userId,$tdb]);
         if($dup->fetchColumn()){ echo json_encode(['error'=>'This task is already in your tomorrow plan']); break; }
         $pdo->prepare("INSERT INTO tomorrow_plans (technician_id,task_db_id,task_id,customer_name,note,plan_time,status) VALUES (?,?,?,?,?,?, 'planned')")
@@ -2711,7 +2715,7 @@ case 'tm_add':
 case 'tm_mine':
     try {
         _ensureTomorrowTable($pdo);
-        $rows = $pdo->prepare("SELECT * FROM tomorrow_plans WHERE technician_id=? AND created_at >= CONCAT(CURDATE(),' 06:00:00') ORDER BY id ASC");
+        $rows = $pdo->prepare("SELECT * FROM tomorrow_plans WHERE technician_id=? ORDER BY id ASC");
         $rows->execute([$userId]);
         echo json_encode(['success'=>true,'plans'=>$rows->fetchAll(PDO::FETCH_ASSOC)]);
     } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage()]); }
@@ -2750,7 +2754,7 @@ case 'tm_admin_board':
         _ensureTomorrowTable($pdo);
         // All active technicians
         $techs = $pdo->query("SELECT id, name FROM users WHERE role='technician' AND is_active=1 ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
-        $plansRows = $pdo->query("SELECT * FROM tomorrow_plans WHERE created_at >= CONCAT(CURDATE(),' 06:00:00') ORDER BY plan_time ASC, id ASC")->fetchAll(PDO::FETCH_ASSOC);
+        $plansRows = $pdo->query("SELECT * FROM tomorrow_plans ORDER BY plan_time ASC, id ASC")->fetchAll(PDO::FETCH_ASSOC);
         $byTech = [];
         foreach($plansRows as $p){ $byTech[$p['technician_id']][] = $p; }
         $out = [];
