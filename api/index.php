@@ -652,11 +652,13 @@ function apply_stale_task_penalty($pdo, $taskId){
         // Only installation tasks earn/lose coins here. Service jobs (V2V/Troubleshoot/Re-Adding/Demo) are excluded.
         if(bs_type_for_task($row['device_details'] ?? '') !== 'sales') return;
 
-        // The clock runs from the LAST activity (updated_at) so any status change resets it,
-        // BUT it never starts before the rule-start date (so old tasks count from today, not earlier).
-        $lastActivity = !empty($row['updated_at']) ? strtotime($row['updated_at']) : strtotime($row['start_ts']);
-        if(!$lastActivity) $lastActivity = $ruleTs;
-        $anchor = max($lastActivity, $ruleTs);         // never earlier than the rule start
+        // The clock runs from ASSIGNMENT and does NOT reset on status updates — only CLOSING the
+        // task stops it (handled by the status check above). This pushes technicians to actually
+        // close the lead, not just poke a status change. It never starts before the rule-start date
+        // (so old open tasks count from today, not from their earlier assignment).
+        $assignTs = !empty($row['start_ts']) ? strtotime($row['start_ts']) : $ruleTs;
+        if(!$assignTs) $assignTs = $ruleTs;
+        $anchor = max($assignTs, $ruleTs);             // never earlier than the rule start
         $ageDays = (time() - $anchor) / 86400.0;
         if($ageDays < 3) return;                       // first penalty only after 3 full days
 
@@ -666,9 +668,9 @@ function apply_stale_task_penalty($pdo, $taskId){
         for($w = 0; $w < $windows; $w++){
             $key = 'stale_task_'.$taskId.'_'.$w;       // idempotent per window
             award_coins($pdo, intval($row['assigned_to']), -50,
-                'Installation task not progressing ('.($w===0?'3 days':(3 + $w*5).' days').' with no update)',
+                'Installation task not closed ('.($w===0?'3 days':(3 + $w*5).' days').' since assignment)',
                 $taskId, $key,
-                '⚠️ -50 coins', 'An installation task assigned to you has had no update. Please update or close it to stop further penalty.');
+                '⚠️ -50 coins', 'An installation task assigned to you is still not closed. Close the task to stop further penalty.');
         }
     } catch(Exception $e){ error_log('apply_stale_task_penalty: '.$e->getMessage()); }
 }
