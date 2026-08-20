@@ -2868,6 +2868,27 @@ case 'os_decide_line':
 
 // Admin: finalize the claim — sum approved lines, award that as coins to the technician.
 // Admin: delete a claim entirely (and its lines + uploaded bills). Cannot be undone.
+// Technician: delete their OWN claim (only while draft or submitted — not after approval/payment).
+case 'os_tech_delete_claim':
+    try {
+        _ensureOutstationTables($pdo);
+        $cid=intval($body['claim_id']??0);
+        if(!$cid){ echo json_encode(['error'=>'Missing claim id']); break; }
+        $c=$pdo->prepare("SELECT * FROM outstation_claims WHERE id=?"); $c->execute([$cid]); $claim=$c->fetch(PDO::FETCH_ASSOC);
+        if(!$claim){ echo json_encode(['error'=>'Claim not found']); break; }
+        if(intval($claim['technician_id'])!==intval($userId)){ echo json_encode(['error'=>'Not your claim']); break; }
+        if($claim['status']==='approved'){ echo json_encode(['error'=>'This claim is already approved and cannot be deleted. Ask admin if needed.']); break; }
+        // Remove uploaded bill files
+        try {
+            $dir=__DIR__.'/../uploads/outstation/'.$cid;
+            if(is_dir($dir)){ foreach(glob($dir.'/*') as $f){ @unlink($f); } @rmdir($dir); }
+        } catch(Exception $e){}
+        $pdo->prepare("DELETE FROM outstation_claim_lines WHERE claim_id=?")->execute([$cid]);
+        $pdo->prepare("DELETE FROM outstation_claims WHERE id=?")->execute([$cid]);
+        echo json_encode(['success'=>true]);
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
+    break;
+
 case 'os_delete_claim':
     if($userRole!=='admin'){ http_response_code(403); echo json_encode(['error'=>'Only admin can delete claims']); break; }
     try {
