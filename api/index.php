@@ -865,6 +865,38 @@ function _ensureOutstationTables($pdo){
     } catch(Exception $e){ error_log('outstation tables: '.$e->getMessage()); }
 }
 
+// TOMORROW ASSIGNMENTS helpers (must be top-level, not inside the switch)
+// ══════════════════════════════════════════════════════════════════════════
+// TOMORROW ASSIGNMENTS — technicians note which tasks they plan to do tomorrow (with a time/note),
+// so the manager can see everyone's plan without calling each morning. Auto-clears nightly.
+// ══════════════════════════════════════════════════════════════════════════
+function _ensureTomorrowTable($pdo){
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS tomorrow_plans (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            technician_id INT NOT NULL,
+            task_db_id INT DEFAULT NULL,
+            task_id VARCHAR(50) DEFAULT NULL,
+            customer_name VARCHAR(255) DEFAULT NULL,
+            note VARCHAR(500) DEFAULT NULL,
+            plan_time VARCHAR(50) DEFAULT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'planned',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_tech (technician_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch(Exception $e){ error_log('tomorrow table: '.$e->getMessage()); }
+}
+// Nightly cleanup: wipe all plans older than the current cycle. We stamp each plan with created_at;
+// anything created before today 6 AM is from a previous day and is cleared. Cheap + idempotent.
+function _tomorrowNightlyReset($pdo){
+    try {
+        _ensureTomorrowTable($pdo);
+        // Clear everything created before today 06:00 (previous night's plans have served their purpose).
+        $pdo->exec("DELETE FROM tomorrow_plans WHERE created_at < CONCAT(CURDATE(),' 06:00:00')");
+    } catch(Exception $e){ error_log('tomorrow reset: '.$e->getMessage()); }
+}
+
+
 switch ($action) {
 
 // ---- PING ----
@@ -2653,36 +2685,6 @@ case 'os_debug_create':
     break;
 
 // DEBUG: (single canonical os_debug_create above)
-
-// ══════════════════════════════════════════════════════════════════════════
-// TOMORROW ASSIGNMENTS — technicians note which tasks they plan to do tomorrow (with a time/note),
-// so the manager can see everyone's plan without calling each morning. Auto-clears nightly.
-// ══════════════════════════════════════════════════════════════════════════
-function _ensureTomorrowTable($pdo){
-    try {
-        $pdo->exec("CREATE TABLE IF NOT EXISTS tomorrow_plans (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            technician_id INT NOT NULL,
-            task_db_id INT DEFAULT NULL,
-            task_id VARCHAR(50) DEFAULT NULL,
-            customer_name VARCHAR(255) DEFAULT NULL,
-            note VARCHAR(500) DEFAULT NULL,
-            plan_time VARCHAR(50) DEFAULT NULL,
-            status VARCHAR(20) NOT NULL DEFAULT 'planned',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            INDEX idx_tech (technician_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-    } catch(Exception $e){ error_log('tomorrow table: '.$e->getMessage()); }
-}
-// Nightly cleanup: wipe all plans older than the current cycle. We stamp each plan with created_at;
-// anything created before today 6 AM is from a previous day and is cleared. Cheap + idempotent.
-function _tomorrowNightlyReset($pdo){
-    try {
-        _ensureTomorrowTable($pdo);
-        // Clear everything created before today 06:00 (previous night's plans have served their purpose).
-        $pdo->exec("DELETE FROM tomorrow_plans WHERE created_at < CONCAT(CURDATE(),' 06:00:00')");
-    } catch(Exception $e){ error_log('tomorrow reset: '.$e->getMessage()); }
-}
 
 // Technician: add a task to their tomorrow plan.
 case 'tm_add':
