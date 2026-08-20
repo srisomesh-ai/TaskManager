@@ -893,8 +893,9 @@ function _tomorrowNightlyReset($pdo){
         _ensureTomorrowTable($pdo);
         // Clear yesterday's plans ONLY at/after 9 PM. This way a plan made today (6 AM–6 PM for the
         // next day) stays visible all through the day it is meant for, and is cleared at 9 PM that day.
-        // Rule: at 9 PM or later, delete anything created before today 06:00.
-        if((int)date('H') >= 21){
+        // Rule: at 9 PM IST or later, delete anything created before today 06:00.
+        $istH = (int)(new DateTime('now', new DateTimeZone('Asia/Kolkata')))->format('H');
+        if($istH >= 21){
             $pdo->exec("DELETE FROM tomorrow_plans WHERE created_at < CONCAT(CURDATE(),' 06:00:00')");
         }
     } catch(Exception $e){ error_log('tomorrow reset: '.$e->getMessage()); }
@@ -2694,6 +2695,14 @@ case 'os_debug_create':
 case 'tm_add':
     try {
         _ensureTomorrowTable($pdo);
+        // Technicians can only plan tomorrow's work AFTER 6 PM (18:00) IST today — this keeps them
+        // focused on today's jobs during the day and makes evening planning a discipline.
+        // Admin/manager can add anytime (e.g. planning on a tech's behalf).
+        $istHour = (int)(new DateTime('now', new DateTimeZone('Asia/Kolkata')))->format('H');
+        if($userRole==='technician' && $istHour < 18){
+            echo json_encode(['error'=>'Tomorrow planning opens after 6 PM. Please update your tomorrow tasks in the evening.']);
+            break;
+        }
         $tdb = intval($body['task_db_id'] ?? 0);
         $note = trim($body['note'] ?? '');
         $ptime = trim($body['plan_time'] ?? '');
