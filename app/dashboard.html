@@ -374,7 +374,7 @@
 
   async function api(action,params={},method='GET',body=null){
     let url=API+'?action='+action;
-    if(method==='GET') url+='&'+new URLSearchParams(params);
+    if(method==='GET'){ params=Object.assign({_t:Date.now()},params); url+='&'+new URLSearchParams(params); }
     const opts={method,cache:'no-store',headers:{'X-Auth-Token':authToken}};
     if(body){ opts.headers['Content-Type']='application/json'; opts.body=JSON.stringify(body); }
     const r=await fetch(url,opts);
@@ -457,11 +457,21 @@
   }
 
   // Hardware/browser BACK: if any slide-in panel is open, just close it (don't exit the app).
+  // Push an initial history state so the FIRST back press is caught by us (not an immediate exit).
+  try{ history.pushState({panel:'home'},''); }catch(e){}
+  let _osBackExitArmed=false;
   window.addEventListener('popstate', function(){
     const os=document.getElementById('os-ov'), nh=document.getElementById('nh-ov'), gl=document.getElementById('gl-ov');
-    if(os && getComputedStyle(os).display!=='none'){ closeOutstation(true); return; }
-    if(nh && getComputedStyle(nh).display!=='none' && typeof closeNotifHistory==='function'){ closeNotifHistory(true); return; }
-    if(gl && getComputedStyle(gl).display!=='none' && typeof closeGuidelines==='function'){ closeGuidelines(true); return; }
+    // 1) If any slide-in panel is open, just close it and stay in the app.
+    if(os && getComputedStyle(os).display!=='none'){ closeOutstation(true); try{history.pushState({panel:'home'},'');}catch(e){} return; }
+    if(nh && getComputedStyle(nh).display!=='none' && typeof closeNotifHistory==='function'){ closeNotifHistory(true); try{history.pushState({panel:'home'},'');}catch(e){} return; }
+    if(gl && getComputedStyle(gl).display!=='none' && typeof closeGuidelines==='function'){ closeGuidelines(true); try{history.pushState({panel:'home'},'');}catch(e){} return; }
+    // 2) On the home screen: require a second back press within 2s to exit.
+    if(_osBackExitArmed){ _osBackExitArmed=false; return; /* let the browser go back → exit */ }
+    _osBackExitArmed=true;
+    try{ if(typeof showToast==='function') showToast('Press back again to exit'); }catch(e){}
+    try{ history.pushState({panel:'home'},''); }catch(e){}   // re-arm so we stay in the app
+    setTimeout(function(){ _osBackExitArmed=false; }, 2000);
   });
   async function osDebugCreate(){
     const who=await api('os_whoami',{}).catch(function(e){ return {error:String(e.message||e)}; });
