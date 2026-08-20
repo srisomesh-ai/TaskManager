@@ -1155,6 +1155,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
           <button class="ts-btn" id="os-tab-pending" onclick="loadOutstationClaims('submitted')" style="background:var(--accent);color:#fff">⏳ Pending</button>
           <button class="ts-btn" id="os-tab-approved" onclick="loadOutstationClaims('approved')" style="background:var(--surface2);color:var(--text)">✅ Approved</button>
           <button class="ts-btn" id="os-tab-all" onclick="loadOutstationClaims('all')" style="background:var(--surface2);color:var(--text)">All</button>
+          <button class="ts-btn" id="os-tab-emp" onclick="loadOutstationByEmployee()" style="background:var(--surface2);color:var(--text)">👥 By Employee</button>
         </div>
         <div id="os-list"><div style="color:var(--text3);padding:20px;text-align:center">Loading…</div></div>
       </div>
@@ -8022,10 +8023,62 @@ function setCoinMode(m){
 }
 // ── OUTSTATION CLAIMS (admin/manager) ───────────────────────────
 let _osCurrentFilter='submitted';
+async function loadOutstationByEmployee(){
+  ['pending','approved','all','emp'].forEach(function(t){ const b=document.getElementById('os-tab-'+t); if(b){ b.style.background=(t==='emp')?'var(--accent)':'var(--surface2)'; b.style.color=(t==='emp')?'#fff':'var(--text)'; } });
+  const list=document.getElementById('os-list'); if(!list) return;
+  list.innerHTML='<div style="color:var(--text3);padding:20px;text-align:center">Loading…</div>';
+  try{
+    const d=await api('os_admin_summary',{});
+    if(!d||!d.success){ list.innerHTML='<div style="padding:20px;color:var(--red)">'+escHtml((d&&d.error)||'Error')+'</div>'; return; }
+    const emps=d.employees||[];
+    let h='<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">'
+      +'<div style="flex:1;min-width:160px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px"><div style="font-size:12px;color:var(--text3)">All-time invested (approved)</div><div style="font-size:22px;font-weight:800;color:var(--green)">₹'+(+d.overall_approved||0).toLocaleString("en-IN")+'</div></div>'
+      +'<div style="flex:1;min-width:160px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px"><div style="font-size:12px;color:var(--text3)">All-time claimed (submitted)</div><div style="font-size:22px;font-weight:800">₹'+(+d.overall_claimed||0).toLocaleString("en-IN")+'</div></div>'
+      +'</div>';
+    if(!emps.length){ h+='<div style="color:var(--text3);padding:20px;text-align:center">No claims yet.</div>'; }
+    else {
+      h+=emps.map(function(e){
+        return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;cursor:pointer" onclick="openTechClaims('+e.technician_id+',\''+escHtml((e.tech_name||'').replace(/\x27/g,""))+'\')">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:800;font-size:15px">👤 '+escHtml(e.tech_name||'')+'</div><div style="color:var(--accent2)">'+e.total_claims+' claim(s) ›</div></div>'
+          +'<div style="display:flex;gap:16px;margin-top:8px;font-size:13px;flex-wrap:wrap">'
+            +'<span>Claimed: <b>₹'+(+e.total_claimed||0).toLocaleString("en-IN")+'</b></span>'
+            +'<span style="color:var(--green)">Approved: <b>₹'+(+e.total_approved||0).toLocaleString("en-IN")+'</b></span>'
+            +'<span style="color:#b45309">Pending: <b>'+e.pending_claims+'</b></span>'
+            +'<span style="color:var(--text3)">Approved claims: <b>'+e.approved_claims+'</b></span>'
+          +'</div></div>';
+      }).join('');
+    }
+    list.innerHTML=h;
+  }catch(e){ list.innerHTML='<div style="padding:20px;color:var(--red)">'+escHtml(e.message)+'</div>'; }
+}
+async function openTechClaims(tid, name){
+  const list=document.getElementById('os-list'); if(!list) return;
+  list.innerHTML='<div style="color:var(--text3);padding:20px;text-align:center">Loading…</div>';
+  try{
+    const d=await api('os_admin_by_tech',{technician_id:tid});
+    const claims=(d&&d.claims)?d.claims:[];
+    let h='<button class="ts-btn" style="background:var(--surface2);color:var(--text);margin-bottom:12px" onclick="loadOutstationByEmployee()">‹ Back to employees</button>'
+      +'<div style="font-weight:800;font-size:16px;margin-bottom:10px">👤 '+escHtml(name||'')+' — claims</div>';
+    if(!claims.length){ h+='<div style="color:var(--text3);padding:20px;text-align:center">No claims.</div>'; }
+    else {
+      h+=claims.map(function(c){
+        const st=c.status==='approved'?'<span style="background:var(--green-bg);color:var(--green);font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px">✅ ₹'+(+c.approved_total||0)+'</span>':'<span style="background:#fef3c7;color:#b45309;font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px">⏳ Submitted</span>';
+        const icon={courier:'📦',expense:'💼'}[c.claim_type]||'📍';
+        return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:9px;cursor:pointer" onclick="openOutstationDetail('+c.id+')">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:700">'+icon+' '+escHtml(c.task_id||'')+(c.customer_name?(' · '+escHtml(c.customer_name)):'')+'</div>'+st+'</div>'
+          +'<div style="font-size:12px;color:var(--text3);margin-top:3px">Task value ₹'+(+c.task_price||0)+' · Claimed ₹'+(+c.claimed_total||0)+' · '+(c.line_count||0)+' line(s)</div>'
+          +'</div>';
+      }).join('');
+    }
+    list.innerHTML=h;
+  }catch(e){ list.innerHTML='<div style="padding:20px;color:var(--red)">'+escHtml(e.message)+'</div>'; }
+}
+
 async function loadOutstationClaims(filter){
   _osCurrentFilter=filter||'submitted';
-  ['pending','approved','all'].forEach(function(t){
+  ['pending','approved','all','emp'].forEach(function(t){
     const b=document.getElementById('os-tab-'+t); if(!b)return;
+    if(t==='emp'){ b.style.background='var(--surface2)'; b.style.color='var(--text)'; return; }
     const on=(t==='pending'&&_osCurrentFilter==='submitted')||(t==='approved'&&_osCurrentFilter==='approved')||(t==='all'&&_osCurrentFilter==='all');
     b.style.background=on?'var(--accent)':'var(--surface2)'; b.style.color=on?'#fff':'var(--text)';
   });
