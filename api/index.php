@@ -1074,6 +1074,7 @@ case 'get_tasks':
     try { sweep_opened_no_action($pdo); } catch(Exception $e){}
     // Apply the stale-installation-task penalty (-50 at 3 days, then every 5 days; resets on any status change).
     try { sweep_stale_task_penalties($pdo); } catch(Exception $e){}
+    try { _tomorrowNightlyReset($pdo); } catch(Exception $e){}
     $where=[]; $params=[];
 
     // ROLE-BASED FILTER — enforced server-side
@@ -2652,6 +2653,114 @@ case 'os_debug_create':
     break;
 
 // DEBUG: (single canonical os_debug_create above)
+
+// ══════════════════════════════════════════════════════════════════════════
+// TOMORROW ASSIGNMENTS — technicians note which tasks they plan to do tomorrow (with a time/note),
+// so the manager can see everyone's plan without calling each morning. Auto-clears nightly.
+// ══════════════════════════════════════════════════════════════════════════
+function _ensureTomorrowTable($pdo){
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS tomorrow_plans (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            technician_id INT NOT NULL,
+            task_db_id INT DEFAULT NULL,
+            task_id VARCHAR(50) DEFAULT NULL,
+            customer_name VARCHAR(255) DEFAULT NULL,
+            note VARCHAR(500) DEFAULT NULL,
+            plan_time VARCHAR(50) DEFAULT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'planned',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_tech (technician_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch(Exception $e){ error_log('tomorrow table: '.$e->getMessage()); }
+}
+// Nightly cleanup: wipe all plans older than the current cycle. We stamp each plan with created_at;
+// anything created before today 6 AM is from a previous day and is cleared. Cheap + idempotent.
+function _tomorrowNightlyReset($pdo){
+    try {
+        _ensureTomorrowTable($pdo);
+        // Clear everything created before today 06:00 (previous night's plans have served their purpose).
+        $pdo->exec("DELETE FROM tomorrow_plans WHERE created_at < CONCAT(CURDATE(),' 06:00:00')");
+    } catch(Exception $e){ error_log('tomorrow reset: '.$e->getMessage()); }
+}
+
+// Technician: add a task to their tomorrow plan.
+case 'tm_add':
+    try {
+        _ensureTomorrowTable($pdo);
+        $tdb = intval($body['task_db_id'] ?? 0);
+        $note = trim($body['note'] ?? '');
+        $ptime = trim($body['plan_time'] ?? '');
+        if(!$tdb){ echo json_encode(['error'=>'Select a task']); break; }
+        $tk = $pdo->prepare("SELECT task_id, customer_name, assigned_to FROM tasks WHERE id=?"); $tk->execute([$tdb]); $ti = $tk->fetch(PDO::FETCH_ASSOC);
+        if(!$ti){ echo json_encode(['error'=>'Task not found']); break; }
+        if($userRole==='technician' && intval($ti['assigned_to'])!==intval($userId)){ echo json_encode(['error'=>'Not your task']); break; }
+        // Avoid duplicate of same task in the current cycle
+        $dup = $pdo->prepare("SELECT id FROM tomorrow_plans WHERE technician_id=? AND task_db_id=? AND created_at >= CONCAT(CURDATE(),' 06:00:00') LIMIT 1");
+        $dup->execute([$userId,$tdb]);
+        if($dup->fetchColumn()){ echo json_encode(['error'=>'This task is already in your tomorrow plan']); break; }
+        $pdo->prepare("INSERT INTO tomorrow_plans (technician_id,task_db_id,task_id,customer_name,note,plan_time,status) VALUES (?,?,?,?,?,?, 'planned')")
+            ->execute([$userId,$tdb,$ti['task_id'],$ti['customer_name'],$note,$ptime]);
+        echo json_encode(['success'=>true,'id'=>intval($pdo->lastInsertId())]);
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
+    break;
+
+// Technician: my tomorrow plan.
+case 'tm_mine':
+    try {
+        _ensureTomorrowTable($pdo);
+        $rows = $pdo->prepare("SELECT * FROM tomorrow_plans WHERE technician_id=? AND created_at >= CONCAT(CURDATE(),' 06:00:00') ORDER BY id ASC");
+        $rows->execute([$userId]);
+        echo json_encode(['success'=>true,'plans'=>$rows->fetchAll(PDO::FETCH_ASSOC)]);
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// Technician: mark a plan item complete (it disappears from the board).
+case 'tm_complete':
+    try {
+        _ensureTomorrowTable($pdo);
+        $id = intval($body['id'] ?? 0);
+        $p = $pdo->prepare("SELECT technician_id FROM tomorrow_plans WHERE id=?"); $p->execute([$id]); $pl = $p->fetch(PDO::FETCH_ASSOC);
+        if(!$pl){ echo json_encode(['error'=>'Not found']); break; }
+        if($userRole==='technician' && intval($pl['technician_id'])!==intval($userId)){ echo json_encode(['error'=>'Not yours']); break; }
+        $pdo->prepare("DELETE FROM tomorrow_plans WHERE id=?")->execute([$id]);  // complete = remove from board
+        echo json_encode(['success'=>true]);
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// Technician: remove a plan item (mistake).
+case 'tm_remove':
+    try {
+        _ensureTomorrowTable($pdo);
+        $id = intval($body['id'] ?? 0);
+        $p = $pdo->prepare("SELECT technician_id FROM tomorrow_plans WHERE id=?"); $p->execute([$id]); $pl = $p->fetch(PDO::FETCH_ASSOC);
+        if(!$pl){ echo json_encode(['error'=>'Not found']); break; }
+        if($userRole==='technician' && intval($pl['technician_id'])!==intval($userId)){ echo json_encode(['error'=>'Not yours']); break; }
+        $pdo->prepare("DELETE FROM tomorrow_plans WHERE id=?")->execute([$id]);
+        echo json_encode(['success'=>true]);
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+// Admin/Manager: assessment board — every technician with their planned count + items (busy vs free).
+case 'tm_admin_board':
+    if(!in_array($userRole,['admin','assigner','manager'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        _ensureTomorrowTable($pdo);
+        // All active technicians
+        $techs = $pdo->query("SELECT id, name FROM users WHERE role='technician' AND is_active=1 ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
+        $plansRows = $pdo->query("SELECT * FROM tomorrow_plans WHERE created_at >= CONCAT(CURDATE(),' 06:00:00') ORDER BY plan_time ASC, id ASC")->fetchAll(PDO::FETCH_ASSOC);
+        $byTech = [];
+        foreach($plansRows as $p){ $byTech[$p['technician_id']][] = $p; }
+        $out = [];
+        foreach($techs as $t){
+            $tid = intval($t['id']);
+            $out[] = ['technician_id'=>$tid, 'name'=>$t['name'], 'plans'=>($byTech[$tid] ?? []), 'count'=>count($byTech[$tid] ?? [])];
+        }
+        // Sort: busy (has plans) first, then free
+        usort($out, function($a,$b){ return $b['count'] <=> $a['count']; });
+        echo json_encode(['success'=>true,'technicians'=>$out]);
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
 
 case 'os_my_taskable':
     try {
