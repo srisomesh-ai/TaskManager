@@ -2882,7 +2882,11 @@ case 'os_submit_claim':
         $lc=$pdo->prepare("SELECT COUNT(*) FROM outstation_claim_lines WHERE claim_id=?"); $lc->execute([$cid]);
         if(intval($lc->fetchColumn())<1){ echo json_encode(['error'=>'Add at least one transport line first']); break; }
         $pdo->prepare("UPDATE outstation_claims SET status='submitted', submitted_at=NOW() WHERE id=?")->execute([$cid]);
-        // Notify admins/managers
+        // Respond to the app IMMEDIATELY — the claim is already submitted. FCM pushes to admins can
+        // be slow, so send them AFTER flushing the response so the tech's Submit button never hangs.
+        echo json_encode(['success'=>true]);
+        if(function_exists('fastcgi_finish_request')){ @session_write_close(); @fastcgi_finish_request(); }
+        else { @ob_end_flush(); @flush(); }
         try {
             require_once __DIR__.'/fcm_send.php';
             if(function_exists('fcm_send_to_user')){
@@ -2891,7 +2895,6 @@ case 'os_submit_claim':
                 foreach($admins as $aid){ fcm_send_to_user($pdo,intval($aid),'📍 Outstation claim submitted', $techName.' submitted an outstation claim for task '.($claim['task_id']??'').' (₹'.number_format($claim['claimed_total'],0).')', ['type'=>'outstation','url'=>'index.html']); }
             }
         } catch(Exception $e){}
-        echo json_encode(['success'=>true]);
     } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
@@ -3112,7 +3115,10 @@ case 'os_create_expense':
         if($bin!==false){ $fn='bill_'.time().'_'.rand(100,999).'.jpg'; if(@file_put_contents($dir.'/'.$fn,$bin)){ $billFile='outstation/'.$cid.'/'.$fn; } }
         $pdo->prepare("INSERT INTO outstation_claim_lines (claim_id,transport_mode,amount,bill_file,status) VALUES (?,?,?,?, 'pending')")
             ->execute([$cid, $label, $amount, $billFile]);
-        // Notify admins/managers
+        // Respond IMMEDIATELY, then push to admins after flushing so the app never hangs on SMTP/FCM.
+        echo json_encode(['success'=>true,'claim_id'=>$cid]);
+        if(function_exists('fastcgi_finish_request')){ @session_write_close(); @fastcgi_finish_request(); }
+        else { @ob_end_flush(); @flush(); }
         try {
             require_once __DIR__.'/fcm_send.php';
             if(function_exists('fcm_send_to_user')){
@@ -3121,7 +3127,6 @@ case 'os_create_expense':
                 foreach($admins as $aid){ fcm_send_to_user($pdo,intval($aid),'🧾 Expense claim submitted', $techName.' submitted a '.$label.' claim (Rs '.number_format($amount,0).')', ['type'=>'outstation','url'=>'index.html']); }
             }
         } catch(Exception $e){}
-        echo json_encode(['success'=>true,'claim_id'=>$cid]);
     } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
