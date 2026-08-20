@@ -494,10 +494,11 @@
       +'<input id="ex-task" placeholder="Task number, e.g. 1547 (leave blank if none)" style="width:100%;padding:9px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:10px">'
       +'<label style="font-size:12px;color:#667;display:block;margin-bottom:4px">Bill / receipt / transaction proof <span style="color:#c00">*required</span></label>'
       +'<input id="ex-bill" type="file" accept="image/*" style="width:100%;font-size:12px;margin-bottom:12px">'
-      +'<button onclick="osSubmitExpense(\''+kind+'\')" style="width:100%;background:#1a7a3a;color:#fff;border:none;border-radius:10px;padding:12px;font-weight:800;font-size:14px;cursor:pointer">📤 Submit for approval</button>'
+      +'<button onclick="osSubmitExpense(\''+kind+'\',event)" style="width:100%;background:#1a7a3a;color:#fff;border:none;border-radius:10px;padding:12px;font-weight:800;font-size:14px;cursor:pointer">📤 Submit for approval</button>'
       +'</div>';
   }
-  async function osSubmitExpense(kind){
+  async function osSubmitExpense(kind, ev){
+    if(window._osSubmitting) return;              // block double taps → no duplicate claims
     const amt=parseFloat((document.getElementById('ex-amt')||{}).value||0);
     const date=(document.getElementById('ex-date')||{}).value||'';
     const desc=(document.getElementById('ex-desc')||{}).value||'';
@@ -508,14 +509,19 @@
     if(f[0].size>4*1024*1024){ alert('Image too large — use under 4 MB.'); return; }
     const bill64=await new Promise(function(res){ const r=new FileReader(); r.onload=function(){res(r.result);}; r.onerror=function(){res('');}; r.readAsDataURL(f[0]); });
     if(!bill64){ alert('Could not read the image. Try again.'); return; }
-    // Resolve optional task number to its db id
-    let taskDb=0;
-    if(taskNo.trim()){
-      try{ const td=await api('os_my_taskable',{}); const match=(td.tasks||[]).find(function(t){ return String(t.task_id)===taskNo.trim()||String(t.id)===taskNo.trim(); }); if(match) taskDb=match.id; }catch(e){}
-    }
-    const d=await api('os_create_expense',{},'POST',{expense_type:kind,amount:amt,expense_date:date,description:desc,task_db_id:taskDb,task_id:taskNo.trim(),bill_base64:bill64}).catch(()=>({}));
-    if(d&&d.success){ showToast('✅ Expense claim submitted'); osShowTaskList(); }
-    else alert((d&&d.error)||'Could not submit');
+    window._osSubmitting = true;
+    const btn = ev && ev.target ? ev.target : null;
+    if(btn){ btn.disabled=true; btn.dataset._t=btn.textContent; btn.textContent='⏳ Submitting…'; btn.style.opacity='.6'; }
+    try {
+      // Resolve optional task number to its db id
+      let taskDb=0;
+      if(taskNo.trim()){
+        try{ const td=await api('os_my_taskable',{}); const match=(td.tasks||[]).find(function(t){ return String(t.task_id)===taskNo.trim()||String(t.id)===taskNo.trim(); }); if(match) taskDb=match.id; }catch(e){}
+      }
+      const d=await api('os_create_expense',{},'POST',{expense_type:kind,amount:amt,expense_date:date,description:desc,task_db_id:taskDb,task_id:taskNo.trim(),bill_base64:bill64}).catch(()=>({}));
+      if(d&&d.success){ showToast('✅ Expense claim submitted'); osShowTaskList(); }
+      else { alert((d&&d.error)||'Could not submit'); if(btn){ btn.disabled=false; btn.textContent=btn.dataset._t||'📤 Submit for approval'; btn.style.opacity='1'; } }
+    } finally { window._osSubmitting = false; }
   }
 
   async function osShowTaskList(){
@@ -598,7 +604,7 @@
         +'<button onclick="osAddLine()" style="width:100%;background:#b45309;color:#fff;border:none;border-radius:8px;padding:9px;font-weight:700;font-size:13px;cursor:pointer">+ Add transport</button>'
         +'</div>';
       h+='<div style="font-weight:800;font-size:15px;text-align:right;margin-bottom:10px">Total claimed: ₹'+total.toFixed(0)+'</div>';
-      h+='<button onclick="osSubmit()" style="width:100%;background:#1a7a3a;color:#fff;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:15px;cursor:pointer">📤 Submit for approval</button>';
+      h+='<button onclick="osSubmit(event)" style="width:100%;background:#1a7a3a;color:#fff;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:15px;cursor:pointer">📤 Submit for approval</button>';
     } else {
       h+='<div style="font-weight:800;font-size:15px;text-align:right">Total claimed: ₹'+total.toFixed(0)+'</div>';
     }
@@ -633,12 +639,18 @@
     const d=await api('os_delete_line',{},'POST',{line_id:id}).catch(()=>({}));
     if(d&&d.success){ osOpenClaim(_osClaim.task_db_id); } else alert((d&&d.error)||'Error');
   }
-  async function osSubmit(){
+  async function osSubmit(ev){
+    if(window._osSubmitting) return;              // block double taps
     await osSaveHeader();
     if(!confirm('Submit this outstation claim for approval? You cannot edit it after submitting.')) return;
-    const d=await api('os_submit_claim',{},'POST',{claim_id:_osClaim.id}).catch(()=>({}));
-    if(d&&d.success){ showToast('✅ Submitted for approval'); osShowTaskList(); }
-    else alert((d&&d.error)||'Could not submit');
+    window._osSubmitting = true;
+    const btn = ev && ev.target ? ev.target : null;
+    if(btn){ btn.disabled=true; btn.dataset._t=btn.textContent; btn.textContent='⏳ Submitting…'; btn.style.opacity='.6'; }
+    try {
+      const d=await api('os_submit_claim',{},'POST',{claim_id:_osClaim.id}).catch(()=>({}));
+      if(d&&d.success){ showToast('✅ Submitted for approval'); osShowTaskList(); }
+      else { alert((d&&d.error)||'Could not submit'); if(btn){ btn.disabled=false; btn.textContent=btn.dataset._t||'📤 Submit for approval'; btn.style.opacity='1'; } }
+    } finally { window._osSubmitting = false; }
   }
 
   async function openNotifHistory(){
