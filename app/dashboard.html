@@ -495,7 +495,10 @@
     try{
       const d=await api('tm_mine',{});
       const plans=(d&&d.plans)?d.plans:[];
-      let h='<button onclick="tmAddForm()" style="width:100%;background:#0e5c5c;color:#fff;border:none;border-radius:11px;padding:14px;font-weight:800;font-size:15px;cursor:pointer;margin-bottom:14px">➕ Add a task for tomorrow</button>';
+      const afterSix = new Date().getHours() >= 18;
+      let h = afterSix
+        ? '<button onclick="tmAddForm()" style="width:100%;background:#0e5c5c;color:#fff;border:none;border-radius:11px;padding:14px;font-weight:800;font-size:15px;cursor:pointer;margin-bottom:14px">➕ Add a task for tomorrow</button>'
+        : '<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:11px;padding:14px;margin-bottom:14px;text-align:center;color:#9a3412;font-size:13px">🕕 Tomorrow planning opens after <b>6:00 PM</b>.<br>Please update your tomorrow tasks in the evening.</div>';
       if(!plans.length){
         h+='<div style="text-align:center;padding:30px;color:#889;font-size:13px">No tasks planned for tomorrow yet.<br>Add the jobs you plan to do so your manager can see.</div>';
       } else {
