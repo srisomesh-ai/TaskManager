@@ -621,7 +621,17 @@
     } else {
       h+='<div style="font-weight:800;font-size:15px;text-align:right">Total claimed: ₹'+total.toFixed(0)+'</div>';
     }
+    // Delete option — allowed while the claim is not yet approved (draft or submitted).
+    if(c.status!=='approved'){
+      h+='<button onclick="osTechDeleteClaim('+c.id+')" style="width:100%;background:none;color:#c00;border:1.5px solid #c00;border-radius:10px;padding:11px;font-weight:700;font-size:14px;cursor:pointer;margin-top:10px">🗑️ Delete this claim</button>';
+    }
     b.innerHTML=h;
+  }
+  async function osTechDeleteClaim(cid){
+    if(!confirm('Delete this claim? This removes it and all its bills. This cannot be undone.')) return;
+    const d=await api('os_tech_delete_claim',{},'POST',{claim_id:cid}).catch(()=>({}));
+    if(d&&d.success){ showToast('🗑️ Claim deleted'); osShowTaskList(); }
+    else alert((d&&d.error)||'Could not delete');
   }
   async function osSaveHeader(){
     if(!_osClaim||_osClaim.status!=='draft') return;
