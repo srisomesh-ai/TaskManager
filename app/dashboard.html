@@ -622,34 +622,50 @@
     }catch(e){ b.innerHTML='<div style="padding:20px;color:#c00">'+esc(e.message)+'</div>'; }
   }
 
+  // Clean claims menu — no task list clutter. User deliberately starts a claim and picks a task.
   async function osShowTaskList(){
+    const b=document.getElementById('os-body');
+    b.innerHTML=''
+      +'<div style="font-size:13px;color:#667;margin-bottom:14px">Choose what you want to do:</div>'
+      +'<button onclick="osApplyForClaim()" style="width:100%;background:#0e5c5c;color:#fff;border:none;border-radius:11px;padding:15px;font-weight:800;font-size:15px;cursor:pointer;margin-bottom:10px">🚗 Apply for Outstation Claim</button>'
+      +'<div style="display:flex;gap:8px;margin-bottom:10px">'
+        +'<button onclick="osExpenseForm(\'courier\')" style="flex:1;background:#fff;border:1.5px solid #b45309;color:#b45309;border-radius:11px;padding:14px 8px;font-weight:700;font-size:13px;cursor:pointer">📦 Courier<br>Charges</button>'
+        +'<button onclick="osExpenseForm(\'personal_office\')" style="flex:1;background:#fff;border:1.5px solid #b45309;color:#b45309;border-radius:11px;padding:14px 8px;font-weight:700;font-size:13px;cursor:pointer">💼 Office<br>Expense</button>'
+      +'</div>'
+      +'<button onclick="osMyClaimsView()" style="width:100%;background:#fff;border:1.5px solid #0e5c5c;color:#0e5c5c;border-radius:11px;padding:14px;font-weight:700;font-size:14px;cursor:pointer">📅 My Claims — by month</button>';
+  }
+
+  // Apply for a claim: show a dropdown of tasks (all, including closed) to pick from.
+  async function osApplyForClaim(){
     const b=document.getElementById('os-body');
     b.innerHTML='<div style="text-align:center;padding:30px;color:#889">Loading your tasks…</div>';
     try{
       const d=await api('os_my_taskable',{});
       if(d && d.error){ b.innerHTML='<div style="text-align:center;padding:30px;color:#c00;font-size:13px">⚠️ '+esc(d.error)+'</div>'; return; }
       const tasks=(d&&d.tasks)?d.tasks:[];
-      const dbg='';
-      if(!tasks.length){ b.innerHTML='<div style="text-align:center;padding:30px;color:#889">No tasks assigned to you yet.</div>'; return; }
-      const expenseBtns='<div style="display:flex;gap:8px;margin-bottom:12px">'
-        +'<button onclick="osExpenseForm(\'courier\')" style="flex:1;background:#fff;border:1.5px solid #b45309;color:#b45309;border-radius:9px;padding:10px;font-weight:700;font-size:12px;cursor:pointer">📦 Courier Charges</button>'
-        +'<button onclick="osExpenseForm(\'personal_office\')" style="flex:1;background:#fff;border:1.5px solid #b45309;color:#b45309;border-radius:9px;padding:10px;font-weight:700;font-size:12px;cursor:pointer">💼 Office Expense</button>'
-        +'</div>';
-      const myClaimsBtn='<button onclick="osMyClaimsView()" style="width:100%;background:#0e5c5c;color:#fff;border:none;border-radius:9px;padding:11px;font-weight:700;font-size:13px;cursor:pointer;margin-bottom:12px">📅 My Claims — by month</button>';
-      b.innerHTML=expenseBtns+myClaimsBtn+'<div style="font-size:12px;color:#667;margin-bottom:10px">Or pick a task to claim outstation travel costs. One claim per task.</div>'
+      let h='<button onclick="osShowTaskList()" style="background:none;border:none;color:#0e5c5c;font-weight:700;font-size:13px;padding:0 0 12px;cursor:pointer">‹ Back</button>'
+        +'<div style="font-weight:800;font-size:16px;margin-bottom:4px">🚗 Apply for Outstation Claim</div>'
+        +'<div style="font-size:12px;color:#889;margin-bottom:14px">Select the task this trip was for, then add your transport bills.</div>';
+      if(!tasks.length){ b.innerHTML=h+'<div style="text-align:center;padding:20px;color:#889">No tasks assigned to you.</div>'; return; }
+      h+='<label style="font-size:12px;color:#667;display:block;margin-bottom:6px">Select task</label>'
+        +'<select id="os-task-select" style="width:100%;padding:12px 10px;border:1.5px solid #ddd;border-radius:9px;font-size:14px;margin-bottom:14px;background:#fff">'
+        +'<option value="">— Choose a task —</option>'
         + tasks.map(function(t){
-          const st=t.claim_status;
-          const badge = st==='approved'?'<span style="background:#1a7a3a;color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:9px">✅ Approved</span>'
-                     : st==='submitted'?'<span style="background:#b45309;color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:9px">⏳ Submitted</span>'
-                     : st==='draft'?'<span style="background:#64748b;color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:9px">✍️ Draft</span>':'';
-          return '<div onclick="osOpenClaim('+t.id+')" style="background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);cursor:pointer">'
-            +'<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:800;font-size:14px">'+esc(t.task_id||'')+'</div>'+badge+'</div>'
-            +'<div style="font-size:13px;color:#334;margin-top:2px">'+esc(t.customer_name||'')+'</div>'
-            +'<div style="font-size:11px;color:#889;margin-top:3px">📍 '+esc(t.location||'–')+' · '+esc(t.task_status||'')+' · '+(t.installed_count||0)+'/'+(t.device_qty||1)+' installed</div>'
-            +'</div>';
-        }).join('');
+            const badge = t.claim_status==='approved'?' (✅ claimed)': t.claim_status==='submitted'?' (⏳ claim submitted)':'';
+            return '<option value="'+t.id+'">'+esc(t.task_id||'')+' · '+esc(t.customer_name||'')+' · '+esc(t.task_status||'')+badge+'</option>';
+          }).join('')
+        +'</select>'
+        +'<button onclick="osApplyGo()" style="width:100%;background:#0e5c5c;color:#fff;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:15px;cursor:pointer">Continue ›</button>';
+      b.innerHTML=h;
     }catch(e){ b.innerHTML='<div style="padding:20px;color:#c00">'+esc(e.message)+'</div>'; }
   }
+  function osApplyGo(){
+    const sel=document.getElementById('os-task-select');
+    const tid=sel?sel.value:'';
+    if(!tid){ alert('Please select a task first'); return; }
+    osOpenClaim(parseInt(tid));
+  }
+
   async function osOpenClaim(taskDbId){
     const b=document.getElementById('os-body');
     b.innerHTML='<div style="text-align:center;padding:30px;color:#889">Loading claim…</div>';
@@ -664,7 +680,7 @@
     const b=document.getElementById('os-body');
     const c=_osClaim, editable=(c.status==='draft');
     const total=_osLines.reduce(function(s,l){ return s+parseFloat(l.amount||0); },0);
-    let h='<button onclick="osShowTaskList()" style="background:none;border:none;color:#b45309;font-weight:700;font-size:13px;padding:0 0 10px;cursor:pointer">‹ Back to tasks</button>';
+    let h='<button onclick="osShowTaskList()" style="background:none;border:none;color:#b45309;font-weight:700;font-size:13px;padding:0 0 10px;cursor:pointer">‹ Back</button>';
     h+='<div style="background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:12px">'
       +'<div style="font-weight:800;font-size:15px">'+esc(c.task_id||'')+'</div>'
       +'<div style="font-size:13px;color:#334">'+esc(task.customer_name||'')+'</div>'
