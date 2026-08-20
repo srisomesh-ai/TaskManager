@@ -255,7 +255,10 @@
     <div id="tm-sheet" style="position:absolute;inset:0;background:#eef1f5;overflow-y:auto;transform:translateY(100%);transition:transform .25s ease">
       <div style="position:sticky;top:0;background:linear-gradient(135deg,#0e5c5c,#137272);color:#fff;padding:16px 18px;display:flex;justify-content:space-between;align-items:center;z-index:5">
         <div><div style="font-size:18px;font-weight:800">📅 Tomorrow Assignments</div><div style="font-size:12px;opacity:.9">Plan tomorrow so your manager can see · resets each night</div></div>
-        <button onclick="closeTomorrow()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:9px;width:34px;height:34px;font-size:20px;cursor:pointer">×</button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button onclick="tmInfo()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:9px;width:34px;height:34px;font-size:17px;cursor:pointer">ℹ️</button>
+          <button onclick="closeTomorrow()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:9px;width:34px;height:34px;font-size:20px;cursor:pointer">×</button>
+        </div>
       </div>
       <div id="tm-body" style="padding:14px 14px 60px;max-width:600px;margin:0 auto"></div>
     </div>
@@ -544,20 +547,20 @@
     const tid=(document.getElementById('tm-task')||{}).value||'';
     const time=(document.getElementById('tm-time')||{}).value||'';
     const note=(document.getElementById('tm-note')||{}).value||'';
-    if(!tid){ alert('Please select a task'); return; }
+    if(!tid){ await uiAlert({icon:'⚠️',title:'Select a task',message:'Please choose a task from the list first.'}); return; }
     const d=await api('tm_add',{},'POST',{task_db_id:parseInt(tid),plan_time:time,note:note}).catch(()=>({}));
     if(d&&d.success){ showToast('✅ Added to tomorrow plan'); tmRender(); }
-    else alert((d&&d.error)||'Could not add');
+    else { await uiAlert({icon:'⚠️',title:'Could not add',message:(d&&d.error)||'Something went wrong. Please try again.'}); }
   }
   async function tmComplete(id){
     const d=await api('tm_complete',{},'POST',{id:id}).catch(()=>({}));
-    if(d&&d.success){ showToast('✓ Done'); tmRender(); } else alert((d&&d.error)||'Error');
+    if(d&&d.success){ showToast('✓ Done'); tmRender(); } else { await uiAlert({icon:'⚠️',title:'Error',message:(d&&d.error)||'Could not update.'}); }
   }
   async function tmRemove(id){
     const ok=await uiConfirm({icon:'🗑️',title:'Remove this?',message:'Remove this task from your tomorrow plan?',okText:'Remove',cancelText:'Cancel'});
     if(!ok) return;
     const d=await api('tm_remove',{},'POST',{id:id}).catch(()=>({}));
-    if(d&&d.success){ showToast('Removed'); tmRender(); } else alert((d&&d.error)||'Error');
+    if(d&&d.success){ showToast('Removed'); tmRender(); } else { await uiAlert({icon:'⚠️',title:'Error',message:(d&&d.error)||'Could not remove.'}); }
   }
 
   function openOutstation(){
@@ -863,6 +866,40 @@
       ov.onclick=function(e){ if(e.target===ov) close(false); };
     });
   }
+  // Clean single-button info popup (replaces browser alert). message may contain <br> etc.
+  function uiAlert(opts){
+    opts=opts||{};
+    return new Promise(function(resolve){
+      const ov=document.getElementById('cf-ov'), box=document.getElementById('cf-box');
+      document.getElementById('cf-icon').textContent = opts.icon||'ℹ️';
+      document.getElementById('cf-title').textContent = opts.title||'';
+      document.getElementById('cf-msg').innerHTML = opts.message||'';
+      const okBtn=document.getElementById('cf-ok'), cancelBtn=document.getElementById('cf-cancel');
+      okBtn.textContent = opts.okText||'Got it';
+      okBtn.style.background = '#0e5c5c';
+      cancelBtn.style.display='none';           // single button
+      ov.style.display='flex';
+      requestAnimationFrame(function(){ box.style.transform='scale(1)'; box.style.opacity='1'; });
+      function close(){
+        box.style.transform='scale(.92)'; box.style.opacity='0';
+        setTimeout(function(){ ov.style.display='none'; cancelBtn.style.display=''; }, 160);
+        okBtn.onclick=null; ov.onclick=null; resolve(true);
+      }
+      okBtn.onclick=close;
+      ov.onclick=function(e){ if(e.target===ov) close(); };
+    });
+  }
+  function tmInfo(){
+    uiAlert({icon:'📅', title:'What is Tomorrow Assignments?',
+      message:'This is where you tell your manager what jobs you plan to do <b>tomorrow</b>.<br><br>'
+        +'• Add each task you plan to do, with a <b>time</b> and a short <b>note</b>.<br>'
+        +'• Your manager sees this, so no morning calls asking your plan.<br>'
+        +'• You can only add the tomorrow plan <b>after 6:00 PM</b> today.<br>'
+        +'• Tap <b>✓</b> when a job is done — it disappears.<br>'
+        +'• The board <b>clears every night at 9 PM</b>, so plan again each evening.',
+      okText:'Got it'});
+  }
+
   async function osTechDeleteClaim(cid){
     try {
       const ok=await uiConfirm({icon:'🗑️',title:'Delete this claim?',message:'This removes the claim and all its uploaded bills. This action cannot be undone.',okText:'Delete',cancelText:'Cancel'});
