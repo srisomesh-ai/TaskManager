@@ -739,20 +739,26 @@
     });
   }
   async function osTechDeleteClaim(cid){
-    const ok=await uiConfirm({icon:'🗑️',title:'Delete this claim?',message:'This removes the claim and all its uploaded bills. This action cannot be undone.',okText:'Delete',cancelText:'Cancel'});
-    if(!ok) return;
-    if(!cid){ alert('Delete error: no claim id (cid='+cid+'). Reopen the claim and try again.'); return; }
-    let d;
-    try { d=await api('os_tech_delete_claim',{},'POST',{claim_id:cid}); }
-    catch(e){ alert('Delete request failed: '+(e.message||e)); return; }
-    if(d && d.success){
-      showToast('🗑️ Claim deleted');
-      _osClaim=null; _osLines=[];
-      osShowTaskList();
-    } else {
-      alert('Delete did not succeed.\nClaim id: '+cid+'\nServer said: '+JSON.stringify(d));
+    try {
+      const ok=await uiConfirm({icon:'🗑️',title:'Delete this claim?',message:'This removes the claim and all its uploaded bills. This action cannot be undone.',okText:'Delete',cancelText:'Cancel'});
+      if(!ok) return;
+      showToast('⏳ Deleting…');
+      if(!cid && cid!==0){ alert('Delete error: missing claim id. Please go Back to tasks and reopen this claim.'); return; }
+      let d;
+      try { d=await api('os_tech_delete_claim',{},'POST',{claim_id:cid}); }
+      catch(e){ alert('Delete request error: '+(e && e.message ? e.message : e)); return; }
+      if(d && d.success){
+        showToast('🗑️ Claim deleted');
+        _osClaim=null; _osLines=[];
+        osShowTaskList();
+      } else {
+        alert('Delete did not succeed.\nClaim id: '+cid+'\nServer response: '+JSON.stringify(d||{}));
+      }
+    } catch(err){
+      alert('Delete crashed: '+(err && err.message ? err.message : err));
     }
   }
+
   async function osSaveHeader(){
     if(!_osClaim||_osClaim.status!=='draft') return;
     await api('os_save_claim',{},'POST',{claim_id:_osClaim.id,
