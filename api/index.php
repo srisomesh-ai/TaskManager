@@ -651,6 +651,13 @@ function apply_stale_task_penalty($pdo, $taskId){
         if(in_array($row['task_status'], ['Closed','Cancelled','Completed'])) return;   // done → no penalty
         // Only installation tasks earn/lose coins here. Service jobs (V2V/Troubleshoot/Re-Adding/Demo) are excluded.
         if(bs_type_for_task($row['device_details'] ?? '') !== 'sales') return;
+        // Installation STARTED (at least one device installed / GPS serial entered) → lead is secured,
+        // customer is locked in → stop penalising, even if the task isn't formally closed yet.
+        try {
+            $ins = $pdo->prepare("SELECT COUNT(*) FROM task_device_installs WHERE task_id=? AND gps_serial_no IS NOT NULL AND gps_serial_no<>''");
+            $ins->execute([$taskId]);
+            if(intval($ins->fetchColumn()) > 0) return;
+        } catch(Exception $e){ /* if the check fails, fall through to normal timing */ }
 
         // The clock runs from ASSIGNMENT and does NOT reset on status updates — only CLOSING the
         // task stops it (handled by the status check above). This pushes technicians to actually
