@@ -628,6 +628,56 @@ function sweep_opened_no_action($pdo){
     } catch(Exception $e){ error_log('sweep_opened_no_action: '.$e->getMessage()); }
 }
 
+// ── Stale INSTALLATION task penalty ──────────────────────────────────────────
+// For INSTALLATION tasks only (excludes V2V, Troubleshoot, Re-Adding, Demo, etc — anything
+// bs_type_for_task() flags as 'license'/service). If the task keeps sitting OPEN without any
+// status change: first -50 after 3 days from assignment, then -50 for every additional 5 days.
+// ANY status change resets the clock (updated_at moves forward), so the next penalty is measured
+// from the last update. Stops once the task is Closed/Cancelled. Idempotent per window.
+function apply_stale_task_penalty($pdo, $taskId){
+    try {
+        $st = $pdo->prepare("SELECT id, assigned_to, task_status, device_details,
+                    COALESCE(assigned_at, created_at) AS start_ts, updated_at
+                 FROM tasks WHERE id=?");
+        $st->execute([$taskId]);
+        $row = $st->fetch(PDO::FETCH_ASSOC);
+        if(!$row) return;
+        if(empty($row['assigned_to'])) return;
+        if(in_array($row['task_status'], ['Closed','Cancelled','Completed'])) return;   // done → no penalty
+        // Only installation tasks earn/lose coins here. Service jobs (V2V/Troubleshoot/Re-Adding/Demo) are excluded.
+        if(bs_type_for_task($row['device_details'] ?? '') !== 'sales') return;
+
+        // The clock runs from the LAST activity (updated_at) so any status change resets it.
+        // Fall back to the assignment time if updated_at is somehow empty.
+        $anchor = !empty($row['updated_at']) ? strtotime($row['updated_at']) : strtotime($row['start_ts']);
+        if(!$anchor) return;
+        $ageDays = (time() - $anchor) / 86400.0;
+        if($ageDays < 3) return;                       // first penalty only after 3 full days
+
+        // Window index: day 3 = window 0 (-50), then every +5 days = next window.
+        // e.g. 3–7.99d → 1 window, 8–12.99d → 2 windows, 13–17.99d → 3 windows …
+        $windows = 1 + (int)floor(($ageDays - 3) / 5);
+        for($w = 0; $w < $windows; $w++){
+            $key = 'stale_task_'.$taskId.'_'.$w;       // idempotent per window
+            award_coins($pdo, intval($row['assigned_to']), -50,
+                'Installation task not progressing ('.($w===0?'3 days':(3 + $w*5).' days').' with no update)',
+                $taskId, $key,
+                '⚠️ -50 coins', 'An installation task assigned to you has had no update. Please update or close it to stop further penalty.');
+        }
+    } catch(Exception $e){ error_log('apply_stale_task_penalty: '.$e->getMessage()); }
+}
+
+// Sweep open installation tasks and apply the stale-task penalty where due.
+function sweep_stale_task_penalties($pdo){
+    try {
+        $rows = $pdo->query("SELECT id FROM tasks
+            WHERE assigned_to IS NOT NULL
+              AND task_status NOT IN ('Closed','Cancelled','Completed')
+              AND COALESCE(updated_at, assigned_at, created_at) < (NOW() - INTERVAL 3 DAY)")->fetchAll(PDO::FETCH_COLUMN);
+        foreach($rows as $tid){ apply_stale_task_penalty($pdo, intval($tid)); }
+    } catch(Exception $e){ error_log('sweep_stale_task_penalties: '.$e->getMessage()); }
+}
+
 // ── Device sync helpers ──
 function _devEnsureTables($pdo){
     $pdo->exec("CREATE TABLE IF NOT EXISTS server_devices (
@@ -1006,6 +1056,8 @@ case 'get_tasks':
     try { sweep_unopened_penalties($pdo); } catch(Exception $e){}
     // Apply "opened but no action taken" warnings/penalties (idempotent).
     try { sweep_opened_no_action($pdo); } catch(Exception $e){}
+    // Apply the stale-installation-task penalty (-50 at 3 days, then every 5 days; resets on any status change).
+    try { sweep_stale_task_penalties($pdo); } catch(Exception $e){}
     $where=[]; $params=[];
 
     // ROLE-BASED FILTER — enforced server-side
