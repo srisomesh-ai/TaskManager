@@ -188,6 +188,17 @@
   </div>
 
   <div style="padding:10px 14px 0">
+    <div class="dev-open-card" onclick="openTomorrow()">
+      <div class="doc-ic">📅</div>
+      <div class="doc-main">
+        <div class="doc-n">Tomorrow Assignments</div>
+        <div class="doc-l">Plan tomorrow's tasks so your manager knows · updates every night</div>
+      </div>
+      <div class="doc-arrow">›</div>
+    </div>
+  </div>
+
+  <div style="padding:10px 14px 0">
     <div class="dev-open-card" onclick="location.href='readding.html'">
       <div class="doc-ic">🔌</div>
       <div class="doc-main">
@@ -236,6 +247,17 @@
         <button id="cf-cancel" style="flex:1;background:#f1f5f9;color:#334155;border:none;border-radius:10px;padding:12px;font-weight:700;font-size:14px;cursor:pointer">Cancel</button>
         <button id="cf-ok" style="flex:1;background:#dc2626;color:#fff;border:none;border-radius:10px;padding:12px;font-weight:700;font-size:14px;cursor:pointer">Delete</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Tomorrow assignments slide-in panel -->
+  <div id="tm-ov" onclick="if(event.target===this)closeTomorrow()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000">
+    <div id="tm-sheet" style="position:absolute;inset:0;background:#eef1f5;overflow-y:auto;transform:translateY(100%);transition:transform .25s ease">
+      <div style="position:sticky;top:0;background:linear-gradient(135deg,#0e5c5c,#137272);color:#fff;padding:16px 18px;display:flex;justify-content:space-between;align-items:center;z-index:5">
+        <div><div style="font-size:18px;font-weight:800">📅 Tomorrow Assignments</div><div style="font-size:12px;opacity:.9">Plan tomorrow so your manager can see · resets each night</div></div>
+        <button onclick="closeTomorrow()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:9px;width:34px;height:34px;font-size:20px;cursor:pointer">×</button>
+      </div>
+      <div id="tm-body" style="padding:14px 14px 60px;max-width:600px;margin:0 auto"></div>
     </div>
   </div>
 
@@ -456,6 +478,85 @@
   // ── NOTIFICATION HISTORY ──────────────────────────────────
   // ── OUTSTATION CLAIMS (technician) ─────────────────────────────
   let _osClaim=null, _osLines=[];
+  // ── TOMORROW ASSIGNMENTS (technician) ──────────────────────────
+  function openTomorrow(){
+    const ov=document.getElementById('tm-ov'), sh=document.getElementById('tm-sheet');
+    if(!ov||!sh) return;
+    ov.style.display='block'; requestAnimationFrame(function(){ sh.style.transform='translateY(0)'; });
+    tmRender();
+  }
+  function closeTomorrow(){
+    const ov=document.getElementById('tm-ov'), sh=document.getElementById('tm-sheet');
+    sh.style.transform='translateY(100%)'; setTimeout(function(){ ov.style.display='none'; }, 250);
+  }
+  async function tmRender(){
+    const b=document.getElementById('tm-body');
+    b.innerHTML='<div style="text-align:center;padding:30px;color:#889">Loading…</div>';
+    try{
+      const d=await api('tm_mine',{});
+      const plans=(d&&d.plans)?d.plans:[];
+      let h='<button onclick="tmAddForm()" style="width:100%;background:#0e5c5c;color:#fff;border:none;border-radius:11px;padding:14px;font-weight:800;font-size:15px;cursor:pointer;margin-bottom:14px">➕ Add a task for tomorrow</button>';
+      if(!plans.length){
+        h+='<div style="text-align:center;padding:30px;color:#889;font-size:13px">No tasks planned for tomorrow yet.<br>Add the jobs you plan to do so your manager can see.</div>';
+      } else {
+        h+='<div style="font-size:12px;color:#667;margin-bottom:10px">Your plan for tomorrow — tap ✓ when done, it disappears.</div>';
+        h+=plans.map(function(p){
+          return '<div style="background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.05)">'
+            +'<div style="display:flex;justify-content:space-between;align-items:flex-start">'
+              +'<div style="flex:1"><div style="font-weight:700;font-size:14px">'+esc(p.task_id||'')+(p.customer_name?(' · '+esc(p.customer_name)):'')+'</div>'
+              +(p.plan_time?('<div style="font-size:12px;color:#0e5c5c;font-weight:600;margin-top:2px">🕐 '+esc(p.plan_time)+'</div>'):'')
+              +(p.note?('<div style="font-size:12px;color:#667;margin-top:3px">'+esc(p.note)+'</div>'):'')+'</div>'
+              +'<div style="display:flex;gap:6px;margin-left:8px">'
+                +'<button onclick="tmComplete('+p.id+')" style="background:#16a34a;color:#fff;border:none;border-radius:8px;width:34px;height:34px;font-size:16px;cursor:pointer">✓</button>'
+                +'<button onclick="tmRemove('+p.id+')" style="background:none;color:#c00;border:1px solid #c00;border-radius:8px;width:34px;height:34px;font-size:14px;cursor:pointer">🗑️</button>'
+              +'</div>'
+            +'</div></div>';
+        }).join('');
+      }
+      b.innerHTML=h;
+    }catch(e){ b.innerHTML='<div style="padding:20px;color:#c00">'+esc(e.message)+'</div>'; }
+  }
+  async function tmAddForm(){
+    const b=document.getElementById('tm-body');
+    b.innerHTML='<div style="text-align:center;padding:30px;color:#889">Loading your tasks…</div>';
+    try{
+      const d=await api('os_my_taskable',{});
+      const tasks=(d&&d.tasks)?d.tasks:[];
+      let h='<button onclick="tmRender()" style="background:none;border:none;color:#0e5c5c;font-weight:700;font-size:13px;padding:0 0 12px;cursor:pointer">‹ Back</button>'
+        +'<div style="font-weight:800;font-size:16px;margin-bottom:12px">➕ Add a task for tomorrow</div>';
+      if(!tasks.length){ b.innerHTML=h+'<div style="color:#889;padding:20px;text-align:center">No tasks assigned to you.</div>'; return; }
+      h+='<label style="font-size:12px;color:#667;display:block;margin-bottom:6px">Select task</label>'
+        +'<select id="tm-task" style="width:100%;padding:12px 10px;border:1.5px solid #ddd;border-radius:9px;font-size:14px;margin-bottom:12px;background:#fff"><option value="">— Choose a task —</option>'
+        + tasks.map(function(t){ return '<option value="'+t.id+'">'+esc(t.task_id||'')+' · '+esc(t.customer_name||'')+' · '+esc(t.task_status||'')+'</option>'; }).join('')
+        +'</select>'
+        +'<label style="font-size:12px;color:#667;display:block;margin-bottom:6px">Time (e.g. 10:00 AM)</label>'
+        +'<input id="tm-time" placeholder="10:00 AM" style="width:100%;padding:11px 10px;border:1.5px solid #ddd;border-radius:9px;font-size:14px;margin-bottom:12px">'
+        +'<label style="font-size:12px;color:#667;display:block;margin-bottom:6px">Note (optional)</label>'
+        +'<textarea id="tm-note" rows="2" placeholder="e.g. Meet customer at gate, bring 2 devices" style="width:100%;padding:11px 10px;border:1.5px solid #ddd;border-radius:9px;font-size:14px;resize:vertical;margin-bottom:14px"></textarea>'
+        +'<button onclick="tmSave()" style="width:100%;background:#0e5c5c;color:#fff;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:15px;cursor:pointer">Save to tomorrow plan</button>';
+      b.innerHTML=h;
+    }catch(e){ b.innerHTML='<div style="padding:20px;color:#c00">'+esc(e.message)+'</div>'; }
+  }
+  async function tmSave(){
+    const tid=(document.getElementById('tm-task')||{}).value||'';
+    const time=(document.getElementById('tm-time')||{}).value||'';
+    const note=(document.getElementById('tm-note')||{}).value||'';
+    if(!tid){ alert('Please select a task'); return; }
+    const d=await api('tm_add',{},'POST',{task_db_id:parseInt(tid),plan_time:time,note:note}).catch(()=>({}));
+    if(d&&d.success){ showToast('✅ Added to tomorrow plan'); tmRender(); }
+    else alert((d&&d.error)||'Could not add');
+  }
+  async function tmComplete(id){
+    const d=await api('tm_complete',{},'POST',{id:id}).catch(()=>({}));
+    if(d&&d.success){ showToast('✓ Done'); tmRender(); } else alert((d&&d.error)||'Error');
+  }
+  async function tmRemove(id){
+    const ok=await uiConfirm({icon:'🗑️',title:'Remove this?',message:'Remove this task from your tomorrow plan?',okText:'Remove',cancelText:'Cancel'});
+    if(!ok) return;
+    const d=await api('tm_remove',{},'POST',{id:id}).catch(()=>({}));
+    if(d&&d.success){ showToast('Removed'); tmRender(); } else alert((d&&d.error)||'Error');
+  }
+
   function openOutstation(){
     const ov=document.getElementById('os-ov'), sh=document.getElementById('os-sheet');
     if(!ov||!sh){ alert('Outstation panel not found — please update the app.'); return; }
@@ -475,12 +576,13 @@
   // consumes our guard entry and fires popstate; we then decide what to do and immediately push a
   // fresh guard so the app never actually exits on a single accidental back press.
   function _anyPanelOpen(){
-    const ids=['os-ov','nh-ov','gl-ov'];
+    const ids=['tm-ov','os-ov','nh-ov','gl-ov'];
     for(const id of ids){ const el=document.getElementById(id); if(el && getComputedStyle(el).display!=='none') return id; }
     return null;
   }
   function _closePanelById(id){
-    if(id==='os-ov') closeOutstation();
+    if(id==='tm-ov') closeTomorrow();
+    else if(id==='os-ov') closeOutstation();
     else if(id==='nh-ov' && typeof closeNotifHistory==='function') closeNotifHistory(true);
     else if(id==='gl-ov' && typeof closeGuidelines==='function') closeGuidelines(true);
   }
