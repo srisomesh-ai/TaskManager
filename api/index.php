@@ -636,9 +636,11 @@ function sweep_opened_no_action($pdo){
 // from the last update. Stops once the task is Closed/Cancelled. Idempotent per window.
 function apply_stale_task_penalty($pdo, $taskId){
     try {
-        // This rule starts fresh — it must NOT retroactively punish tasks that were already
-        // open before the rule went live. Only tasks assigned on/after this date are eligible.
+        // This rule started on this date. It applies to ALL open installation tasks (old and new),
+        // but the countdown never begins before this date — so tasks already open before it are not
+        // retroactively punished for the days that passed earlier; their clock starts here.
         $RULE_START = '2026-08-20 00:00:00';
+        $ruleTs = strtotime($RULE_START);
         $st = $pdo->prepare("SELECT id, assigned_to, task_status, device_details,
                     COALESCE(assigned_at, created_at) AS start_ts, updated_at
                  FROM tasks WHERE id=?");
@@ -646,15 +648,15 @@ function apply_stale_task_penalty($pdo, $taskId){
         $row = $st->fetch(PDO::FETCH_ASSOC);
         if(!$row) return;
         if(empty($row['assigned_to'])) return;
-        if(empty($row['start_ts']) || strtotime($row['start_ts']) < strtotime($RULE_START)) return; // pre-rule task — never penalise
         if(in_array($row['task_status'], ['Closed','Cancelled','Completed'])) return;   // done → no penalty
         // Only installation tasks earn/lose coins here. Service jobs (V2V/Troubleshoot/Re-Adding/Demo) are excluded.
         if(bs_type_for_task($row['device_details'] ?? '') !== 'sales') return;
 
-        // The clock runs from the LAST activity (updated_at) so any status change resets it.
-        // Fall back to the assignment time if updated_at is somehow empty.
-        $anchor = !empty($row['updated_at']) ? strtotime($row['updated_at']) : strtotime($row['start_ts']);
-        if(!$anchor) return;
+        // The clock runs from the LAST activity (updated_at) so any status change resets it,
+        // BUT it never starts before the rule-start date (so old tasks count from today, not earlier).
+        $lastActivity = !empty($row['updated_at']) ? strtotime($row['updated_at']) : strtotime($row['start_ts']);
+        if(!$lastActivity) $lastActivity = $ruleTs;
+        $anchor = max($lastActivity, $ruleTs);         // never earlier than the rule start
         $ageDays = (time() - $anchor) / 86400.0;
         if($ageDays < 3) return;                       // first penalty only after 3 full days
 
@@ -674,12 +676,11 @@ function apply_stale_task_penalty($pdo, $taskId){
 // Sweep open installation tasks and apply the stale-task penalty where due.
 function sweep_stale_task_penalties($pdo){
     try {
-        // Only tasks assigned on/after the rule start date (no retroactive penalties).
+        // All open tasks (old + new). The per-task function anchors the clock to the rule-start
+        // date, so old tasks are only charged for days elapsed AFTER the rule began — never before.
         $rows = $pdo->query("SELECT id FROM tasks
             WHERE assigned_to IS NOT NULL
-              AND task_status NOT IN ('Closed','Cancelled','Completed')
-              AND COALESCE(assigned_at, created_at) >= '2026-08-20 00:00:00'
-              AND COALESCE(updated_at, assigned_at, created_at) < (NOW() - INTERVAL 3 DAY)")->fetchAll(PDO::FETCH_COLUMN);
+              AND task_status NOT IN ('Closed','Cancelled','Completed')")->fetchAll(PDO::FETCH_COLUMN);
         foreach($rows as $tid){ apply_stale_task_penalty($pdo, intval($tid)); }
     } catch(Exception $e){ error_log('sweep_stale_task_penalties: '.$e->getMessage()); }
 }
