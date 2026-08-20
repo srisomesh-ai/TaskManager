@@ -3008,7 +3008,11 @@ case 'os_create_expense':
 case 'os_my_claims':
     try {
         _ensureOutstationTables($pdo);
-        $rows=$pdo->prepare("SELECT c.*, (SELECT COUNT(*) FROM outstation_claim_lines l WHERE l.claim_id=c.id) AS line_count FROM outstation_claims c WHERE c.technician_id=? ORDER BY c.id DESC LIMIT 100");
+        $rows=$pdo->prepare("SELECT c.*, t.customer_name, t.task_status,
+                    (SELECT COUNT(*) FROM outstation_claim_lines l WHERE l.claim_id=c.id) AS line_count
+                 FROM outstation_claims c LEFT JOIN tasks t ON c.task_db_id=t.id
+                 WHERE c.technician_id=? AND c.status<>'draft'
+                 ORDER BY COALESCE(c.submitted_at, c.created_at) DESC LIMIT 200");
         $rows->execute([$userId]);
         echo json_encode(['success'=>true,'claims'=>$rows->fetchAll(PDO::FETCH_ASSOC)]);
     } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
