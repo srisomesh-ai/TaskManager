@@ -447,34 +447,51 @@
     const ov=document.getElementById('os-ov'), sh=document.getElementById('os-sheet');
     if(!ov||!sh){ alert('Outstation panel not found — please update the app.'); return; }
     ov.style.display='block'; requestAnimationFrame(function(){ sh.style.transform='translateY(0)'; });
-    try{ history.pushState({panel:'outstation'},''); }catch(e){}
     const b=document.getElementById('os-body');
     if(b) b.innerHTML='<div style="text-align:center;padding:30px;color:#889">Loading your tasks…</div>';
     try { osShowTaskList(); }
     catch(e){ if(b) b.innerHTML='<div style="padding:20px;color:#c00;font-size:13px">Error: '+String(e.message||e)+'</div>'; }
   }
-  function closeOutstation(_fromPop){
+  function closeOutstation(){
     const ov=document.getElementById('os-ov'), sh=document.getElementById('os-sheet');
     sh.style.transform='translateY(100%)'; setTimeout(function(){ ov.style.display='none'; }, 250);
-    if(!_fromPop){ try{ history.back(); }catch(e){} }
   }
 
-  // Hardware/browser BACK: if any slide-in panel is open, just close it (don't exit the app).
-  // Push an initial history state so the FIRST back press is caught by us (not an immediate exit).
-  try{ history.pushState({panel:'home'},''); }catch(e){}
-  let _osBackExitArmed=false;
+  // ── Hardware BACK button handling ────────────────────────────────────────
+  // Keep exactly ONE guard entry in history at all times. Every time BACK is pressed the browser
+  // consumes our guard entry and fires popstate; we then decide what to do and immediately push a
+  // fresh guard so the app never actually exits on a single accidental back press.
+  function _anyPanelOpen(){
+    const ids=['os-ov','nh-ov','gl-ov'];
+    for(const id of ids){ const el=document.getElementById(id); if(el && getComputedStyle(el).display!=='none') return id; }
+    return null;
+  }
+  function _closePanelById(id){
+    if(id==='os-ov') closeOutstation();
+    else if(id==='nh-ov' && typeof closeNotifHistory==='function') closeNotifHistory(true);
+    else if(id==='gl-ov' && typeof closeGuidelines==='function') closeGuidelines(true);
+  }
+  try{ history.pushState({guard:1},''); }catch(e){}   // initial guard
+  let _backExitArmed=false;
   window.addEventListener('popstate', function(){
-    const os=document.getElementById('os-ov'), nh=document.getElementById('nh-ov'), gl=document.getElementById('gl-ov');
-    // 1) If any slide-in panel is open, just close it and stay in the app.
-    if(os && getComputedStyle(os).display!=='none'){ closeOutstation(true); try{history.pushState({panel:'home'},'');}catch(e){} return; }
-    if(nh && getComputedStyle(nh).display!=='none' && typeof closeNotifHistory==='function'){ closeNotifHistory(true); try{history.pushState({panel:'home'},'');}catch(e){} return; }
-    if(gl && getComputedStyle(gl).display!=='none' && typeof closeGuidelines==='function'){ closeGuidelines(true); try{history.pushState({panel:'home'},'');}catch(e){} return; }
-    // 2) On the home screen: require a second back press within 2s to exit.
-    if(_osBackExitArmed){ _osBackExitArmed=false; return; /* let the browser go back → exit */ }
-    _osBackExitArmed=true;
+    const open=_anyPanelOpen();
+    if(open){
+      // A panel is open → close it, stay in the app, restore the guard.
+      _closePanelById(open);
+      try{ history.pushState({guard:1},''); }catch(e){}
+      return;
+    }
+    // On the home screen → first back arms exit, second back within 2s lets the app exit.
+    if(_backExitArmed){
+      _backExitArmed=false;
+      // Do NOT push a new guard. History is now at the base entry, so the next hardware back
+      // press falls through to the WebView and exits the app naturally.
+      return;
+    }
+    _backExitArmed=true;
     try{ if(typeof showToast==='function') showToast('Press back again to exit'); }catch(e){}
-    try{ history.pushState({panel:'home'},''); }catch(e){}   // re-arm so we stay in the app
-    setTimeout(function(){ _osBackExitArmed=false; }, 2000);
+    try{ history.pushState({guard:1},''); }catch(e){}   // re-arm, stay in app
+    setTimeout(function(){ _backExitArmed=false; }, 2000);
   });
   async function osDebugCreate(){
     const who=await api('os_whoami',{}).catch(function(e){ return {error:String(e.message||e)}; });
@@ -679,7 +696,6 @@
   async function openNotifHistory(){
     const ov=document.getElementById('nh-ov'), sh=document.getElementById('nh-sheet'), b=document.getElementById('nh-body');
     ov.style.display='block';
-    try{ history.pushState({panel:'notif'},''); }catch(e){}
     requestAnimationFrame(function(){ sh.style.transform='translateY(0)'; });
     b.innerHTML='<div style="text-align:center;padding:30px;color:#889">Loading…</div>';
     try{
@@ -711,7 +727,6 @@
     const ov=document.getElementById('nh-ov'), sh=document.getElementById('nh-sheet');
     sh.style.transform='translateY(100%)';
     setTimeout(function(){ ov.style.display='none'; }, 250);
-    if(!_fromPop){ try{ history.back(); }catch(e){} }
   }
   async function refreshNotifBadge(){
     try{
@@ -727,14 +742,12 @@
     if(b && !b.dataset.loaded){ b.innerHTML=GUIDELINES_HTML; b.dataset.loaded='1'; }
     const ov=document.getElementById('gl-ov'); const sh=document.getElementById('gl-sheet');
     ov.style.display='block';
-    try{ history.pushState({panel:'guidelines'},''); }catch(e){}
     requestAnimationFrame(function(){ sh.style.transform='translateY(0)'; });
   }
   function closeGuidelines(_fromPop){
     const ov=document.getElementById('gl-ov'); const sh=document.getElementById('gl-sheet');
     sh.style.transform='translateY(100%)';
     setTimeout(function(){ ov.style.display='none'; }, 250);
-    if(!_fromPop){ try{ history.back(); }catch(e){} }
   }
   const GUIDELINES_HTML = `
     <style>
