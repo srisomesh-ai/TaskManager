@@ -411,6 +411,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
       <div class="nav-item readding-approver" id="nav-move-device" onclick="showPage('move-device')" style="display:none"><span class="nav-icon">🔀</span> Move Device</div>
       <div class="nav-item readding-approver" id="nav-bulk-upload" onclick="showPage('bulk-upload')" style="display:none"><span class="nav-icon">📤</span> Bulk Upload</div>
       <div class="nav-item readding-approver" id="nav-outstation" onclick="showPage('outstation')" style="display:none"><span class="nav-icon">🧾</span> Outstation Claims <span class="nav-badge" id="os-badge" style="display:none;background:var(--red);color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:10px;margin-left:4px">0</span></div>
+      <div class="nav-item readding-approver" id="nav-assessment" onclick="showPage('assessment')" style="display:none"><span class="nav-icon">📅</span> Technician Assessment</div>
       <div class="nav-item renewal-staff" id="nav-renewals" onclick="showPage('renewals')" style="display:none"><span class="nav-icon">🔄</span> License / Renewals <span class="nav-badge" id="renewal-badge" style="display:none;background:var(--red);color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:10px;margin-left:4px">0</span></div>
       <div class="nav-sec">Reports</div>
       <div class="nav-item admin-only" id="nav-daily-report" onclick="showPage('daily-report')"><span class="nav-icon">📅</span> Daily Report</div>
@@ -1158,6 +1159,12 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
           <button class="ts-btn" id="os-tab-emp" onclick="loadOutstationByEmployee()" style="background:var(--surface2);color:var(--text)">👥 By Employee</button>
         </div>
         <div id="os-list"><div style="color:var(--text3);padding:20px;text-align:center">Loading…</div></div>
+      </div>
+
+      <div class="page" id="page-assessment" style="padding:20px">
+        <div class="pg-header"><div class="breadcrumb">Home / <b>Technician Assessment</b></div><div class="pg-title">📅 Technician Assessment — Tomorrow</div><div class="pg-sub">What each technician has planned for tomorrow. See who is busy and who is free at a glance. Technicians update this each night; the board clears automatically every morning.</div></div>
+        <div style="margin-bottom:12px"><button class="ts-btn" style="background:var(--accent);color:#fff" onclick="loadAssessment()">🔄 Refresh</button></div>
+        <div id="assess-list"><div style="color:var(--text3);padding:20px;text-align:center">Loading…</div></div>
       </div>
 
       <div class="page" id="page-renewals">
@@ -2182,6 +2189,7 @@ function showPage(name, opts={}){
     'staff-notes':   loadStaffNotesPage,
     'coins':         loadCoinsPage,
     'outstation':    function(){ loadOutstationClaims('submitted'); },
+    'assessment':    loadAssessment,
      'price-list':    syncPlAuth,
      'purchases':     syncPurAuth,
      'discount-budgets': loadDiscountBudgets,
@@ -8069,6 +8077,45 @@ async function openTechClaims(tid, name){
           +'<div style="font-size:12px;color:var(--text3);margin-top:3px">Task value ₹'+(+c.task_price||0)+' · Claimed ₹'+(+c.claimed_total||0)+' · '+(c.line_count||0)+' line(s)</div>'
           +'</div>';
       }).join('');
+    }
+    list.innerHTML=h;
+  }catch(e){ list.innerHTML='<div style="padding:20px;color:var(--red)">'+escHtml(e.message)+'</div>'; }
+}
+
+async function loadAssessment(){
+  const list=document.getElementById('assess-list'); if(!list) return;
+  list.innerHTML='<div style="color:var(--text3);padding:20px;text-align:center">Loading…</div>';
+  try{
+    const d=await api('tm_admin_board',{});
+    if(!d||!d.success){ list.innerHTML='<div style="padding:20px;color:var(--red)">'+escHtml((d&&d.error)||'Error')+'</div>'; return; }
+    const techs=d.technicians||[];
+    const busy=techs.filter(function(t){ return t.count>0; });
+    const free=techs.filter(function(t){ return t.count===0; });
+    let h='<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">'
+      +'<div style="flex:1;min-width:140px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px"><div style="font-size:12px;color:var(--text3)">Busy tomorrow</div><div style="font-size:22px;font-weight:800;color:var(--green)">'+busy.length+'</div></div>'
+      +'<div style="flex:1;min-width:140px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px"><div style="font-size:12px;color:var(--text3)">No plan yet</div><div style="font-size:22px;font-weight:800;color:var(--red)">'+free.length+'</div></div>'
+      +'</div>';
+    // Busy technicians with their plans
+    if(busy.length){
+      h+=busy.map(function(t){
+        return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-weight:800;font-size:15px">👤 '+escHtml(t.name||'')+'</div><span style="background:var(--green-bg);color:var(--green);font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px">'+t.count+' job(s)</span></div>'
+          + t.plans.map(function(p){
+              return '<div style="border-left:3px solid var(--accent);padding:6px 0 6px 10px;margin-bottom:6px">'
+                +'<div style="font-weight:600;font-size:13px">'+escHtml(p.task_id||'')+(p.customer_name?(' · '+escHtml(p.customer_name)):'')+'</div>'
+                +(p.plan_time?('<div style="font-size:12px;color:var(--accent2);font-weight:600">🕐 '+escHtml(p.plan_time)+'</div>'):'')
+                +(p.note?('<div style="font-size:12px;color:var(--text2)">'+escHtml(p.note)+'</div>'):'')
+                +'</div>';
+            }).join('')
+          +'</div>';
+      }).join('');
+    }
+    // Free technicians (no plan)
+    if(free.length){
+      h+='<div style="font-weight:700;font-size:13px;color:var(--text3);margin:14px 0 8px">No plan submitted yet</div>';
+      h+='<div style="display:flex;flex-wrap:wrap;gap:8px">'+free.map(function(t){
+        return '<span style="background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:6px 12px;font-size:13px;color:var(--text2)">👤 '+escHtml(t.name||'')+'</span>';
+      }).join('')+'</div>';
     }
     list.innerHTML=h;
   }catch(e){ list.innerHTML='<div style="padding:20px;color:var(--red)">'+escHtml(e.message)+'</div>'; }
