@@ -636,6 +636,9 @@ function sweep_opened_no_action($pdo){
 // from the last update. Stops once the task is Closed/Cancelled. Idempotent per window.
 function apply_stale_task_penalty($pdo, $taskId){
     try {
+        // This rule starts fresh — it must NOT retroactively punish tasks that were already
+        // open before the rule went live. Only tasks assigned on/after this date are eligible.
+        $RULE_START = '2026-08-20 00:00:00';
         $st = $pdo->prepare("SELECT id, assigned_to, task_status, device_details,
                     COALESCE(assigned_at, created_at) AS start_ts, updated_at
                  FROM tasks WHERE id=?");
@@ -643,6 +646,7 @@ function apply_stale_task_penalty($pdo, $taskId){
         $row = $st->fetch(PDO::FETCH_ASSOC);
         if(!$row) return;
         if(empty($row['assigned_to'])) return;
+        if(empty($row['start_ts']) || strtotime($row['start_ts']) < strtotime($RULE_START)) return; // pre-rule task — never penalise
         if(in_array($row['task_status'], ['Closed','Cancelled','Completed'])) return;   // done → no penalty
         // Only installation tasks earn/lose coins here. Service jobs (V2V/Troubleshoot/Re-Adding/Demo) are excluded.
         if(bs_type_for_task($row['device_details'] ?? '') !== 'sales') return;
@@ -670,9 +674,11 @@ function apply_stale_task_penalty($pdo, $taskId){
 // Sweep open installation tasks and apply the stale-task penalty where due.
 function sweep_stale_task_penalties($pdo){
     try {
+        // Only tasks assigned on/after the rule start date (no retroactive penalties).
         $rows = $pdo->query("SELECT id FROM tasks
             WHERE assigned_to IS NOT NULL
               AND task_status NOT IN ('Closed','Cancelled','Completed')
+              AND COALESCE(assigned_at, created_at) >= '2026-08-20 00:00:00'
               AND COALESCE(updated_at, assigned_at, created_at) < (NOW() - INTERVAL 3 DAY)")->fetchAll(PDO::FETCH_COLUMN);
         foreach($rows as $tid){ apply_stale_task_penalty($pdo, intval($tid)); }
     } catch(Exception $e){ error_log('sweep_stale_task_penalties: '.$e->getMessage()); }
