@@ -8220,6 +8220,8 @@ function openOutstationDetailInline(c, lines, cid, isAdmin, final){
           +'<div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--text3)">Task value</span><b>₹'+tv.toFixed(0)+'</b></div>'
           +'<div style="display:flex;justify-content:space-between;font-size:13px;margin-top:3px"><span style="color:var(--text3)">Collected from customer</span><b>₹'+collected.toFixed(0)+'</b></div>'
           +'<div style="display:flex;justify-content:space-between;font-size:13px;margin-top:3px"><span style="color:var(--text3)">Claimed by technician</span><b>₹'+claimed.toFixed(0)+'</b></div>'
+          +((+c.customer_paid>0)?('<div style="display:flex;justify-content:space-between;font-size:13px;margin-top:3px"><span style="color:var(--text3)">Customer already paid</span><b style="color:#b45309">− ₹'+(+c.customer_paid).toFixed(0)+'</b></div>'
+            +'<div style="display:flex;justify-content:space-between;font-size:14px;margin-top:4px;padding-top:5px;border-top:1px dashed var(--border)"><span style="font-weight:800;color:#0e5c5c">Company should pay</span><b style="color:#0e5c5c">₹'+Math.max(0,claimed-(+c.customer_paid)).toFixed(0)+'</b></div>'):'')
           +'<hr style="border:none;border-top:1px dashed var(--border);margin:7px 0">'
           +'<div style="display:flex;justify-content:space-between;font-size:14px"><span style="font-weight:700">Task value − claim</span><b style="color:'+dc+'">₹'+diff.toFixed(0)+(tv>0?(' ('+pct+'% claimed)'):'')+'</b></div>'
           +warn+'</div>';
