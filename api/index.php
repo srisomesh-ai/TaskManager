@@ -3065,7 +3065,10 @@ case 'os_finalize_claim':
         $pend=$pdo->prepare("SELECT COUNT(*) FROM outstation_claim_lines WHERE claim_id=? AND status='pending'"); $pend->execute([$cid]);
         if(intval($pend->fetchColumn())>0){ echo json_encode(['error'=>'Decide all lines first (some are still pending)']); break; }
         $sum=$pdo->prepare("SELECT COALESCE(SUM(approved_amount),0) FROM outstation_claim_lines WHERE claim_id=? AND status='approved'"); $sum->execute([$cid]);
-        $approvedTotal=floatval($sum->fetchColumn());
+        $approvedLines=floatval($sum->fetchColumn());
+        // Net payable = approved travel bills MINUS what the customer already paid the technician.
+        $customerPaid = floatval($claim['customer_paid'] ?? 0);
+        $approvedTotal = max(0, $approvedLines - $customerPaid);
         $pdo->prepare("UPDATE outstation_claims SET status='approved', approved_total=?, decided_at=NOW(), decided_by=? WHERE id=?")
             ->execute([$approvedTotal,$currentUser['name']??'admin',$cid]);
         // Award the approved total as coins (1 rupee = 1 coin), idempotent per claim.
