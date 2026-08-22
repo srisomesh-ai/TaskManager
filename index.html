@@ -4076,12 +4076,10 @@ async function fmPullVehicleStatus(idx){
   const res = document.getElementById('fm-veh-result-'+idx);
   _fmVehicleStatuses[idx] = null;
   if(!veh){ if(res) res.innerHTML='<span style="color:var(--saffron)">Enter a vehicle number first.</span>'; return; }
-  // Accept any real Indian plate — the server lookup below is the real validator.
-  // Just do a light sanity check (letters+digits, reasonable length); formats vary
-  // (e.g. TG09B9966 has a single series letter), so do NOT enforce the strict AB01CD1234 pattern.
+  // Plate is free text — do not enforce any format. Only require it to be non-empty.
   const vehClean = veh.replace(/[\s-]/g,'').toUpperCase();
-  if(!/^[A-Z0-9]{6,12}$/.test(vehClean) || !/[A-Z]/.test(vehClean) || !/[0-9]/.test(vehClean)){
-    if(res) res.innerHTML='<span style="color:var(--saffron)">Enter a valid vehicle number (letters and numbers).</span>'; return;
+  if(vehClean.length < 1){
+    if(res) res.innerHTML='<span style="color:var(--saffron)">Enter a vehicle number.</span>'; return;
   }
   if(btn){ btn.disabled=true; btn.textContent='⏳ Checking…'; }
   if(res){ res.innerHTML='<span style="color:var(--text3)">Searching GPS servers…</span>'; }
