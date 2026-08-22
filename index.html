@@ -8154,37 +8154,6 @@ async function openOutstationDetail(cid){
   const c=d.claim, lines=d.lines||[];
   const isAdmin=(currentUser&&(currentUser.role==='admin'||currentUser.role==='manager'));
   const final=(c.status==='approved');
-  let h='<div style="padding:4px 0 14px"><div style="font-weight:800;font-size:16px">'+escHtml(c.tech_name||'')+' — '
-    +'<a href="#" onclick="closeModal();viewTask('+c.task_db_id+');return false;" style="color:var(--accent2);text-decoration:none">'+escHtml(c.task_id||'')+' ↗</a></div>'
-    +'<div style="font-size:13px;color:var(--text2);margin-top:4px">Customer: '+escHtml(c.customer_name||'')+' · Reached: '+escHtml(c.customer_location||'–')+'</div>'
-    +'<div style="font-size:12px;color:var(--text3);margin-top:2px">Distance: '+escHtml(c.travel_distance||'–')+' · '+(c.installed_count||0)+'/'+(c.device_qty||1)+' installed · '+escHtml(c.task_status||'')+'</div>'
-    +(c.notes?'<div style="font-size:12px;color:var(--text2);margin-top:4px;font-style:italic">"'+escHtml(c.notes)+'"</div>':'')
-    +'</div>';
-  h+=lines.map(function(l){
-    const badge=l.status==='approved'?'<span style="color:var(--green);font-weight:700">✅ ₹'+(+l.approved_amount||0)+'</span>':l.status==='rejected'?'<span style="color:var(--red);font-weight:700">❌ Rejected</span>':'<span style="color:#b45309;font-weight:700">⏳ Pending</span>';
-    let block='<div style="border:1px solid var(--border);border-radius:9px;padding:11px;margin-bottom:9px">'
-      +'<div style="display:flex;justify-content:space-between"><div style="font-weight:700">🚏 '+escHtml(l.transport_mode||'')+' — claimed ₹'+(+l.amount||0)+'</div>'+badge+'</div>'
-      +((l.from_place||l.to_place)?'<div style="font-size:12px;color:var(--accent2);font-weight:600;margin:3px 0">📍 '+escHtml(l.from_place||'?')+' → '+escHtml(l.to_place||'?')+'</div>':'')
-      +(l.bill_file?'<a href="https://salmon-goldfish-110661.hostingersite.com/uploads/'+escHtml(l.bill_file)+'" target="_blank" style="font-size:12px;color:var(--accent2)">📎 View bill</a>':'<span style="font-size:12px;color:var(--red)">no bill uploaded</span>');
-    if(isAdmin && !final && l.status==='pending'){
-      block+='<div style="display:flex;gap:6px;margin-top:9px;align-items:center">'
-        +'<input type="number" id="os-appr-'+l.id+'" value="'+(+l.amount||0)+'" style="width:90px;padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">'
-        +'<button class="act-btn" style="background:var(--green);color:#fff;font-size:12px;font-weight:700" onclick="osDecideLine('+l.id+',\'approve\','+cid+')">Approve</button>'
-        +'<button class="act-btn" style="background:var(--red);color:#fff;font-size:12px;font-weight:700" onclick="osDecideLine('+l.id+',\'reject\','+cid+')">Reject</button>'
-        +'</div>';
-    } else if(l.note){ block+='<div style="font-size:11px;color:var(--text3);margin-top:4px">Note: '+escHtml(l.note)+'</div>'; }
-    return block+'</div>';
-  }).join('');
-  const approvedSum=lines.filter(l=>l.status==='approved').reduce((s,l)=>s+parseFloat(l.approved_amount||0),0);
-  const anyPending=lines.some(l=>l.status==='pending');
-  h+='<div style="font-weight:800;text-align:right;margin:8px 0">Approved so far: ₹'+approvedSum.toFixed(0)+'</div>';
-  if(isAdmin && !final){
-    h+='<button class="ts-btn" style="width:100%;background:'+(anyPending?'var(--surface2)':'var(--green)')+';color:'+(anyPending?'var(--text3)':'#fff')+';font-weight:800" '
-      +(anyPending?'disabled title="Decide all lines first"':'onclick="osFinalize('+cid+')"')+'>'
-      +(anyPending?'Decide all lines to finalize':'✅ Finalize &amp; pay ₹'+approvedSum.toFixed(0)+' as coins')+'</button>';
-  } else if(final){
-    h+='<div style="text-align:center;color:var(--green);font-weight:800;padding:8px">✅ Finalized — ₹'+(+c.approved_total||0)+' paid as coins</div>';
-  }
   openOutstationDetailInline(c, lines, cid, isAdmin, final);
 }
 function openOutstationDetailInline(c, lines, cid, isAdmin, final){
@@ -8284,8 +8253,14 @@ async function osDeleteClaim(cid){
 }
 async function osDecideLine(lineId, decision, cid){
   let approved=0, note='';
-  if(decision==='approve'){ approved=parseFloat((document.getElementById('os-appr-'+lineId)||{}).value||0); }
-  else { note=prompt('Reason for rejecting (optional):','')||''; }
+  if(decision==='approve'){
+    const el=document.getElementById('os-appr-'+lineId);
+    const raw = el ? String(el.value).trim() : '';
+    approved = parseFloat(raw);
+    if(isNaN(approved) || approved<0) approved = 0;
+  } else {
+    note=prompt('Reason for rejecting (optional):','')||'';
+  }
   const d=await api('os_decide_line',{},'POST',{line_id:lineId,decision:decision,approved_amount:approved,note:note}).catch(()=>({}));
   if(d&&d.success){ openOutstationDetail(cid); } else showToast('❌ '+((d&&d.error)||'Error'));
 }
