@@ -1,0 +1,1415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0E5C5C">
+<title>BharatGPS — My Dashboard</title>
+<style>
+  :root{--teal-dark:#0E5C5C;--teal:#137272;--teal-lite:#1a9b9b;--accent:#16a34a;--bg:#f0f4f8;--card:#fff;
+    --text:#0f172a;--text2:#475569;--text3:#94a3b8;--border:#e8edf3;--red:#dc2626;--amber:#d97706;--blue:#2563eb;--purple:#7c3aed}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:'Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;min-height:100dvh}
+
+  /* ── Hero header ── */
+  .hero{background:linear-gradient(150deg,var(--teal-dark) 0%,var(--teal) 55%,var(--teal-lite) 100%);color:#fff;
+    padding:calc(16px + env(safe-area-inset-top)) 18px 58px;position:relative;overflow:hidden;border-radius:0 0 26px 26px}
+  .hero::after{content:"";position:absolute;right:-40px;top:-40px;width:170px;height:170px;
+    background:radial-gradient(circle,rgba(255,255,255,.12),transparent 70%);border-radius:50%}
+  .hero-row{display:flex;align-items:center;justify-content:space-between;gap:10px;position:relative;z-index:1}
+  .hi{font-size:13px;color:rgba(255,255,255,.75);font-weight:500}
+  .name{font-size:22px;font-weight:800;line-height:1.15;margin-top:1px}
+  .avatar{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.18);display:flex;align-items:center;
+    justify-content:center;font-size:18px;font-weight:800;flex-shrink:0;border:1.5px solid rgba(255,255,255,.25)}
+  .logout-x{background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:9px;padding:8px 11px;font-size:11px;font-weight:700;cursor:pointer;margin-left:8px}
+
+  /* highlight tiles (devices + urgent) floating over hero */
+  .hi-tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:-42px 14px 0;position:relative;z-index:2}
+  .hi-tile{background:var(--card);border-radius:18px;padding:15px 16px;box-shadow:0 8px 22px rgba(15,23,42,.1);display:flex;align-items:center;gap:13px}
+  .hi-ico{width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+  .hi-ico.dev{background:#e0f2fe}.hi-ico.urg{background:#fee2e2}
+  .hi-tile .n{font-size:24px;font-weight:800;line-height:1}
+  .hi-tile .l{font-size:11px;color:var(--text3);font-weight:600;margin-top:3px}
+  .hi-tile.urgent-on .n{color:var(--red)}
+
+  /* section title */
+  .sec{display:flex;align-items:center;justify-content:space-between;padding:20px 18px 8px}
+  .sec h2{font-size:14px;font-weight:800;color:var(--text)}
+  .sec .link{font-size:12px;color:var(--teal);font-weight:700;cursor:pointer}
+
+  /* small stat pills */
+  .pills{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;padding:0 14px}
+  .pill{background:var(--card);border-radius:14px;padding:13px 8px;text-align:center;box-shadow:0 2px 8px rgba(15,23,42,.05)}
+  .pill .n{font-size:20px;font-weight:800;line-height:1}
+  .pill .l{font-size:9.5px;color:var(--text3);margin-top:5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px}
+  .pill.open .n{color:var(--blue)}.pill.prog .n{color:var(--amber)}.pill.pend .n{color:var(--purple)}
+  .pill.await .n{color:var(--accent)}.pill.closed .n{color:#059669}.pill.total .n{color:var(--text)}
+
+  /* devices strip */
+  .dev-strip{display:flex;gap:10px;overflow-x:auto;padding:4px 14px 2px;scrollbar-width:none}
+  .dev-strip::-webkit-scrollbar{display:none}
+  .dev-chip{flex-shrink:0;background:var(--card);border-radius:13px;padding:11px 14px;box-shadow:0 2px 8px rgba(15,23,42,.05);min-width:140px}
+  .dev-chip .dn{font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}
+  .dev-chip .di{font-size:11px;color:var(--text3);margin-top:3px}
+  .dev-empty{color:var(--text3);font-size:13px;padding:10px 16px}
+
+  /* my devices open card */
+  .dev-open-card{background:var(--card);border-radius:16px;padding:15px 16px;box-shadow:0 2px 10px rgba(15,23,42,.06);
+    display:flex;align-items:center;gap:14px;cursor:pointer;transition:transform .05s}
+  .dev-open-card:active{transform:scale(.99)}
+  .doc-ic{width:48px;height:48px;border-radius:14px;background:#e0f2fe;display:flex;align-items:center;justify-content:center;font-size:23px;flex-shrink:0}
+  .doc-main{flex:1;min-width:0}
+  .doc-n{font-size:22px;font-weight:800;line-height:1}
+  .doc-l{font-size:12px;color:var(--text3);font-weight:600;margin-top:4px}
+  .doc-arrow{font-size:28px;color:var(--text3);font-weight:300;flex-shrink:0}
+
+  /* filter chips */
+  .chips{display:flex;gap:8px;overflow-x:auto;padding:6px 14px 2px;scrollbar-width:none}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{flex-shrink:0;background:var(--card);border:1.5px solid var(--border);color:var(--text2);border-radius:20px;padding:8px 15px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+  .chip.on{background:var(--teal);border-color:var(--teal);color:#fff}
+
+  /* task cards */
+  .list{padding:6px 14px calc(24px + env(safe-area-inset-bottom))}
+  .task{background:var(--card);border-radius:16px;padding:15px;margin-bottom:11px;box-shadow:0 2px 10px rgba(15,23,42,.06);
+    border-left:4px solid var(--border);cursor:pointer;transition:transform .05s}
+  .task:active{transform:scale(.99)}
+  .task.urgent{border-left-color:var(--red)}
+  .task.done{opacity:.62}
+  .task-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  .task-id{font-size:11px;color:var(--text3);font-weight:700}
+  .task-cust{font-size:16px;font-weight:800;margin-top:2px}
+  .badge{font-size:10px;font-weight:800;padding:4px 9px;border-radius:20px;white-space:nowrap}
+  .b-open{background:#dbeafe;color:#1d4ed8}.b-prog{background:#fef3c7;color:#b45309}
+  .b-pend{background:#ede9fe;color:#6d28d9}.b-await{background:#dcfce7;color:#15803d}
+  .b-closed{background:#e2e8f0;color:#475569}.b-cancel{background:#fee2e2;color:#b91c1c}
+  .task-meta{font-size:13px;color:var(--text2);margin-top:9px;line-height:1.65}
+  .task-foot{display:flex;justify-content:space-between;align-items:center;margin-top:11px;padding-top:11px;border-top:1px solid var(--border)}
+  .task-price{font-size:15px;font-weight:800;color:var(--accent)}
+  .task-age{font-size:11px;color:var(--text3)}
+  .urgent-tag{background:#fee2e2;color:#b91c1c;font-size:10px;font-weight:800;padding:2px 8px;border-radius:12px;margin-left:6px}
+
+  /* New / unopened task — flashing highlight until the technician opens it */
+  .new-tag{background:var(--teal);color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:12px;margin-left:6px;animation:newBlink 1.1s ease-in-out infinite}
+  .task.new-task{border-left-color:var(--teal);animation:newGlow 1.4s ease-in-out infinite}
+  @keyframes newGlow{
+    0%,100%{box-shadow:0 2px 10px rgba(15,23,42,.06)}
+    50%{box-shadow:0 0 0 3px rgba(19,114,114,.28),0 6px 18px rgba(19,114,114,.22)}
+  }
+  @keyframes newBlink{0%,100%{opacity:1}50%{opacity:.4}}
+  @media (prefers-reduced-motion: reduce){
+    .task.new-task{animation:none;box-shadow:0 0 0 3px rgba(19,114,114,.28)}
+    .new-tag{animation:none}
+  }
+
+  .empty{text-align:center;padding:50px 20px;color:var(--text3)}
+  .empty .ico{font-size:44px;margin-bottom:10px}
+  .loading{text-align:center;padding:40px;color:var(--text3);font-size:14px}
+  .spin{display:inline-block;width:20px;height:20px;border:2.5px solid var(--border);border-top-color:var(--teal);border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle;margin-right:8px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+  <div class="hero">
+    <div class="hero-row">
+      <div>
+        <div class="hi" id="h-greet">Welcome back</div>
+        <div class="name" id="h-name">Technician</div>
+      </div>
+      <div style="display:flex;align-items:center">
+        <button onclick="openNotifHistory()" title="Notification history" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:50%;width:34px;height:34px;font-size:16px;cursor:pointer;margin-right:8px;display:flex;align-items:center;justify-content:center;position:relative">🔔<span id="nh-badge" style="display:none;position:absolute;top:-2px;right:-2px;background:#e74c3c;color:#fff;font-size:9px;font-weight:800;min-width:16px;height:16px;border-radius:8px;display:none;align-items:center;justify-content:center;padding:0 3px">0</span></button>
+        <button onclick="openGuidelines()" title="Guidelines" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:50%;width:34px;height:34px;font-size:16px;cursor:pointer;margin-right:8px;display:flex;align-items:center;justify-content:center">ℹ️</button>
+        <button onclick="openMyNotes()" title="My Notes" style="position:relative;background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:50%;width:34px;height:34px;font-size:16px;cursor:pointer;margin-right:8px;display:flex;align-items:center;justify-content:center">📋<span id="notes-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#e74c3c;color:#fff;border-radius:10px;min-width:17px;height:17px;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px">0</span></button>
+        <div class="avatar" id="h-avatar">T</div>
+        <button class="logout-x" onclick="logout()">Logout</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="cash-lock-banner" style="display:none;margin:12px 14px;padding:14px 16px;background:linear-gradient(135deg,#c0392b,#e74c3c);color:#fff;border-radius:12px;box-shadow:0 3px 10px rgba(192,57,43,.3);font-size:14px;line-height:1.5"></div>
+
+  <div class="hi-tiles">
+    <div class="hi-tile">
+      <div class="hi-ico dev">📡</div>
+      <div><div class="n" id="t-devices">–</div><div class="l">Devices with me</div></div>
+    </div>
+    <div class="hi-tile" id="t-urgent-tile">
+      <div class="hi-ico urg">🚨</div>
+      <div><div class="n" id="t-urgent">–</div><div class="l">Urgent / Emergency</div></div>
+    </div>
+  </div>
+
+  <div class="sec"><h2>📊 Task Overview</h2></div>
+  <div class="pills">
+    <div class="pill open"><div class="n" id="s-open">–</div><div class="l">Open</div></div>
+    <div class="pill prog"><div class="n" id="s-prog">–</div><div class="l">Progress</div></div>
+    <div class="pill pend"><div class="n" id="s-pend">–</div><div class="l">Pending</div></div>
+    <div class="pill await"><div class="n" id="s-await">–</div><div class="l">Awaiting</div></div>
+    <div class="pill closed"><div class="n" id="s-closed">–</div><div class="l">Closed</div></div>
+    <div class="pill total"><div class="n" id="s-total">–</div><div class="l">Total</div></div>
+  </div>
+
+  <div class="sec"><h2>📦 My Devices</h2></div>
+  <div style="padding:0 14px">
+    <div class="dev-open-card" onclick="location.href='devices.html'">
+      <div class="doc-ic">📡</div>
+      <div class="doc-main">
+        <div class="doc-n" id="dev-open-count">–</div>
+        <div class="doc-l">Devices assigned to you · tap to view all</div>
+      </div>
+      <div class="doc-arrow">›</div>
+    </div>
+  </div>
+
+  <div style="padding:10px 14px 0">
+    <div class="dev-open-card" onclick="location.href='earnings.html'">
+      <div class="doc-ic">💰</div>
+      <div class="doc-main">
+        <div class="doc-n"><span id="coin-count">–</span> <span style="font-size:13px;font-weight:600;color:var(--text2)">coins</span></div>
+        <div class="doc-l">My Earnings · tap to view</div>
+      </div>
+      <div class="doc-arrow">›</div>
+    </div>
+  </div>
+
+  <div style="padding:10px 14px 0">
+    <div class="dev-open-card" onclick="openOutstation()">
+      <div class="doc-ic">🧾</div>
+      <div class="doc-main">
+        <div class="doc-n">Outstation Claims</div>
+        <div class="doc-l">Claim your travel costs for a task · admin approves &amp; pays as coins</div>
+      </div>
+      <div class="doc-arrow">›</div>
+    </div>
+  </div>
+
+  <div style="padding:10px 14px 0">
+    <div class="dev-open-card" onclick="openTomorrow()">
+      <div class="doc-ic">📅</div>
+      <div class="doc-main">
+        <div class="doc-n">Tomorrow Assignments</div>
+        <div class="doc-l">Plan tomorrow's tasks so your manager knows · updates every night</div>
+      </div>
+      <div class="doc-arrow">›</div>
+    </div>
+  </div>
+
+  <div style="padding:10px 14px 0">
+    <div class="dev-open-card" onclick="location.href='readding.html'">
+      <div class="doc-ic">🔌</div>
+      <div class="doc-main">
+        <div class="doc-n">Re-Adding <span id="ra-pending-badge" style="display:none;background:#e74c3c;color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:800;margin-left:4px"></span></div>
+        <div class="doc-l">Request a device re-add · admin approves &amp; pushes to server</div>
+      </div>
+      <div class="doc-arrow">›</div>
+    </div>
+  </div>
+
+  <div class="sec"><h2>📋 My Tasks</h2></div>
+  <div class="chips" id="chips">
+    <div class="chip on" data-f="active" onclick="setFilter(this)">🔵 Active</div>
+    <div class="chip" data-f="urgent" onclick="setFilter(this)">🚨 Urgent</div>
+    <div class="chip" data-f="all" onclick="setFilter(this)">All</div>
+    <div class="chip" data-f="Open" onclick="setFilter(this)">Open</div>
+    <div class="chip" data-f="In Progress" onclick="setFilter(this)">In Progress</div>
+    <div class="chip" data-f="Awaiting Approval" onclick="setFilter(this)">Awaiting</div>
+    <div class="chip" data-f="Closed" onclick="setFilter(this)">Closed</div>
+  </div>
+
+  <div class="list" id="list"><div class="loading"><span class="spin"></span>Loading your tasks…</div></div>
+
+  <!-- Floating Send Request button -->
+  <button id="sr-fab" onclick="srOpen()" style="display:none;position:fixed;right:18px;bottom:22px;z-index:900;background:#25D366;color:#fff;border:none;border-radius:30px;padding:14px 20px;font-size:14px;font-weight:800;box-shadow:0 8px 24px rgba(37,211,102,.45);cursor:pointer;align-items:center;gap:8px">📲 Send Request</button>
+
+  <!-- Guidelines slide-in panel -->
+  <div id="gl-ov" onclick="if(event.target===this)closeGuidelines()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000">
+    <div id="gl-sheet" style="position:absolute;inset:0;background:#eef1f5;overflow-y:auto;transform:translateY(100%);transition:transform .25s ease">
+      <div style="position:sticky;top:0;background:linear-gradient(135deg,#137272,#0d5555);color:#fff;padding:16px 18px;display:flex;justify-content:space-between;align-items:center;z-index:5">
+        <div><div style="font-size:18px;font-weight:800">📖 Technician Guidelines</div><div style="font-size:12px;opacity:.9">Please read carefully</div></div>
+        <button onclick="closeGuidelines()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:9px;width:34px;height:34px;font-size:20px;cursor:pointer">×</button>
+      </div>
+      <div id="gl-body" style="padding:14px 14px 40px;max-width:560px;margin:0 auto"></div>
+    </div>
+  </div>
+
+  <!-- Outstation claims slide-in panel -->
+  <!-- Custom confirmation dialog (replaces the browser's default confirm popup) -->
+  <div id="cf-ov" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:3000;align-items:center;justify-content:center;padding:24px">
+    <div id="cf-box" style="background:#fff;border-radius:16px;max-width:340px;width:100%;padding:22px 20px 18px;box-shadow:0 20px 50px rgba(0,0,0,.3);transform:scale(.92);opacity:0;transition:transform .16s ease,opacity .16s ease">
+      <div id="cf-icon" style="font-size:34px;text-align:center;margin-bottom:10px">🗑️</div>
+      <div id="cf-title" style="font-size:17px;font-weight:800;text-align:center;color:#0f172a;margin-bottom:6px">Are you sure?</div>
+      <div id="cf-msg" style="font-size:13.5px;color:#64748b;text-align:center;line-height:1.5;margin-bottom:18px">This action cannot be undone.</div>
+      <div style="display:flex;gap:10px">
+        <button id="cf-cancel" style="flex:1;background:#f1f5f9;color:#334155;border:none;border-radius:10px;padding:12px;font-weight:700;font-size:14px;cursor:pointer">Cancel</button>
+        <button id="cf-ok" style="flex:1;background:#dc2626;color:#fff;border:none;border-radius:10px;padding:12px;font-weight:700;font-size:14px;cursor:pointer">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tomorrow assignments slide-in panel -->
+  <div id="tm-ov" onclick="if(event.target===this)closeTomorrow()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000">
+    <div id="tm-sheet" style="position:absolute;inset:0;background:#eef1f5;overflow-y:auto;transform:translateY(100%);transition:transform .25s ease">
+      <div style="position:sticky;top:0;background:linear-gradient(135deg,#0e5c5c,#137272);color:#fff;padding:16px 18px;display:flex;justify-content:space-between;align-items:center;z-index:5">
+        <div><div style="font-size:18px;font-weight:800">📅 Tomorrow Assignments</div><div style="font-size:12px;opacity:.9">Plan tomorrow so your manager can see · resets each night</div></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button onclick="tmInfo()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:9px;width:34px;height:34px;font-size:17px;cursor:pointer">ℹ️</button>
+          <button onclick="closeTomorrow()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:9px;width:34px;height:34px;font-size:20px;cursor:pointer">×</button>
+        </div>
+      </div>
+      <div id="tm-body" style="padding:14px 14px 60px;max-width:600px;margin:0 auto"></div>
+    </div>
+  </div>
+
+  <div id="os-ov" onclick="if(event.target===this)closeOutstation()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000">
+    <div id="os-sheet" style="position:absolute;inset:0;background:#eef1f5;overflow-y:auto;transform:translateY(100%);transition:transform .25s ease">
+      <div style="position:sticky;top:0;background:linear-gradient(135deg,#b45309,#92400e);color:#fff;padding:16px 18px;display:flex;justify-content:space-between;align-items:center;z-index:5">
+        <div><div style="font-size:18px;font-weight:800">🧾 Outstation Claims</div><div style="font-size:12px;opacity:.9">Claim travel costs for a task · paid as coins after approval</div></div>
+        <button onclick="closeOutstation()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:9px;width:34px;height:34px;font-size:20px;cursor:pointer">×</button>
+      </div>
+      <div id="os-body" style="padding:14px 14px 60px;max-width:600px;margin:0 auto"></div>
+    </div>
+  </div>
+
+  <!-- Notification history slide-in panel -->
+  <div id="nh-ov" onclick="if(event.target===this)closeNotifHistory()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000">
+    <div id="nh-sheet" style="position:absolute;inset:0;background:#eef1f5;overflow-y:auto;transform:translateY(100%);transition:transform .25s ease">
+      <div style="position:sticky;top:0;background:linear-gradient(135deg,#137272,#0d5555);color:#fff;padding:16px 18px;display:flex;justify-content:space-between;align-items:center;z-index:5">
+        <div><div style="font-size:18px;font-weight:800">🔔 Notification History</div><div style="font-size:12px;opacity:.9">All alerts you received · tap to open the task</div></div>
+        <button onclick="closeNotifHistory()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:9px;width:34px;height:34px;font-size:20px;cursor:pointer">×</button>
+      </div>
+      <div id="nh-body" style="padding:14px 14px 40px;max-width:560px;margin:0 auto"></div>
+    </div>
+  </div>
+
+  <!-- My Notes slide-in panel -->
+  <div id="nt-ov" onclick="if(event.target===this)closeMyNotes()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000">
+    <div id="nt-sheet" style="position:absolute;inset:0;background:#eef1f5;overflow-y:auto;transform:translateY(100%);transition:transform .25s ease">
+      <div style="position:sticky;top:0;background:linear-gradient(135deg,#137272,#0d5555);color:#fff;padding:16px 18px;display:flex;justify-content:space-between;align-items:center;z-index:5">
+        <div><div style="font-size:18px;font-weight:800">📋 My Notes</div><div style="font-size:12px;opacity:.9">Messages from the office</div></div>
+        <button onclick="closeMyNotes()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:9px;width:34px;height:34px;font-size:20px;cursor:pointer">×</button>
+      </div>
+      <div id="nt-body" style="padding:14px 14px 40px;max-width:560px;margin:0 auto"></div>
+    </div>
+  </div>
+
+  <!-- Send Request modal (technician) -->
+  <div id="sr-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:flex-end;justify-content:center" onclick="srClose()">
+    <div onclick="event.stopPropagation()" style="background:#fff;border-radius:16px 16px 0 0;width:100%;max-width:520px;max-height:92vh;overflow-y:auto;box-shadow:0 -8px 40px rgba(0,0,0,.3)">
+      <div style="padding:16px 18px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:#fff">
+        <div>
+          <div style="font-size:16px;font-weight:800">📲 Send Request to Customer</div>
+          <div style="font-size:12px;color:#888">Customer fills the form → office assigns the task</div>
+        </div>
+        <button onclick="srClose()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#888">✕</button>
+      </div>
+      <div style="padding:18px">
+        <div style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;display:block;margin-bottom:6px">Which request?</label>
+          <select id="sr-service" onchange="srServiceChange()" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px">
+            <option value="enquiry">🆕 New GPS Installation (enquiry)</option>
+            <option value="troubleshoot">🔧 GPS Troubleshoot</option>
+            <option value="vehicle-change">🔁 Vehicle to Vehicle Change</option>
+            <option value="gps-remove">🗑️ GPS Removal</option>
+            <option value="re-adding">🔄 GPS Re-Activation (Re-Adding)</option>
+          </select>
+        </div>
+
+        <div id="sr-plan-group" style="margin-bottom:14px;display:none">
+          <label style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;display:block;margin-bottom:6px">Service Plan (price set by office)</label>
+          <select id="sr-plan" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px">
+            <option value="">Loading plans…</option>
+          </select>
+          <div style="font-size:11px;color:#888;margin-top:5px">Pick the correct plan — GST or non-GST. You cannot change the price.</div>
+        </div>
+
+        <div style="margin-bottom:12px">
+          <label style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;display:block;margin-bottom:5px">Customer Name *</label>
+          <input type="text" id="sr-name" placeholder="e.g. Ramesh Kumar" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px">
+        </div>
+        <div style="margin-bottom:12px">
+          <label style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;display:block;margin-bottom:5px">Mobile Number *</label>
+          <input type="tel" id="sr-phone" placeholder="10-digit mobile number" maxlength="10" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px">
+        </div>
+        <div style="margin-bottom:16px">
+          <label style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;display:block;margin-bottom:5px">Email (optional)</label>
+          <input type="email" id="sr-email" placeholder="customer@email.com" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px">
+        </div>
+
+        <div style="display:flex;gap:10px">
+          <button onclick="srClose()" style="flex:1;padding:12px;border:1px solid #ddd;background:#fff;border-radius:8px;font-weight:700;cursor:pointer">Cancel</button>
+          <button id="sr-send-btn" onclick="srSend()" style="flex:2;padding:12px;border:none;background:#25D366;color:#fff;border-radius:8px;font-weight:800;font-size:14px;cursor:pointer">📱 Send via WhatsApp</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom confirm dialog (replaces the ugly native confirm) -->
+  <div id="cx-overlay" style="display:none;position:fixed;inset:0;background:rgba(15,30,40,.55);z-index:3000;align-items:center;justify-content:center;padding:24px">
+    <div style="background:#fff;border-radius:18px;max-width:340px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,.28);overflow:hidden;animation:cxPop .18s ease">
+      <div style="padding:22px 22px 8px;text-align:center">
+        <div id="cx-icon" style="font-size:34px;margin-bottom:8px">❓</div>
+        <div id="cx-title" style="font-size:17px;font-weight:800;color:#1a2b33;margin-bottom:6px">Are you sure?</div>
+        <div id="cx-msg" style="font-size:13.5px;color:#5b6b73;line-height:1.5"></div>
+      </div>
+      <div style="display:flex;gap:0;border-top:1px solid #eef1f3;margin-top:14px">
+        <button id="cx-cancel" style="flex:1;padding:15px;border:none;background:#fff;color:#8a9aa2;font-weight:700;font-size:15px;cursor:pointer;border-right:1px solid #eef1f3">Cancel</button>
+        <button id="cx-ok" style="flex:1;padding:15px;border:none;background:#fff;color:#16a34a;font-weight:800;font-size:15px;cursor:pointer">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="cx-toast" style="display:none;position:fixed;left:50%;bottom:32px;transform:translateX(-50%);z-index:3200;background:#1a2b33;color:#fff;padding:12px 20px;border-radius:30px;font-size:13.5px;font-weight:600;box-shadow:0 8px 28px rgba(0,0,0,.3);max-width:88%;text-align:center"></div>
+
+  <style>
+    @keyframes cxPop{from{transform:scale(.92);opacity:0}to{transform:scale(1);opacity:1}}
+  </style>
+
+<script>
+  const API='../api/index.php';
+  let authToken=localStorage.getItem('bgps_tech_token')||'';
+  let currentUser={}; try{currentUser=JSON.parse(localStorage.getItem('bgps_tech_user')||'{}');}catch(e){}
+  let allTasks=[], filter='active';
+
+  // ── Custom dialogs (replace native alert/confirm) ──
+  function cxConfirm(opts){
+    // opts: {title, message, icon, okText, cancelText, danger}
+    return new Promise(function(resolve){
+      const ov=document.getElementById('cx-overlay');
+      document.getElementById('cx-icon').textContent = opts.icon || '❓';
+      document.getElementById('cx-title').textContent = opts.title || 'Are you sure?';
+      document.getElementById('cx-msg').textContent = opts.message || '';
+      const ok=document.getElementById('cx-ok'), cancel=document.getElementById('cx-cancel');
+      ok.textContent = opts.okText || 'OK';
+      cancel.textContent = opts.cancelText || 'Cancel';
+      ok.style.color = opts.danger ? '#dc2626' : '#16a34a';
+      ov.style.display='flex';
+      function done(val){ ov.style.display='none'; ok.onclick=null; cancel.onclick=null; ov.onclick=null; resolve(val); }
+      ok.onclick=function(){ done(true); };
+      cancel.onclick=function(){ done(false); };
+      ov.onclick=function(e){ if(e.target===ov) done(false); };
+    });
+  }
+  let _cxToastTimer=null;
+  function cxToast(msg){
+    const t=document.getElementById('cx-toast');
+    t.textContent=msg; t.style.display='block';
+    clearTimeout(_cxToastTimer);
+    _cxToastTimer=setTimeout(function(){ t.style.display='none'; }, 2800);
+  }
+
+  // Track which tasks this technician has opened (per-device), so new/unopened tasks can flash.
+  const OPENED_KEY='bgps_opened_tasks';
+  function getOpened(){ try{ return new Set(JSON.parse(localStorage.getItem(OPENED_KEY)||'[]')); }catch(e){ return new Set(); } }
+  function markOpened(id){ try{ const s=getOpened(); s.add(String(id)); localStorage.setItem(OPENED_KEY, JSON.stringify([...s])); }catch(e){} }
+  function isUnopened(t){
+    const active=!['Closed','Cancelled'].includes(t.task_status);
+    return active && !getOpened().has(String(t.id));
+  }
+  function openTask(id){ markOpened(id); location.href='task.html?id='+id; }
+  if(!authToken){ location.href='login.html'; }
+
+  async function api(action,params={},method='GET',body=null){
+    let url=API+'?action='+action;
+    if(method==='GET'){ params=Object.assign({_t:Date.now()},params); url+='&'+new URLSearchParams(params); }
+    const opts={method,cache:'no-store',headers:{'X-Auth-Token':authToken}};
+    if(body){ opts.headers['Content-Type']='application/json'; opts.body=JSON.stringify(body); }
+    const r=await fetch(url,opts);
+    const t=await r.text();
+    try{return JSON.parse(t);}catch(e){console.error('non-JSON',action,t.slice(0,200));return {};}
+  }
+  // ── My Notes (warnings / appreciation from admin) ──
+  function _ntMeta(t){
+    return ({
+      warning:      {i:'\u26A0\uFE0F', c:'#c76e00', bg:'#fff3e0', l:'Warning'},
+      appreciation: {i:'\u{1F44F}', c:'#1a7a3a', bg:'#e8f5ec', l:'Appreciation'},
+      issue:        {i:'\u2757', c:'#c0392b', bg:'#fdecea', l:'Issue'},
+      general:      {i:'\u{1F4DD}', c:'#2563eb', bg:'#eef5ff', l:'Note'}
+    })[t] || {i:'\u{1F4DD}',c:'#2563eb',bg:'#eef5ff',l:'Note'};
+  }
+  async function loadNotesBadge(){
+    try{
+      const r=await api('my_notes_unread');
+      const b=document.getElementById('notes-badge');
+      if(b){ if(r&&r.unread>0){ b.textContent=r.unread; b.style.display='flex'; } else b.style.display='none'; }
+    }catch(e){}
+  }
+  async function openMyNotes(){
+    const ov=document.getElementById('nt-ov'); const sh=document.getElementById('nt-sheet');
+    const body=document.getElementById('nt-body');
+    body.innerHTML='<div style="text-align:center;color:#8a9ab0;padding:30px;font-size:14px">Loading…</div>';
+    ov.style.display='block';
+    requestAnimationFrame(function(){ sh.style.transform='translateY(0)'; });
+    const res=await api('list_tech_notes').catch(()=>({}));
+    const notes=(res&&res.notes)||[];
+    // Opening the panel = the technician has seen the notes → auto-mark all as read.
+    try{ await api2('ack_all_notes',{}); }catch(e){}
+    const b=document.getElementById('notes-badge'); if(b) b.style.display='none';
+    if(!notes.length){ body.innerHTML='<div style="text-align:center;color:#8a9ab0;padding:40px;font-size:14px">\u{1F4ED} No notes yet.<br>Messages from the office will appear here.</div>'; return; }
+    body.innerHTML = notes.map(function(n){
+      const m=_ntMeta(n.note_type);
+      const when=(n.created_at||'').replace('T',' ').slice(0,16);
+      const isNew=!n.acknowledged_at; // was it unread when opened? (just for a subtle NEW tag this once)
+      return '<div style="background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.05);margin-bottom:11px;overflow:hidden">'
+        + '<div style="background:'+m.bg+';padding:10px 14px;display:flex;justify-content:space-between;align-items:center">'
+          + '<span style="font-size:13px;font-weight:800;color:'+m.c+'">'+m.i+' '+m.l+'</span>'
+          + (isNew?'<span style="font-size:10px;font-weight:800;background:#e74c3c;color:#fff;border-radius:10px;padding:2px 8px">NEW</span>':'')
+        + '</div>'
+        + '<div style="padding:12px 14px">'
+          + (n.title?('<div style="font-size:14px;font-weight:700;margin-bottom:3px">'+esc(n.title)+'</div>'):'')
+          + '<div style="font-size:13.5px;color:#374658;white-space:pre-wrap;line-height:1.5">'+esc(n.body||'')+'</div>'
+          + '<div style="font-size:11px;color:#8a9ab0;margin-top:7px">'+esc(when)+' \u00B7 by '+esc(n.created_by_name||'Office')+'</div>'
+        + '</div>'
+      + '</div>';
+    }).join('');
+  }
+  function closeMyNotes(){
+    const ov=document.getElementById('nt-ov'); const sh=document.getElementById('nt-sheet');
+    sh.style.transform='translateY(100%)';
+    setTimeout(function(){ ov.style.display='none'; loadNotesBadge(); }, 250);
+  }
+  async function ackNote(noteId, btn){
+    if(btn){ btn.textContent='…'; btn.disabled=true; }
+    const r=await api2('ack_tech_note',{note_id:noteId}).catch(()=>({}));
+    if(r&&r.success){ openMyNotes(); loadNotesBadge(); }
+    else if(btn){ btn.textContent='\u2713 Mark as read'; btn.disabled=false; }
+  }
+  // ── NOTIFICATION HISTORY ──────────────────────────────────
+  // ── OUTSTATION CLAIMS (technician) ─────────────────────────────
+  let _osClaim=null, _osLines=[];
+  // ── TOMORROW ASSIGNMENTS (technician) ──────────────────────────
+  function openTomorrow(){
+    const ov=document.getElementById('tm-ov'), sh=document.getElementById('tm-sheet');
+    if(!ov||!sh) return;
+    ov.style.display='block'; requestAnimationFrame(function(){ sh.style.transform='translateY(0)'; });
+    tmRender();
+  }
+  function closeTomorrow(){
+    const ov=document.getElementById('tm-ov'), sh=document.getElementById('tm-sheet');
+    sh.style.transform='translateY(100%)'; setTimeout(function(){ ov.style.display='none'; }, 250);
+  }
+  async function tmRender(){
+    const b=document.getElementById('tm-body');
+    b.innerHTML='<div style="text-align:center;padding:30px;color:#889">Loading…</div>';
+    try{
+      const d=await api('tm_mine',{});
+      const plans=(d&&d.plans)?d.plans:[];
+      const afterSix = new Date().getHours() >= 18;
+      let h = afterSix
+        ? '<button onclick="tmAddForm()" style="width:100%;background:#0e5c5c;color:#fff;border:none;border-radius:11px;padding:14px;font-weight:800;font-size:15px;cursor:pointer;margin-bottom:14px">➕ Add a task for tomorrow</button>'
+        : '<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:11px;padding:14px;margin-bottom:14px;text-align:center;color:#9a3412;font-size:13px">🕕 Tomorrow planning opens after <b>6:00 PM</b>.<br>Please update your tomorrow tasks in the evening.</div>';
+      if(!plans.length){
+        h+='<div style="text-align:center;padding:30px;color:#889;font-size:13px">No tasks planned for tomorrow yet.<br>Add the jobs you plan to do so your manager can see.</div>';
+      } else {
+        h+='<div style="font-size:12px;color:#667;margin-bottom:10px">Your plan for tomorrow — tap ✓ when done, it disappears.</div>';
+        h+=plans.map(function(p){
+          return '<div style="background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.05)">'
+            +'<div style="display:flex;justify-content:space-between;align-items:flex-start">'
+              +'<div style="flex:1"><div style="font-weight:700;font-size:14px">'+esc(p.task_id||'')+(p.customer_name?(' · '+esc(p.customer_name)):'')+'</div>'
+              +(p.plan_time?('<div style="font-size:12px;color:#0e5c5c;font-weight:600;margin-top:2px">🕐 '+esc(p.plan_time)+'</div>'):'')
+              +(p.note?('<div style="font-size:12px;color:#667;margin-top:3px">'+esc(p.note)+'</div>'):'')+'</div>'
+              +'<div style="display:flex;gap:6px;margin-left:8px">'
+                +'<button onclick="tmComplete('+p.id+')" style="background:#16a34a;color:#fff;border:none;border-radius:8px;width:34px;height:34px;font-size:16px;cursor:pointer">✓</button>'
+                +'<button onclick="tmRemove('+p.id+')" style="background:none;color:#c00;border:1px solid #c00;border-radius:8px;width:34px;height:34px;font-size:14px;cursor:pointer">🗑️</button>'
+              +'</div>'
+            +'</div></div>';
+        }).join('');
+      }
+      b.innerHTML=h;
+    }catch(e){ b.innerHTML='<div style="padding:20px;color:#c00">'+esc(e.message)+'</div>'; }
+  }
+  async function tmAddForm(){
+    const b=document.getElementById('tm-body');
+    b.innerHTML='<div style="text-align:center;padding:30px;color:#889">Loading your tasks…</div>';
+    try{
+      const d=await api('os_my_taskable',{});
+      const tasks=(d&&d.tasks)?d.tasks:[];
+      let h='<button onclick="tmRender()" style="background:none;border:none;color:#0e5c5c;font-weight:700;font-size:13px;padding:0 0 12px;cursor:pointer">‹ Back</button>'
+        +'<div style="font-weight:800;font-size:16px;margin-bottom:12px">➕ Add a task for tomorrow</div>';
+      if(!tasks.length){ b.innerHTML=h+'<div style="color:#889;padding:20px;text-align:center">No tasks assigned to you.</div>'; return; }
+      h+='<label style="font-size:12px;color:#667;display:block;margin-bottom:6px">Select task</label>'
+        +'<select id="tm-task" style="width:100%;padding:12px 10px;border:1.5px solid #ddd;border-radius:9px;font-size:14px;margin-bottom:12px;background:#fff"><option value="">— Choose a task —</option>'
+        + tasks.map(function(t){ return '<option value="'+t.id+'">'+esc(t.task_id||'')+' · '+esc(t.customer_name||'')+' · '+esc(t.task_status||'')+'</option>'; }).join('')
+        +'</select>'
+        +'<label style="font-size:12px;color:#667;display:block;margin-bottom:6px">Time (e.g. 10:00 AM)</label>'
+        +'<input id="tm-time" placeholder="10:00 AM" style="width:100%;padding:11px 10px;border:1.5px solid #ddd;border-radius:9px;font-size:14px;margin-bottom:12px">'
+        +'<label style="font-size:12px;color:#667;display:block;margin-bottom:6px">Note (optional)</label>'
+        +'<textarea id="tm-note" rows="2" placeholder="e.g. Meet customer at gate, bring 2 devices" style="width:100%;padding:11px 10px;border:1.5px solid #ddd;border-radius:9px;font-size:14px;resize:vertical;margin-bottom:14px"></textarea>'
+        +'<button onclick="tmSave()" style="width:100%;background:#0e5c5c;color:#fff;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:15px;cursor:pointer">Save to tomorrow plan</button>';
+      b.innerHTML=h;
+    }catch(e){ b.innerHTML='<div style="padding:20px;color:#c00">'+esc(e.message)+'</div>'; }
+  }
+  async function tmSave(){
+    const tid=(document.getElementById('tm-task')||{}).value||'';
+    const time=(document.getElementById('tm-time')||{}).value||'';
+    const note=(document.getElementById('tm-note')||{}).value||'';
+    if(!tid){ await uiAlert({icon:'⚠️',title:'Select a task',message:'Please choose a task from the list first.'}); return; }
+    const d=await api('tm_add',{},'POST',{task_db_id:parseInt(tid),plan_time:time,note:note}).catch(()=>({}));
+    if(d&&d.success){ showToast('✅ Added to tomorrow plan'); tmRender(); }
+    else { await uiAlert({icon:'⚠️',title:'Could not add',message:(d&&d.error)||'Something went wrong. Please try again.'}); }
+  }
+  async function tmComplete(id){
+    const d=await api('tm_complete',{},'POST',{id:id}).catch(()=>({}));
+    if(d&&d.success){ showToast('✓ Done'); tmRender(); } else { await uiAlert({icon:'⚠️',title:'Error',message:(d&&d.error)||'Could not update.'}); }
+  }
+  async function tmRemove(id){
+    const ok=await uiConfirm({icon:'🗑️',title:'Remove this?',message:'Remove this task from your tomorrow plan?',okText:'Remove',cancelText:'Cancel'});
+    if(!ok) return;
+    const d=await api('tm_remove',{},'POST',{id:id}).catch(()=>({}));
+    if(d&&d.success){ showToast('Removed'); tmRender(); } else { await uiAlert({icon:'⚠️',title:'Error',message:(d&&d.error)||'Could not remove.'}); }
+  }
+
+  function openOutstation(){
+    const ov=document.getElementById('os-ov'), sh=document.getElementById('os-sheet');
+    if(!ov||!sh){ alert('Outstation panel not found — please update the app.'); return; }
+    ov.style.display='block'; requestAnimationFrame(function(){ sh.style.transform='translateY(0)'; });
+    const b=document.getElementById('os-body');
+    if(b) b.innerHTML='<div style="text-align:center;padding:30px;color:#889">Loading your tasks…</div>';
+    try { osShowTaskList(); }
+    catch(e){ if(b) b.innerHTML='<div style="padding:20px;color:#c00;font-size:13px">Error: '+String(e.message||e)+'</div>'; }
+  }
+  function closeOutstation(){
+    const ov=document.getElementById('os-ov'), sh=document.getElementById('os-sheet');
+    sh.style.transform='translateY(100%)'; setTimeout(function(){ ov.style.display='none'; }, 250);
+  }
+
+  // ── Hardware BACK button handling ────────────────────────────────────────
+  // Keep exactly ONE guard entry in history at all times. Every time BACK is pressed the browser
+  // consumes our guard entry and fires popstate; we then decide what to do and immediately push a
+  // fresh guard so the app never actually exits on a single accidental back press.
+  function _anyPanelOpen(){
+    const ids=['tm-ov','os-ov','nh-ov','gl-ov'];
+    for(const id of ids){ const el=document.getElementById(id); if(el && getComputedStyle(el).display!=='none') return id; }
+    return null;
+  }
+  function _closePanelById(id){
+    if(id==='tm-ov') closeTomorrow();
+    else if(id==='os-ov') closeOutstation();
+    else if(id==='nh-ov' && typeof closeNotifHistory==='function') closeNotifHistory(true);
+    else if(id==='gl-ov' && typeof closeGuidelines==='function') closeGuidelines(true);
+  }
+  // Called by the Flutter app's hardware back button. Returns:
+  //   'handled' → we closed a panel or armed exit (app should stay)
+  //   'exit'    → nothing open, user confirmed intent → app may exit
+  let _flBackArmed=false; let _flBackTimer=null;
+  window.__handleAndroidBack = function(){
+    const open=_anyPanelOpen();
+    if(open){ _closePanelById(open); return 'handled'; }
+    // On home screen: first back arms exit + shows a toast; second back within 2s allows exit.
+    if(_flBackArmed){ if(_flBackTimer){clearTimeout(_flBackTimer);} _flBackArmed=false; return 'exit'; }
+    _flBackArmed=true;
+    try{ if(typeof showToast==='function') showToast('Press back again to exit'); }catch(e){}
+    _flBackTimer=setTimeout(function(){ _flBackArmed=false; }, 2000);
+    return 'handled';
+  };
+  try{ history.pushState({guard:1},''); }catch(e){}   // initial guard
+  let _backExitArmed=false;
+  window.addEventListener('popstate', function(){
+    const open=_anyPanelOpen();
+    if(open){
+      // A panel is open → close it, stay in the app, restore the guard.
+      _closePanelById(open);
+      try{ history.pushState({guard:1},''); }catch(e){}
+      return;
+    }
+    // On the home screen → first back arms exit, second back within 2s lets the app exit.
+    if(_backExitArmed){
+      _backExitArmed=false;
+      // Do NOT push a new guard. History is now at the base entry, so the next hardware back
+      // press falls through to the WebView and exits the app naturally.
+      return;
+    }
+    _backExitArmed=true;
+    try{ if(typeof showToast==='function') showToast('Press back again to exit'); }catch(e){}
+    try{ history.pushState({guard:1},''); }catch(e){}   // re-arm, stay in app
+    setTimeout(function(){ _backExitArmed=false; }, 2000);
+  });
+  async function osDebugCreate(){
+    const who=await api('os_whoami',{}).catch(function(e){ return {error:String(e.message||e)}; });
+    let whoTxt='Server sees -> id: '+(who&&who.user_id!=null?who.user_id:'NULL')+' | role: '+((who&&who.user_role)||'NULL')+' | name: '+((who&&who.user_name)||'NULL')+' | token: '+((who&&who.token_seen)||'NONE')+' | authed: '+((who&&who.authenticated)?'YES':'NO');
+    if(!confirm(whoTxt+'\n\nCreate a DEBUG test claim and submit to admin?')) return;
+    const d=await api('os_debug_create',{},'POST',{}).catch(function(e){ return {error:String(e.message||e)}; });
+    if(d && d.success){
+      showToast('✅ Debug claim #'+d.claim_id+' created');
+      alert('Debug claim created!\n\n'+whoTxt+'\n\nClaim ID: '+d.claim_id+'\nTasks assigned to you: '+d.your_task_count+'\n\nNow open ADMIN -> Outstation Claims -> Pending.');
+    } else {
+      alert('Debug create failed: '+((d&&d.error)||'unknown error')+'\n\n'+whoTxt);
+    }
+  }
+
+  function osExpenseForm(kind){
+    const b=document.getElementById('os-body');
+    const title = kind==='courier'?'📦 Courier Charges':'💼 Personal / Office Expense';
+    const hint = kind==='courier'?'Claim courier charges for devices you sent. Attach the courier receipt.':'Claim money you paid personally for office work (e.g. courier, purchases). Attach the bill/transaction proof.';
+    b.innerHTML='<button onclick="osShowTaskList()" style="background:none;border:none;color:#b45309;font-weight:700;font-size:13px;padding:0 0 10px;cursor:pointer">‹ Back</button>'
+      +'<div style="background:#fff;border-radius:10px;padding:14px">'
+      +'<div style="font-weight:800;font-size:15px;margin-bottom:4px">'+title+'</div>'
+      +'<div style="font-size:12px;color:#889;margin-bottom:12px">'+hint+'</div>'
+      +'<label style="font-size:12px;color:#667;display:block;margin-bottom:4px">Amount ₹ <span style="color:#c00">*</span></label>'
+      +'<input id="ex-amt" type="number" placeholder="e.g. 250" style="width:100%;padding:9px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:10px">'
+      +'<label style="font-size:12px;color:#667;display:block;margin-bottom:4px">Date of expense</label>'
+      +'<input id="ex-date" type="date" value="'+new Date().toISOString().slice(0,10)+'" style="width:100%;padding:9px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:10px">'
+      +'<label style="font-size:12px;color:#667;display:block;margin-bottom:4px">Description</label>'
+      +'<textarea id="ex-desc" rows="2" placeholder="What was this for? (e.g. Couriered 2 devices to Kakinada)" style="width:100%;padding:9px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;resize:vertical;margin-bottom:10px"></textarea>'
+      +'<label style="font-size:12px;color:#667;display:block;margin-bottom:4px">Link to a task (optional)</label>'
+      +'<input id="ex-task" placeholder="Task number, e.g. 1547 (leave blank if none)" style="width:100%;padding:9px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:10px">'
+      +'<label style="font-size:12px;color:#667;display:block;margin-bottom:4px">Bill / receipt / transaction proof <span style="color:#c00">*required</span></label>'
+      +'<input id="ex-bill" type="file" accept="image/*" style="width:100%;font-size:12px;margin-bottom:12px">'
+      +'<button onclick="osSubmitExpense(\''+kind+'\',event)" style="width:100%;background:#1a7a3a;color:#fff;border:none;border-radius:10px;padding:12px;font-weight:800;font-size:14px;cursor:pointer">📤 Submit for approval</button>'
+      +'</div>';
+  }
+  async function osSubmitExpense(kind, ev){
+    if(window._osSubmitting) return;              // block double taps → no duplicate claims
+    const amt=parseFloat((document.getElementById('ex-amt')||{}).value||0);
+    const date=(document.getElementById('ex-date')||{}).value||'';
+    const desc=(document.getElementById('ex-desc')||{}).value||'';
+    const taskNo=(document.getElementById('ex-task')||{}).value||'';
+    const f=(document.getElementById('ex-bill')||{}).files;
+    if(!amt||amt<=0){ alert('Enter the amount'); return; }
+    if(!f||!f[0]){ alert('📎 Please attach the bill/receipt — it is required.'); return; }
+    if(f[0].size>4*1024*1024){ alert('Image too large — use under 4 MB.'); return; }
+    const bill64=await new Promise(function(res){ const r=new FileReader(); r.onload=function(){res(r.result);}; r.onerror=function(){res('');}; r.readAsDataURL(f[0]); });
+    if(!bill64){ alert('Could not read the image. Try again.'); return; }
+    window._osSubmitting = true;
+    const btn = ev && ev.target ? ev.target : null;
+    if(btn){ btn.disabled=true; btn.dataset._t=btn.textContent; btn.textContent='⏳ Submitting…'; btn.style.opacity='.6'; }
+    try {
+      // Resolve optional task number to its db id
+      let taskDb=0;
+      if(taskNo.trim()){
+        try{ const td=await api('os_my_taskable',{}); const match=(td.tasks||[]).find(function(t){ return String(t.task_id)===taskNo.trim()||String(t.id)===taskNo.trim(); }); if(match) taskDb=match.id; }catch(e){}
+      }
+      const d=await Promise.race([
+        api('os_create_expense',{},'POST',{expense_type:kind,amount:amt,expense_date:date,description:desc,task_db_id:taskDb,task_id:taskNo.trim(),bill_base64:bill64}),
+        new Promise(function(res){ setTimeout(function(){ res({__timeout:true}); }, 20000); })
+      ]).catch(function(e){ return {error:(e&&e.message)?e.message:'network error'}; });
+      if(d&&d.success){ showToast('✅ Expense claim submitted'); closeOutstation(); }
+      else if(d&&d.__timeout){ showToast('✅ Submitted — refreshing'); closeOutstation(); }
+      else { alert((d&&d.error)||'Could not submit'); if(btn){ btn.disabled=false; btn.textContent=btn.dataset._t||'📤 Submit for approval'; btn.style.opacity='1'; } }
+    } finally { window._osSubmitting = false; }
+  }
+
+  async function osMyClaimsView(){
+    const b=document.getElementById('os-body');
+    b.innerHTML='<div style="text-align:center;padding:30px;color:#889">Loading your claims…</div>';
+    try{
+      const d=await api('os_my_claims',{});
+      const claims=(d&&d.claims)?d.claims:[];
+      let h='<button onclick="osShowTaskList()" style="background:none;border:none;color:#0e5c5c;font-weight:700;font-size:13px;padding:0 0 10px;cursor:pointer">‹ Back</button>'
+        +'<div style="font-weight:800;font-size:16px;margin-bottom:12px">📅 My Claims</div>';
+      if(!claims.length){ b.innerHTML=h+'<div style="text-align:center;padding:30px;color:#889">No claims yet.</div>'; return; }
+      // Group by month (YYYY-MM from submitted_at/created_at)
+      const groups={};
+      claims.forEach(function(c){
+        const dt=(c.submitted_at||c.created_at||'').slice(0,7)||'—';
+        (groups[dt]=groups[dt]||[]).push(c);
+      });
+      const months=Object.keys(groups).sort().reverse();
+      const monthName=function(ym){ if(ym==='—')return 'Other'; const p=ym.split('-'); const mn=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return mn[parseInt(p[1])]+' '+p[0]; };
+      months.forEach(function(m){
+        const list=groups[m];
+        const total=list.reduce(function(s,c){ return s+parseFloat(c.claimed_total||0); },0);
+        const appr=list.reduce(function(s,c){ return s+(c.status==='approved'?parseFloat(c.approved_total||0):0); },0);
+        h+='<div style="margin:6px 0 8px;display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #0e5c5c;padding-bottom:4px">'
+          +'<span style="font-weight:800;font-size:14px;color:#0e5c5c">'+monthName(m)+'</span>'
+          +'<span style="font-size:12px;color:#667">Claimed ₹'+total.toFixed(0)+' · Approved ₹'+appr.toFixed(0)+'</span></div>';
+        h+=list.map(function(c){
+          const icon={courier:'📦',expense:'💼'}[c.claim_type]||'📍';
+          const st=c.status==='approved'?'<span style="background:#dcfce7;color:#166534;font-size:10px;font-weight:800;padding:2px 7px;border-radius:8px">✅ ₹'+(+c.approved_total||0)+'</span>':'<span style="background:#fef3c7;color:#b45309;font-size:10px;font-weight:800;padding:2px 7px;border-radius:8px">⏳ Submitted</span>';
+          const label = c.claim_type==='courier'?'Courier': c.claim_type==='expense'?'Office expense':'Outstation';
+          const title = (c.task_id&&c.task_id.indexOf('EXP-')!==0)? (esc(c.task_id)+(c.customer_name?(' · '+esc(c.customer_name)):'')) : label;
+          return '<div style="background:#fff;border-radius:10px;padding:11px 13px;margin-bottom:7px;box-shadow:0 1px 3px rgba(0,0,0,.05)">'
+            +'<div style="display:flex;justify-content:space-between;align-items:center">'
+              +'<div style="font-weight:700;font-size:13px">'+icon+' '+title+'</div>'+st+'</div>'
+            +'<div style="font-size:12px;color:#667;margin-top:3px">'+label+' · Claimed <b>₹'+(+c.claimed_total||0)+'</b> · '+(c.line_count||0)+' item(s)'
+              +((c.submitted_at||c.created_at)?(' · '+String(c.submitted_at||c.created_at).slice(0,10)):'')+'</div>'
+            +'</div>';
+        }).join('');
+      });
+      b.innerHTML=h;
+    }catch(e){ b.innerHTML='<div style="padding:20px;color:#c00">'+esc(e.message)+'</div>'; }
+  }
+
+  // Clean claims menu — no task list clutter. User deliberately starts a claim and picks a task.
+  async function osShowTaskList(){
+    const b=document.getElementById('os-body');
+    b.innerHTML=''
+      +'<div style="font-size:13px;color:#667;margin-bottom:14px">Choose what you want to do:</div>'
+      +'<button onclick="osApplyForClaim()" style="width:100%;background:#0e5c5c;color:#fff;border:none;border-radius:11px;padding:15px;font-weight:800;font-size:15px;cursor:pointer;margin-bottom:10px">🚗 Apply for Outstation Claim</button>'
+      +'<div style="display:flex;gap:8px;margin-bottom:10px">'
+        +'<button onclick="osExpenseForm(\'courier\')" style="flex:1;background:#fff;border:1.5px solid #b45309;color:#b45309;border-radius:11px;padding:14px 8px;font-weight:700;font-size:13px;cursor:pointer">📦 Courier<br>Charges</button>'
+        +'<button onclick="osExpenseForm(\'personal_office\')" style="flex:1;background:#fff;border:1.5px solid #b45309;color:#b45309;border-radius:11px;padding:14px 8px;font-weight:700;font-size:13px;cursor:pointer">💼 Office<br>Expense</button>'
+      +'</div>'
+      +'<button onclick="osMyClaimsView()" style="width:100%;background:#fff;border:1.5px solid #0e5c5c;color:#0e5c5c;border-radius:11px;padding:14px;font-weight:700;font-size:14px;cursor:pointer">📅 My Claims — by month</button>';
+  }
+
+  // Apply for a claim: show a dropdown of tasks (all, including closed) to pick from.
+  async function osApplyForClaim(){
+    const b=document.getElementById('os-body');
+    b.innerHTML='<div style="text-align:center;padding:30px;color:#889">Loading your tasks…</div>';
+    try{
+      const d=await api('os_my_taskable',{});
+      if(d && d.error){ b.innerHTML='<div style="text-align:center;padding:30px;color:#c00;font-size:13px">⚠️ '+esc(d.error)+'</div>'; return; }
+      const tasks=(d&&d.tasks)?d.tasks:[];
+      let h='<button onclick="osShowTaskList()" style="background:none;border:none;color:#0e5c5c;font-weight:700;font-size:13px;padding:0 0 12px;cursor:pointer">‹ Back</button>'
+        +'<div style="font-weight:800;font-size:16px;margin-bottom:4px">🚗 Apply for Outstation Claim</div>'
+        +'<div style="font-size:12px;color:#889;margin-bottom:14px">Select the task this trip was for, then add your transport bills.</div>';
+      if(!tasks.length){ b.innerHTML=h+'<div style="text-align:center;padding:20px;color:#889">No tasks assigned to you.</div>'; return; }
+      h+='<label style="font-size:12px;color:#667;display:block;margin-bottom:6px">Select task</label>'
+        +'<select id="os-task-select" style="width:100%;padding:12px 10px;border:1.5px solid #ddd;border-radius:9px;font-size:14px;margin-bottom:14px;background:#fff">'
+        +'<option value="">— Choose a task —</option>'
+        + tasks.map(function(t){
+            const badge = t.claim_status==='approved'?' (✅ claimed)': t.claim_status==='submitted'?' (⏳ claim submitted)':'';
+            return '<option value="'+t.id+'">'+esc(t.task_id||'')+' · '+esc(t.customer_name||'')+' · '+esc(t.task_status||'')+badge+'</option>';
+          }).join('')
+        +'</select>'
+        +'<button onclick="osApplyGo()" style="width:100%;background:#0e5c5c;color:#fff;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:15px;cursor:pointer">Continue ›</button>';
+      b.innerHTML=h;
+    }catch(e){ b.innerHTML='<div style="padding:20px;color:#c00">'+esc(e.message)+'</div>'; }
+  }
+  function osApplyGo(){
+    const sel=document.getElementById('os-task-select');
+    const tid=sel?sel.value:'';
+    if(!tid){ alert('Please select a task first'); return; }
+    osOpenClaim(parseInt(tid));
+  }
+
+  async function osOpenClaim(taskDbId){
+    const b=document.getElementById('os-body');
+    b.innerHTML='<div style="text-align:center;padding:30px;color:#889">Loading claim…</div>';
+    try{
+      const d=await api('os_get_or_create_claim',{},'POST',{task_db_id:taskDbId});
+      if(!d||!d.success){ b.innerHTML='<div style="padding:20px;color:#c00">'+esc((d&&d.error)||'Error')+'</div>'; return; }
+      _osClaim=d.claim; _osLines=d.lines||[];
+      osRenderClaim(d.task, d.installed_count);
+    }catch(e){ b.innerHTML='<div style="padding:20px;color:#c00">'+esc(e.message)+'</div>'; }
+  }
+  function osRenderClaim(task, installed){
+    const b=document.getElementById('os-body');
+    const c=_osClaim, editable=(c.status==='draft');
+    const total=_osLines.reduce(function(s,l){ return s+parseFloat(l.amount||0); },0);
+    let h='<button onclick="osShowTaskList()" style="background:none;border:none;color:#b45309;font-weight:700;font-size:13px;padding:0 0 10px;cursor:pointer">‹ Back</button>';
+    h+='<div style="background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:12px">'
+      +'<div style="font-weight:800;font-size:15px">'+esc(c.task_id||'')+'</div>'
+      +'<div style="font-size:13px;color:#334">'+esc(task.customer_name||'')+'</div>'
+      +'<div style="font-size:11px;color:#889;margin-top:3px">'+(installed||0)+' device(s) installed · '+esc(task.location||'')+'</div>'
+      + (c.status!=='draft' ? '<div style="margin-top:8px;font-size:12px;font-weight:700;color:'+(c.status==='approved'?'#1a7a3a':'#b45309')+'">Status: '+(c.status==='approved'?('✅ Approved — ₹'+(+c.approved_total||0)+' paid as coins'):'⏳ Submitted, awaiting approval')+'</div>':'')
+      +'</div>';
+    if(editable){
+      const isRound = (c.trip_type==='round');
+      const custPaid = (+c.customer_paid||0);
+      h+='<div style="background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:12px">'
+        +'<div style="font-weight:700;font-size:13px;margin-bottom:8px">Trip details</div>'
+        +'<input id="os-loc" placeholder="Customer location you reached" value="'+esc(c.customer_location||'')+'" style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px">'
+        +'<input id="os-dist" placeholder="Travel distance (e.g. 120 km)" value="'+esc(c.travel_distance||'')+'" style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px">'
+        // One-way / Round trip
+        +'<div style="font-size:12px;color:#667;margin:6px 0 5px">Are you claiming:</div>'
+        +'<div style="display:flex;gap:8px;margin-bottom:10px">'
+          +'<label style="flex:1;border:1.5px solid '+(!isRound?'#0e5c5c':'#ddd')+';border-radius:8px;padding:8px;font-size:12.5px;text-align:center;cursor:pointer;font-weight:'+(!isRound?'700':'500')+';color:'+(!isRound?'#0e5c5c':'#667')+'"><input type="radio" name="os-trip" value="one_way" '+(!isRound?'checked':'')+' style="margin-right:5px">One-way (one side)</label>'
+          +'<label style="flex:1;border:1.5px solid '+(isRound?'#0e5c5c':'#ddd')+';border-radius:8px;padding:8px;font-size:12.5px;text-align:center;cursor:pointer;font-weight:'+(isRound?'700':'500')+';color:'+(isRound?'#0e5c5c':'#667')+'"><input type="radio" name="os-trip" value="round" '+(isRound?'checked':'')+' style="margin-right:5px">Round trip (both)</label>'
+        +'</div>'
+        // Did customer pay?
+        +'<div style="font-size:12px;color:#667;margin-bottom:5px">Did the customer pay you any amount for travel?</div>'
+        +'<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">'
+          +'<label style="font-size:13px;cursor:pointer"><input type="radio" name="os-custpaid" value="no" '+(custPaid>0?'':'checked')+' onclick="document.getElementById(\'os-custamt\').style.display=\'none\'" style="margin-right:4px">No</label>'
+          +'<label style="font-size:13px;cursor:pointer"><input type="radio" name="os-custpaid" value="yes" '+(custPaid>0?'checked':'')+' onclick="document.getElementById(\'os-custamt\').style.display=\'block\'" style="margin-right:4px">Yes</label>'
+          +'<input id="os-custamt" type="number" placeholder="Amount customer paid ₹" value="'+(custPaid>0?custPaid:'')+'" style="flex:1;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;display:'+(custPaid>0?'block':'none')+'">'
+        +'</div>'
+        +'<textarea id="os-notes" rows="2" placeholder="Notes (optional)" style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;resize:vertical">'+esc(c.notes||'')+'</textarea>'
+        +'</div>';
+    }
+    // Lines
+    h+='<div style="font-weight:700;font-size:13px;margin-bottom:8px">Transport modes &amp; bills</div>';
+    if(!_osLines.length){ h+='<div style="color:#889;font-size:12px;margin-bottom:10px">No transport added yet.</div>'; }
+    else {
+      h+=_osLines.map(function(l){
+        const st=l.status==='approved'?'<span style="color:#1a7a3a;font-weight:700">✅ ₹'+(+l.approved_amount||0)+'</span>':l.status==='rejected'?'<span style="color:#c00;font-weight:700">❌ Rejected</span>':'<span style="color:#b45309">⏳ Pending</span>';
+        return '<div style="background:#fff;border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">'
+          +'<div><div style="font-weight:700;font-size:13px">🚏 '+esc(l.transport_mode||'')+' — ₹'+(+l.amount||0)+'</div>'
+          +((l.from_place||l.to_place)?('<div style="font-size:12px;color:#0e5c5c;font-weight:600;margin:2px 0">📍 '+esc(l.from_place||'?')+' → '+esc(l.to_place||'?')+'</div>'):'')
+          +(l.bill_file?'<a href="../uploads/'+esc(l.bill_file)+'" target="_blank" style="font-size:11px;color:#2563eb">📎 View bill</a>':'<span style="font-size:11px;color:#c00">no bill</span>')
+          +' · <span style="font-size:11px">'+st+'</span></div>'
+          +(editable?'<button onclick="osDeleteLine('+l.id+')" style="background:none;border:none;color:#c00;font-size:16px;cursor:pointer">🗑️</button>':'')
+          +'</div>';
+      }).join('');
+    }
+    if(editable){
+      // Round-trip completion: if the last leg's TO returns to the FIRST leg's FROM (e.g. started
+      // Vizag ... last leg ends Vizag), the journey loop is closed → stop adding more legs.
+      const norm=function(s){ return String(s||'').trim().toLowerCase(); };
+      const firstFrom = _osLines.length ? norm(_osLines[0].from_place) : '';
+      const lastToRaw = _osLines.length ? (_osLines[_osLines.length-1].to_place||'') : '';
+      const loopClosed = _osLines.length>=2 && firstFrom!=='' && norm(lastToRaw)===firstFrom;
+      if(loopClosed){
+        h+='<div style="background:#dcfce7;border:1px solid #86efac;border-radius:10px;padding:12px 14px;margin-bottom:12px;text-align:center;color:#166534;font-size:13px;font-weight:600">'
+          +'🔁 Round trip complete — you returned to '+esc(_osLines[0].from_place||'')+'.<br>No more legs can be added.</div>';
+      } else {
+      // Auto-fill "From" with the previous leg's "To" so the journey chains pin-to-pin.
+      const lastTo = _osLines.length ? (_osLines[_osLines.length-1].to_place||'') : '';
+      h+='<div style="background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:12px">'
+        +'<div style="font-weight:700;font-size:12px;margin-bottom:8px;color:#667">Add a travel leg (pin to pin)</div>'
+        +'<select id="os-mode" style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px"><option value="">Select transport mode…</option><option>Bus</option><option>Auto</option><option>Train</option><option>Taxi/Cab</option><option>Bike/Petrol</option><option>Flight</option><option>Other</option></select>'
+        +'<div style="display:flex;gap:6px;margin-bottom:8px">'
+          +'<input id="os-from" placeholder="From" value="'+esc(lastTo)+'" style="flex:1;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">'
+          +'<div style="align-self:center;color:#0e5c5c;font-weight:800">→</div>'
+          +'<input id="os-to" placeholder="To" style="flex:1;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">'
+        +'</div>'
+        +'<input id="os-amt" type="number" placeholder="Charges ₹" style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px">'
+        +'<label style="font-size:12px;color:#667;display:block;margin-bottom:4px">Upload bill photo <span style="color:#c00">*required</span></label>'
+        +'<input id="os-bill" type="file" accept="image/*" style="width:100%;font-size:12px;margin-bottom:8px">'
+        +'<button onclick="osAddLine()" style="width:100%;background:#b45309;color:#fff;border:none;border-radius:8px;padding:9px;font-weight:700;font-size:13px;cursor:pointer">+ Add this leg</button>'
+        +'</div>';
+      }
+      h+='<div style="font-weight:800;font-size:15px;text-align:right;margin-bottom:10px">Total claimed: ₹'+total.toFixed(0)+'</div>';
+      h+='<button onclick="osSubmit(event)" style="width:100%;background:#1a7a3a;color:#fff;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:15px;cursor:pointer">📤 Submit for approval</button>';
+    } else {
+      h+='<div style="font-weight:800;font-size:15px;text-align:right">Total claimed: ₹'+total.toFixed(0)+'</div>';
+    }
+    // Delete option — allowed while the claim is not yet approved (draft or submitted).
+    if(c.status!=='approved'){
+      h+='<button onclick="osTechDeleteClaim('+c.id+')" style="width:100%;background:none;color:#c00;border:1.5px solid #c00;border-radius:10px;padding:11px;font-weight:700;font-size:14px;cursor:pointer;margin-top:10px">🗑️ Delete this claim</button>';
+    }
+    b.innerHTML=h;
+  }
+  // Clean custom confirm dialog — returns a Promise<boolean>. Replaces browser confirm().
+  function uiConfirm(opts){
+    opts=opts||{};
+    return new Promise(function(resolve){
+      const ov=document.getElementById('cf-ov'), box=document.getElementById('cf-box');
+      document.getElementById('cf-icon').textContent = opts.icon||'⚠️';
+      document.getElementById('cf-title').textContent = opts.title||'Are you sure?';
+      document.getElementById('cf-msg').textContent = opts.message||'';
+      const okBtn=document.getElementById('cf-ok'), cancelBtn=document.getElementById('cf-cancel');
+      okBtn.textContent = opts.okText||'Confirm';
+      cancelBtn.textContent = opts.cancelText||'Cancel';
+      okBtn.style.background = opts.danger===false ? '#16a34a' : '#dc2626';
+      ov.style.display='flex';
+      requestAnimationFrame(function(){ box.style.transform='scale(1)'; box.style.opacity='1'; });
+      function close(val){
+        box.style.transform='scale(.92)'; box.style.opacity='0';
+        setTimeout(function(){ ov.style.display='none'; }, 160);
+        okBtn.onclick=null; cancelBtn.onclick=null; ov.onclick=null;
+        resolve(val);
+      }
+      okBtn.onclick=function(){ close(true); };
+      cancelBtn.onclick=function(){ close(false); };
+      ov.onclick=function(e){ if(e.target===ov) close(false); };
+    });
+  }
+  // Clean single-button info popup (replaces browser alert). message may contain <br> etc.
+  function uiAlert(opts){
+    opts=opts||{};
+    return new Promise(function(resolve){
+      const ov=document.getElementById('cf-ov'), box=document.getElementById('cf-box');
+      document.getElementById('cf-icon').textContent = opts.icon||'ℹ️';
+      document.getElementById('cf-title').textContent = opts.title||'';
+      document.getElementById('cf-msg').innerHTML = opts.message||'';
+      const okBtn=document.getElementById('cf-ok'), cancelBtn=document.getElementById('cf-cancel');
+      okBtn.textContent = opts.okText||'Got it';
+      okBtn.style.background = '#0e5c5c';
+      cancelBtn.style.display='none';           // single button
+      ov.style.display='flex';
+      requestAnimationFrame(function(){ box.style.transform='scale(1)'; box.style.opacity='1'; });
+      function close(){
+        box.style.transform='scale(.92)'; box.style.opacity='0';
+        setTimeout(function(){ ov.style.display='none'; cancelBtn.style.display=''; }, 160);
+        okBtn.onclick=null; ov.onclick=null; resolve(true);
+      }
+      okBtn.onclick=close;
+      ov.onclick=function(e){ if(e.target===ov) close(); };
+    });
+  }
+  function tmInfo(){
+    uiAlert({icon:'📅', title:'What is Tomorrow Assignments?',
+      message:'This is where you tell your manager what jobs you plan to do <b>tomorrow</b>.<br><br>'
+        +'• Add each task you plan to do, with a <b>time</b> and a short <b>note</b>.<br>'
+        +'• Your manager sees this, so no morning calls asking your plan.<br>'
+        +'• You can only add the tomorrow plan <b>after 6:00 PM</b> today.<br>'
+        +'• Tap <b>✓</b> when a job is done — it disappears.<br>'
+        +'• The board <b>clears every night at 9 PM</b>, so plan again each evening.',
+      okText:'Got it'});
+  }
+
+  async function osTechDeleteClaim(cid){
+    try {
+      const ok=await uiConfirm({icon:'🗑️',title:'Delete this claim?',message:'This removes the claim and all its uploaded bills. This action cannot be undone.',okText:'Delete',cancelText:'Cancel'});
+      if(!ok) return;
+      showToast('⏳ Deleting…');
+      if(!cid && cid!==0){ alert('Delete error: missing claim id. Please go Back to tasks and reopen this claim.'); return; }
+      let d;
+      try { d=await api('os_tech_delete_claim',{},'POST',{claim_id:cid}); }
+      catch(e){ alert('Delete request error: '+(e && e.message ? e.message : e)); return; }
+      if(d && d.success){
+        showToast('🗑️ Claim deleted');
+        _osClaim=null; _osLines=[];
+        osShowTaskList();
+      } else {
+        alert('Delete did not succeed.\nClaim id: '+cid+'\nServer response: '+JSON.stringify(d||{}));
+      }
+    } catch(err){
+      alert('Delete crashed: '+(err && err.message ? err.message : err));
+    }
+  }
+
+  async function osSaveHeader(){
+    if(!_osClaim||_osClaim.status!=='draft') return;
+    const tripEl=document.querySelector('input[name="os-trip"]:checked');
+    const custEl=document.querySelector('input[name="os-custpaid"]:checked');
+    const custAmt=(custEl&&custEl.value==='yes')?parseFloat((document.getElementById('os-custamt')||{}).value||0):0;
+    await api('os_save_claim',{},'POST',{claim_id:_osClaim.id,
+      customer_location:(document.getElementById('os-loc')||{}).value||'',
+      travel_distance:(document.getElementById('os-dist')||{}).value||'',
+      trip_type:(tripEl?tripEl.value:'one_way'),
+      customer_paid:(custAmt||0),
+      notes:(document.getElementById('os-notes')||{}).value||''}).catch(function(){});
+  }
+  async function osAddLine(){
+    const mode=(document.getElementById('os-mode')||{}).value||'';
+    const amt=parseFloat((document.getElementById('os-amt')||{}).value||0);
+    const fromP=(document.getElementById('os-from')||{}).value||'';
+    const toP=(document.getElementById('os-to')||{}).value||'';
+    if(!mode){ await uiAlert({icon:'⚠️',title:'Select transport',message:'Please choose the transport mode.'}); return; }
+    if(!fromP.trim()||!toP.trim()){ await uiAlert({icon:'⚠️',title:'From & To needed',message:'Please enter both From and To so we have a clear pin-to-pin record.'}); return; }
+    if(!amt||amt<=0){ await uiAlert({icon:'⚠️',title:'Enter charges',message:'Please enter the charges for this leg.'}); return; }
+    const f=(document.getElementById('os-bill')||{}).files;
+    if(!f || !f[0]){ await uiAlert({icon:'📎',title:'Bill required',message:'Please attach the bill photo for this leg.'}); return; }
+    if(f[0].size > 4*1024*1024){ await uiAlert({icon:'⚠️',title:'Image too large',message:'Please use an image under 4 MB.'}); return; }
+    await osSaveHeader();
+    let bill64='';
+    bill64=await new Promise(function(res){ const r=new FileReader(); r.onload=function(){res(r.result);}; r.onerror=function(){res('');}; r.readAsDataURL(f[0]); });
+    if(!bill64){ await uiAlert({icon:'⚠️',title:'Read failed',message:'Could not read the bill image. Try again.'}); return; }
+    const d=await api('os_add_line',{},'POST',{claim_id:_osClaim.id,transport_mode:mode,amount:amt,from_place:fromP,to_place:toP,bill_base64:bill64}).catch(()=>({}));
+    if(d&&d.success){ osOpenClaim(_osClaim.task_db_id); }
+    else { await uiAlert({icon:'⚠️',title:'Could not add',message:(d&&d.error)||'Please try again.'}); }
+  }
+  async function osDeleteLine(id){
+    const ok=await uiConfirm({icon:'🗑️',title:'Remove this transport?',message:'This transport line and its bill will be removed from the claim.',okText:'Remove',cancelText:'Cancel'});
+    if(!ok) return;
+    const d=await api('os_delete_line',{},'POST',{line_id:id}).catch(()=>({}));
+    if(d&&d.success){ osOpenClaim(_osClaim.task_db_id); } else alert((d&&d.error)||'Error');
+  }
+  async function osSubmit(ev){
+    if(window._osSubmitting) return;              // block double taps
+    const ok=await uiConfirm({icon:'📤',title:'Submit for approval?',message:'You cannot edit this claim after submitting. Continue?',okText:'Submit',cancelText:'Cancel',danger:false});
+    if(!ok) return;
+    window._osSubmitting = true;
+    const btn = ev && ev.target ? ev.target : null;
+    const claimId = _osClaim ? _osClaim.id : null;
+    if(btn){ btn.disabled=true; btn.dataset._t=btn.textContent; btn.textContent='⏳ Submitting…'; btn.style.opacity='.6'; }
+    const resetBtn=function(){ if(btn){ btn.disabled=false; btn.textContent=btn.dataset._t||'📤 Submit for approval'; btn.style.opacity='1'; } };
+    try {
+      // Save header first (best-effort, timeout-protected so it can never block submit)
+      try {
+        await Promise.race([
+          osSaveHeader(),
+          new Promise(function(res){ setTimeout(res, 6000); })
+        ]);
+      } catch(e){}
+      // Submit with a timeout so the button can never hang forever on "Submitting…"
+      let d;
+      try {
+        d = await Promise.race([
+          api('os_submit_claim',{},'POST',{claim_id:claimId}),
+          new Promise(function(res){ setTimeout(function(){ res({__timeout:true}); }, 12000); })
+        ]);
+      } catch(e){ d = {error:(e && e.message) ? e.message : 'network error'}; }
+
+      if((d && d.success) || (d && d.__timeout)){
+        try { showToast('✅ Claim submitted for approval'); } catch(e){}
+        _osClaim=null; _osLines=[];
+        try { closeOutstation(); } catch(e){ const ov=document.getElementById('os-ov'); if(ov) ov.style.display='none'; }
+      } else {
+        try { await uiAlert({icon:'⚠️',title:'Could not submit',message:(d && d.error) || 'Please try again.'}); } catch(e){}
+        resetBtn();
+      }
+    } finally {
+      window._osSubmitting = false;
+    }
+  }
+
+  async function openNotifHistory(){
+    const ov=document.getElementById('nh-ov'), sh=document.getElementById('nh-sheet'), b=document.getElementById('nh-body');
+    ov.style.display='block';
+    requestAnimationFrame(function(){ sh.style.transform='translateY(0)'; });
+    b.innerHTML='<div style="text-align:center;padding:30px;color:#889">Loading…</div>';
+    try{
+      const d=await api('my_notifications',{limit:150});
+      const rows=(d&&d.notifications)?d.notifications:[];
+      if(!rows.length){ b.innerHTML='<div style="text-align:center;padding:40px;color:#889"><div style="font-size:34px;margin-bottom:8px">🔔</div><div style="font-weight:700">No notifications yet</div></div>'; }
+      else {
+        const ico={new_task:'🔔',task_closed:'✅',task_cancelled:'❌',status_change:'🔄',payment_received:'💰',
+                   cash_confirmed:'✅',coins:'🪙',appreciation:'👏',consent_accepted:'✅',task_returned:'↩️',
+                   tech_note:'📋',leave_used:'🗓️',leave_granted:'🎁'};
+        b.innerHTML=rows.map(function(n){
+          const when=n.created_at?new Date(n.created_at.replace(' ','T')).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+          const tap=n.url?(' onclick="location.href=\''+n.url+'\'" style="cursor:pointer"'):'';
+          return '<div class="glc" style="margin-bottom:9px"'+tap+'><div style="padding:12px 14px">'
+            +'<div style="display:flex;gap:9px;align-items:flex-start">'
+              +'<div style="font-size:19px;line-height:1.2">'+(ico[n.type]||'🔔')+'</div>'
+              +'<div style="flex:1;min-width:0">'
+                +'<div style="font-weight:800;font-size:14px;color:#1d2b3a">'+esc(n.title||'')+'</div>'
+                +'<div style="font-size:13px;color:#4a5b6d;line-height:1.5;margin-top:3px;white-space:pre-wrap;word-break:break-word">'+esc(n.body||'')+'</div>'
+                +'<div style="font-size:10.5px;color:#9aa7b4;margin-top:5px">'+when+(n.url?' · tap to open':'')+'</div>'
+              +'</div></div></div></div>';
+        }).join('');
+      }
+      try{ await api('mark_notifications_read',{},'POST',{}); }catch(e){}
+      const bd=document.getElementById('nh-badge'); if(bd){ bd.style.display='none'; }
+    }catch(e){ b.innerHTML='<div style="padding:20px;color:#c0392b;font-size:13px">Could not load: '+esc(e.message)+'</div>'; }
+  }
+  function closeNotifHistory(_fromPop){
+    const ov=document.getElementById('nh-ov'), sh=document.getElementById('nh-sheet');
+    sh.style.transform='translateY(100%)';
+    setTimeout(function(){ ov.style.display='none'; }, 250);
+  }
+  async function refreshNotifBadge(){
+    try{
+      const d=await api('my_notifications',{limit:50});
+      const u=(d&&d.unread)?d.unread:0;
+      const bd=document.getElementById('nh-badge');
+      if(bd){ if(u>0){ bd.textContent=u>99?'99+':u; bd.style.display='flex'; } else { bd.style.display='none'; } }
+    }catch(e){}
+  }
+
+  function openGuidelines(){
+    const b=document.getElementById('gl-body');
+    if(b && !b.dataset.loaded){ b.innerHTML=GUIDELINES_HTML; b.dataset.loaded='1'; }
+    const ov=document.getElementById('gl-ov'); const sh=document.getElementById('gl-sheet');
+    ov.style.display='block';
+    requestAnimationFrame(function(){ sh.style.transform='translateY(0)'; });
+  }
+  function closeGuidelines(_fromPop){
+    const ov=document.getElementById('gl-ov'); const sh=document.getElementById('gl-sheet');
+    sh.style.transform='translateY(100%)';
+    setTimeout(function(){ ov.style.display='none'; }, 250);
+  }
+  const GUIDELINES_HTML = `
+    <style>
+      .glc{background:#fff;border-radius:13px;box-shadow:0 3px 14px rgba(0,0,0,.06);margin-bottom:12px;overflow:hidden}
+      .glc-h{padding:14px 16px;font-size:15px;font-weight:800;display:flex;align-items:center;gap:9px}
+      .glc-b{padding:0 16px 16px;font-size:13.5px;color:#374658;line-height:1.55}
+      .glc-b ul{margin:4px 0;list-style:none;padding:0}
+      .glc-b li{position:relative;padding:5px 0 5px 22px}
+      .glc-b li:before{content:"•";position:absolute;left:6px;color:#137272;font-weight:900}
+      .glc-b li.good:before{content:"✅";left:0}
+      .glc-b li.bad:before{content:"❌";left:0}
+      .glpill{display:inline-block;background:#e8f5ec;color:#1a7a3a;border-radius:6px;padding:1px 8px;font-weight:800;font-size:12.5px}
+      .glpill.red{background:#fdecea;color:#c0392b}
+      .glnote{background:#fff8e1;border-left:3px solid #e0a800;border-radius:6px;padding:9px 12px;font-size:12.5px;color:#7a5c00;margin-top:8px}
+      .glte{color:#137272;font-size:12.5px;margin-top:4px;font-style:italic}
+    </style>
+    <div class="glc"><div class="glc-h" style="color:#b8860b">🪙 Coins — Your Real Reward</div><div class="glc-b">
+      Coins are your performance reward — and they are <b>real money</b>.
+      <ul>
+        <li><span class="glpill">1 coin = ₹1</span> — your coins have real cash value.</li>
+        <li>When your balance reaches <span class="glpill">500 coins</span>, you can <b>request a withdrawal</b>.</li>
+        <li class="good"><span class="glpill">+50 coins</span> when you submit a task <b>within 24 hours</b> of it being assigned.</li>
+        <li class="bad"><span class="glpill red">−50 coins</span> if you do <b>not open</b> an assigned task within <b>3 daytime hours</b>.</li>
+        <li class="bad"><span class="glpill red">−50 coins</span> for every <b>6-hour daytime window</b> your collected cash stays undeposited <b>after 4 days</b>.</li>
+        <li class="bad"><span class="glpill red">−50 coins</span> if you don't <b>start an installation task within 3 days</b> of it being assigned, and <b>−50 more every 5 days</b> after. It <b>stops once you install at least one device</b> (lead secured). <i>(Installation tasks only — not V2V, Troubleshoot or Re-Adding.)</i></li>
+      </ul>
+      <div class="glte">తెలుగు: 1 కాయిన్ = ₹1. 500 కాయిన్‌లు చేరితే విత్‌డ్రా అడగవచ్చు. టాస్క్ 24 గంటల్లో సబ్మిట్ చేస్తే +50, 3 గంటల్లో ఓపెన్ చేయకపోతే −50, క్యాష్ 4 రోజులు దాటితే ప్రతి 6 గంటలకు −50. ఇన్‌స్టాలేషన్ టాస్క్‌ను 3 రోజుల్లో మొదలుపెట్టకపోతే −50, ఆ తర్వాత ప్రతి 5 రోజులకు −50 — కనీసం ఒక్క డివైస్ ఇన్‌స్టాల్ చేస్తే ఆగుతుంది.</div>
+      <div class="glnote">Daytime = 8:00 AM to 8:00 PM. Penalties apply only during daytime hours.</div>
+      <div class="glnote" style="background:#eef4ff;border-left-color:#3b6fd4;color:#1e3a6f;margin-top:8px">Coins apply to <b>paid tasks only</b>. Free (zero-value) tasks earn <b>Appreciations</b> instead — see below.</div>
+    </div></div>
+
+    <div class="glc"><div class="glc-h" style="color:#6b21a8">👏 Appreciations &amp; Paid Leave — Free Tasks</div><div class="glc-b">
+      Some tasks have <b>no charge</b> to the customer — troubleshoot, demo, and other free services.
+      These do <b>not</b> give coins, because no money is earned on them. Instead you earn <b>Appreciations</b>.
+      <ul>
+        <li class="good"><span class="glpill">+1 Appreciation</span> when you complete a <b>free task on time</b>.</li>
+        <li class="bad"><span class="glpill red">−1 Appreciation</span> if you do <b>not open</b> or take no action on a free task.</li>
+        <li><span class="glpill">10 Appreciations = 1 PAID LEAVE</span> — converted <b>automatically</b> as soon as you reach 10.</li>
+        <li>Your appreciation count and paid leaves are shown in <b>My Earnings</b>.</li>
+        <li>Free tasks <b>never reduce your coins</b> — only appreciations go down.</li>
+      </ul>
+      <div class="glte">తెలుగు: ఉచిత సేవలకు (ట్రబుల్‌షూట్, డెమో) కాయిన్‌లు రావు — బదులుగా అప్రిషియేషన్‌లు వస్తాయి. సమయానికి పూర్తి చేస్తే +1, ఓపెన్ చేయకపోతే −1. <b>10 అప్రిషియేషన్‌లు = 1 పెయిడ్ లీవ్</b> (ఆటోమేటిక్‌గా మారుతుంది). ఉచిత టాస్క్‌ల వల్ల కాయిన్‌లు తగ్గవు.</div>
+      <div class="glnote">Your paid leave is marked as used by the office when you actually take the leave.</div>
+    </div></div>
+
+    <div class="glc" style="display:none"><div class="glc-b">
+    </div></div>
+    <div class="glc"><div class="glc-h" style="color:#c76e00">💵 Cash &amp; Payment Rules</div><div class="glc-b"><ul>
+      <li>Always collect the <b>exact amount</b> on the task. Entering more than the price is blocked.</li>
+      <li>For <b>UPI / Bank / Cheque</b>, upload a <b>payment screenshot</b> — it is required.</li>
+      <li>For <b>Cash</b>, <b>deposit within 24 hours</b> and confirm it in the app with a proof screenshot.</li>
+      <li class="bad">If cash stays with you <b>more than 4 days</b>, your tasks get <b>locked</b> and coin penalties begin until you deposit.</li>
+      <li>Entered a wrong amount? Use <b>✏️ Correct amount</b> before depositing.</li>
+    </ul><div class="glte">తెలుగు: క్యాష్‌ను 24 గంటల్లో డిపాజిట్ చేయాలి. 4 రోజులు దాటితే టాస్క్‌లు లాక్ అవుతాయి. UPI/బ్యాంక్‌కి స్క్రీన్‌షాట్ తప్పనిసరి.</div></div></div>
+    <div class="glc"><div class="glc-h" style="color:#137272">🛠️ Installation Rules</div><div class="glc-b">Follow the task steps in order — the app guides you:<ul>
+      <li><b>Get Location</b> → send the customer the WhatsApp link to share their exact location.</li>
+      <li><b>Navigate</b> → start the trip (distance &amp; time are recorded).</li>
+      <li><b>Reached</b> → tap only when you actually arrive at the vehicle.</li>
+      <li><b>Attend</b> → send consent &amp; price; wait for the customer to agree.</li>
+      <li><b>Install &amp; Push</b> → add the device, then give the customer access.</li>
+      <li><b>Collect Payment → Submit</b> for approval.</li>
+    </ul><div class="glnote">You must be physically <b>next to the vehicle</b> when you push the device.</div>
+    <div class="glte">తెలుగు: డివైస్ పుష్ చేసేటప్పుడు మీరు వాహనం దగ్గరే ఉండాలి.</div></div></div>
+    <div class="glc"><div class="glc-h" style="color:#2563eb">📍 Why Location &amp; Kilometers Matter</div><div class="glc-b"><ul>
+      <li>Your <b>trip distance and time</b> are recorded from Navigate to Reached — proof of your travel.</li>
+      <li>Location confirms you visited the customer, protecting you in any dispute.</li>
+      <li>Keep <b>GPS/location ON</b> during every task. Turning it off looks suspicious and may flag the task.</li>
+    </ul><div class="glte">తెలుగు: ప్రయాణ దూరం మీ పనికి రుజువు. ఎప్పుడూ లొకేషన్ ఆన్‌లో ఉంచండి.</div></div></div>
+    <div class="glc"><div class="glc-h" style="color:#7a3fc0">📄 Customer Documents</div><div class="glc-b">For every installation, the customer must upload via the secure link:<ul>
+      <li><b>RC copy</b> of each vehicle (one per vehicle).</li>
+      <li><b>ID proof</b> (Aadhaar).</li>
+      <li>A <b>selfie</b> for verification.</li>
+    </ul>These protect the company and the customer.</div></div>
+    <div class="glc"><div class="glc-h" style="color:#1a7a3a">✅ Do &amp; ❌ Don't</div><div class="glc-b"><ul>
+      <li class="good">Open and act on new tasks quickly (within 3 hours).</li>
+      <li class="good">Deposit cash the same day.</li>
+      <li class="good">Keep location ON and follow every step honestly.</li>
+      <li class="bad">Do not send someone else to do your installation.</li>
+      <li class="bad">Do not take private/outside GPS jobs without informing the office.</li>
+      <li class="bad">Do not mark a step done if you were not there.</li>
+      <li class="bad">Do not hold customer cash beyond 4 days.</li>
+    </ul><div class="glte">తెలుగు: మీ పనిని వేరొకరితో చేయించవద్దు. ఆఫీసుకు చెప్పకుండా బయటి పనులు చేయవద్దు.</div></div></div>
+    <div class="glc"><div class="glc-h" style="color:#374658">📅 Everyday Activity</div><div class="glc-b"><ul>
+      <li>Your daily installs, troubleshoots and work are recorded for the daily report.</li>
+      <li>If you complete <b>no work in a day</b>, you are marked <b>Half Day</b> automatically.</li>
+      <li>Being active daily keeps your coins high and your record clean.</li>
+    </ul><div class="glte">తెలుగు: రోజూ పని లేకపోతే హాఫ్ డే గా గుర్తించబడుతుంది.</div></div></div>
+    <p style="text-align:center;font-size:11.5px;color:#8a9ab0;margin-top:6px">Questions? Contact your manager. — BharatGPS</p>
+  `;
+  async function logout(){
+    const yes = await cxConfirm({title:'Log out?', message:'You will need to sign in again to access your tasks.', icon:'👋', okText:'Log out', danger:true});
+    if(!yes) return;
+    try{fetch(API+'?action=clear_fcm_token',{method:'POST',headers:{'X-Auth-Token':authToken}});}catch(e){}
+    localStorage.removeItem('bgps_tech_token'); localStorage.removeItem('bgps_tech_user'); location.href='login.html';
+  }
+
+  // Register device FCM token (injected by Flutter WebView) so an already-logged-in tech still gets push.
+  function registerFcmToken(tries){
+    tries=tries||0;
+    var t=window.BGPS_FCM_TOKEN;
+    if(t&&authToken){
+      fetch(API+'?action=save_fcm_token',{method:'POST',headers:{'Content-Type':'application/json','X-Auth-Token':authToken},
+        body:JSON.stringify({fcm_token:t,platform:'android'})}).catch(function(){});
+      return;
+    }
+    if(tries<8) setTimeout(function(){registerFcmToken(tries+1);},1500);
+  }
+  registerFcmToken();
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+  function ageHours(c){ if(!c)return 0; const then=new Date(c.replace(' ','T')); return Math.max(0,Math.floor((Date.now()-then.getTime())/3600000)); }
+  function ageText(h){ if(h<1)return 'just now'; if(h<24)return h+'h ago'; return Math.floor(h/24)+'d ago'; }
+  function isUrgent(t){ const open=['Open','In Progress','Task Pending'].includes(t.task_status); return open&&(t.is_urgent=='1'||ageHours(t.created_at)>=24); }
+  const STATUS={'Open':'b-open','In Progress':'b-prog','Task Pending':'b-pend','Awaiting Approval':'b-await','Closed':'b-closed','Cancelled':'b-cancel'};
+
+  function setFilter(el){ document.querySelectorAll('.chip').forEach(c=>c.classList.remove('on')); el.classList.add('on'); filter=el.getAttribute('data-f'); render(); }
+
+  function render(){
+    const list=document.getElementById('list');
+    let tasks=allTasks.slice();
+    if(filter==='active') tasks=tasks.filter(t=>!['Closed','Cancelled'].includes(t.task_status));
+    else if(filter==='urgent') tasks=tasks.filter(isUrgent);
+    else if(filter!=='all') tasks=tasks.filter(t=>t.task_status===filter);
+
+    if(!tasks.length){ list.innerHTML='<div class="empty"><div class="ico">📋</div><div style="font-weight:700">No tasks here</div><div style="font-size:13px;margin-top:4px">Nothing in this filter.</div></div>'; return; }
+    list.innerHTML=tasks.map(t=>{
+      const h=['Open','In Progress','Task Pending'].includes(t.task_status)?ageHours(t.created_at):0;
+      const urg=isUrgent(t), done=['Closed','Cancelled'].includes(t.task_status);
+      const isNew=isUnopened(t);
+      const noAction=(+t.opened_no_action===1 || t.opened_no_action==='1');
+      const badge=STATUS[t.task_status]||'b-closed', price=parseFloat(t.price_to_collect||0);
+      const noActStyle = noAction ? 'border:2px solid #8b5cf6;background:#faf5ff;' : '';
+      const noActTag = noAction ? '<span style="background:#8b5cf6;color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;margin-left:6px">⚡ TAKE ACTION</span>' : '';
+      const noActNote = noAction ? '<div style="background:#f3e8ff;color:#6b21a8;font-size:11px;font-weight:700;padding:6px 10px;border-radius:6px;margin-top:8px;line-height:1.4">⚠️ You opened this but took no action. Update it now (call / status / install) or your coins will start reducing.</div>' : '';
+      return `<div class="task ${urg?'urgent':''} ${done?'done':''} ${isNew?'new-task':''}" style="${noActStyle}" onclick="openTask('${t.id}')">
+        <div class="task-top"><div>
+          <div class="task-id">${t.task_id||'—'}${isNew?'<span class="new-tag">● NEW</span>':''}${urg?'<span class="urgent-tag">🚨 URGENT</span>':''}${noActTag}</div>
+          <div class="task-cust">${esc(t.customer_name||'—')}</div></div>
+          <span class="badge ${badge}">${t.task_status||'—'}</span></div>
+        <div class="task-meta">📞 ${esc(t.contact_number||'—')}<br>📍 ${esc(t.location||'—')}<br>🔧 ${esc(t.device_details||t.lead_type||'—')}</div>
+        ${noActNote}
+        <div class="task-foot"><div class="task-price">₹${price.toLocaleString('en-IN')}</div><div class="task-age">${h>0?ageText(h):(t.created_at||'').slice(0,10)}</div></div>
+      </div>`;
+    }).join('');
+  }
+
+  async function loadDevices(){
+    const d=await api('dev_assignments_get');
+    const rows=(d&&d.assignments)?d.assignments:[];
+    document.getElementById('t-devices').textContent=rows.length;
+    const oc=document.getElementById('dev-open-count');
+    if(oc) oc.textContent=rows.length;
+  }
+
+  async function loadCoins(){
+    try{
+      const d=await api('get_earnings');
+      const el=document.getElementById('coin-count');
+      if(el) el.textContent=(d&&typeof d.total_coins!=='undefined')?d.total_coins:0;
+    }catch(e){ const el=document.getElementById('coin-count'); if(el) el.textContent='0'; }
+  }
+
+  async function load(){
+    const first=currentUser.name?currentUser.name.split(' ')[0]:'Technician';
+    document.getElementById('h-name').textContent='Hi, '+first;
+    document.getElementById('h-avatar').textContent=(currentUser.name||'T').charAt(0).toUpperCase();
+    const hr=new Date().getHours();
+    document.getElementById('h-greet').textContent=hr<12?'Good morning ☀️':hr<17?'Good afternoon 👋':'Good evening 🌙';
+
+    const res=await api('get_tasks',{limit:500});
+    if(res&&res.error&&/auth/i.test(res.error)){ logout(); return; }
+    allTasks=res.tasks||[];
+    try{ refreshNotifBadge(); }catch(e){}
+
+    const sRes=await api('get_stats'); const s=sRes.stats||{};
+    const sv=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=(v??0);};
+    sv('s-open',s.open); sv('s-prog',s.in_progress); sv('s-pend',s.task_pending);
+    sv('s-await',s.awaiting_approval); sv('s-closed',s.closed); sv('s-total',s.total);
+
+    const urgentCount=allTasks.filter(isUrgent).length;
+    document.getElementById('t-urgent').textContent=urgentCount;
+    if(urgentCount>0) document.getElementById('t-urgent-tile').classList.add('urgent-on');
+
+    render();
+    loadDevices();
+    loadCoins();
+    loadReaddingBadge();
+    loadCashLock();
+    loadNotesBadge();
+  }
+
+  async function loadCashLock(){
+    try{
+      const d=await api('my_cash_lock_status');
+      const b=document.getElementById('cash-lock-banner');
+      if(!b) return;
+      if(d&&d.locked){
+        b.style.display='block';
+        b.innerHTML='<div style="font-weight:800;font-size:15px;margin-bottom:4px">🔒 Tasks locked — please deposit your pending cash.</div>'
+          +'<div>₹'+Number(d.pending_amount||0).toLocaleString('en-IN')+' pending for '+d.pending_days+' days. Deposit it and your tasks unlock automatically.</div>'
+          +'<div style="margin-top:6px;font-size:13px;line-height:1.5">🔒 మీ టాస్క్‌లు లాక్ అయ్యాయి — దయచేసి మీ దగ్గర ఉన్న క్యాష్ డిపాజిట్ చేయండి. ₹'+Number(d.pending_amount||0).toLocaleString('en-IN')+', '+d.pending_days+' రోజులుగా పెండింగ్‌లో ఉంది. డిపాజిట్ చేయగానే మీ టాస్క్‌లు ఆటోమేటిక్‌గా అన్‌లాక్ అవుతాయి.</div>'
+          +'<div style="margin-top:6px;font-size:12px;opacity:.9">Your coin balance: '+(d.coins||0)+'</div>';
+      } else {
+        b.style.display='none';
+      }
+    }catch(e){}
+  }
+  async function loadReaddingBadge(){
+    try{
+      const d=await api('readding_list',{status:'pending'});
+      const n=(d&&d.requests)?d.requests.length:0;
+      const b=document.getElementById('ra-pending-badge');
+      if(b){ if(n>0){ b.textContent=n+' pending'; b.style.display=''; } else b.style.display='none'; }
+    }catch(e){}
+  }
+  load();
+
+  // ── Send Request (technician) ─────────────────────────────
+  // Base site URL (parent of /app/) where the public service forms live.
+  const SITE_BASE = location.origin + location.pathname.replace(/\/app\/[^/]*$/, '');
+  let _srPlans = [];
+  function srOpen(){
+    document.getElementById('sr-overlay').style.display='flex';
+    srServiceChange();
+  }
+  function srClose(){ document.getElementById('sr-overlay').style.display='none'; }
+  const SR_PRICED = ['troubleshoot','vehicle-change','gps-remove','re-adding'];
+  async function srServiceChange(){
+    const svc=document.getElementById('sr-service').value;
+    const planGroup=document.getElementById('sr-plan-group');
+    // New Installation shows GPS models; priced services show service plans. Both use the plan dropdown.
+    if(svc!=='enquiry' && SR_PRICED.indexOf(svc)===-1){ planGroup.style.display='none'; return; }
+    planGroup.style.display='';
+    await srLoadPlans();
+  }
+  async function srLoadPlans(){
+    const sel=document.getElementById('sr-plan');
+    const svc=document.getElementById('sr-service').value;
+    sel.innerHTML='<option value="">Loading plans…</option>';
+    if(!_srPlans.length){
+      const r=await api('pl_get_public').catch(()=>({}));
+      _srPlans=(r&&r.items)?r.items:[];
+    }
+    // re-adding uses Renewal plans; enquiry uses GPS models; other services use Service plans.
+    let items;
+    if(svc==='enquiry'){
+      items=_srPlans.filter(function(i){ const c=(i.category||'').toLowerCase(); return c==='gps tracker'||c==='gps device'; });
+      if(!items.length){ sel.innerHTML='<option value="">No GPS models in Price List yet</option>'; return; }
+    } else if(svc==='re-adding'){
+      items=_srPlans.filter(function(i){ return (i.category||'').toLowerCase()==='renewal'; });
+    } else {
+      items=_srPlans.filter(function(i){ return (i.category||'').toLowerCase()==='service'; });
+      // Narrow to the plans that match the chosen service (by name keyword).
+      const kw = {
+        'troubleshoot':   ['troubleshoot','offline'],
+        'vehicle-change': ['vehicle to vehicle','vehicle change','v2v'],
+        'gps-remove':     ['gps remove','only remove','remove','removal']
+      }[svc] || [];
+      if(kw.length){
+        const match = items.filter(function(i){ const n=(i.product_name||'').toLowerCase(); return kw.some(function(k){ return n.indexOf(k)!==-1; }); });
+        if(match.length) items = match;
+      }
+    }
+    if(!items.length){ sel.innerHTML='<option value="">No plans set by office yet — ask office to add them in Price List</option>'; return; }
+    const withGst=items.filter(function(i){ return parseFloat(i.gst_percent||0)>0 || /SBGT/i.test(i.product_name||''); });
+    const noGst  =items.filter(function(i){ return !(parseFloat(i.gst_percent||0)>0 || /SBGT/i.test(i.product_name||'')); });
+    function opt(it){
+      const incl=parseFloat(it.price_incl_gst||0);
+      const gst = parseFloat(it.gst_percent||0)>0 ? 1 : 0;
+      // value = price|gst|name  (name used for enquiry model pre-selection)
+      return '<option value="'+incl+'|'+gst+'|'+encodeURIComponent(it.product_name||'')+'">'+esc(it.product_name)+' — ₹'+incl.toLocaleString('en-IN')+'</option>';
+    }
+    let html='';
+    if(noGst.length)  html+='<optgroup label="No GST">'+noGst.map(opt).join('')+'</optgroup>';
+    if(withGst.length)html+='<optgroup label="With GST (18%)">'+withGst.map(opt).join('')+'</optgroup>';
+    sel.innerHTML=html||items.map(opt).join('');
+  }
+  async function srSend(){
+    const svc=document.getElementById('sr-service').value;
+    const name=(document.getElementById('sr-name').value||'').trim();
+    const phone=(document.getElementById('sr-phone').value||'').replace(/\D/g,'');
+    const email=(document.getElementById('sr-email').value||'').trim();
+    if(!name){ cxToast('⚠️ Please enter the customer name'); return; }
+    if(!phone || phone.length<10){ cxToast('⚠️ Enter a valid 10-digit mobile number'); return; }
+    const btn=document.getElementById('sr-send-btn');
+    if(btn){ btn.disabled=true; btn.textContent='…'; }
+
+    // New installation enquiry — sender picks the GPS model; lock it into the link.
+    if(svc==='enquiry'){
+      const planVal=(document.getElementById('sr-plan').value||'');
+      if(!planVal){ cxToast('⚠️ Please select the GPS model'); if(btn){ btn.disabled=false; btn.textContent='📱 Send via WhatsApp'; } return; }
+      const parts=planVal.split('|'); const modelName=decodeURIComponent(parts[2]||'');
+      let url=SITE_BASE+'/enquiry.php?name='+encodeURIComponent(name)+'&phone='+encodeURIComponent(phone);
+      if(modelName) url+='&type='+encodeURIComponent(modelName);
+      if(email) url+='&email='+encodeURIComponent(email);
+      const msg=encodeURIComponent('Hello '+name+'!\n\nThank you for your interest in BharatGPS Tracker.\n\nPlease fill your details to book your GPS installation:\n\n'+url+'\n\nThe form takes 2 minutes. Our team will contact you to schedule.\n\nFor help call: 9849849824');
+      window.open('https://wa.me/91'+phone+'?text='+msg,'_blank');
+      srClose(); if(btn){ btn.disabled=false; btn.textContent='📱 Send via WhatsApp'; }
+      return;
+    }
+
+    // Priced services — get plan price/gst from the dropdown, create a signed token.
+    const planVal=(document.getElementById('sr-plan').value||'');
+    if(!planVal){ cxToast('⚠️ Please select the service plan'); if(btn){ btn.disabled=false; btn.textContent='📱 Send via WhatsApp'; } return; }
+    const parts=planVal.split('|'); const price=parseFloat(parts[0])||0; const gst=parseInt(parts[1])||0;
+    const meta={
+      'troubleshoot':   { file:'troubleshoot.php',   label:'GPS Troubleshoot',        line:'to request a GPS troubleshoot check for your vehicle' },
+      'vehicle-change': { file:'vehicle-change.php', label:'Vehicle to Vehicle Change',line:'to move your GPS device to a new vehicle' },
+      'gps-remove':     { file:'gps-remove.php',     label:'GPS Removal',              line:'to request removal of your GPS device' },
+      're-adding':      { file:'re-adding.php',      label:'GPS Re-Activation',        line:'to renew and re-activate your expired GPS device' },
+    }[svc];
+    let url=SITE_BASE+'/'+meta.file+'?p='+encodeURIComponent(phone);
+    try{
+      const r=await api2('make_req_link',{type:svc, price:price, gst:gst});
+      if(r&&r.token){ url+='&t='+encodeURIComponent(r.token); }
+    }catch(e){}
+    const msg=encodeURIComponent('Hello '+name+'!\n\nThis is BharatGPS Tracker.\n\nPlease fill this short form '+meta.line+':\n\n'+url+'\n\nThis link is valid for 6 hours and can be used once.\n\nFor help call: 9849849824');
+    window.open('https://wa.me/91'+phone+'?text='+msg,'_blank');
+    srClose(); if(btn){ btn.disabled=false; btn.textContent='📱 Send via WhatsApp'; }
+  }
+  // POST helper (the existing api() is GET-only)
+  async function api2(action, body){
+    const r=await fetch(API+'?action='+action,{method:'POST',headers:{'Content-Type':'application/json','X-Auth-Token':authToken},body:JSON.stringify(body||{})});
+    return r.json();
+  }
+</script>
+</body>
+</html>
