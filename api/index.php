@@ -2918,6 +2918,30 @@ case 'os_submit_claim':
                 foreach($admins as $aid){ fcm_send_to_user($pdo,intval($aid),'📍 Outstation claim submitted', $techName.' submitted an outstation claim for task '.($claim['task_id']??'').' (₹'.number_format($claim['claimed_total'],0).')', ['type'=>'outstation','url'=>'index.html']); }
             }
         } catch(Exception $e){}
+        // Email the sales / manager / admin inboxes so the office is alerted about a new claim.
+        try {
+            require_once __DIR__.'/mailer.php';
+            if(function_exists('sendMail')){
+                $techName=$currentUser['name']??'Technician';
+                $custPaid=floatval($claim['customer_paid']??0);
+                $claimed=floatval($claim['claimed_total']??0);
+                $net=max(0,$claimed-$custPaid);
+                $typeLabel = ($claim['claim_type']??'outstation')==='courier' ? 'Courier Charges' : (($claim['claim_type']??'')==='expense' ? 'Office/Personal Expense' : 'Outstation Travel');
+                $subject='New '.$typeLabel.' claim submitted — '.$techName.' ('.($claim['task_id']??'').')';
+                $body_html='<div style="font-family:Arial,sans-serif;font-size:14px;color:#222">'
+                    .'<h2 style="color:#0e5c5c">New '.$typeLabel.' Claim Submitted</h2>'
+                    .'<p><b>Technician:</b> '.htmlspecialchars($techName).'</p>'
+                    .'<p><b>Task:</b> '.htmlspecialchars($claim['task_id']??'-').'</p>'
+                    .(($claim['claim_type']??'outstation')==='outstation' ? '<p><b>Trip type:</b> '.($claim['trip_type']==='round'?'Round trip (both sides)':'One-way (one side)').'</p>' : '')
+                    .'<p><b>Total claimed:</b> ₹'.number_format($claimed,0).'</p>'
+                    .($custPaid>0 ? '<p><b>Customer already paid:</b> ₹'.number_format($custPaid,0).'</p><p><b>Net payable by company:</b> ₹'.number_format($net,0).'</p>' : '')
+                    .'<p style="margin-top:16px;color:#667">Please review and approve in the admin panel.</p>'
+                    .'</div>';
+                foreach(['sales@bharatgps.com','manager@bharatgps.com','admin@bharatgps.com'] as $toEmail){
+                    try { sendMail($toEmail, 'BharatGPS Team', $subject, $body_html); } catch(Exception $e){ error_log('claim email '.$toEmail.': '.$e->getMessage()); }
+                }
+            }
+        } catch(Exception $e){ error_log('claim submit email: '.$e->getMessage()); }
     } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
@@ -3096,6 +3120,23 @@ case 'os_finalize_claim':
             } catch(Exception $e){ error_log('os expense record: '.$e->getMessage()); }
         }
         echo json_encode(['success'=>true,'approved_total'=>$approvedTotal]);
+        // Notify the technician of the outcome (after responding, so admin UI is never blocked).
+        if(function_exists('fastcgi_finish_request')){ @session_write_close(); @fastcgi_finish_request(); }
+        else { @ob_end_flush(); @flush(); }
+        try {
+            require_once __DIR__.'/fcm_send.php';
+            if(function_exists('fcm_send_to_user') && !empty($claim['technician_id'])){
+                if($approvedTotal>0){
+                    fcm_send_to_user($pdo, intval($claim['technician_id']),
+                        '✅ Claim approved', 'Your claim for task '.($claim['task_id']??'').' was approved — ₹'.number_format($approvedTotal,0).' paid as coins.',
+                        ['type'=>'outstation','url'=>'dashboard.html']);
+                } else {
+                    fcm_send_to_user($pdo, intval($claim['technician_id']),
+                        '❌ Claim not approved', 'Your claim for task '.($claim['task_id']??'').' was reviewed but nothing was approved. Please check the details.',
+                        ['type'=>'outstation','url'=>'dashboard.html']);
+                }
+            }
+        } catch(Exception $e){ error_log('claim decision push: '.$e->getMessage()); }
     } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
 
