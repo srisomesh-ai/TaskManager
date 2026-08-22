@@ -3070,6 +3070,19 @@ case 'os_delete_claim':
             $dir=__DIR__.'/../uploads/outstation/'.$cid;
             if(is_dir($dir)){ foreach(glob($dir.'/*') as $f){ @unlink($f); } @rmdir($dir); }
         } catch(Exception $e){}
+        // If this claim was approved and coins were awarded, reverse them so the technician does not
+        // keep coins for a deleted claim. The finalize used event_key 'os_claim_{cid}'.
+        try {
+            _ensureCoinLedger($pdo);
+            $ev = 'os_claim_'.$cid;
+            // Look up the awarded coins for this claim (for the notification), then remove the ledger row.
+            $le = $pdo->prepare("SELECT user_id, coins FROM coin_ledger WHERE event_key=?");
+            $le->execute([$ev]); $led = $le->fetch(PDO::FETCH_ASSOC);
+            $pdo->prepare("DELETE FROM coin_ledger WHERE event_key=?")->execute([$ev]);
+            if($led && intval($led['coins'])!==0 && function_exists('fcm_send_to_user')){
+                try { fcm_send_to_user($pdo, intval($led['user_id']), '⚠️ Claim removed', 'A previously approved claim was removed by admin. '.abs(intval($led['coins'])).' coins have been reversed.', ['type'=>'coins','url'=>'earnings.html']); } catch(Exception $e){}
+            }
+        } catch(Exception $e){ error_log('os coin reversal: '.$e->getMessage()); }
         $pdo->prepare("DELETE FROM outstation_claim_lines WHERE claim_id=?")->execute([$cid]);
         $pdo->prepare("DELETE FROM outstation_claims WHERE id=?")->execute([$cid]);
         try { $pdo->prepare("DELETE FROM expenses WHERE reference=?")->execute(['OSCLAIM-'.$cid]); } catch(Exception $e){}
