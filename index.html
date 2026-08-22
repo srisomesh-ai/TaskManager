@@ -6075,8 +6075,8 @@ function buildAttendDeviceCard(idx, saved, done){
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label>Installation Date *</label>
-            <input type="date" id="adev-inst-date-${idx}" oninput="autoAttendExpiry(${idx})" onchange="autoAttendExpiry(${idx})">
+            <label>Installation Date * <span style="font-weight:400;color:var(--text3);font-size:10px">(auto)</span></label>
+            <input type="date" id="adev-inst-date-${idx}" readonly style="background:var(--surface2);color:var(--text2);cursor:not-allowed" oninput="autoAttendExpiry(${idx})" onchange="autoAttendExpiry(${idx})">
           </div>
           <div class="form-group">
             <label>Expiry Date (auto)</label>
