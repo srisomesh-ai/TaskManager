@@ -800,10 +800,25 @@
       + (c.status!=='draft' ? '<div style="margin-top:8px;font-size:12px;font-weight:700;color:'+(c.status==='approved'?'#1a7a3a':'#b45309')+'">Status: '+(c.status==='approved'?('✅ Approved — ₹'+(+c.approved_total||0)+' paid as coins'):'⏳ Submitted, awaiting approval')+'</div>':'')
       +'</div>';
     if(editable){
+      const isRound = (c.trip_type==='round');
+      const custPaid = (+c.customer_paid||0);
       h+='<div style="background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:12px">'
         +'<div style="font-weight:700;font-size:13px;margin-bottom:8px">Trip details</div>'
         +'<input id="os-loc" placeholder="Customer location you reached" value="'+esc(c.customer_location||'')+'" style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px">'
         +'<input id="os-dist" placeholder="Travel distance (e.g. 120 km)" value="'+esc(c.travel_distance||'')+'" style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px">'
+        // One-way / Round trip
+        +'<div style="font-size:12px;color:#667;margin:6px 0 5px">Are you claiming:</div>'
+        +'<div style="display:flex;gap:8px;margin-bottom:10px">'
+          +'<label style="flex:1;border:1.5px solid '+(!isRound?'#0e5c5c':'#ddd')+';border-radius:8px;padding:8px;font-size:12.5px;text-align:center;cursor:pointer;font-weight:'+(!isRound?'700':'500')+';color:'+(!isRound?'#0e5c5c':'#667')+'"><input type="radio" name="os-trip" value="one_way" '+(!isRound?'checked':'')+' style="margin-right:5px">One-way (one side)</label>'
+          +'<label style="flex:1;border:1.5px solid '+(isRound?'#0e5c5c':'#ddd')+';border-radius:8px;padding:8px;font-size:12.5px;text-align:center;cursor:pointer;font-weight:'+(isRound?'700':'500')+';color:'+(isRound?'#0e5c5c':'#667')+'"><input type="radio" name="os-trip" value="round" '+(isRound?'checked':'')+' style="margin-right:5px">Round trip (both)</label>'
+        +'</div>'
+        // Did customer pay?
+        +'<div style="font-size:12px;color:#667;margin-bottom:5px">Did the customer pay you any amount for travel?</div>'
+        +'<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">'
+          +'<label style="font-size:13px;cursor:pointer"><input type="radio" name="os-custpaid" value="no" '+(custPaid>0?'':'checked')+' onclick="document.getElementById(\'os-custamt\').style.display=\'none\'" style="margin-right:4px">No</label>'
+          +'<label style="font-size:13px;cursor:pointer"><input type="radio" name="os-custpaid" value="yes" '+(custPaid>0?'checked':'')+' onclick="document.getElementById(\'os-custamt\').style.display=\'block\'" style="margin-right:4px">Yes</label>'
+          +'<input id="os-custamt" type="number" placeholder="Amount customer paid ₹" value="'+(custPaid>0?custPaid:'')+'" style="flex:1;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;display:'+(custPaid>0?'block':'none')+'">'
+        +'</div>'
         +'<textarea id="os-notes" rows="2" placeholder="Notes (optional)" style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;resize:vertical">'+esc(c.notes||'')+'</textarea>'
         +'</div>';
     }
@@ -815,6 +830,7 @@
         const st=l.status==='approved'?'<span style="color:#1a7a3a;font-weight:700">✅ ₹'+(+l.approved_amount||0)+'</span>':l.status==='rejected'?'<span style="color:#c00;font-weight:700">❌ Rejected</span>':'<span style="color:#b45309">⏳ Pending</span>';
         return '<div style="background:#fff;border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">'
           +'<div><div style="font-weight:700;font-size:13px">🚏 '+esc(l.transport_mode||'')+' — ₹'+(+l.amount||0)+'</div>'
+          +((l.from_place||l.to_place)?('<div style="font-size:12px;color:#0e5c5c;font-weight:600;margin:2px 0">📍 '+esc(l.from_place||'?')+' → '+esc(l.to_place||'?')+'</div>'):'')
           +(l.bill_file?'<a href="../uploads/'+esc(l.bill_file)+'" target="_blank" style="font-size:11px;color:#2563eb">📎 View bill</a>':'<span style="font-size:11px;color:#c00">no bill</span>')
           +' · <span style="font-size:11px">'+st+'</span></div>'
           +(editable?'<button onclick="osDeleteLine('+l.id+')" style="background:none;border:none;color:#c00;font-size:16px;cursor:pointer">🗑️</button>':'')
@@ -822,13 +838,20 @@
       }).join('');
     }
     if(editable){
+      // Auto-fill "From" with the previous leg's "To" so the journey chains pin-to-pin.
+      const lastTo = _osLines.length ? (_osLines[_osLines.length-1].to_place||'') : '';
       h+='<div style="background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:12px">'
-        +'<div style="font-weight:700;font-size:12px;margin-bottom:8px;color:#667">Add a transport mode</div>'
-        +'<select id="os-mode" style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px"><option value="">Select mode…</option><option>Bus</option><option>Auto</option><option>Train</option><option>Taxi/Cab</option><option>Bike/Petrol</option><option>Flight</option><option>Other</option></select>'
-        +'<input id="os-amt" type="number" placeholder="Amount ₹" style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px">'
+        +'<div style="font-weight:700;font-size:12px;margin-bottom:8px;color:#667">Add a travel leg (pin to pin)</div>'
+        +'<select id="os-mode" style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px"><option value="">Select transport mode…</option><option>Bus</option><option>Auto</option><option>Train</option><option>Taxi/Cab</option><option>Bike/Petrol</option><option>Flight</option><option>Other</option></select>'
+        +'<div style="display:flex;gap:6px;margin-bottom:8px">'
+          +'<input id="os-from" placeholder="From" value="'+esc(lastTo)+'" style="flex:1;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">'
+          +'<div style="align-self:center;color:#0e5c5c;font-weight:800">→</div>'
+          +'<input id="os-to" placeholder="To" style="flex:1;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px">'
+        +'</div>'
+        +'<input id="os-amt" type="number" placeholder="Charges ₹" style="width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:8px">'
         +'<label style="font-size:12px;color:#667;display:block;margin-bottom:4px">Upload bill photo <span style="color:#c00">*required</span></label>'
         +'<input id="os-bill" type="file" accept="image/*" style="width:100%;font-size:12px;margin-bottom:8px">'
-        +'<button onclick="osAddLine()" style="width:100%;background:#b45309;color:#fff;border:none;border-radius:8px;padding:9px;font-weight:700;font-size:13px;cursor:pointer">+ Add transport</button>'
+        +'<button onclick="osAddLine()" style="width:100%;background:#b45309;color:#fff;border:none;border-radius:8px;padding:9px;font-weight:700;font-size:13px;cursor:pointer">+ Add this leg</button>'
         +'</div>';
       h+='<div style="font-weight:800;font-size:15px;text-align:right;margin-bottom:10px">Total claimed: ₹'+total.toFixed(0)+'</div>';
       h+='<button onclick="osSubmit(event)" style="width:100%;background:#1a7a3a;color:#fff;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:15px;cursor:pointer">📤 Submit for approval</button>';
@@ -923,27 +946,34 @@
 
   async function osSaveHeader(){
     if(!_osClaim||_osClaim.status!=='draft') return;
+    const tripEl=document.querySelector('input[name="os-trip"]:checked');
+    const custEl=document.querySelector('input[name="os-custpaid"]:checked');
+    const custAmt=(custEl&&custEl.value==='yes')?parseFloat((document.getElementById('os-custamt')||{}).value||0):0;
     await api('os_save_claim',{},'POST',{claim_id:_osClaim.id,
       customer_location:(document.getElementById('os-loc')||{}).value||'',
       travel_distance:(document.getElementById('os-dist')||{}).value||'',
+      trip_type:(tripEl?tripEl.value:'one_way'),
+      customer_paid:(custAmt||0),
       notes:(document.getElementById('os-notes')||{}).value||''}).catch(function(){});
   }
   async function osAddLine(){
     const mode=(document.getElementById('os-mode')||{}).value||'';
     const amt=parseFloat((document.getElementById('os-amt')||{}).value||0);
-    if(!mode){ alert('Select a transport mode'); return; }
-    if(!amt||amt<=0){ alert('Enter the amount'); return; }
+    const fromP=(document.getElementById('os-from')||{}).value||'';
+    const toP=(document.getElementById('os-to')||{}).value||'';
+    if(!mode){ await uiAlert({icon:'⚠️',title:'Select transport',message:'Please choose the transport mode.'}); return; }
+    if(!fromP.trim()||!toP.trim()){ await uiAlert({icon:'⚠️',title:'From & To needed',message:'Please enter both From and To so we have a clear pin-to-pin record.'}); return; }
+    if(!amt||amt<=0){ await uiAlert({icon:'⚠️',title:'Enter charges',message:'Please enter the charges for this leg.'}); return; }
     const f=(document.getElementById('os-bill')||{}).files;
-    if(!f || !f[0]){ alert('📎 Please attach the bill photo for this transport — it is required.'); return; }
-    // Basic size guard (max ~4MB)
-    if(f[0].size > 4*1024*1024){ alert('Bill image is too large. Please use an image under 4 MB.'); return; }
+    if(!f || !f[0]){ await uiAlert({icon:'📎',title:'Bill required',message:'Please attach the bill photo for this leg.'}); return; }
+    if(f[0].size > 4*1024*1024){ await uiAlert({icon:'⚠️',title:'Image too large',message:'Please use an image under 4 MB.'}); return; }
     await osSaveHeader();
     let bill64='';
     bill64=await new Promise(function(res){ const r=new FileReader(); r.onload=function(){res(r.result);}; r.onerror=function(){res('');}; r.readAsDataURL(f[0]); });
-    if(!bill64){ alert('Could not read the bill image. Try again.'); return; }
-    const d=await api('os_add_line',{},'POST',{claim_id:_osClaim.id,transport_mode:mode,amount:amt,bill_base64:bill64}).catch(()=>({}));
+    if(!bill64){ await uiAlert({icon:'⚠️',title:'Read failed',message:'Could not read the bill image. Try again.'}); return; }
+    const d=await api('os_add_line',{},'POST',{claim_id:_osClaim.id,transport_mode:mode,amount:amt,from_place:fromP,to_place:toP,bill_base64:bill64}).catch(()=>({}));
     if(d&&d.success){ osOpenClaim(_osClaim.task_db_id); }
-    else alert((d&&d.error)||'Could not add');
+    else { await uiAlert({icon:'⚠️',title:'Could not add',message:(d&&d.error)||'Please try again.'}); }
   }
   async function osDeleteLine(id){
     const ok=await uiConfirm({icon:'🗑️',title:'Remove this transport?',message:'This transport line and its bill will be removed from the claim.',okText:'Remove',cancelText:'Cancel'});
