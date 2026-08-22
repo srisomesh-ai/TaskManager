@@ -838,6 +838,16 @@
       }).join('');
     }
     if(editable){
+      // Round-trip completion: if the last leg's TO returns to the FIRST leg's FROM (e.g. started
+      // Vizag ... last leg ends Vizag), the journey loop is closed → stop adding more legs.
+      const norm=function(s){ return String(s||'').trim().toLowerCase(); };
+      const firstFrom = _osLines.length ? norm(_osLines[0].from_place) : '';
+      const lastToRaw = _osLines.length ? (_osLines[_osLines.length-1].to_place||'') : '';
+      const loopClosed = _osLines.length>=2 && firstFrom!=='' && norm(lastToRaw)===firstFrom;
+      if(loopClosed){
+        h+='<div style="background:#dcfce7;border:1px solid #86efac;border-radius:10px;padding:12px 14px;margin-bottom:12px;text-align:center;color:#166534;font-size:13px;font-weight:600">'
+          +'🔁 Round trip complete — you returned to '+esc(_osLines[0].from_place||'')+'.<br>No more legs can be added.</div>';
+      } else {
       // Auto-fill "From" with the previous leg's "To" so the journey chains pin-to-pin.
       const lastTo = _osLines.length ? (_osLines[_osLines.length-1].to_place||'') : '';
       h+='<div style="background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:12px">'
@@ -853,6 +863,7 @@
         +'<input id="os-bill" type="file" accept="image/*" style="width:100%;font-size:12px;margin-bottom:8px">'
         +'<button onclick="osAddLine()" style="width:100%;background:#b45309;color:#fff;border:none;border-radius:8px;padding:9px;font-weight:700;font-size:13px;cursor:pointer">+ Add this leg</button>'
         +'</div>';
+      }
       h+='<div style="font-weight:800;font-size:15px;text-align:right;margin-bottom:10px">Total claimed: ₹'+total.toFixed(0)+'</div>';
       h+='<button onclick="osSubmit(event)" style="width:100%;background:#1a7a3a;color:#fff;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:15px;cursor:pointer">📤 Submit for approval</button>';
     } else {
@@ -991,28 +1002,28 @@
     if(btn){ btn.disabled=true; btn.dataset._t=btn.textContent; btn.textContent='⏳ Submitting…'; btn.style.opacity='.6'; }
     const resetBtn=function(){ if(btn){ btn.disabled=false; btn.textContent=btn.dataset._t||'📤 Submit for approval'; btn.style.opacity='1'; } };
     try {
-      // Save header first (best-effort, do not let it block submit)
-      try { await osSaveHeader(); } catch(e){}
+      // Save header first (best-effort, timeout-protected so it can never block submit)
+      try {
+        await Promise.race([
+          osSaveHeader(),
+          new Promise(function(res){ setTimeout(res, 6000); })
+        ]);
+      } catch(e){}
       // Submit with a timeout so the button can never hang forever on "Submitting…"
       let d;
       try {
         d = await Promise.race([
           api('os_submit_claim',{},'POST',{claim_id:claimId}),
-          new Promise(function(res){ setTimeout(function(){ res({__timeout:true}); }, 15000); })
+          new Promise(function(res){ setTimeout(function(){ res({__timeout:true}); }, 12000); })
         ]);
       } catch(e){ d = {error:(e && e.message) ? e.message : 'network error'}; }
 
-      if(d && d.success){
-        showToast('✅ Claim submitted for approval');
+      if((d && d.success) || (d && d.__timeout)){
+        try { showToast('✅ Claim submitted for approval'); } catch(e){}
         _osClaim=null; _osLines=[];
-        closeOutstation();          // close the whole panel on success, as requested
-      } else if(d && d.__timeout){
-        // Server was slow — the claim was likely submitted. Close and let them re-check.
-        showToast('✅ Submitted — refreshing');
-        _osClaim=null; _osLines=[];
-        closeOutstation();
+        try { closeOutstation(); } catch(e){ const ov=document.getElementById('os-ov'); if(ov) ov.style.display='none'; }
       } else {
-        alert((d && d.error) || 'Could not submit. Please try again.');
+        try { await uiAlert({icon:'⚠️',title:'Could not submit',message:(d && d.error) || 'Please try again.'}); } catch(e){}
         resetBtn();
       }
     } finally {
