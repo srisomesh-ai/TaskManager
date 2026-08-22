@@ -862,6 +862,12 @@ function _ensureOutstationTables($pdo){
         try { $pdo->exec("ALTER TABLE outstation_claims ADD COLUMN expense_description TEXT DEFAULT NULL"); } catch(Exception $e){}
         // The old UNIQUE(task_db_id) blocks multiple expense claims (all task_db_id=0). Drop it if present.
         try { $pdo->exec("ALTER TABLE outstation_claims DROP INDEX uq_task_claim"); } catch(Exception $e){}
+        // Trip type (one-way / round) + whether the customer already paid the technician something.
+        try { $pdo->exec("ALTER TABLE outstation_claims ADD COLUMN trip_type VARCHAR(20) DEFAULT 'one_way'"); } catch(Exception $e){}
+        try { $pdo->exec("ALTER TABLE outstation_claims ADD COLUMN customer_paid DECIMAL(10,2) NOT NULL DEFAULT 0"); } catch(Exception $e){}
+        // Pin-to-pin: each transport line records From and To.
+        try { $pdo->exec("ALTER TABLE outstation_claim_lines ADD COLUMN from_place VARCHAR(150) DEFAULT NULL"); } catch(Exception $e){}
+        try { $pdo->exec("ALTER TABLE outstation_claim_lines ADD COLUMN to_place VARCHAR(150) DEFAULT NULL"); } catch(Exception $e){}
     } catch(Exception $e){ error_log('outstation tables: '.$e->getMessage()); }
 }
 
@@ -2830,8 +2836,10 @@ case 'os_save_claim':
         if(!$claim){ echo json_encode(['error'=>'Claim not found']); break; }
         if($userRole==='technician' && intval($claim['technician_id'])!==intval($userId)){ echo json_encode(['error'=>'Not your claim']); break; }
         if($claim['status']!=='draft'){ echo json_encode(['error'=>'Claim already submitted']); break; }
-        $pdo->prepare("UPDATE outstation_claims SET customer_location=?, travel_distance=?, notes=? WHERE id=?")
-            ->execute([trim($body['customer_location']??''),trim($body['travel_distance']??''),trim($body['notes']??''),$cid]);
+        $tripType = (($body['trip_type']??'')==='round') ? 'round' : 'one_way';
+        $custPaid = floatval($body['customer_paid'] ?? 0); if($custPaid<0) $custPaid=0;
+        $pdo->prepare("UPDATE outstation_claims SET customer_location=?, travel_distance=?, notes=?, trip_type=?, customer_paid=? WHERE id=?")
+            ->execute([trim($body['customer_location']??''),trim($body['travel_distance']??''),trim($body['notes']??''),$tripType,$custPaid,$cid]);
         echo json_encode(['success'=>true]);
     } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
     break;
@@ -2858,8 +2866,10 @@ case 'os_add_line':
             $bin=base64_decode($data);
             if($bin!==false){ $fn='bill_'.time().'_'.rand(100,999).'.jpg'; if(@file_put_contents($dir.'/'.$fn,$bin)){ $billFile='outstation/'.$cid.'/'.$fn; } }
         }
-        $pdo->prepare("INSERT INTO outstation_claim_lines (claim_id,transport_mode,amount,bill_file,status) VALUES (?,?,?,?, 'pending')")
-            ->execute([$cid,$mode,$amt,$billFile]);
+        $fromP = trim($body['from_place'] ?? '');
+        $toP = trim($body['to_place'] ?? '');
+        $pdo->prepare("INSERT INTO outstation_claim_lines (claim_id,transport_mode,amount,bill_file,from_place,to_place,status) VALUES (?,?,?,?,?,?, 'pending')")
+            ->execute([$cid,$mode,$amt,$billFile,$fromP?:null,$toP?:null]);
         // Recompute claimed total
         $pdo->prepare("UPDATE outstation_claims SET claimed_total=(SELECT COALESCE(SUM(amount),0) FROM outstation_claim_lines WHERE claim_id=?) WHERE id=?")->execute([$cid,$cid]);
         echo json_encode(['success'=>true,'line_id'=>intval($pdo->lastInsertId()),'bill_file'=>$billFile]);
