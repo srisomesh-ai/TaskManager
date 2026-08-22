@@ -890,7 +890,8 @@
           }
         }
       } else if(_consentSent){
-        btn='<button class="act-btn" id="loc-btn" style="background:var(--saffron)" onclick="resendConsent()"><div class="ico">⏳</div><div class="l">Waiting…</div><div class="s">Tap to resend consent</div></button>';
+        btn='<button class="act-btn" id="loc-btn" style="background:var(--saffron)" onclick="resendConsent()"><div class="ico">⏳</div><div class="l">Waiting…</div><div class="s">Tap to resend consent</div></button>'
+          +'<button class="act-btn" style="background:#25D366;margin-top:10px" onclick="sendConsentWhatsApp()"><div class="ico">📱</div><div class="l">Send via WhatsApp</div><div class="s">Send consent link to customer on WhatsApp</div></button>';
         // Consent was sent but the customer can't complete it (forgot login, no email access, etc.)
         // Allow the technician to skip & proceed on ANY job — responsibility shifts to the technician.
         _showSkipConsent=true;
@@ -1065,7 +1066,7 @@
 
 
   // ═══════════════ CONSENT STEP (matches web) ═══════════════
-  let _consentSent=false, _consentPoll=null;
+  let _consentSent=false, _consentPoll=null, _consentLink='';
 
   // Skip consent — ONLY for existing-customer jobs (V2V / Troubleshoot). Shifts responsibility to the technician.
   async function skipConsent(){
@@ -1099,20 +1100,30 @@
     const res=await apiPost('send_consent',{id:t.id});
     if(res && res.success){
       _consentSent=true;
-      if(res.email_sent) toast('📧 Consent sent to customer');
-      else {
-        // no email — share the consent link via WhatsApp
-        const phone=String(t.contact_number||'').replace(/\D/g,'');
-        const link=res.link||res.consent_link||'https://salmon-goldfish-110661.hostingersite.com/consent.php';
-        const msg=encodeURIComponent('Hello '+(t.customer_name||'')+', please review the terms and confirm your BharatGPS installation & payment here:\n\n'+link);
-        window.open('https://wa.me/'+(phone?'91'+phone:'')+'?text='+msg,'_blank');
-        toast('📱 Share consent link via WhatsApp');
-      }
+      _consentLink = res.consent_link || res.link || 'https://salmon-goldfish-110661.hostingersite.com/consent.php';
+      if(res.email_sent) toast('📧 Consent sent to customer — you can also send via WhatsApp');
+      else toast('📱 Send the consent link via WhatsApp');
+      // Always offer WhatsApp to the customer's number, since email may be full/inaccessible.
       renderActionArea();
     } else {
       if(btn)btn.style.opacity='1';
       toast('Could not send consent request. Please try again.');
     }
+  }
+  // Open WhatsApp with the consent link pre-filled, addressed to the customer's number on file.
+  async function sendConsentWhatsApp(){
+    const t=_curTask;
+    let link=_consentLink;
+    if(!link){
+      // No link in memory (e.g. reopened later) — get a fresh consent link.
+      try { const r=await apiPost('send_consent',{id:t.id}); if(r&&r.success){ link=r.consent_link||r.link; _consentLink=link; } } catch(e){}
+    }
+    link = link || 'https://salmon-goldfish-110661.hostingersite.com/consent.php';
+    const phone=String(t.contact_number||'').replace(/\D/g,'');
+    const msg=encodeURIComponent('Hello '+(t.customer_name||'')+', please review the terms and confirm your BharatGPS installation & payment here:\n\n'+link);
+    const num = phone ? (phone.length===10 ? '91'+phone : phone) : '';
+    window.open('https://wa.me/'+num+'?text='+msg,'_blank');
+    toast('📱 Opening WhatsApp…');
   }
 
   function resendConsent(){ _consentSent=false; handleAttend(); }
