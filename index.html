@@ -8166,6 +8166,7 @@ async function openOutstationDetail(cid){
     const badge=l.status==='approved'?'<span style="color:var(--green);font-weight:700">✅ ₹'+(+l.approved_amount||0)+'</span>':l.status==='rejected'?'<span style="color:var(--red);font-weight:700">❌ Rejected</span>':'<span style="color:#b45309;font-weight:700">⏳ Pending</span>';
     let block='<div style="border:1px solid var(--border);border-radius:9px;padding:11px;margin-bottom:9px">'
       +'<div style="display:flex;justify-content:space-between"><div style="font-weight:700">🚏 '+escHtml(l.transport_mode||'')+' — claimed ₹'+(+l.amount||0)+'</div>'+badge+'</div>'
+      +((l.from_place||l.to_place)?'<div style="font-size:12px;color:var(--accent2);font-weight:600;margin:3px 0">📍 '+escHtml(l.from_place||'?')+' → '+escHtml(l.to_place||'?')+'</div>':'')
       +(l.bill_file?'<a href="https://salmon-goldfish-110661.hostingersite.com/uploads/'+escHtml(l.bill_file)+'" target="_blank" style="font-size:12px;color:var(--accent2)">📎 View bill</a>':'<span style="font-size:12px;color:var(--red)">no bill uploaded</span>');
     if(isAdmin && !final && l.status==='pending'){
       block+='<div style="display:flex;gap:6px;margin-top:9px;align-items:center">'
@@ -8197,6 +8198,10 @@ function openOutstationDetailInline(c, lines, cid, isAdmin, final){
     +'<div style="font-size:13px;color:var(--text2);margin-top:4px">Customer: '+escHtml(c.customer_name||'')+' · Reached: '+escHtml(c.customer_location||'–')+'</div>'
     +'<div style="font-size:12px;color:var(--text3);margin-top:2px">Distance: '+escHtml(c.travel_distance||'–')+' · '+(c.installed_count||0)+'/'+(c.device_qty||1)+' installed · '+escHtml(c.task_status||'')+'</div>'
     +(c.notes?'<div style="font-size:12px;color:var(--text2);margin-top:4px;font-style:italic">"'+escHtml(c.notes)+'"</div>':'')
+    +((c.claim_type==='outstation'||!c.claim_type)?('<div style="font-size:12px;margin-top:4px;display:flex;gap:8px;flex-wrap:wrap">'
+        +'<span style="background:var(--surface2);border-radius:6px;padding:2px 8px;font-weight:600">'+(c.trip_type==='round'?'🔁 Round trip (both sides)':'➡️ One-way (one side)')+'</span>'
+        +((+c.customer_paid>0)?('<span style="background:#fef3c7;color:#b45309;border-radius:6px;padding:2px 8px;font-weight:700">💰 Customer already paid ₹'+(+c.customer_paid).toFixed(0)+'</span>'):'<span style="background:var(--surface2);border-radius:6px;padding:2px 8px;color:var(--text3)">Customer paid: none</span>')
+      +'</div>'):'')
     +((c.claim_type&&c.claim_type!=='outstation')?('<div style="margin-top:6px;font-size:12px;color:var(--text2)"><b>'+({courier:'📦 Courier Charges',expense:'💼 Personal/Office Expense'}[c.claim_type]||c.claim_type)+'</b>'+(c.expense_date?(' · '+String(c.expense_date).slice(0,10)):'')+(c.expense_description?('<br>'+escHtml(c.expense_description)):'')+'</div>'):'')
     + (function(){
         // Highlight for the admin: task value vs claimed amount vs difference/margin.
@@ -8224,6 +8229,7 @@ function openOutstationDetailInline(c, lines, cid, isAdmin, final){
     const badge=l.status==='approved'?'<span style="color:var(--green);font-weight:700">✅ ₹'+(+l.approved_amount||0)+'</span>':l.status==='rejected'?'<span style="color:var(--red);font-weight:700">❌ Rejected</span>':'<span style="color:#b45309;font-weight:700">⏳ Pending</span>';
     let block='<div style="border:1px solid var(--border);border-radius:9px;padding:11px;margin-bottom:9px">'
       +'<div style="display:flex;justify-content:space-between"><div style="font-weight:700">🚏 '+escHtml(l.transport_mode||'')+' — claimed ₹'+(+l.amount||0)+'</div>'+badge+'</div>'
+      +((l.from_place||l.to_place)?'<div style="font-size:12px;color:var(--accent2);font-weight:600;margin:3px 0">📍 '+escHtml(l.from_place||'?')+' → '+escHtml(l.to_place||'?')+'</div>':'')
       +(l.bill_file?'<a href="https://salmon-goldfish-110661.hostingersite.com/uploads/'+escHtml(l.bill_file)+'" target="_blank" style="font-size:12px;color:var(--accent2)">📎 View bill</a>':'<span style="font-size:12px;color:var(--red)">no bill uploaded</span>');
     if(isAdmin && !final && l.status==='pending'){
       block+='<div style="display:flex;gap:6px;margin-top:9px;align-items:center">'
