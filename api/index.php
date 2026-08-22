@@ -747,10 +747,14 @@ function _bsSyncInstalls($pdo, $cuName){
         $di = $pdo->prepare("SELECT gps_serial_no,name_on_server,server_name FROM task_device_installs WHERE task_id=? AND gps_serial_no IS NOT NULL AND gps_serial_no != '' ORDER BY device_index ASC");
         $di->execute([$tid]); $installs = $di->fetchAll();
         $installedCount = count($installs);
-        if ($installedCount < 1) continue;
-        // Free services (zero price or Troubleshoot/Demo) never belong in the balance sheet.
+        $taskPrice = floatval($t2['price_to_collect'] ?? 0);
+        // Normally we need at least one installed device. EXCEPTION: a paid service task (e.g. a
+        // paid Troubleshoot charge) can have a price with no new device — still bill it.
+        if ($installedCount < 1 && $taskPrice <= 0) continue;
+        // Free services never belong in the balance sheet — but a PAID troubleshoot/demo (a real
+        // charge or a device replacement) SHOULD appear. So exclude only when the price is zero.
         $syncLead = strtolower(trim((string)($t2['lead_type'] ?? '')));
-        if (floatval($t2['price_to_collect'] ?? 0) <= 0 || in_array($syncLead, ['troubleshoot','demo'])) continue;
+        if ($taskPrice <= 0) continue;
         $allSerials = implode(', ', array_filter(array_column($installs,'gps_serial_no')));
         $allNames   = implode(', ', array_filter(array_column($installs,'name_on_server')));
         $serverName = $installs[0]['server_name'] ?? $t2['server_name'] ?? null;
@@ -764,8 +768,15 @@ function _bsSyncInstalls($pdo, $cuName){
         // Use the per-device unit_price captured at creation; fall back to total÷qty for old tasks.
         $storedUnit = isset($t2['unit_price']) ? floatval($t2['unit_price']) : 0;
         $unit2     = $storedUnit>0 ? $storedUnit : ($fullQty>0 ? $fullTotal/$fullQty : $fullTotal);
-        $billQty   = $installedCount;
-        $billTotal = round($unit2*$billQty, 2);
+        // Normally we bill per installed device. For a paid service task with NO device install
+        // (e.g. a paid Troubleshoot charge), bill the full task price as a single line.
+        if ($installedCount >= 1) {
+            $billQty   = $installedCount;
+            $billTotal = round($unit2*$billQty, 2);
+        } else {
+            $billQty   = 1;
+            $billTotal = round($fullTotal, 2);
+        }
         $recv2     = floatval($t2['amount_collected']??0); if($recv2>$billTotal)$recv2=$billTotal;
         // CASH is only truly RECEIVED once the technician has deposited it and admin confirmed
         // (cash_deposit_status='deposited'). While pending/submitted, the cash is still with the
@@ -786,13 +797,16 @@ function _bsSyncInstalls($pdo, $cuName){
             continue;
         }
 
+        // Readable label: for a device install use the server name(s); for a no-device paid
+        // service (e.g. paid Troubleshoot) fall back to the job type so the row is not blank.
+        $entryName = $allNames !== '' ? $allNames : trim((string)($t2['lead_type'] ?? $t2['device_details'] ?? 'Service charge'));
         if (!empty($t2['bs_entry_id'])) {
             $pdo->prepare("UPDATE balance_sheet_entries SET gps_serial_no=?,name_on_server=?,server_name=?,qty=?,unit_price=?,total_price=?,payment_received=?,pending_payment=?,payment_status=?,updated_at=NOW() WHERE id=?")
-                ->execute([$allSerials?:null,$allNames?:null,$serverName,$billQty,$unit2,$billTotal,$recv2,$pend2,$pStatus,intval($t2['bs_entry_id'])]);
+                ->execute([$allSerials?:null,$entryName?:null,$serverName,$billQty,$unit2,$billTotal,$recv2,$pend2,$pStatus,intval($t2['bs_entry_id'])]);
             $updated++;
         } else {
             $pdo->prepare("INSERT INTO balance_sheet_entries (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,name_on_server,server_name,device_model,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_mode,technician_name,location,remarks,created_by_code) VALUES (?,?,?,?,CURDATE(),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-                ->execute([bs_type_for_task($t2['device_details']??''),$profile2,$t2['task_id'],$tid,$allSerials?:null,$t2['lead_type']??null,$allNames?:null,$serverName,$t2['device_details']??null,$billQty,$unit2,floatval($t2['gst_amount']??0),$billTotal,$pStatus,$recv2,$pend2,$t2['payment_mode']??null,$t2['tech_name']??null,$t2['location']??null,$t2['general_notes']??null,$cuName??'system']);
+                ->execute([bs_type_for_task($t2['device_details']??''),$profile2,$t2['task_id'],$tid,$allSerials?:null,$t2['lead_type']??null,$entryName?:null,$serverName,$t2['device_details']??null,$billQty,$unit2,floatval($t2['gst_amount']??0),$billTotal,$pStatus,$recv2,$pend2,$t2['payment_mode']??null,$t2['tech_name']??null,$t2['location']??null,$t2['general_notes']??null,$cuName??'system']);
             $bsId=$pdo->lastInsertId();
             if($bsId){ $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$bsId,$tid]); }
             $created++;
