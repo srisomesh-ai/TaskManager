@@ -2812,7 +2812,22 @@ case 'os_my_taskable':
         foreach ($tasks as &$t) {
             $t['installed_count']=0; $t['claim_id']=null; $t['claim_status']=null;
             try { $ic=$pdo->prepare("SELECT COUNT(*) FROM task_device_installs WHERE task_id=? AND gps_serial_no IS NOT NULL AND gps_serial_no<>''"); $ic->execute([$t['id']]); $t['installed_count']=intval($ic->fetchColumn()); } catch(Exception $e){}
-            try { $cl=$pdo->prepare("SELECT id,status FROM outstation_claims WHERE task_db_id=? AND technician_id=? LIMIT 1"); $cl->execute([$t['id'],$tuid]); if($cr=$cl->fetch(PDO::FETCH_ASSOC)){ $t['claim_id']=$cr['id']; $t['claim_status']=$cr['status']; } } catch(Exception $e){}
+            try {
+                // Prefer a submitted/approved claim over a draft, so an already-claimed task is
+                // correctly flagged even if an old empty draft also exists for it.
+                $cl=$pdo->prepare("SELECT id,status FROM outstation_claims WHERE task_db_id=? AND technician_id=?
+                                   ORDER BY FIELD(status,'approved','submitted','draft'), id DESC LIMIT 1");
+                $cl->execute([$t['id'],$tuid]);
+                if($cr=$cl->fetch(PDO::FETCH_ASSOC)){ $t['claim_id']=$cr['id']; $t['claim_status']=$cr['status']; }
+                // Safety net: if no claim matched by technician_id but the task itself has a
+                // submitted/approved claim (id mismatch), still flag it so it cannot be re-claimed.
+                if(empty($t['claim_status'])){
+                    $cl2=$pdo->prepare("SELECT status FROM outstation_claims WHERE task_db_id=? AND status IN ('submitted','approved')
+                                        ORDER BY FIELD(status,'approved','submitted'), id DESC LIMIT 1");
+                    $cl2->execute([$t['id']]);
+                    if($s2=$cl2->fetchColumn()){ $t['claim_status']=$s2; }
+                }
+            } catch(Exception $e){}
         }
         unset($t);
         echo json_encode(['success'=>true,'tasks'=>$tasks,'debug_uid'=>$tuid,'debug_count'=>count($tasks)]);
