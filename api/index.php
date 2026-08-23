@@ -659,27 +659,56 @@ function apply_stale_task_penalty($pdo, $taskId){
             if(intval($ins->fetchColumn()) > 0) return;
         } catch(Exception $e){ /* if the check fails, fall through to normal timing */ }
 
-        // The clock runs from ASSIGNMENT and does NOT reset on status updates — only CLOSING the
-        // task stops it (handled by the status check above). This pushes technicians to actually
-        // close the lead, not just poke a status change. It never starts before the rule-start date
-        // (so old open tasks count from today, not from their earlier assignment).
+        // The clock runs from the LAST ACTIVITY on the task (any activity-log entry counts as an
+        // update and resets it). If there is no activity yet, it runs from assignment. It never
+        // starts before the rule-start date (so old open tasks count from today, not earlier).
         $assignTs = !empty($row['start_ts']) ? strtotime($row['start_ts']) : $ruleTs;
         if(!$assignTs) $assignTs = $ruleTs;
-        $anchor = max($assignTs, $ruleTs);             // never earlier than the rule start
-        $ageDays = (time() - $anchor) / 86400.0;
-        if($ageDays < 3) return;                       // first penalty only after 3 full days
+        // Latest activity for this task (any type) resets the countdown.
+        $lastAct = 0;
+        try {
+            $la = $pdo->prepare("SELECT MAX(created_at) FROM task_activities WHERE task_id=?");
+            $la->execute([$taskId]);
+            $lav = $la->fetchColumn();
+            if($lav) $lastAct = strtotime($lav);
+        } catch(Exception $e){}
+        // Anchor = the latest of: assignment, last activity, and the rule-start date.
+        $anchor = max($assignTs, $ruleTs, $lastAct);
+        // Count elapsed days EXCLUDING Sundays (Sundays are non-working, so they don't count).
+        $ageDays = _working_days_between($anchor, time());
+        if($ageDays < 3) return;                       // first penalty only after 3 full working days
 
         // Window index: day 3 = window 0 (-50), then every +5 days = next window.
         // e.g. 3–7.99d → 1 window, 8–12.99d → 2 windows, 13–17.99d → 3 windows …
         $windows = 1 + (int)floor(($ageDays - 3) / 5);
         for($w = 0; $w < $windows; $w++){
-            $key = 'stale_task_'.$taskId.'_'.$w;       // idempotent per window
+            // Key includes the anchor day so that when activity resets the clock, a fresh set of
+            // windows can be charged later (old windows for the previous anchor stay settled).
+            $key = 'stale_task_'.$taskId.'_'.date('Ymd',$anchor).'_'.$w;
             award_coins($pdo, intval($row['assigned_to']), -50,
-                'Installation task not closed ('.($w===0?'3 days':(3 + $w*5).' days').' since assignment)',
+                'Installation task not progressing ('.($w===0?'3 days':(3 + $w*5).' days').', excl. Sundays)',
                 $taskId, $key,
-                '⚠️ -50 coins', 'An installation task assigned to you is still not closed. Close the task to stop further penalty.');
+                '⚠️ -50 coins', 'An installation task assigned to you has had no activity. Update or close it to stop further penalty.');
         }
     } catch(Exception $e){ error_log('apply_stale_task_penalty: '.$e->getMessage()); }
+}
+
+// Count days between two timestamps, EXCLUDING Sundays (non-working). Returns a float (fractional
+// last day included). Used by the stale-task penalty so Sundays never count toward the deadline.
+function _working_days_between($fromTs, $toTs){
+    if($toTs <= $fromTs) return 0.0;
+    $days = 0.0;
+    // Walk whole days from the anchor; skip any day that is a Sunday (w==0).
+    $cur = $fromTs;
+    while($cur < $toTs){
+        $next = min($cur + 86400, $toTs);
+        $span = ($next - $cur) / 86400.0;            // portion of this day within the range
+        if((int)date('w', $cur) !== 0){              // 0 = Sunday → skip
+            $days += $span;
+        }
+        $cur = $next;
+    }
+    return $days;
 }
 
 // Sweep open installation tasks and apply the stale-task penalty where due.
