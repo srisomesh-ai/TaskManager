@@ -2829,6 +2829,11 @@ case 'os_get_or_create_claim':
         if(!$tinfo){ echo json_encode(['error'=>'Task not found']); break; }
         if($userRole==='technician' && intval($tinfo['assigned_to'])!==intval($userId)){ echo json_encode(['error'=>'Not your task']); break; }
         $ex=$pdo->prepare("SELECT * FROM outstation_claims WHERE task_db_id=?"); $ex->execute([$tdb]); $claim=$ex->fetch(PDO::FETCH_ASSOC);
+        // A task can be claimed only once. If it already has a submitted/approved claim, do not allow a new one.
+        if($claim && in_array($claim['status'],['submitted','approved'])){
+            echo json_encode(['error'=>'This task already has a '.$claim['status'].' claim. You cannot claim it again.','already_claimed'=>true,'status'=>$claim['status']]);
+            break;
+        }
         if(!$claim){
             $pdo->prepare("INSERT INTO outstation_claims (task_db_id,task_id,technician_id,customer_location,status) VALUES (?,?,?,?, 'draft')")
                 ->execute([$tdb,$tinfo['task_id'],$userId,$tinfo['location']??'']);
