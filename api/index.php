@@ -2833,10 +2833,18 @@ case 'os_my_taskable':
         $tuid = $userId;
         if (in_array($userRole,['admin','assigner','manager']) && !empty($_GET['user_id'])) $tuid = intval($_GET['user_id']);
         // Simple, robust query — same assigned_to filter the normal task list uses.
-        $rows=$pdo->prepare("SELECT id, task_id, customer_name, location, task_status, lead_type, device_qty
+        $rows=$pdo->prepare("SELECT id, task_id, customer_name, location, task_status, lead_type, device_qty, created_at, closed_at
                              FROM tasks WHERE assigned_to=? ORDER BY id DESC LIMIT 300");
         $rows->execute([$tuid]);
         $tasks=$rows->fetchAll(PDO::FETCH_ASSOC);
+        // A task created AND closed on the SAME day is a local (same-day) job — no outstation travel,
+        // so it must not be claimable. Drop those from the list.
+        $tasks = array_values(array_filter($tasks, function($t){
+            if(!empty($t['created_at']) && !empty($t['closed_at'])){
+                if(substr($t['created_at'],0,10) === substr($t['closed_at'],0,10)) return false; // same-day local
+            }
+            return true;
+        }));
         // Enrich each with claim status + installed count (in PHP, so a bad subquery can't blank the list).
         foreach ($tasks as &$t) {
             $t['installed_count']=0; $t['claim_id']=null; $t['claim_status']=null;
@@ -2869,7 +2877,13 @@ case 'os_get_or_create_claim':
         _ensureOutstationTables($pdo);
         $tdb=intval($body['task_db_id']??$_GET['task_db_id']??0);
         if(!$tdb){ echo json_encode(['error'=>'Missing task']); break; }
-        $tk=$pdo->prepare("SELECT id,task_id,customer_name,location,assigned_to FROM tasks WHERE id=?"); $tk->execute([$tdb]); $tinfo=$tk->fetch(PDO::FETCH_ASSOC);
+        $tk=$pdo->prepare("SELECT id,task_id,customer_name,location,assigned_to,created_at,closed_at FROM tasks WHERE id=?"); $tk->execute([$tdb]); $tinfo=$tk->fetch(PDO::FETCH_ASSOC);
+        // Same-day local task (created and closed on the same day) cannot be claimed for outstation travel.
+        if($tinfo && !empty($tinfo['created_at']) && !empty($tinfo['closed_at'])
+            && substr($tinfo['created_at'],0,10)===substr($tinfo['closed_at'],0,10)){
+            echo json_encode(['error'=>'This is a same-day local task and cannot be claimed for outstation travel.','local_task'=>true]);
+            break;
+        }
         if(!$tinfo){ echo json_encode(['error'=>'Task not found']); break; }
         if($userRole==='technician' && intval($tinfo['assigned_to'])!==intval($userId)){ echo json_encode(['error'=>'Not your task']); break; }
         $ex=$pdo->prepare("SELECT * FROM outstation_claims WHERE task_db_id=?"); $ex->execute([$tdb]); $claim=$ex->fetch(PDO::FETCH_ASSOC);
