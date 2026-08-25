@@ -1162,7 +1162,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
       </div>
 
       <div class="page" id="page-assessment" style="padding:20px">
-        <div class="pg-header"><div class="breadcrumb">Home / <b>Technician Assessment</b></div><div class="pg-title">📅 Technician Assessment — Tomorrow</div><div class="pg-sub">What each technician has planned for tomorrow. See who is busy and who is free at a glance. Technicians update this each night; the board clears automatically every morning.</div></div>
+        <div class="pg-header"><div class="breadcrumb">Home / <b>Technician Assessment</b></div><div class="pg-title">📅 Technician Assessment — Today</div><div class="pg-sub">What each technician planned (updated the evening before) for today's work. See who is busy and who is free at a glance. The board clears automatically at 9 PM each night.</div></div>
         <div style="margin-bottom:12px"><button class="ts-btn" style="background:var(--accent);color:#fff" onclick="loadAssessment()">🔄 Refresh</button></div>
         <div id="assess-list"><div style="color:var(--text3);padding:20px;text-align:center">Loading…</div></div>
       </div>
@@ -8098,6 +8098,14 @@ async function loadAssessment(){
       h+=busy.map(function(t){
         return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">'
           +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-weight:800;font-size:15px">👤 '+escHtml(t.name||'')+'</div><span style="background:var(--green-bg);color:var(--green);font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px">'+t.count+' job(s)</span></div>'
+          +(function(){
+              // Latest update time among this tech's plans (when they submitted their plan).
+              var latest=''; (t.plans||[]).forEach(function(p){ if(p.created_at && p.created_at>latest) latest=p.created_at; });
+              if(!latest) return '';
+              var dt=new Date(latest.replace(' ','T'));
+              var when=isNaN(dt.getTime())? latest : dt.toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',hour12:true});
+              return '<div style="font-size:11px;color:var(--text3);margin:-4px 0 8px">🕓 Updated: '+escHtml(when)+'</div>';
+            })()
           + t.plans.map(function(p){
               return '<div style="border-left:3px solid var(--accent);padding:6px 0 6px 10px;margin-bottom:6px">'
                 +'<div style="font-weight:600;font-size:13px">'+escHtml(p.task_id||'')+(p.customer_name?(' · '+escHtml(p.customer_name)):'')+'</div>'
