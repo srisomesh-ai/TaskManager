@@ -1328,6 +1328,16 @@
     const sv=(id,v)=>{const el=document.getElementById(id);if(el&&v)el.value=v;};
     sv('iname-'+idx,device.name); sv('iplate-'+idx,dd.plate_number); sv('iowner-'+idx,dd.object_owner); sv('ireg-'+idx,dd.registration_number); sv('inotes-'+idx,dd.additional_notes);
     const today=new Date().toISOString().slice(0,10);
+    // DEBUG (V2V): surface which date-ish fields the server actually returned, so we map correctly.
+    if(_v2vMode){
+      try {
+        const dateKeys=Object.keys(dd).filter(function(k){ return /date|install|expir|forming|time/i.test(k); });
+        const dbg=dateKeys.map(function(k){ return k+'='+dd[k]; }).join(' | ');
+        console.log('V2V device_data date fields:', dbg, dd);
+        const r=document.getElementById('ires-'+idx);
+        if(r){ r.innerHTML += '<div style="font-size:10px;color:#888;margin-top:6px;word-break:break-all">🔎 '+esc(dbg||'no date fields found')+'</div>'; }
+      } catch(e){}
+    }
     // For V2V the install date MUST come from the server and never be replaced with today.
     // Look across the possible field names GPSWOX may use for the original installation date.
     const serverInstDate = (dd.installation_date && dd.installation_date!=='0000-00-00') ? dd.installation_date
