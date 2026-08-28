@@ -1448,11 +1448,15 @@
       const fd=new FormData();
       fd.append('server_id',serverId); fd.append('device_id',deviceId); fd.append('name',name);
       fd.append('plate_number',plate); fd.append('registration_number',reg); fd.append('object_owner',owner);
-      // In V2V mode the original install date must stay as it is on the server. Only send
-      // installation_date when we actually have the server's date; if it is blank, omit it so the
-      // server keeps its existing value (never overwrite with today).
-      if(!_v2vMode || (inst && inst!=='0000-00-00')){ fd.append('installation_date',inst); }
-      fd.append('expiration_date',exp); fd.append('icon_id',iconId);
+      // V2V = vehicle change ONLY. The device keeps everything it already has on the server —
+      // installation date, expiry date, etc. must NOT be touched. So in V2V mode we do NOT send
+      // installation_date or expiration_date at all; the server keeps its existing values.
+      // (For a normal new install we send them as usual.)
+      if(!_v2vMode){
+        fd.append('installation_date',inst);
+        fd.append('expiration_date',exp);
+      }
+      fd.append('icon_id',iconId);
       fd.append('additional_notes',notes+(vtype?' | Vehicle Type: '+vtype:''));
       fd.append('comment',(_v2vMode?'Vehicle changed (V2V) via BharatGPS TaskManager — Task ':'Installed via BharatGPS TaskManager — Task ')+(_curTask.task_id||''));
       const r=await fetch(GPS_PROXY+'?action=update',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd});
