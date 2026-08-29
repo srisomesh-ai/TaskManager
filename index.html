@@ -7409,11 +7409,17 @@ function rnwRenderDevices(){
     // WhatsApp uses the registration/asset number (customer contact), not the SIM.
     // The field may contain two comma-separated numbers — use only the first.
     const phone = String(d.reg||'').split(/[,/;|]/)[0].replace(/[^0-9]/g,'');
+    // Device connection status badge + last-seen time (from GPS server).
+    const isOn = (d.online===true || d.online_status==='online');
+    let lastSeenTxt='';
+    if(d.last_seen){ var _ls=new Date(String(d.last_seen).replace(' ','T')); lastSeenTxt = isNaN(_ls.getTime())? String(d.last_seen) : _ls.toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',hour12:true}); }
+    const statusBadge = '<span style="display:inline-block;font-size:10px;font-weight:800;padding:1px 7px;border-radius:9px;background:'+(isOn?'#dcfce7':'#fee2e2')+';color:'+(isOn?'#166534':'#b91c1c')+'">'+(isOn?'● ONLINE':'○ OFFLINE')+'</span>'
+      + (lastSeenTxt?('<span style="font-size:10px;color:var(--text3);margin-left:5px">'+escHtml(lastSeenTxt)+'</span>'):'');
     const waBtn = phone
       ? '<button class="rnw-wa-btn" title="Send WhatsApp renewal reminder" onclick="rnwWhatsApp('+realIdx+')">💬 WhatsApp</button>'
       : '<button class="rnw-wa-btn" disabled title="No registration number on this device">💬 WhatsApp</button>';
     return '<tr>'
-      + '<td><div style="font-weight:700">'+escHtml(d.name)+'</div><div style="font-family:monospace;font-size:11px;color:var(--text3)">'+escHtml(d.imei)+'</div></td>'
+      + '<td><div style="font-weight:700">'+escHtml(d.name)+'</div><div style="font-family:monospace;font-size:11px;color:var(--text3)">'+escHtml(d.imei)+'</div><div style="margin-top:3px">'+statusBadge+'</div></td>'
       + '<td><div style="font-weight:600">'+escHtml(plate||'—')+'</div><div style="color:var(--text3);font-size:11px">'+custCell+'</div></td>'
       + '<td>'+regCell+'</td>'
       + '<td style="color:var(--text2);white-space:nowrap">'+escHtml(srvName)+'</td>'
