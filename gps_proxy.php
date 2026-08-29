@@ -746,6 +746,10 @@ if($action === 'search_expiry'){
                 } else $include = true;
                 if(!$include) continue;
                 $status = ($daysLeft<0)?'expired':(($daysLeft<=7)?'critical':(($daysLeft<=30)?'warning':(($daysLeft<=90)?'soon':'ok')));
+                // Device connection status (GPSWOX: online|ack|offline) + last-seen timestamp.
+                $onlineRaw = strtolower($d['online'] ?? $dd['online'] ?? '');
+                $isOnline  = in_array($onlineRaw, ['online','ack']);
+                $lastSeen  = $d['time'] ?? ($dd['time'] ?? ($d['timestamp'] ?? ($dd['timestamp'] ?? '')));
                 // Clean server label (name without the "Server N — " prefix, e.g. "bharatgps.com")
                 $srvLabel = trim(preg_replace('/^Server\s*\d+\s*[—-]\s*/u', '', $srv['name']));
                 $out[] = [
@@ -759,6 +763,7 @@ if($action === 'search_expiry'){
                     'vin'=>$dd['vin'] ?? '',
                     'phone'=>$dd['msisdn'] ?? $dd['sim_number'] ?? $dd['phone'] ?? $dd['device_phone'] ?? $d['msisdn'] ?? '',
                     'expiry'=>$expiry, 'days_left'=>$daysLeft, 'status'=>$status,
+                    'online'=>$isOnline, 'online_status'=>($isOnline?'online':'offline'), 'last_seen'=>$lastSeen,
                     '_raw'=> (!empty($_GET['debug']) ? $dd : null),
                 ];
             }
