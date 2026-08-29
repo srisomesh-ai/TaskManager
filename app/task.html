@@ -1328,23 +1328,7 @@
     const sv=(id,v)=>{const el=document.getElementById(id);if(el&&v)el.value=v;};
     sv('iname-'+idx,device.name); sv('iplate-'+idx,dd.plate_number); sv('iowner-'+idx,dd.object_owner); sv('ireg-'+idx,dd.registration_number); sv('inotes-'+idx,dd.additional_notes);
     const today=new Date().toISOString().slice(0,10);
-    // DEBUG (V2V): surface which date-ish fields the server actually returned, so we map correctly.
-    if(_v2vMode){
-      try {
-        const dateKeys=Object.keys(dd).filter(function(k){ return /date|install|expir|forming|time/i.test(k); });
-        const dbg=dateKeys.map(function(k){ return k+'='+dd[k]; }).join(' | ');
-        console.log('V2V device_data date fields:', dbg, dd);
-        const r=document.getElementById('ires-'+idx);
-        if(r){ r.innerHTML += '<div style="font-size:10px;color:#888;margin-top:6px;word-break:break-all">🔎 '+esc(dbg||'no date fields found')+'</div>'; }
-      } catch(e){}
-    }
-    // For V2V the install date MUST come from the server and never be replaced with today.
-    // Look across the possible field names GPSWOX may use for the original installation date.
-    const serverInstDate = (dd.installation_date && dd.installation_date!=='0000-00-00') ? dd.installation_date
-                          : (dd.install_date && dd.install_date!=='0000-00-00') ? dd.install_date
-                          : (dd.date_installed && dd.date_installed!=='0000-00-00') ? dd.date_installed
-                          : '';
-    document.getElementById('iinst-'+idx).value = _v2vMode ? serverInstDate : (serverInstDate || today);
+    document.getElementById('iinst-'+idx).value=(dd.installation_date&&dd.installation_date!=='0000-00-00')?dd.installation_date:today;
     if(_v2vMode){
       // Vehicle-to-vehicle transfer: the device keeps its identity & licence, so LOCK the pulled
       // details (install date, expiry, registration, owner/mobile). Only NAME ON SERVER and
@@ -1352,8 +1336,7 @@
       // so its display name (last 4 digits) and the plate number legitimately change.
       const _lock=(id)=>{ const el=document.getElementById(id+'-'+idx); if(el){ el.setAttribute('readonly','readonly'); el.removeAttribute('onchange'); el.style.background='#f1f3f6'; el.style.color='#555'; el.style.cursor='not-allowed'; if(el.tagName==='SELECT'){ el.disabled=true; } } };
       const instEl=document.getElementById('iinst-'+idx);
-      // Keep the server's original install date — do NOT overwrite with today.
-      if(instEl){ instEl.value = serverInstDate; }
+      if(instEl){ instEl.value=(dd.installation_date&&dd.installation_date!=='0000-00-00')?dd.installation_date:today; }
       const expEl=document.getElementById('iexp-'+idx);
       if(expEl){ expEl.value=(dd.expiration_date&&dd.expiration_date!=='0000-00-00')?dd.expiration_date:(dd.expiration_date||''); }
       // Lock the fields that must carry over unchanged.
@@ -1458,15 +1441,7 @@
       const fd=new FormData();
       fd.append('server_id',serverId); fd.append('device_id',deviceId); fd.append('name',name);
       fd.append('plate_number',plate); fd.append('registration_number',reg); fd.append('object_owner',owner);
-      // V2V = vehicle change ONLY. The device keeps everything it already has on the server —
-      // installation date, expiry date, etc. must NOT be touched. So in V2V mode we do NOT send
-      // installation_date or expiration_date at all; the server keeps its existing values.
-      // (For a normal new install we send them as usual.)
-      if(!_v2vMode){
-        fd.append('installation_date',inst);
-        fd.append('expiration_date',exp);
-      }
-      fd.append('icon_id',iconId);
+      fd.append('installation_date',inst); fd.append('expiration_date',exp); fd.append('icon_id',iconId);
       fd.append('additional_notes',notes+(vtype?' | Vehicle Type: '+vtype:''));
       fd.append('comment',(_v2vMode?'Vehicle changed (V2V) via BharatGPS TaskManager — Task ':'Installed via BharatGPS TaskManager — Task ')+(_curTask.task_id||''));
       const r=await fetch(GPS_PROXY+'?action=update',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd});
