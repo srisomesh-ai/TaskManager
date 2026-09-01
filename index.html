@@ -1468,6 +1468,21 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
       <div class="page" id="page-coins" style="padding:20px">
         <h2 style="font-size:18px;font-weight:800;margin-bottom:4px">🪙 Manage Coins</h2>
         <p style="color:var(--text3);font-size:13px;margin-bottom:16px">Add or remove coins for a technician — for corrections when coins were added by mistake or calculated wrongly. 1 coin = ₹1. Only admin can change coins.</p>
+        <div class="card" style="padding:16px 18px;margin-bottom:16px;max-width:600px">
+          <div style="font-weight:800;font-size:14px;margin-bottom:4px">⚙️ Coins System Control</div>
+          <div style="color:var(--text3);font-size:12px;margin-bottom:12px">Turn the whole coins system on or off. When a switch is OFF, those coins stop being applied everywhere (task rewards, penalties, claim payouts).</div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer">
+              <span style="font-size:13px;font-weight:600">🎉 Rewards (positive coins for good work)</span>
+              <input type="checkbox" id="coins-rewards-toggle" onchange="saveCoinsSettings()" style="width:20px;height:20px;cursor:pointer">
+            </label>
+            <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer">
+              <span style="font-size:13px;font-weight:600">⚠️ Penalties (negative coins / deductions)</span>
+              <input type="checkbox" id="coins-penalties-toggle" onchange="saveCoinsSettings()" style="width:20px;height:20px;cursor:pointer">
+            </label>
+          </div>
+          <div id="coins-settings-msg" style="display:none;margin-top:10px;font-size:12px;font-weight:600"></div>
+        </div>
         <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
           <div class="card" style="flex:1;min-width:300px;max-width:440px;padding:18px">
             <div style="font-weight:800;font-size:14px;margin-bottom:12px">Adjust Coins</div>
@@ -8285,7 +8300,28 @@ async function osFinalize(cid){
   else showToast('❌ '+((d&&d.error)||'Error'));
 }
 
+async function loadCoinsSettings(){
+  try{
+    const d=await api('get_coins_settings',{});
+    if(d&&d.success){
+      const r=document.getElementById('coins-rewards-toggle'), p=document.getElementById('coins-penalties-toggle');
+      if(r) r.checked=!!d.rewards_enabled;
+      if(p) p.checked=!!d.penalties_enabled;
+    }
+  }catch(e){}
+}
+async function saveCoinsSettings(){
+  const r=document.getElementById('coins-rewards-toggle'), p=document.getElementById('coins-penalties-toggle');
+  const msg=document.getElementById('coins-settings-msg');
+  try{
+    const d=await api('set_coins_settings',{},'POST',{rewards_enabled:r?r.checked:true, penalties_enabled:p?p.checked:true});
+    if(d&&d.success){
+      if(msg){ msg.style.display=''; msg.style.color='var(--green)'; msg.textContent='✅ Saved — '+(r&&r.checked?'rewards ON':'rewards OFF')+', '+(p&&p.checked?'penalties ON':'penalties OFF'); }
+    } else { if(msg){ msg.style.display=''; msg.style.color='var(--red)'; msg.textContent='❌ '+((d&&d.error)||'Could not save'); } }
+  }catch(e){ if(msg){ msg.style.display=''; msg.style.color='var(--red)'; msg.textContent='❌ '+e.message; } }
+}
 async function loadCoinsPage(){
+  loadCoinsSettings();
   const sel=document.getElementById('coin-tech'); if(!sel) return;
   setCoinMode('add');
   const msg=document.getElementById('coin-msg');
