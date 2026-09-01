@@ -1159,7 +1159,10 @@
 
   async function openInstall(forceQty){
     const t=_curTask;
-    _v2vMode=false;
+    // Detect V2V from the task's job type so the flag is reliable no matter how we got here
+    // (tapping Record Transfer calls openV2V then openInstall — this must not lose the V2V mode).
+    const _job0=(t.device_details||'').toLowerCase();
+    _v2vMode = (_job0.includes('vehicle to vehicle') || _job0.includes('v2v'));
     // route special jobs — troubleshoot/demo/v2v/remove now have their own flows
     const job=(t.device_details||'').toLowerCase();
     if(job.includes('remove only')||job.includes('only remove')||job.includes('gps remove')||job.includes('device removal')){
@@ -1319,7 +1322,7 @@
       return;
     }
     if(_v2vMode && installed){
-      res.innerHTML='<div style="background:var(--accent-light,#E0EEEE);border:1.5px solid var(--accent2,#137272);border-radius:8px;padding:10px;font-size:12px;line-height:1.6;color:#0c4a4a"><strong>🚗 Device found — vehicle change</strong><br>Current plate: <strong>'+esc(dd.plate_number||'–')+'</strong><br>Edit only the <strong>Name on Server</strong> and <strong>Vehicle Number / Plate</strong> for the new vehicle, pick the icon, then push. <strong>Install date, expiry, registration &amp; owner stay locked.</strong></div>';
+      res.innerHTML='<div style="background:var(--accent-light,#E0EEEE);border:1.5px solid var(--accent2,#137272);border-radius:8px;padding:10px;font-size:12px;line-height:1.6;color:#0c4a4a"><strong>🚗 Device found — vehicle change</strong><br>Current plate: <strong>'+esc(dd.plate_number||'–')+'</strong><br>Update the details for the new vehicle, then push. <strong>Install date &amp; expiry date stay locked</strong> (unchanged).</div>';
     }
     document.getElementById('iserverid-'+idx).value=device._server_id||'';
     document.getElementById('ideviceid-'+idx).value=dd.id||device.id||'';
