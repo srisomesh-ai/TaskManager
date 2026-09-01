@@ -244,11 +244,17 @@ if($action === 'update'){
         'plate_number'        => $_POST['plate_number']        ?? '',
         'registration_number' => $_POST['registration_number'] ?? '',
         'object_owner'        => $_POST['object_owner']        ?? '',
-        'installation_date'   => $_POST['installation_date']   ?? '',
-        'expiration_date'     => $_POST['expiration_date']     ?? '',
         'additional_notes'    => $_POST['additional_notes']    ?? '',
         'comment'             => $_POST['comment']             ?? '',
     ];
+    // Only include the dates when they are actually provided and valid — otherwise omit them so the
+    // GPS server keeps its existing installation/expiry dates (sending '' would wipe them).
+    if(isset($_POST['installation_date']) && trim($_POST['installation_date'])!=='' && substr($_POST['installation_date'],0,10)!=='0000-00-00'){
+        $fields['installation_date'] = $_POST['installation_date'];
+    }
+    if(isset($_POST['expiration_date']) && trim($_POST['expiration_date'])!=='' && substr($_POST['expiration_date'],0,10)!=='0000-00-00'){
+        $fields['expiration_date'] = $_POST['expiration_date'];
+    }
     if(!empty($_POST['device_model'])) $fields['device_model'] = $_POST['device_model'];
     if(!empty($_POST['icon_id']))      $fields['icon_id']      = intval($_POST['icon_id']);
     if(!empty($_POST['icon_colors']))  $fields['icon_colors']  = $_POST['icon_colors'];
