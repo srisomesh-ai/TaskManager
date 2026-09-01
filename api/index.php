@@ -338,6 +338,15 @@ function award_task_reward($pdo, $userId, $coins, $reason, $taskId = null, $even
 function award_coins($pdo, $userId, $coins, $reason, $taskId = null, $eventKey = null, $pushTitle = null, $pushBody = null){
     try {
         if (!$userId) return false;
+        // Master toggles (set from the admin panel). Positive coins = reward, negative = penalty.
+        // Default ON so behaviour is unchanged until an admin turns them off.
+        try {
+            $tg = $pdo->query("SELECT key_name,key_value FROM app_settings WHERE key_name IN ('coins_rewards_enabled','coins_penalties_enabled')")->fetchAll(PDO::FETCH_KEY_PAIR);
+            $rewardsOn  = !isset($tg['coins_rewards_enabled'])  || $tg['coins_rewards_enabled']  !== '0';
+            $penaltiesOn= !isset($tg['coins_penalties_enabled'])|| $tg['coins_penalties_enabled']!== '0';
+            if ($coins >= 0 && !$rewardsOn)   return false;   // rewards disabled → skip positive coins
+            if ($coins <  0 && !$penaltiesOn) return false;   // penalties disabled → skip negative coins
+        } catch(Exception $e){ /* if settings table missing, proceed as enabled */ }
         _ensureCoinLedger($pdo);
         $inserted = false;
         if ($eventKey) {
@@ -5115,6 +5124,28 @@ case 'check_consent':
 // ---- MARK TASK VIEWED (clears unseen badge) ----
 
 // ---- ADMIN WIPE ----
+// ---- COINS SETTINGS (rewards / penalties master toggles) ----
+case 'get_coins_settings':
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS app_settings (key_name VARCHAR(100) PRIMARY KEY, key_value TEXT, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $tg = $pdo->query("SELECT key_name,key_value FROM app_settings WHERE key_name IN ('coins_rewards_enabled','coins_penalties_enabled')")->fetchAll(PDO::FETCH_KEY_PAIR);
+        echo json_encode(['success'=>true,
+            'rewards_enabled'  => !isset($tg['coins_rewards_enabled'])   || $tg['coins_rewards_enabled']   !== '0',
+            'penalties_enabled'=> !isset($tg['coins_penalties_enabled']) || $tg['coins_penalties_enabled'] !== '0']);
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'set_coins_settings':
+    if(!in_array($userRole,['admin','assigner','manager'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS app_settings (key_name VARCHAR(100) PRIMARY KEY, key_value TEXT, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $upd = $pdo->prepare("INSERT INTO app_settings (key_name,key_value) VALUES (?,?) ON DUPLICATE KEY UPDATE key_value=VALUES(key_value)");
+        if(isset($body['rewards_enabled']))   $upd->execute(['coins_rewards_enabled',   $body['rewards_enabled']   ? '1' : '0']);
+        if(isset($body['penalties_enabled'])) $upd->execute(['coins_penalties_enabled', $body['penalties_enabled'] ? '1' : '0']);
+        echo json_encode(['success'=>true]);
+    } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'admin_wipe':
     if($userRole !== 'admin'){ echo json_encode(['error'=>'Admin only']); break; }
     if(($body['confirm']??'') !== 'DELETE'){ echo json_encode(['error'=>'Confirmation required']); break; }
