@@ -1330,22 +1330,19 @@
     const today=new Date().toISOString().slice(0,10);
     document.getElementById('iinst-'+idx).value=(dd.installation_date&&dd.installation_date!=='0000-00-00')?dd.installation_date:today;
     if(_v2vMode){
-      // Vehicle-to-vehicle transfer: the device keeps its identity & licence, so LOCK the pulled
-      // details (install date, expiry, registration, owner/mobile). Only NAME ON SERVER and
-      // PLATE / VEHICLE NUMBER stay editable — because the device is moving to a different vehicle,
-      // so its display name (last 4 digits) and the plate number legitimately change.
+      // Vehicle-to-vehicle transfer: the data is pulled from the server and pre-filled, but the
+      // technician can EDIT everything EXCEPT the install date and expiry date (those must stay as
+      // they are on the server — the device keeps its original licence period).
       const _lock=(id)=>{ const el=document.getElementById(id+'-'+idx); if(el){ el.setAttribute('readonly','readonly'); el.removeAttribute('onchange'); el.style.background='#f1f3f6'; el.style.color='#555'; el.style.cursor='not-allowed'; if(el.tagName==='SELECT'){ el.disabled=true; } } };
       const instEl=document.getElementById('iinst-'+idx);
       if(instEl){ instEl.value=(dd.installation_date&&dd.installation_date!=='0000-00-00')?dd.installation_date:today; }
       const expEl=document.getElementById('iexp-'+idx);
       if(expEl){ expEl.value=(dd.expiration_date&&dd.expiration_date!=='0000-00-00')?dd.expiration_date:(dd.expiration_date||''); }
-      // Lock the fields that must carry over unchanged.
-      _lock('iinst');    // install date
-      _lock('iexp');     // expiry date
-      _lock('ireg');     // registration / asset no
-      _lock('iowner');   // owner / mobile
-      _lock('ivtype');   // vehicle type stays with the device
-      // iname (Name on Server) and iplate (Plate) are intentionally left EDITABLE.
+      // Lock ONLY the dates — everything else (registration, owner/mobile, vehicle type, name,
+      // plate) stays editable so the tech can update them for the new vehicle.
+      _lock('iinst');    // install date — must not change
+      _lock('iexp');     // expiry date — must not change
+      // ireg, iowner, ivtype, iname, iplate are all intentionally EDITABLE in V2V.
     } else {
       // NEW device install: the installation date is the actual date it is being added today.
       // Auto-set to today and LOCK it so it cannot be back/forward-dated.
