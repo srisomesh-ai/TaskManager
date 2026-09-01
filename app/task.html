@@ -1340,7 +1340,13 @@
       const instEl=document.getElementById('iinst-'+idx);
       if(instEl){ instEl.value=(dd.installation_date&&dd.installation_date!=='0000-00-00')?dd.installation_date:today; }
       const expEl=document.getElementById('iexp-'+idx);
-      if(expEl){ expEl.value=(dd.expiration_date&&dd.expiration_date!=='0000-00-00')?dd.expiration_date:(dd.expiration_date||''); }
+      // The server may store expiry under any of these field names (same list the renewal search uses).
+      // Read the first valid one so the expiry is never shown blank / wiped in a V2V transfer.
+      let _srvExpiry='';
+      ['expiration_date','sim_expiration_date','expire_date','expiry_date'].forEach(function(f){
+        if(!_srvExpiry && dd[f] && String(dd[f]).slice(0,10)!=='0000-00-00'){ _srvExpiry=String(dd[f]).slice(0,10); }
+      });
+      if(expEl){ expEl.value=_srvExpiry; }
       // Lock ONLY the dates — everything else (registration, owner/mobile, vehicle type, name,
       // plate) stays editable so the tech can update them for the new vehicle.
       _lock('iinst');    // install date — must not change
@@ -1441,7 +1447,11 @@
       const fd=new FormData();
       fd.append('server_id',serverId); fd.append('device_id',deviceId); fd.append('name',name);
       fd.append('plate_number',plate); fd.append('registration_number',reg); fd.append('object_owner',owner);
-      fd.append('installation_date',inst); fd.append('expiration_date',exp); fd.append('icon_id',iconId);
+      // In V2V, never send an empty install/expiry date — that would wipe the server value. Only
+      // send them when we actually have a value (they are locked to the server's dates anyway).
+      if(inst){ fd.append('installation_date',inst); }
+      if(exp){ fd.append('expiration_date',exp); }
+      fd.append('icon_id',iconId);
       fd.append('additional_notes',notes+(vtype?' | Vehicle Type: '+vtype:''));
       fd.append('comment',(_v2vMode?'Vehicle changed (V2V) via BharatGPS TaskManager — Task ':'Installed via BharatGPS TaskManager — Task ')+(_curTask.task_id||''));
       const r=await fetch(GPS_PROXY+'?action=update',{method:'POST',headers:{'X-Auth-Token':authToken},body:fd});
