@@ -143,7 +143,17 @@ if($action === 'find'){
                 } elseif($field === 'registration'){
                     $hay = strtolower(($dd['registration_number'] ?? '').' '.($dd['vin'] ?? ''));
                 } else { // imei (default)
-                    $hay = strtolower($dd['imei'] ?? '');
+                    // The IMEI can live in several places depending on how the device was added:
+                    // device_data.imei is the usual one, but some devices carry it in the top-level
+                    // imei, in device_data.device_imei, or embedded in the device name. Check all so
+                    // a device that clearly exists is never reported as "not found".
+                    $hay = strtolower(
+                        ($dd['imei'] ?? '').' '.
+                        ($device['imei'] ?? '').' '.
+                        ($dd['device_imei'] ?? '').' '.
+                        ($dd['sim_number'] ?? '').' '.
+                        ($device['name'] ?? '')
+                    );
                 }
                 if($hay !== '' && strpos($hay, $q) !== false){
                     $device['_server_id']   = $sid;
