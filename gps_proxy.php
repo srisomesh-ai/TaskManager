@@ -121,13 +121,19 @@ if($action === 'find'){
     do { curl_multi_exec($multi, $running); curl_multi_select($multi); } while($running > 0);
 
     $found = [];
+    $diag = [];   // per-server diagnostics so failures are visible instead of silently swallowed
     foreach($handles as $sid => $ch){
-        $body = curl_multi_getcontent($ch);
+        $body     = curl_multi_getcontent($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr  = curl_error($ch);
         curl_multi_remove_handle($multi, $ch);
         curl_close($ch);
-        if(!$body) continue;
+        $srvName = $servers[$sid]['name'] ?? ('Server '.$sid);
+        if($curlErr){        $diag[] = ['server'=>$srvName,'http'=>$httpCode,'error'=>'connection: '.$curlErr]; continue; }
+        if(!$body){          $diag[] = ['server'=>$srvName,'http'=>$httpCode,'error'=>'empty response']; continue; }
         $data = json_decode($body, true);
-        if(!is_array($data)) continue;
+        if(!is_array($data)){ $diag[] = ['server'=>$srvName,'http'=>$httpCode,'error'=>'non-JSON response','sample'=>substr(strip_tags($body),0,180)]; continue; }
+        $diag[] = ['server'=>$srvName,'http'=>$httpCode,'error'=>null,'groups'=>count($data)];
         foreach($data as $group){
             if(!isset($group['items'])) continue;
             foreach($group['items'] as $device){
@@ -155,7 +161,7 @@ if($action === 'find'){
         }
     }
     curl_multi_close($multi);
-    echo json_encode(['success'=>true, 'devices'=>$found, 'count'=>count($found)]);
+    echo json_encode(['success'=>true, 'devices'=>$found, 'count'=>count($found), '_diag'=>$diag]);
     exit;
 }
 
