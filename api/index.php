@@ -3633,6 +3633,7 @@ case 'bs_get_entries':
     // Ensure table exists
     try { $pdo->exec("CREATE TABLE IF NOT EXISTS balance_sheet_entries (id INT AUTO_INCREMENT PRIMARY KEY, type VARCHAR(20) DEFAULT 'sales', profile VARCHAR(10) DEFAULT 'BGPT', task_id VARCHAR(20) NULL, task_db_id INT NULL, date DATE NOT NULL, invoice_no VARCHAR(50), gps_serial_no VARCHAR(100), customer_type VARCHAR(50), name_on_server TEXT, server_name VARCHAR(50), device_model VARCHAR(100), service_type VARCHAR(100), license_plan VARCHAR(100), qty DECIMAL(10,2) DEFAULT 1, unit_price DECIMAL(10,2) DEFAULT 0, gst DECIMAL(10,2) DEFAULT 0, total_price DECIMAL(10,2) DEFAULT 0, payment_status VARCHAR(50), payment_received DECIMAL(10,2) DEFAULT 0, pending_payment DECIMAL(10,2) DEFAULT 0, payment_mode VARCHAR(50), payment_received_on DATE NULL, payment_transaction_details TEXT, pending_reason VARCHAR(100), discount_given DECIMAL(10,2) DEFAULT 0, discount_reason TEXT, discount_incharge VARCHAR(100), payment_reminder_date DATE NULL, technician_name VARCHAR(100), location VARCHAR(200), remarks TEXT, created_by_code VARCHAR(50), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch(Exception $e) {}
     try { $pdo->exec("ALTER TABLE balance_sheet_entries ADD COLUMN technician_id INT DEFAULT NULL"); } catch(Exception $e) {}
+    try { $pdo->exec("ALTER TABLE balance_sheet_entries ADD COLUMN payment_screenshot VARCHAR(255) DEFAULT NULL"); } catch(Exception $e) {}
     // Self-heal installs: this is HEAVY (loops all tasks with installed devices) and was
     // running on every load — for large profiles (BGPT) it slowed the request enough to blank
     // the page. Balance entries are already kept current by the update_task / approve_task hooks,
@@ -7017,14 +7018,15 @@ case 'renewal_bs_repair':
                 $entryExists = (bool)$chk->fetchColumn();
             }
             if($entryExists){
-                // Correct the profile / amount / screenshot of the existing entry
-                $pdo->prepare("UPDATE balance_sheet_entries SET profile=?, type='license', service_type='Renewal', license_plan=?, total_price=?, unit_price=?, gst=?, payment_status='paid', payment_received=?, pending_payment=0, payment_transaction_details=COALESCE(payment_transaction_details,?) WHERE id=?")
+                // Correct the profile / amount / screenshot of the existing entry.
+                // The screenshot goes in payment_screenshot (NOT the UPI/transaction field).
+                $pdo->prepare("UPDATE balance_sheet_entries SET profile=?, type='license', service_type='Renewal', license_plan=?, total_price=?, unit_price=?, gst=?, payment_status='paid', payment_received=?, pending_payment=0, payment_screenshot=COALESCE(payment_screenshot,?) WHERE id=?")
                     ->execute([$prof, $r['label'], $amount, $amount-$gstAmt, $gstAmt, $amount, $r['payment_screenshot']?:null, intval($r['bs_entry_id'])]);
                 $fixed++;
             } else {
                 // No real entry (missing or stale link) → create it
                 $pdo->prepare("INSERT INTO balance_sheet_entries
-                    (type,profile,date,gps_serial_no,name_on_server,server_name,device_model,service_type,license_plan,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_transaction_details,remarks,created_by_code)
+                    (type,profile,date,gps_serial_no,name_on_server,server_name,device_model,service_type,license_plan,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_screenshot,remarks,created_by_code)
                     VALUES ('license',?,COALESCE(?,CURDATE()),?,?,?,?,?,?,1,?,?,?,'paid',?,0,?,?,?)")
                     ->execute([
                         $prof, ($r['approved_at']?substr($r['approved_at'],0,10):null),
