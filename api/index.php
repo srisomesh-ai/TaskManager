@@ -839,12 +839,12 @@ function _bsSyncInstalls($pdo, $cuName){
         // service (e.g. paid Troubleshoot) fall back to the job type so the row is not blank.
         $entryName = $allNames !== '' ? $allNames : trim((string)($t2['lead_type'] ?? $t2['device_details'] ?? 'Service charge'));
         if (!empty($t2['bs_entry_id'])) {
-            $pdo->prepare("UPDATE balance_sheet_entries SET gps_serial_no=?,name_on_server=?,server_name=?,qty=?,unit_price=?,total_price=?,payment_received=?,pending_payment=?,payment_status=?,payment_mode=?,payment_transaction_details=?,updated_at=NOW() WHERE id=?")
-                ->execute([$allSerials?:null,$entryName?:null,$serverName,$billQty,$unit2,$billTotal,$recv2,$pend2,$pStatus,$t2['payment_mode']??null,$t2['payment_transaction_details']??null,intval($t2['bs_entry_id'])]);
+            $pdo->prepare("UPDATE balance_sheet_entries SET gps_serial_no=?,name_on_server=?,server_name=?,qty=?,unit_price=?,total_price=?,payment_received=?,pending_payment=?,payment_status=?,payment_mode=?,updated_at=NOW() WHERE id=?")
+                ->execute([$allSerials?:null,$entryName?:null,$serverName,$billQty,$unit2,$billTotal,$recv2,$pend2,$pStatus,$t2['payment_mode']??null,intval($t2['bs_entry_id'])]);
             $updated++;
         } else {
-            $pdo->prepare("INSERT INTO balance_sheet_entries (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,name_on_server,server_name,device_model,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_mode,payment_transaction_details,technician_name,location,remarks,created_by_code) VALUES (?,?,?,?,CURDATE(),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-                ->execute([bs_type_for_task($t2['device_details']??''),$profile2,$t2['task_id'],$tid,$allSerials?:null,$t2['lead_type']??null,$entryName?:null,$serverName,$t2['device_details']??null,$billQty,$unit2,floatval($t2['gst_amount']??0),$billTotal,$pStatus,$recv2,$pend2,$t2['payment_mode']??null,$t2['payment_transaction_details']??null,$t2['tech_name']??null,$t2['location']??null,$t2['general_notes']??null,$cuName??'system']);
+            $pdo->prepare("INSERT INTO balance_sheet_entries (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,name_on_server,server_name,device_model,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_mode,technician_name,location,remarks,created_by_code) VALUES (?,?,?,?,CURDATE(),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+                ->execute([bs_type_for_task($t2['device_details']??''),$profile2,$t2['task_id'],$tid,$allSerials?:null,$t2['lead_type']??null,$entryName?:null,$serverName,$t2['device_details']??null,$billQty,$unit2,floatval($t2['gst_amount']??0),$billTotal,$pStatus,$recv2,$pend2,$t2['payment_mode']??null,$t2['tech_name']??null,$t2['location']??null,$t2['general_notes']??null,$cuName??'system']);
             $bsId=$pdo->lastInsertId();
             if($bsId){ $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$bsId,$tid]); }
             $created++;
@@ -3701,8 +3701,10 @@ case 'bs_get_entries':
                 if ($t && isset($payByTask[$t])) {
                     // Exact received timestamp (date + time)
                     if (!empty($payByTask[$t]['last'])) $e['payment_received_at'] = $payByTask[$t]['last'];
-                    // Transaction details (join all refs) — only if the entry doesn't already carry one
-                    if (empty($e['payment_transaction_details']) && !empty($payByTask[$t]['refs'])) {
+                    // Transaction details come from the payments table (the real UPI/UTR refs).
+                    // This is the source of truth, so it OVERRIDES any polluted value that may have
+                    // been synced onto the entry (e.g. notes or a screenshot path).
+                    if (!empty($payByTask[$t]['refs'])) {
                         $e['payment_transaction_details'] = implode(' | ', array_unique($payByTask[$t]['refs']));
                     }
                 }
