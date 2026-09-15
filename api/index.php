@@ -3838,7 +3838,7 @@ case 'bs_update_entry':
     $allowed = ['date','invoice_no','task_id','gps_serial_no','customer_type','name_on_server','server_name',
                 'device_model','service_type','license_plan','qty','unit_price','gst','total_price',
                 'payment_status','payment_received','pending_payment','payment_mode','payment_received_on',
-                'payment_transaction_details','pending_reason','discount_given','discount_reason',
+                'payment_transaction_details','payment_screenshot','pending_reason','discount_given','discount_reason',
                 'discount_incharge','payment_reminder_date','technician_name','technician_id','location','remarks','profile'];
     $sets=[]; $vals=[];
     foreach ($allowed as $f) {
