@@ -818,6 +818,11 @@ function editEntry(id){
   const e=allEntries.find(x=>+x.id===+id); if(!e) return;
   // The auto-created entry may store the task number in task_id — mirror it to task_no so the field shows it.
   if(!e.task_no && e.task_id) e.task_no = e.task_id;
+  // A screenshot path must NEVER appear in the editable Transaction/UTR field — otherwise typing a UTR
+  // erases the screenshot. Detect an image path and keep it out of the UTR field.
+  const _isImgPath = v => /uploads\/.*\.(jpg|jpeg|png|gif|webp)$/i.test(String(v||'')) || /^uploads\/renewals\//i.test(String(v||''));
+  const _utrText = _isImgPath(e.payment_transaction_details) ? '' : (e.payment_transaction_details||'');
+  const _shotPath = e.payment_screenshot || (_isImgPath(e.payment_transaction_details) ? e.payment_transaction_details : '');
   const fields=[
     {id:'task_no',label:'Task Number',type:'text'},
     {id:'invoice_no',label:'Invoice Number',type:'text'},
@@ -844,9 +849,12 @@ function editEntry(id){
       ${fields.map(f=>`<div class="fg"><label>${f.label}</label>
         ${f.type==='select'
           ?`<select id="ef-${f.id}"><option value="">–</option>${f.opts.map(o=>`<option value="${o}" ${e[f.id]===o?'selected':''}>${o}</option>`).join('')}</select>`
-          :`<input type="${f.type}" id="ef-${f.id}" value="${e[f.id]||''}">`}
+          :`<input type="${f.type}" id="ef-${f.id}" value="${f.id==='payment_transaction_details' ? String(_utrText).replace(/"/g,'&quot;') : (e[f.id]||'')}">`}
       </div>`).join('')}
     </div>
+    ${_shotPath?`<div class="fg" style="margin-bottom:14px"><label>Payment Screenshot (kept safe — not affected by the UTR field)</label>
+      <div><a href="${_shotPath.replace(/^\.?\//,'')}" target="_blank" style="color:#2563eb;font-weight:700">📎 View screenshot</a>
+      <img src="${_shotPath.replace(/^\.?\//,'')}" style="max-width:140px;max-height:110px;border-radius:6px;border:1px solid #ddd;display:block;margin-top:6px"></div></div>`:''}
     <div class="sub-row">
       <button class="sub-btn" onclick="saveEdit(${id})">💾 Save</button>
       <button class="rst-btn" onclick="closeEditModal()">Cancel</button>
@@ -859,6 +867,15 @@ async function saveEdit(id){
                 'discount_given','discount_reason','discount_incharge','remarks'];
   const updates={};
   fields.forEach(f=>{ const v=document.getElementById('ef-'+f)?.value; updates[f]=v||null; });
+  // Preserve the payment screenshot: if the original entry kept the screenshot inside the
+  // transaction field (old data), move it to payment_screenshot so editing the UTR never loses it.
+  const _orig = allEntries.find(x=>+x.id===+id) || {};
+  const _isImgPath = v => /uploads\/.*\.(jpg|jpeg|png|gif|webp)$/i.test(String(v||'')) || /^uploads\/renewals\//i.test(String(v||''));
+  if(!_orig.payment_screenshot && _isImgPath(_orig.payment_transaction_details)){
+    updates.payment_screenshot = _orig.payment_transaction_details;
+  } else if(_orig.payment_screenshot){
+    updates.payment_screenshot = _orig.payment_screenshot;   // keep existing screenshot
+  }
   // Task number is stored in the task_id column — save the edited value there.
   if(document.getElementById('ef-task_no')){ updates.task_id = document.getElementById('ef-task_no').value||null; }
   // Technician link (id + display name)
