@@ -785,6 +785,7 @@ function viewEntry(id){
     + row('Received', money(recv), {color:'var(--green)', bold:true})
     + row('Pending', money(pend), {color:pend>0?'var(--red)':'var(--text)', bold:true})
     + row('Mode', esc(e.payment_mode))
+    + row('Transaction / UTR', esc(e.payment_transaction_details))
     + row('Status', S.ic+' '+S.t, {bold:true, color:S.c})
     + row('Received On', esc(e.payment_received_on))
     + row('Payment Screenshot', shot)
@@ -919,7 +920,7 @@ function exportXLS(){
     'Received':e.payment_received,'Pending':e.pending_payment,'Mode':e.payment_mode,
     'Status':e.payment_status,
     'Payment Received On':e.payment_received_at?new Date(String(e.payment_received_at).replace(' ','T')).toLocaleString('en-IN'):(e.payment_received_on?new Date(e.payment_received_on).toLocaleDateString('en-IN'):''),
-    'Transaction Details / Payment Remarks':e.payment_transaction_details||e.remarks||'',
+    'Transaction Details / Payment Remarks':e.payment_transaction_details||'',
     'Tech':e.technician_name,'Location':e.location,
     'GPS Serial':e.gps_serial_no,'Remarks':e.remarks,'Created By':e.created_by_code,
     'Task Created At':e.created_at?new Date(e.created_at).toLocaleString('en-IN'):'',
