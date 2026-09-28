@@ -7788,7 +7788,7 @@ async function approveRenewal(id, btn){
   }
 }
 async function backfillCoins(btn){
-  if(!confirm('Award the 50 on-time coins for past tasks that were completed within 24h of creation but never got them?\n\nThis is safe to run multiple times — it will not double-award.')) return;
+  if(!confirm('Award the 50 on-time coins for past tasks that were completed within 24h of being assigned but never got them?\n\nThis is safe to run multiple times — it will not double-award.')) return;
   if(btn){ btn.disabled=true; btn.textContent='⏳ Working…'; }
   const r = await api('coin_backfill_24h',{},'POST',{});
   if(btn){ btn.disabled=false; btn.textContent='🪙 Backfill coins'; }
