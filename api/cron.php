@@ -394,18 +394,18 @@ if(count($demoFollowups)) echo "Demo follow-ups sent: " . count($demoFollowups) 
 
 
 // ============================================================
-// JOB 5: Late cash-deposit penalty — -50 coins after 24h, then -50 every 6h
-// DAYTIME ONLY (08:00–20:00 IST). Night runs apply nothing.
+// JOB 5: Late cash-deposit REMINDER — once a day after 24h, DAYTIME ONLY (08:00–20:00 IST).
+// No coins are deducted here. The coin penalty for undeposited cash is apply_cash_penalty()
+// in index.php (after 4 days, -50 at 08:00 and 14:00), which respects the admin
+// Rewards/Penalties switches and the free-task / handover rules.
 // ============================================================
 $hourIST = intval($now->format('G')); // 0-23
 $isDaytime = ($hourIST >= 8 && $hourIST < 20);
 
 if ($isDaytime) {
-    // ensure ledger + column
-    try { $pdo->exec("CREATE TABLE IF NOT EXISTS coin_ledger (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, task_id INT NULL, coins INT NOT NULL, reason VARCHAR(190) NOT NULL, event_key VARCHAR(120) NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_user (user_id), UNIQUE KEY uniq_event (event_key)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"); } catch(Exception $e){}
     try { $pdo->exec("ALTER TABLE tasks ADD COLUMN cash_pending_at DATETIME DEFAULT NULL"); } catch(Exception $e){}
 
-    // Tasks with cash still pending (collected, not yet submitted/deposited), past 24h
+    // Tasks with cash still pending (collected, not yet deposited), past 24h
     $lateCash = $pdo->query("
         SELECT t.id, t.task_id, t.assigned_to, t.customer_name, t.amount_collected, t.cash_pending_at, u.name AS tech_name,
                TIMESTAMPDIFF(HOUR, t.cash_pending_at, NOW()) AS hrs_pending
@@ -419,30 +419,27 @@ if ($isDaytime) {
 
     foreach ($lateCash as $task) {
         $hrs = intval($task['hrs_pending']);
-        // slot 1 at 24h, slot 2 at 30h, slot 3 at 36h ... slot n at 24 + 6*(n-1)
-        $slot = 1 + intdiv($hrs - 24, 6);
+        // reminder 1 at 24h, 2 at 48h, 3 at 72h ...
+        $slot = 1 + intdiv($hrs - 24, 24);
         if ($slot < 1) continue;
-        // Apply only the current slot, idempotently
-        $ekey = 'cashlate_'.$task['id'].'_'.$slot;
-        $chk = $pdo->prepare("SELECT 1 FROM coin_ledger WHERE event_key=? LIMIT 1");
-        $chk->execute([$ekey]);
+        // Send each daily reminder once (guarded by the activity log)
+        $marker = "⏰ Cash deposit reminder #{$slot}";
+        $chk = $pdo->prepare("SELECT 1 FROM task_activities WHERE task_id=? AND remark LIKE ? LIMIT 1");
+        $chk->execute([$task['id'], $marker.'%']);
         if ($chk->fetch()) continue;
 
         $amt = number_format(floatval($task['amount_collected']), 0);
-        $pdo->prepare("INSERT IGNORE INTO coin_ledger (user_id,task_id,coins,reason,event_key) VALUES (?,?,?,?,?)")
-            ->execute([intval($task['assigned_to']), $task['id'], -50, 'Cash not deposited within 24h (₹'.$amt.')', $ekey]);
-
-        // Push alert with reason
+        $days = intdiv($hrs, 24);
         if (function_exists('fcm_send_to_user')) {
             try {
                 fcm_send_to_user($pdo, intval($task['assigned_to']),
-                    '😔 -50 coins — cash not deposited',
-                    'You collected ₹'.$amt.' cash but have not deposited it within 24 hours. Deposit now to stop further deductions (-50 every 6h).',
-                    ['type'=>'coins','coins'=>'-50','task_id'=>(string)$task['id'],'url'=>'task.html?id='.$task['id']]);
+                    '⏰ Cash deposit pending',
+                    'You collected ₹'.$amt.' cash '.$days.' day(s) ago. Please deposit and confirm it. After 4 days your tasks get locked and coins are deducted.',
+                    ['type'=>'cash_reminder','task_id'=>(string)$task['id'],'url'=>'task.html?id='.$task['id']]);
             } catch(Exception $e){}
         }
         $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,1,?,'system')")
-            ->execute([$task['id'], "⚠️ -50 coins: cash not deposited (slot {$slot}, {$hrs}h pending) for {$task['tech_name']}"]);
-        $log[] = "Late-cash -50 (slot {$slot}) → {$task['tech_name']} for {$task['task_id']}";
+            ->execute([$task['id'], "{$marker} ({$hrs}h pending) sent to {$task['tech_name']}"]);
+        $log[] = "Cash reminder #{$slot} → {$task['tech_name']} for {$task['task_id']}";
     }
 }

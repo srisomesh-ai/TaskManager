@@ -322,6 +322,12 @@ function task_is_handover($pdo, $taskId){
         return strcasecmp(trim((string)$s->fetchColumn()), 'Handover') === 0;
     } catch(Exception $e){ return false; }
 }
+// Start of the 24h on-time window: when the task was assigned to the technician
+// (falls back to creation time for tasks created before assigned_at was tracked).
+function task_bonus_start_ts($row){
+    $s = !empty($row['assigned_at']) ? $row['assigned_at'] : ($row['created_at'] ?? null);
+    return $s ? strtotime($s) : 0;
+}
 // Router: paid task -> coins (real money). Zero-value task -> appreciations. Handover -> nothing.
 function award_task_reward($pdo, $userId, $coins, $reason, $taskId = null, $eventKey = null, $pushTitle = null, $pushBody = null){
     // Handover tasks never award coins or appreciations to anyone (no visit, self-installed).
@@ -694,7 +700,7 @@ function apply_stale_task_penalty($pdo, $taskId){
             // Key includes the anchor day so that when activity resets the clock, a fresh set of
             // windows can be charged later (old windows for the previous anchor stay settled).
             $key = 'stale_task_'.$taskId.'_'.date('Ymd',$anchor).'_'.$w;
-            award_coins($pdo, intval($row['assigned_to']), -50,
+            award_task_reward($pdo, intval($row['assigned_to']), -50,
                 'Installation task not progressing ('.($w===0?'3 days':(3 + $w*5).' days').', excl. Sundays)',
                 $taskId, $key,
                 '⚠️ -50 coins', 'An installation task assigned to you has had no activity. Update or close it to stop further penalty.');
@@ -1695,6 +1701,11 @@ case 'update_task':
     }
     if (isset($body['task_status'])&&$body['task_status']==='Closed'&&$existing['task_status']!=='Closed') $sets[]="closed_at=NOW()";
     if ($sets) { $vals[]=$id; $pdo->prepare("UPDATE tasks SET ".implode(',',$sets)." WHERE id=?")->execute($vals); }
+    // Assigned to a different technician → fresh 3-hour open window and 24h on-time window.
+    if (array_key_exists('assigned_to',$body) && intval($body['assigned_to']) && intval($body['assigned_to']) !== intval($existing['assigned_to'] ?? 0)) {
+        try { $pdo->exec("ALTER TABLE tasks ADD COLUMN assigned_at DATETIME DEFAULT NULL"); } catch(Exception $e){}
+        try { $pdo->prepare("UPDATE tasks SET assigned_at=NOW(), tech_viewed_at=NULL WHERE id=?")->execute([$id]); } catch(Exception $e){}
+    }
 
     // Auto-blacklist: task cancelled AFTER consent was given
     if(isset($body['task_status']) && $body['task_status']==='Cancelled'
@@ -1944,11 +1955,11 @@ case 'update_task':
             }
         } catch(Exception $e) { error_log('BS awaiting error: '.$e->getMessage()); }
 
-        // ── Feature #2: 50 coins if technician submits within 24h of task creation ──
+        // ── Feature #2: 50 coins if technician submits within 24h of being assigned ──
         try {
-            $ct=$pdo->prepare("SELECT assigned_to, created_at FROM tasks WHERE id=?"); $ct->execute([$id]); $ctr=$ct->fetch();
-            if ($ctr && $ctr['assigned_to'] && !empty($ctr['created_at'])) {
-                $hrs=(time()-strtotime($ctr['created_at']))/3600;
+            $ct=$pdo->prepare("SELECT * FROM tasks WHERE id=?"); $ct->execute([$id]); $ctr=$ct->fetch();
+            if ($ctr && $ctr['assigned_to'] && task_bonus_start_ts($ctr)) {
+                $hrs=(time()-task_bonus_start_ts($ctr))/3600;
                 if ($hrs <= 24) {
                     award_task_reward($pdo, intval($ctr['assigned_to']), 50, 'On-time submission (within 24h)', $id, 'submit24_'.$id, '🎉 Congratulations! +50 coins', 'Task submitted within 24 hours. Great work — keep it up!');
                 }
@@ -2072,11 +2083,12 @@ case 'approve_task':
     $hrs=(time()-strtotime($t['created_at']))/3600;
     $stars=$hrs<=12?5:($hrs<=24?4:($hrs<=48?3:($hrs<=72?2:1)));
     $pdo->prepare("UPDATE tasks SET star_rating=? WHERE id=? AND (star_rating IS NULL OR star_rating=0)")->execute([$stars,$id]);
-    // On-time coins safety net: if the task was created & completed within 24h, credit the
+    // On-time coins safety net: if the task was completed within 24h of being assigned, credit the
     // technician here too (idempotent via submit24_ key, so it won't double-award if the
     // Awaiting-Approval step already gave them). Covers tasks that skipped that step.
     try {
-        if (!empty($t['assigned_to']) && !empty($t['created_at']) && $hrs <= 24) {
+        $bonusStart = task_bonus_start_ts($t);
+        if (!empty($t['assigned_to']) && $bonusStart && (time()-$bonusStart)/3600 <= 24) {
             award_task_reward($pdo, intval($t['assigned_to']), 50, 'On-time submission (within 24h)', $id, 'submit24_'.$id, '🎉 Congratulations! +50 coins', 'Task completed within 24 hours. Great work — keep it up!');
         }
     } catch(Exception $e) { error_log('coin close24 error: '.$e->getMessage()); }
@@ -3384,7 +3396,7 @@ case 'resolve_dispute':
         if (!$t) { echo json_encode(['error'=>'Task not found']); break; }
         if ($verdict==='valid') {
             if ($t['assigned_to']) {
-                award_coins($pdo, intval($t['assigned_to']), -50, 'Customer report confirmed valid by admin', $id, 'dispute50_'.$id, '😔 -50 coins — customer complaint', 'A customer report against your task was confirmed. Please ensure quality to avoid this.');
+                award_task_reward($pdo, intval($t['assigned_to']), -50, 'Customer report confirmed valid by admin', $id, 'dispute50_'.$id, '😔 -50 coins — customer complaint', 'A customer report against your task was confirmed. Please ensure quality to avoid this.');
             }
             $pdo->prepare("UPDATE tasks SET dispute_status='confirmed' WHERE id=?")->execute([$id]);
             $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")
@@ -5338,10 +5350,10 @@ case 'confirm_cash_deposit':
     $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'remark')")
         ->execute([$id, $userId, "💰 Cash deposit submitted — Method: {$depositMethod}. Awaiting admin verification."]);
 
-    // ── Feature #2: 50 coins if submitted (via cash flow) within 24h of creation ──
+    // ── Feature #2: 50 coins if submitted (via cash flow) within 24h of being assigned ──
     try {
-        if (!empty($td['created_at']) && $td['assigned_to']) {
-            $hrs=(time()-strtotime($td['created_at']))/3600;
+        if (task_bonus_start_ts($td) && $td['assigned_to']) {
+            $hrs=(time()-task_bonus_start_ts($td))/3600;
             if ($hrs <= 24) {
                 award_task_reward($pdo, intval($td['assigned_to']), 50, 'On-time submission (within 24h)', $id, 'submit24_'.$id, '🎉 Congratulations! +50 coins', 'Task submitted within 24 hours. Great work — keep it up!');
             }
@@ -7147,20 +7159,20 @@ case 'coin_diagnose':
 
 case 'coin_backfill_24h':
     // Admin: award the 50 within-24h coins for any past task that qualified but never got them.
-    // "Submitted/closed within 24h of creation." Uses the best available timestamp:
+    // "Submitted/closed within 24h of being assigned (creation time for older tasks)." Uses the best available timestamp:
     // activity-log submit time -> closed_at -> cash_submitted_at -> updated_at. Idempotent.
     try {
         if($userRole !== 'admin'){ http_response_code(403); echo json_encode(['error'=>'Admin only']); break; }
         _ensureCoinLedger($pdo);
         // Make sure timestamp columns exist (older DBs)
         try { $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS closed_at DATETIME DEFAULT NULL"); } catch(Exception $e){}
-        $tasks = $pdo->query("SELECT id,task_id,assigned_to,created_at,closed_at,cash_submitted_at,updated_at,task_status
+        $tasks = $pdo->query("SELECT *
                               FROM tasks
                               WHERE assigned_to IS NOT NULL
                                 AND task_status IN ('Awaiting Approval','Completed','Closed')")->fetchAll();
         $awarded=0; $skipped=0; $noTime=0; $tooLate=0; $already=0;
         foreach($tasks as $t){
-            if(empty($t['created_at']) || !$t['assigned_to']){ $skipped++; continue; }
+            if(!task_bonus_start_ts($t) || !$t['assigned_to']){ $skipped++; continue; }
             // Already credited?
             $before = $pdo->prepare("SELECT COUNT(*) FROM coin_ledger WHERE event_key=?");
             $before->execute(['submit24_'.$t['id']]);
@@ -7174,7 +7186,7 @@ case 'coin_backfill_24h':
             elseif(!empty($t['cash_submitted_at'])) $doneAt = $t['cash_submitted_at'];
             elseif(!empty($t['updated_at']))        $doneAt = $t['updated_at'];
             if(!$doneAt){ $noTime++; $skipped++; continue; }
-            $hrs=(strtotime($doneAt)-strtotime($t['created_at']))/3600;
+            $hrs=(strtotime($doneAt)-task_bonus_start_ts($t))/3600;
             if($hrs < 0 || $hrs > 24){ $tooLate++; $skipped++; continue; }
             award_task_reward($pdo, intval($t['assigned_to']), 50, 'On-time submission (within 24h)', $t['id'], 'submit24_'.$t['id'], '🎉 +50 coins', 'On-time submission bonus credited.');
             $awarded++;
