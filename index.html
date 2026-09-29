@@ -7892,13 +7892,13 @@ async function loadJobTypeItems(){
 function syncPurAuth(){
   const iframe = document.getElementById('pur-iframe');
   if(!iframe) return;
-  iframe.src = 'purchases.html?token=' + encodeURIComponent(authToken||'');
+  iframe.src = 'purchases.html?token=' + encodeURIComponent(authToken||'') + '&_v=' + Date.now();   // always load the latest page, never a cached copy
 }
 
 function syncPlAuth(){
   const iframe = document.getElementById('pl-iframe');
   if(!iframe) return;
-  iframe.src = 'price-list.html?token=' + encodeURIComponent(authToken||'');
+  iframe.src = 'price-list.html?token=' + encodeURIComponent(authToken||'') + '&_v=' + Date.now();   // always load the latest page, never a cached copy
 }
 
 function syncBsAuth(){
