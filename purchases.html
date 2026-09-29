@@ -424,7 +424,7 @@ function savePurchase(){
     item_id:         itemId,
     qty:             qty,
     unit_price:      price,
-    gst_percent:     parseFloat(document.getElementById('m-gst').value)||18,
+    gst_percent:     (function(v){ return isNaN(v) ? 18 : v; })(parseFloat(document.getElementById('m-gst').value)),
     notes:           document.getElementById('m-notes').value.trim(),
   }).then(function(d){
     btn.disabled=false; btn.textContent='💳 Save Payment';
