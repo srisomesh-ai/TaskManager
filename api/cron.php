@@ -396,7 +396,7 @@ if(count($demoFollowups)) echo "Demo follow-ups sent: " . count($demoFollowups) 
 // ============================================================
 // JOB 5: Late cash-deposit REMINDER — once a day after 24h, DAYTIME ONLY (08:00–20:00 IST).
 // No coins are deducted here. The coin penalty for undeposited cash is apply_cash_penalty()
-// in index.php (after 4 days, -50 at 08:00 and 14:00), which respects the admin
+// in index.php (after 3 days, -50 at 08:00 and 14:00), which respects the admin
 // Rewards/Penalties switches and the free-task / handover rules.
 // ============================================================
 $hourIST = intval($now->format('G')); // 0-23
@@ -434,7 +434,7 @@ if ($isDaytime) {
             try {
                 fcm_send_to_user($pdo, intval($task['assigned_to']),
                     '⏰ Cash deposit pending',
-                    'You collected ₹'.$amt.' cash '.$days.' day(s) ago. Please deposit and confirm it. After 4 days your tasks get locked and coins are deducted.',
+                    'You collected ₹'.$amt.' cash '.$days.' day(s) ago. Please deposit and confirm it. After 3 days your tasks get locked and coins are deducted.',
                     ['type'=>'cash_reminder','task_id'=>(string)$task['id'],'url'=>'task.html?id='.$task['id']]);
             } catch(Exception $e){}
         }

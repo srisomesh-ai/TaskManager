@@ -384,7 +384,7 @@ function award_coins($pdo, $userId, $coins, $reason, $taskId = null, $eventKey =
 }
 
 // ── Cash-deposit penalty ────────────────────────────────────────────────────
-// Rules: a technician who holds cash pending deposit for MORE than 4 days is penalised
+// Rules: a technician who holds cash pending deposit for MORE than 3 days is penalised
 // 50 coins per 6-hour DAYTIME window (08:00 and 14:00 slots — two windows per day) until
 // the deposit is confirmed. 50 total per window regardless of how many tasks. Idempotent
 // per window via a deterministic event_key so it never double-charges.
@@ -428,7 +428,7 @@ function apply_cash_penalty($pdo, $techId){
         if($om && (!$oldest || $om<$oldest)) $oldest=$om;
         if(!$oldest) return; // nothing pending
         $startTs = strtotime($oldest);
-        $graceEnd = $startTs + 4*86400;           // penalty begins only AFTER 4 full days
+        $graceEnd = $startTs + 3*86400;           // penalty begins only AFTER 3 full days
         $now = time();
         if($now <= $graceEnd) return;             // still within grace
         // Walk each DAYTIME 6-hour window (08:00 and 14:00) from grace end to now.
@@ -479,7 +479,7 @@ function _ensureMonthlyTables($pdo){
 }
 
 // ── Block-time tracking (for payroll absent calculation) ───────────────────────
-// When a technician crosses into the blocked state (cash > 4 days overdue) we stamp the exact
+// When a technician crosses into the blocked state (cash > 3 days overdue) we stamp the exact
 // time the block STARTED (today onward — never backdated). When they deposit, the period closes.
 // Accumulated blocked minutes are summed; every full 24h (1440 min) = 1 absent day.
 function _ensureBlockLog($pdo){
@@ -495,11 +495,11 @@ function _ensureBlockLog($pdo){
     } catch(Exception $e){}
 }
 
-// Is this technician currently blocked? (cash > 4 days overdue with a real pending amount)
+// Is this technician currently blocked? (cash > 3 days overdue with a real pending amount)
 function is_tech_blocked($pdo, $techId){
     if(!$techId) return false;
     $days = cash_oldest_pending_days($pdo, $techId);
-    if($days <= 4) return false;
+    if($days < 3) return false;
     $amt = 0.0;
     try { $r=$pdo->prepare("SELECT COALESCE(SUM(amount_collected),0) FROM tasks WHERE assigned_to=? AND LOWER(payment_mode)='cash' AND cash_deposit_status='pending' AND COALESCE(amount_collected,0)>0"); $r->execute([$techId]); $amt+=floatval($r->fetchColumn()); } catch(Exception $e){}
     try { $r2=$pdo->prepare("SELECT COALESCE(SUM(pending_payment),0) FROM balance_sheet_entries WHERE technician_id=? AND COALESCE(pending_payment,0)>0 AND (task_db_id IS NULL OR task_db_id=0)"); $r2->execute([$techId]); $amt+=floatval($r2->fetchColumn()); } catch(Exception $e){}
@@ -1583,7 +1583,7 @@ case 'update_task':
     $ex = $pdo->prepare("SELECT * FROM tasks WHERE id=?"); $ex->execute([$id]); $existing=$ex->fetch();
     if (!$existing) { echo json_encode(['error'=>'Not found']); break; }
     // ── CASH DEPOSIT LOCK ──────────────────────────────────────────────
-    // A technician holding cash undeposited for more than 4 days is blocked from moving ANY
+    // A technician holding cash undeposited for more than 3 days is blocked from moving ANY
     // task forward (attend, install, give access, collect, close). They can still open & read
     // the task, and log a call/update note. Penalty coins accrue separately.
     if (!in_array($userRole,['admin','assigner'])) {
@@ -1598,7 +1598,7 @@ case 'update_task':
                     FROM tasks
                     WHERE assigned_to=? AND id<>?
                       AND LOWER(payment_mode)='cash' AND cash_deposit_status='pending'
-                      AND cash_pending_at IS NOT NULL AND cash_pending_at < (NOW() - INTERVAL 4 DAY)");
+                      AND cash_pending_at IS NOT NULL AND cash_pending_at < (NOW() - INTERVAL 3 DAY)");
                 $lockChk->execute([$existing['assigned_to'], $id]);
                 $lk = $lockChk->fetch();
                 $cnt = intval($lk['c']??0); $amt = floatval($lk['amt']??0); $oldest = $lk['oldest']??null;
@@ -1606,7 +1606,7 @@ case 'update_task':
                 try {
                     $lm = $pdo->prepare("SELECT COUNT(*) c, COALESCE(SUM(pending_payment),0) amt, MIN(date) oldest
                         FROM balance_sheet_entries WHERE technician_id=? AND COALESCE(pending_payment,0)>0
-                          AND (task_db_id IS NULL OR task_db_id=0) AND date < (CURDATE() - INTERVAL 4 DAY)");
+                          AND (task_db_id IS NULL OR task_db_id=0) AND date < (CURDATE() - INTERVAL 3 DAY)");
                     $lm->execute([$existing['assigned_to']]); $lmr=$lm->fetch();
                     $cnt += intval($lmr['c']??0); $amt += floatval($lmr['amt']??0);
                     if (!empty($lmr['oldest']) && (!$oldest || $lmr['oldest']<$oldest)) $oldest=$lmr['oldest'];
@@ -5440,7 +5440,7 @@ case 'my_cash_lock_status':
         $amt = 0.0;
         try { $r=$pdo->prepare("SELECT COALESCE(SUM(amount_collected),0) FROM tasks WHERE assigned_to=? AND LOWER(payment_mode)='cash' AND cash_deposit_status='pending' AND COALESCE(amount_collected,0)>0"); $r->execute([$me2]); $amt+=floatval($r->fetchColumn()); } catch(Exception $e){}
         try { $r2=$pdo->prepare("SELECT COALESCE(SUM(pending_payment),0) FROM balance_sheet_entries WHERE technician_id=? AND COALESCE(pending_payment,0)>0 AND (task_db_id IS NULL OR task_db_id=0)"); $r2->execute([$me2]); $amt+=floatval($r2->fetchColumn()); } catch(Exception $e){}
-        $locked = ($days > 4 && $amt > 0);
+        $locked = ($days >= 3 && $amt > 0);
         echo json_encode([
             'success'=>true,
             'locked'=>$locked,
@@ -5456,7 +5456,7 @@ case 'my_cash_lock_status':
 case 'cash_pending_summary':
     if(!in_array($userRole,['admin','assigner'])){ http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
     try {
-        $LOCK_DAYS = 4;
+        $LOCK_DAYS = 3;
         try { $pdo->exec("ALTER TABLE balance_sheet_entries ADD COLUMN technician_id INT DEFAULT NULL"); } catch(Exception $e){}
         // Per-task pending cash (collected, cash mode, not yet deposited)
         $q = $pdo->query("SELECT t.id, t.task_id, t.customer_name, t.amount_collected, t.cash_pending_at,

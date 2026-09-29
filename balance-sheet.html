@@ -485,7 +485,7 @@ async function loadCashPending(){
   const escC=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const res=await bsApi('cash_pending_summary').catch(()=>({}));
   if(!res||!res.success||!res.by_technician||!res.by_technician.length){ box.innerHTML=''; return; }
-  const lockDays=res.lock_days||4;
+  const lockDays=res.lock_days||3;
   const rows=res.by_technician.sort((a,b)=>b.total-a.total).map(function(t){
     const badge = t.overdue ? '<span class="cashp-badge">OVERDUE '+t.oldest_days+'d</span>'
                             : (t.oldest_days>=lockDays-1 ? '<span class="cashp-badge" style="background:#fef3c7;color:#92400e">'+t.oldest_days+'d</span>' : '');
