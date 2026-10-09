@@ -119,6 +119,7 @@ tr:hover td{background:#f7f9fc}
   <button class="bs-tab"        id="bstab-sales"    onclick="bsTab('sales')">➕ Sales Entry</button>
   <button class="bs-tab"        id="bstab-license"  onclick="bsTab('license')">🔄 License / Service</button>
   <button class="bs-tab" onclick="resyncAll()" title="Rebuild any missing entries from installed tasks" style="color:var(--accent2);font-weight:700">🔁 Resync from Tasks</button>
+  <button class="bs-tab" onclick="openDeletedEntries()" title="See balance sheet entries that were deleted and restore them" style="color:#b45309;font-weight:700">🗑 Deleted entries</button>
   <div style="margin-left:auto;display:flex;align-items:center;padding:0 12px">
     <select class="bs-profile-sel" id="bs-profile" onchange="window._bsLoadAll=false;loadEntries()"
       style="padding:5px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-weight:700;color:var(--text);background:#fff;outline:none;cursor:pointer">
@@ -1133,6 +1134,54 @@ function techName(selId){
   const el=document.getElementById(selId); if(!el||!el.value) return '';
   const u=(window._bsTechs||[]).find(x=>String(x.id)===String(el.value));
   return u ? (u.name||'') : (el.options[el.selectedIndex]?el.options[el.selectedIndex].text:'');
+}
+</script>
+<!-- Deleted entries (restore) -->
+<div id="del-ov" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:flex-start;justify-content:center;padding:30px 12px;overflow:auto">
+  <div style="background:#fff;border-radius:12px;max-width:1000px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.25)">
+    <div style="display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid #e5e7eb">
+      <div style="font-weight:800;font-size:16px">🗑 Deleted balance sheet entries</div>
+      <button onclick="document.getElementById('del-ov').style.display='none'" style="margin-left:auto;border:none;background:none;font-size:22px;cursor:pointer">×</button>
+    </div>
+    <div style="padding:8px 18px;font-size:12px;color:#6b7280">Every entry removed from the balance sheet (by hand or automatically) is kept here. Click <b>Restore</b> to put it back exactly as it was.</div>
+    <div id="del-body" style="padding:6px 18px 18px;overflow-x:auto"></div>
+  </div>
+</div>
+<script>
+async function openDeletedEntries(){
+  const ov=document.getElementById('del-ov'), body=document.getElementById('del-body');
+  ov.style.display='flex'; body.innerHTML='<div style="padding:20px;color:#6b7280">Loading…</div>';
+  const res=await bsApi('bs_deleted_list').catch(()=>({}));
+  if(!res||!res.success){ body.innerHTML='<div style="padding:20px;color:#b91c1c">'+((res&&res.error)||'Could not load')+'</div>'; return; }
+  if(!res.rows.length){ body.innerHTML='<div style="padding:20px;color:#6b7280">No deleted entries recorded yet.</div>'; return; }
+  const h=v=>String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  let t='<table style="width:100%;border-collapse:collapse;font-size:12px"><tr style="background:#f3f4f6;text-align:left">'
+    +'<th style="padding:6px">Deleted on</th><th style="padding:6px">Profile</th><th style="padding:6px">Task</th><th style="padding:6px">Name / Serial</th>'
+    +'<th style="padding:6px;text-align:right">Total</th><th style="padding:6px;text-align:right">Received</th><th style="padding:6px">Why</th><th style="padding:6px">By</th><th></th></tr>';
+  res.rows.forEach(function(r){
+    const e=r.row||{};
+    t+='<tr style="border-top:1px solid #eee">'
+      +'<td style="padding:6px;white-space:nowrap">'+h(r.deleted_at)+'</td>'
+      +'<td style="padding:6px">'+h(r.profile)+'</td>'
+      +'<td style="padding:6px">'+h(e.task_id||'')+'</td>'
+      +'<td style="padding:6px">'+h(e.name_on_server||e.service_type||'')+(e.gps_serial_no?'<br><span style="color:#6b7280">'+h(e.gps_serial_no)+'</span>':'')+'</td>'
+      +'<td style="padding:6px;text-align:right">₹'+h(e.total_price||0)+'</td>'
+      +'<td style="padding:6px;text-align:right">₹'+h(e.payment_received||0)+'</td>'
+      +'<td style="padding:6px">'+h(r.reason)+'</td>'
+      +'<td style="padding:6px">'+h(r.deleted_by)+'</td>'
+      +'<td style="padding:6px;white-space:nowrap">'+(r.restored_at
+          ? '<span style="color:#15803d;font-weight:700">✅ Restored</span>'
+          : '<button onclick="restoreDeleted('+r.id+',this)" style="background:#0E5C5C;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-weight:700;cursor:pointer">Restore</button>')+'</td>'
+      +'</tr>';
+  });
+  body.innerHTML=t+'</table>';
+}
+async function restoreDeleted(logId,btn){
+  if(!confirm('Put this entry back into the balance sheet?')) return;
+  btn.disabled=true; btn.textContent='Restoring…';
+  const res=await bsApi('bs_restore_deleted',{},'POST',{log_id:logId}).catch(()=>({}));
+  if(res&&res.success){ toast('✅ Entry restored'); btn.outerHTML='<span style="color:#15803d;font-weight:700">✅ Restored</span>'; loadEntries(); }
+  else { btn.disabled=false; btn.textContent='Restore'; toast('❌ '+((res&&res.error)||'Restore failed')); }
 }
 </script>
 </body>
