@@ -161,6 +161,7 @@ tr:hover td{background:#f7f9fc}
     <button class="bs-btn bs-btn-p" onclick="exportXLS()">⬇️ Excel</button>
     <button class="bs-btn bs-btn-g" id="bs-wa-btn" onclick="sendWA()" style="display:none">📱 WA Report</button>
   </div>
+  <div id="bs-window-note" style="display:none;margin:0 0 8px;padding:8px 12px;background:#fff7e6;border:1px solid #f3c77a;border-radius:8px;font-size:12px;color:#7a4b00"></div>
   <div class="bs-table-wrap">
     <div class="bs-table-scroll">
       <table>
@@ -482,6 +483,14 @@ async function loadEntries(){
     return;
   }
   allEntries = res.entries||[];
+  const note = document.getElementById('bs-window-note');
+  if(note){
+    if(!window._bsLoadAll){
+      note.style.display='block';
+      note.innerHTML='ℹ️ Showing only entries from <b>'+params.from+'</b> onwards (last 4 months) so the page loads fast. Older entries are <b>not deleted</b>. '
+        +'<button onclick="window._bsLoadAll=true;loadEntries()" style="margin-left:6px;background:#0E5C5C;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-weight:700;cursor:pointer">Load full history</button>';
+    } else { note.style.display='none'; }
+  }
   renderTable();   // computes & renders stats from the filtered entries
   loadCashPending();
 }

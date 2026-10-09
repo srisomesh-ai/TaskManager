@@ -2840,6 +2840,7 @@ function buildTaskParams(){
   if(te) p.technician= te;
   if(df) p.date_from = df;
   if(dt) p.date_to   = dt;
+  p.limit = 20000;   // load ALL tasks (the server default is only the newest 500)
   return p;
 }
 
