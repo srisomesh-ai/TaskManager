@@ -465,6 +465,12 @@ async function loadEntries(){
   // Fetch only recent entries by default so large profiles (BGPT) load fast and never blank.
   // The "Load older" control fetches the full history when needed.
   const params = { profile };
+  // Respect what the filters already show (the browser can restore "All Time" or an old
+  // From date without firing onchange, and Resync reloads too) — then fetch the full history.
+  const _m = (document.getElementById('bs-month')||{}).value;
+  const _f = (document.getElementById('bs-from')||{}).value;
+  const _cut = new Date(); _cut.setDate(_cut.getDate() - 120);
+  if(_m==='all' || _m==='pending' || (_f && new Date(_f) < _cut)) window._bsLoadAll = true;
   if(!window._bsLoadAll){
     const d = new Date(); d.setDate(d.getDate() - 120); // last ~4 months
     params.from = d.toISOString().slice(0,10);
