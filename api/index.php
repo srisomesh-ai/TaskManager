@@ -3703,7 +3703,7 @@ case 'bs_get_entries':
     if (!empty($_GET['to']))       { $where[]="date<=?";         $params[]=$_GET['to']; }
     if (!empty($_GET['search']))   { $q='%'.$_GET['search'].'%'; $where[]="(task_id LIKE ? OR name_on_server LIKE ? OR gps_serial_no LIKE ? OR invoice_no LIKE ? OR technician_name LIKE ?)"; $params=array_merge($params,[$q,$q,$q,$q,$q]); }
     if (!empty($_GET['pending']))  { $where[]="pending_payment > 0"; }
-    $sql = "SELECT * FROM balance_sheet_entries" . ($where?" WHERE ".implode(" AND ",$where):"") . " ORDER BY date DESC, created_at DESC LIMIT 1000";
+    $sql = "SELECT * FROM balance_sheet_entries" . ($where?" WHERE ".implode(" AND ",$where):"") . " ORDER BY date DESC, created_at DESC LIMIT 100000";   // was 1000: older entries were silently cut off
     $s = $pdo->prepare($sql); $s->execute($params);
     $entries = $s->fetchAll();
     // Enrich each task-linked entry with the ACTUAL payment received time + transaction reference
