@@ -776,6 +776,23 @@ function _devEnsureTables($pdo){
 }
 function _devNorm($imei){ return preg_replace('/\D/', '', (string)$imei); } // digits only
 
+// ── Balance-sheet safety net ─────────────────────────────────────────────
+// Before ANY balance-sheet row is deleted, a full copy is kept in bs_deleted_log so it can be
+// restored from the Balance Sheet page ("🗑 Deleted entries"). $where is a SQL condition on
+// balance_sheet_entries (with ? placeholders). Never throws.
+function bs_archive($pdo, $where, $params, $reason){
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS bs_deleted_log (id INT AUTO_INCREMENT PRIMARY KEY, bs_id INT NOT NULL, profile VARCHAR(10) NULL, task_id VARCHAR(40) NULL, row_json MEDIUMTEXT NOT NULL, reason VARCHAR(190) NOT NULL, deleted_by VARCHAR(100) NULL, deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, restored_at DATETIME NULL, INDEX idx_del (deleted_at)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $st = $pdo->prepare("SELECT * FROM balance_sheet_entries WHERE ".$where);
+        $st->execute($params);
+        $by = $GLOBALS['cu']['name'] ?? 'system';
+        $ins = $pdo->prepare("INSERT INTO bs_deleted_log (bs_id,profile,task_id,row_json,reason,deleted_by) VALUES (?,?,?,?,?,?)");
+        while ($r = $st->fetch(PDO::FETCH_ASSOC)) {
+            $ins->execute([intval($r['id']), $r['profile'] ?? null, $r['task_id'] ?? null, json_encode($r), mb_substr($reason,0,190), $by]);
+        }
+    } catch(Exception $e){ error_log('bs_archive: '.$e->getMessage()); }
+}
+
 // Ensure every task with installed devices has a balance-sheet entry (billing only installed devices).
 // Safe to run repeatedly — creates missing entries, updates existing ones to match installed count.
 function _bsSyncInstalls($pdo, $cuName){
@@ -835,6 +852,7 @@ function _bsSyncInstalls($pdo, $cuName){
         // If one was created earlier, remove it and clear the link.
         if ($billTotal <= 0) {
             if (!empty($t2['bs_entry_id'])) {
+                bs_archive($pdo, "id=?", [intval($t2['bs_entry_id'])], 'Resync: task is a free service (price 0)');
                 try { $pdo->prepare("DELETE FROM balance_sheet_entries WHERE id=?")->execute([intval($t2['bs_entry_id'])]); } catch(Exception $e){}
                 try { $pdo->prepare("UPDATE tasks SET bs_entry_id=NULL WHERE id=?")->execute([$tid]); } catch(Exception $e){}
             }
@@ -1731,9 +1749,11 @@ case 'update_task':
     }
 
     // ── SYNC PAYMENT TO BS ENTRY ─────────────────────────────────────
-    // Received is ONLY confirmed when task is Closed (management approved)
+    // Same rule as save_device_install / bs_resync_all: money collected counts as received
+    // (cash only once the deposit is confirmed). Never wipe a payment that was already
+    // approved on an open task, and keep the installed-devices total unless the price changed.
     try {
-        $bsCheck = $pdo->prepare("SELECT bs_entry_id, price_to_collect, amount_collected, payment_mode, task_status FROM tasks WHERE id=?");
+        $bsCheck = $pdo->prepare("SELECT bs_entry_id, price_to_collect, amount_collected, payment_mode, task_status, cash_deposit_status FROM tasks WHERE id=?");
         $bsCheck->execute([$id]); $bsRow = $bsCheck->fetch();
         if (!empty($bsRow['bs_entry_id'])) {
             $total3  = array_key_exists('price_to_collect', $body)
@@ -1741,23 +1761,28 @@ case 'update_task':
                         : floatval($bsRow['price_to_collect']??0);
             // Free service — remove the entry entirely, don't keep it in the balance sheet
             if ($total3 <= 0) {
+                bs_archive($pdo, "id=?", [intval($bsRow['bs_entry_id'])], 'Task price set to 0 (free service)');
                 try { $pdo->prepare("DELETE FROM balance_sheet_entries WHERE id=?")->execute([intval($bsRow['bs_entry_id'])]); } catch(Exception $e){}
                 try { $pdo->prepare("UPDATE tasks SET bs_entry_id=NULL WHERE id=?")->execute([$id]); } catch(Exception $e){}
             } else {
             $pmode3  = array_key_exists('payment_mode', $body)
                         ? $body['payment_mode']
                         : ($bsRow['payment_mode']??null);
-            $newStatus = $body['task_status'] ?? $bsRow['task_status'] ?? '';
+            // Current entry (to keep its billed total and any payment already recorded on it)
+            $curBs = null;
+            try { $cb=$pdo->prepare("SELECT total_price, payment_received, payment_mode FROM balance_sheet_entries WHERE id=?"); $cb->execute([intval($bsRow['bs_entry_id'])]); $curBs=$cb->fetch(); } catch(Exception $e){}
+            if (($pmode3===null || $pmode3==='') && $curBs) $pmode3 = $curBs['payment_mode'];   // never blank the mode
+            // Total: only change it when the task price was actually changed in this save.
+            // Otherwise keep the entry's total (it is billed per installed device).
+            $priceChanged = array_key_exists('price_to_collect', $body)
+                            && floatval($body['price_to_collect']) != floatval($existing['price_to_collect'] ?? 0);
+            if (!$priceChanged && $curBs && floatval($curBs['total_price']) > 0) $total3 = floatval($curBs['total_price']);
 
-            // Only mark as received when management closes the task
-            if ($newStatus === 'Closed') {
-                $recv3 = array_key_exists('amount_collected', $body)
-                            ? floatval($body['amount_collected'])
-                            : floatval($bsRow['amount_collected']??0);
-            } else {
-                // Task not closed yet — keep received as 0, full amount pending
-                $recv3 = 0;
-            }
+            $recv3 = floatval($bsRow['amount_collected']??0);
+            if (strtolower((string)($bsRow['payment_mode']??''))==='cash' && ($bsRow['cash_deposit_status']??'') !== 'deposited') { $recv3 = 0; }
+            // Never reduce a payment already recorded on the entry (approved / deposit verified).
+            if ($curBs && floatval($curBs['payment_received']) > $recv3) $recv3 = floatval($curBs['payment_received']);
+            if ($recv3 > $total3) $recv3 = $total3;
             $pend3 = max(0, $total3 - $recv3);
             if ($total3 <= 0 || $recv3 <= 0)    $ps3 = 'pending';
             elseif ($recv3 >= $total3 - 15)      $ps3 = 'paid';
@@ -1975,6 +2000,7 @@ case 'delete_task':
     // Delete all linked data
     $pdo->prepare("DELETE FROM task_activities WHERE task_id=?")->execute([$id]);
     $pdo->prepare("DELETE FROM task_device_installs WHERE task_id=?")->execute([$id]);
+    bs_archive($pdo, "task_db_id=?", [$id], 'Task deleted');
     try { $pdo->prepare("DELETE FROM balance_sheet_entries WHERE task_db_id=?")->execute([$id]); } catch(Exception $e){}
     try { $pdo->prepare("DELETE FROM blacklist_entries WHERE task_db_id=?")->execute([$id]); } catch(Exception $e){}
     $pdo->prepare("DELETE FROM tasks WHERE id=?")->execute([$id]);
@@ -3659,11 +3685,15 @@ case 'bs_get_entries':
             $freeIds = $pdo->query("SELECT b.id FROM balance_sheet_entries b JOIN tasks t ON b.task_db_id=t.id WHERE COALESCE(t.price_to_collect,0) <= 0")->fetchAll(PDO::FETCH_COLUMN);
             if ($freeIds) {
                 $in = implode(',', array_map('intval',$freeIds));
+                bs_archive($pdo, "id IN ($in)", [], 'Resync: linked task is a free service (price 0)');
                 $pdo->exec("DELETE FROM balance_sheet_entries WHERE id IN ($in)");
                 $pdo->exec("UPDATE tasks SET bs_entry_id=NULL WHERE bs_entry_id IN ($in)");
             }
-            // Also clear zero-total entries that have no task link
-            $pdo->exec("DELETE FROM balance_sheet_entries WHERE COALESCE(total_price,0) <= 0 AND type='sales'");
+            // Clear zero-total entries whose task no longer exists. Manual entries (no task link)
+            // are NEVER removed automatically — they were typed in by the office team.
+            $orphanWhere = "COALESCE(total_price,0) <= 0 AND type='sales' AND task_db_id IS NOT NULL AND task_db_id NOT IN (SELECT id FROM tasks)";
+            bs_archive($pdo, $orphanWhere, [], 'Resync: zero-total entry whose task no longer exists');
+            $pdo->exec("DELETE FROM balance_sheet_entries WHERE ".$orphanWhere);
         } catch(Exception $e) {}
     }
     $profile = $_GET['profile'] ?? 'BGPT';
@@ -3860,9 +3890,49 @@ case 'bs_update_entry':
     echo json_encode(['success'=>true]);
     break;
 
+case 'bs_deleted_list':
+    // Balance-sheet rows that were deleted (by hand or automatically), newest first.
+    if ($userRole!=='admin') { http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
+    try {
+        bs_archive($pdo, "1=0", [], '');   // makes sure the log table exists
+        $rows = $pdo->query("SELECT id,bs_id,profile,task_id,row_json,reason,deleted_by,deleted_at,restored_at FROM bs_deleted_log ORDER BY id DESC LIMIT 500")->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($rows as &$r) { $r['row'] = json_decode($r['row_json'], true); unset($r['row_json']); }
+        echo json_encode(['success'=>true,'rows'=>$rows]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'bs_restore_deleted':
+    // Put a deleted balance-sheet row back exactly as it was (same id if still free).
+    if ($userRole!=='admin') { http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
+    $logId = intval($body['log_id'] ?? 0);
+    try {
+        $lg = $pdo->prepare("SELECT * FROM bs_deleted_log WHERE id=?"); $lg->execute([$logId]); $log = $lg->fetch(PDO::FETCH_ASSOC);
+        if (!$log) { echo json_encode(['error'=>'Not found']); break; }
+        if (!empty($log['restored_at'])) { echo json_encode(['error'=>'Already restored']); break; }
+        $row = json_decode($log['row_json'], true) ?: [];
+        // Only use columns that still exist in the table
+        $cols = $pdo->query("SHOW COLUMNS FROM balance_sheet_entries")->fetchAll(PDO::FETCH_COLUMN);
+        $taken = $pdo->prepare("SELECT COUNT(*) FROM balance_sheet_entries WHERE id=?"); $taken->execute([intval($row['id'] ?? 0)]);
+        if (intval($taken->fetchColumn()) > 0) unset($row['id']);     // id reused → insert as a new row
+        $row = array_intersect_key($row, array_flip($cols));
+        if (!$row) { echo json_encode(['error'=>'Nothing to restore']); break; }
+        $names = array_keys($row);
+        $pdo->prepare("INSERT INTO balance_sheet_entries (`".implode('`,`',$names)."`) VALUES (".implode(',', array_fill(0,count($names),'?')).")")
+            ->execute(array_values($row));
+        $newId = intval($row['id'] ?? $pdo->lastInsertId());
+        // Re-link the task if it still exists and has no entry now
+        if (!empty($row['task_db_id'])) {
+            try { $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=? AND (bs_entry_id IS NULL OR bs_entry_id=0)")->execute([$newId, intval($row['task_db_id'])]); } catch(Exception $e){}
+        }
+        $pdo->prepare("UPDATE bs_deleted_log SET restored_at=NOW() WHERE id=?")->execute([$logId]);
+        echo json_encode(['success'=>true,'id'=>$newId]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'bs_delete_entry':
     if ($userRole!=='admin') { http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
     $id = intval($body['id']??0);
+    bs_archive($pdo, "id=?", [$id], 'Deleted by hand from the Balance Sheet');
     $pdo->prepare("DELETE FROM balance_sheet_entries WHERE id=?")->execute([$id]);
     echo json_encode(['success'=>true]);
     break;
@@ -4188,7 +4258,7 @@ case 'bs_resync_all':
         $created = 0;
         try { $syncRes = _bsSyncInstalls($pdo, $cu['name'] ?? 'system'); $created = intval($syncRes['created'] ?? 0); } catch(Exception $e){ error_log('resync create: '.$e->getMessage()); }
         // THEN: refresh payment figures on all task-linked entries.
-        $rows = $pdo->query("SELECT b.id, b.task_db_id, t.price_to_collect, t.amount_collected, t.payment_mode, t.task_status, t.device_details, t.cash_deposit_status
+        $rows = $pdo->query("SELECT b.id, b.task_db_id, b.payment_received AS bs_received, t.price_to_collect, t.amount_collected, t.payment_mode, t.task_status, t.device_details, t.cash_deposit_status
             FROM balance_sheet_entries b
             JOIN tasks t ON b.task_db_id = t.id
             WHERE b.task_db_id IS NOT NULL")->fetchAll();
@@ -4199,6 +4269,8 @@ case 'bs_resync_all':
             $isCash = strtolower((string)($r['payment_mode']??''))==='cash';
             $recv = floatval($r['amount_collected']??0);
             if ($isCash && ($r['cash_deposit_status']??'') !== 'deposited') { $recv = 0; }
+            // Never reduce a payment already recorded on the entry (approved / deposit verified).
+            if (floatval($r['bs_received']??0) > $recv) $recv = floatval($r['bs_received']);
             if ($recv > $total) $recv = $total;
             $pend  = max(0, $total - $recv);
             if ($total <= 0 || $recv <= 0)  $ps = 'pending';
@@ -5171,6 +5243,7 @@ case 'admin_wipe':
             $pdo->exec("DELETE FROM task_device_installs");
             $pdo->exec("DELETE FROM task_activities");
             try { $pdo->exec("DELETE FROM consent_logs"); } catch(Exception $e){}
+            bs_archive($pdo, "task_db_id IS NOT NULL", [], 'Admin panel: wipe all tasks');
             try { $pdo->exec("DELETE FROM balance_sheet_entries WHERE task_db_id IS NOT NULL"); } catch(Exception $e){}
             try { $pdo->exec("DELETE FROM blacklist_entries WHERE task_db_id IS NOT NULL"); } catch(Exception $e){}
             $pdo->exec("DELETE FROM tasks");
@@ -5194,6 +5267,7 @@ case 'admin_wipe':
         } elseif($type === 'balance_sheet'){
             // Wipe ALL balance sheet entries
             try {
+                bs_archive($pdo, "1=1", [], 'Admin panel: wipe balance sheet');
                 $pdo->exec("DELETE FROM balance_sheet_entries");
                 echo json_encode(['success'=>true,'message'=>'All balance sheet entries deleted.']);
             } catch(Exception $e){
@@ -7070,6 +7144,7 @@ case 'renewal_delete':
         if(!$r){ echo json_encode(['error'=>'Renewal not found']); break; }
         $bsDeleted = false;
         if(!empty($r['bs_entry_id'])){
+            bs_archive($pdo, "id=?", [intval($r['bs_entry_id'])], 'Renewal request removed');
             try { $pdo->prepare("DELETE FROM balance_sheet_entries WHERE id=?")->execute([intval($r['bs_entry_id'])]); $bsDeleted = true; } catch(Exception $e){}
         }
         $pdo->prepare("DELETE FROM renewal_requests WHERE id=?")->execute([$id]);

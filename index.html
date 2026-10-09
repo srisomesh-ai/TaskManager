@@ -7908,7 +7908,7 @@ function syncBsAuth(){
   // page and causes a blank flash. If the token changed, reload; otherwise leave it.
   const wantSrc = 'balance-sheet.html?token=' + encodeURIComponent(authToken||'');
   if(iframe.dataset.loadedToken !== (authToken||'')){
-    iframe.src = wantSrc;
+    iframe.src = wantSrc + '&_v=' + Date.now();   // latest page, never a cached copy
     iframe.dataset.loadedToken = (authToken||'');
   }
 }
