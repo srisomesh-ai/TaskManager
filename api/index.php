@@ -1222,7 +1222,7 @@ case 'get_tasks':
         $params[]=$q; $params[]=$q; $params[]=$q; $params[]=$q;
     }
 
-    $limit = min(intval($_GET['limit'] ?? 500), 1000);
+    $limit = max(1, min(intval($_GET['limit'] ?? 500), 20000));   // admin Tasks page asks for all
     // Ensure admin_viewed_at column exists
     try { $pdo->exec("ALTER TABLE tasks ADD COLUMN admin_viewed_at DATETIME DEFAULT NULL"); } catch(Exception $e){}
     try {
