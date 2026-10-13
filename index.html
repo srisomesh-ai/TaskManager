@@ -331,16 +331,17 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
 .dal-btn:hover{opacity:.85}
 .dash-alert{padding:10px 14px;border-radius:8px;margin-bottom:8px;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
 /* Dashboard card layout: alerts as a row of cards, action lists side by side */
-.dash-alert-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:12px;margin-bottom:16px}
-.dac{background:var(--surface);border-radius:10px;box-shadow:var(--shadow);border-top:4px solid var(--c);padding:12px 14px;display:flex;flex-direction:column;gap:4px;cursor:pointer;transition:transform .15s}
+.dash-alert-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.dac{background:var(--surface);border-radius:10px;box-shadow:var(--shadow);border-top:4px solid var(--c);padding:10px 12px;display:flex;flex-direction:column;gap:3px;cursor:pointer;transition:transform .15s}
 .dac:hover{transform:translateY(-2px)}
 .dac-top{display:flex;align-items:center;justify-content:space-between}
 .dac-ico{font-size:20px}
 .dac-num{font-size:26px;font-weight:900;line-height:1;color:var(--c)}
-.dac-lbl{font-size:12px;font-weight:600;color:var(--text2);line-height:1.35;flex:1}
-.dac-btn{margin-top:6px;align-self:flex-start;background:var(--c);color:#fff;border:none;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer}
+.dac-lbl{font-size:12px;font-weight:600;color:var(--text2);line-height:1.35;margin-bottom:6px}
+.dac-btn{margin-top:auto;align-self:flex-start;background:var(--c);color:#fff;border:none;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer}
 .dash-ok{grid-column:1/-1;font-size:12px;color:var(--text3);padding:6px 0}
-.dash-panel-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;margin-bottom:18px;align-items:start}
+.dash-panel-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-bottom:14px;align-items:start}
+.dash-panel-grid:empty{display:none}
 .dash-panel-grid .dash-action-panel{margin-bottom:0}
 .dash-panel-grid .dash-action-body{max-height:330px;overflow-y:auto}
 
@@ -531,39 +532,13 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
         <div id="dash-banners" class="dash-alert-grid"></div>
         <div id="dash-action-panels" class="dash-panel-grid"></div>
 
-        <!-- DASH GRID -->
-        <div class="dash-grid">
-
-          <!-- LEFT -->
-          <div style="display:flex;flex-direction:column;gap:14px">
-
-            <!-- Field Technicians -->
-            <div class="card">
-              <div class="card-hd">
-                <div class="card-title"><span class="card-dot" style="background:var(--green)"></span> Field Technicians</div>
-              </div>
-              <div class="tech-grid" id="dash-techs">
-                <div class="empty"><div class="empty-icon">👷</div><div class="empty-txt">Loading...</div></div>
-              </div>
-            </div>
-
+        <!-- Field Technicians -->
+        <div class="card">
+          <div class="card-hd">
+            <div class="card-title"><span class="card-dot" style="background:var(--green)"></span> Field Technicians</div>
           </div>
-
-          <!-- RIGHT -->
-          <div style="display:flex;flex-direction:column;gap:14px">
-
-            <!-- Overdue Tasks -->
-            <div class="card">
-              <div class="card-hd">
-                <div class="card-title">
-                  <span class="card-dot" style="background:var(--red)"></span> Overdue Tasks
-                  <span class="card-badge" id="dash-urg-badge" style="background:var(--red-bg);color:var(--red);display:none">0</span>
-                </div>
-                <button class="card-btn" onclick="showPage('urgent')">View →</button>
-              </div>
-              <div id="dash-overdue"><div class="empty"><div class="empty-txt">Loading...</div></div></div>
-            </div>
-
+          <div class="tech-grid" id="dash-techs">
+            <div class="empty"><div class="empty-icon">👷</div><div class="empty-txt">Loading...</div></div>
           </div>
         </div>
       </div><!-- /page-dashboard -->
@@ -600,6 +575,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
           <input type="date" id="ts-to" class="ts-input" onchange="filterTasks()" title="To date">
           <button class="ts-btn ts-btn-secondary" onclick="clearTaskFilters()">✕ Clear</button>
           <button class="ts-btn" id="ts-active-toggle" onclick="toggleClosedTasks()" style="background:var(--accent);color:#fff">✅ Active only</button>
+          <span id="ts-wf-chip" style="display:none;align-items:center;gap:6px;background:#fdecea;color:#c0392b;border:1px solid #f5b7b1;border-radius:14px;padding:4px 10px;font-size:12px;font-weight:700"></span>
           <button class="ts-btn" id="ts-noaction-toggle" onclick="toggleNoAction()" style="background:var(--surface2);color:var(--text)">⏳ No-action only</button>
           <div class="ts-spacer"></div>
           <button class="ts-btn ts-btn-green admin-only" onclick="exportTasksCSV()">⬇ Export CSV</button>
@@ -2171,6 +2147,7 @@ function showPage(name, opts={}){
   if(nav)  nav.classList.add('active');
   localStorage.setItem('bgps_last_page', name);
   if(opts.status) window._taskFilter = opts.status;
+  if(name==='tasks') window._wfFilter = opts.workflow || null;   // e.g. 'payment_pending' from the dashboard card
   // Auto-close sidebar on mobile after navigation
   const sidebar = document.getElementById('sidebar');
   if(sidebar) sidebar.classList.remove('open');
@@ -2343,10 +2320,15 @@ async function loadDashboard(){
     </div>`;
   let banners = '';
   if(approveNow.length) banners += alertCard('var(--purple)','🟣',approveNow.length, 'Tasks waiting for approval','Approve Now →',"showPage('approvals')");
-  if(paymentPending.length) banners += alertCard('var(--red)','🔴',paymentPending.length,'Device installed — payment not collected','View →',"showPage('tasks')");
+  if(paymentPending.length){
+    const ppTotal = paymentPending.reduce((sum,t)=> sum + Math.max(0, parseFloat(t.price_to_collect||0) - parseFloat(t.amount_collected||0)), 0);
+    banners += alertCard('var(--red)','🔴',paymentPending.length,'Payment pending — device installed<br><b style="font-size:15px;color:var(--red)">₹'+ppTotal.toLocaleString('en-IN')+'</b> to collect','View tasks →',"showPage('tasks',{workflow:'payment_pending'})");
+  }
   if(techUpdated.length) banners += alertCard('var(--amber)','🟠',techUpdated.length,'Updated by technician — not reviewed yet','Review →',"showPage('tasks')");
   if(demoDone.length) banners += alertCard('var(--green)','📱',demoDone.length,'Demo completed — convert or mark as lost','Review →',"showPage('tasks',{status:'Demo Done'})");
   if(cashPending.length) banners += alertCard('var(--saffron)','🏦',cashPending.length, (cashPending.length>1?'Technicians':'Technician')+' collected cash — deposit not confirmed','View →',"showPage('tasks')");
+  if(critical.length) banners += alertCard('var(--red)','🚨',critical.length,'Tasks open 48+ hours — critical','View →',"showPage('urgent')");
+  if(warning.length) banners += alertCard('var(--amber)','⚠️',warning.length,'Tasks open 24+ hours','View →',"showPage('urgent')");
   const bannersEl = document.getElementById('dash-banners');
   if(bannersEl) bannersEl.innerHTML = banners || '<div class="dash-ok">✅ No urgent actions right now</div>';
 
@@ -2386,25 +2368,6 @@ async function loadDashboard(){
             </div>`;
           }).join('')}
           ${approveNow.length>6?`<div style="padding:8px 16px;font-size:11px;color:var(--text3);text-align:center">+${approveNow.length-6} more — <a href="#" onclick="showPage('approvals');return false">See all</a></div>`:''}
-        </div>
-      </div>`;
-    }
-
-    // Payment Pending panel
-    if(paymentPending.length){
-      panelsHtml += `<div class="dash-action-panel">
-        <div class="dash-action-hd" style="background:linear-gradient(135deg,#E74C3C,#f97575)">
-          <div class="dash-action-hd-title">🔴 Payment Pending</div>
-          <span class="dash-action-count">${paymentPending.length}</span>
-        </div>
-        <div class="dash-action-body">
-          ${paymentPending.slice(0,6).map(t => `<div class="dash-action-row" onclick="viewTask(${t.id})">
-            <div style="flex:1;min-width:0">
-              <div style="font-size:12px;font-weight:700">${t.customer_name||'–'} <span style="color:var(--text3);font-weight:400">· ${t.task_id||''}</span></div>
-              <div style="font-size:11px;color:var(--text3);margin-top:2px">${t.tech_name||t.technician_name||'Unassigned'} · ${t.location||'–'}</div>
-            </div>
-            <div style="font-size:13px;font-weight:800;color:var(--red);flex-shrink:0">₹${parseFloat(t.price_to_collect||0).toLocaleString('en-IN')}</div>
-          </div>`).join('')}
         </div>
       </div>`;
     }
@@ -2842,6 +2805,7 @@ function filterTasks(){
     if(status && t.task_status !== status) return false;
     if(tech   && String(t.assigned_to) !== String(tech)) return false;
     if(_noActionOnly && !(+t.opened_no_action===1 || t.opened_no_action==='1')) return false;
+    if(window._wfFilter && t.workflow_state !== window._wfFilter) return false;
     if(search){
       const hay = [(t.customer_name||''),(t.task_id||''),(t.location||''),(t.contact_number||''),(t.device_details||'')].join(' ').toLowerCase();
       if(!hay.includes(search)) return false;
@@ -2849,11 +2813,22 @@ function filterTasks(){
     return true;
   });
   window._hiddenClosedCount = hiddenClosed;
+  const wfChip = document.getElementById('ts-wf-chip');
+  if(wfChip){
+    const wfNames = {payment_pending:'Payment pending'};
+    if(window._wfFilter){
+      const due = filteredTasks.reduce((s,t)=> s + Math.max(0, parseFloat(t.price_to_collect||0) - parseFloat(t.amount_collected||0)), 0);
+      wfChip.innerHTML = '🔴 '+(wfNames[window._wfFilter]||window._wfFilter)+' · '+filteredTasks.length+' tasks · ₹'+due.toLocaleString('en-IN')
+        +' <a href="#" onclick="window._wfFilter=null;filterTasks();return false" style="color:#c0392b;text-decoration:none;font-size:14px" title="Remove filter">✕</a>';
+      wfChip.style.display='inline-flex';
+    } else wfChip.style.display='none';
+  }
   taskCurrentPage = 1;
   renderTasksTable();
 }
 
 function clearTaskFilters(){
+  window._wfFilter = null;
   ['ts-search','ts-status','ts-tech','ts-from','ts-to'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.value='';
