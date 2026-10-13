@@ -673,6 +673,10 @@
 
     const isLocked=['Awaiting Approval','Closed','Cancelled'].includes(t.task_status);
     const _hasNotes = !!String(t.general_notes||t.remark||'').trim();
+    document.getElementById('wa-btn').style.display='';
+    // FIRST CONTACT GUIDE — a task the technician has not worked on yet goes step by step:
+    // read notes → see customer → call → log the call. Then the normal page appears.
+    if(!isLocked && _needsFirstContact(t)){ _renderFirstContact(t); return; }
     document.getElementById('td-body').innerHTML=
       // NOTES first — the technician must read the discussion / instructions before acting
       '<div class="sec"'+(_hasNotes?' style="background:#fff8e6;border-left:4px solid #e6a100"':'')+'><div class="sec-title t-grey"'+(_hasNotes?' style="color:#9a6700"':'')+'>📝 Discussion &amp; Notes'+(_hasNotes?' — read before you start':'')+'</div><div id="td-notes"'+(_hasNotes?' style="color:#3d2e00;font-size:14px"':'')+'>'+esc(t.general_notes||t.remark||'No notes added.')+'</div></div>'+
@@ -747,6 +751,70 @@
       navigator.geolocation.getCurrentPosition(ok,()=>{navigator.geolocation.getCurrentPosition(ok,()=>{navigator.geolocation.getCurrentPosition(ok,fail,{enableHighAccuracy:false,timeout:30000,maximumAge:300000});},{enableHighAccuracy:true,timeout:20000,maximumAge:0});},{enableHighAccuracy:false,timeout:8000,maximumAge:60000});
     });
   }
+
+  // ═══════════════ FIRST CONTACT GUIDE ═══════════════
+  // Shown only until the technician's FIRST call log is saved on this task. Any earlier work by the
+  // assigned technician (an activity, an install, a payment) means the task is already under way,
+  // so the normal page is shown and nothing about existing flows changes.
+  function _needsFirstContact(t){
+    const me = String(t.assigned_to||'');
+    if(!me) return false;
+    if((t.activities||[]).some(a=>String(a.user_id)===me)) return false;
+    if((t.device_installs||[]).length>0) return false;
+    if(parseFloat(t.amount_collected||0)>0) return false;
+    return true;
+  }
+  function _fcStep(id){ try{ return sessionStorage.getItem('fc_'+id)||''; }catch(e){ return window['_fc_'+id]||''; } }
+  function _fcSet(id,v){ try{ sessionStorage.setItem('fc_'+id,v); }catch(e){ window['_fc_'+id]=v; } }
+  function _renderFirstContact(t){
+    const step=_fcStep(t.id);                       // '' → read notes · 'read' → customer + call · 'called' → log call
+    document.getElementById('td-customer').textContent=(t.customer_name||'–');
+    document.getElementById('wa-btn').style.display='none';
+    const notes=String(t.general_notes||t.remark||'').trim();
+    const stepPill=(n,label,state)=>'<div style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:'+(state==='done'?'var(--green)':state==='now'?'var(--accent)':'var(--text3)')+'">'
+      +'<span style="width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;background:'+(state==='done'?'var(--green)':state==='now'?'var(--accent)':'var(--surface2)')+';color:'+(state?'#fff':'var(--text3)')+'">'+(state==='done'?'✓':n)+'</span>'+label+'</div>';
+    const s1=step?'done':'now', s2=step==='called'?'done':(step==='read'?'now':''), s3=step==='called'?'now':'';
+    let html='<div class="sec" style="padding:12px 16px"><div style="display:flex;flex-direction:column;gap:6px">'
+      +stepPill(1,'Read discussion & notes',s1)+stepPill(2,'Check customer details & call',s2)+stepPill(3,'Log the call outcome',s3)+'</div></div>';
+    // Notes (always shown)
+    html+='<div class="sec" style="background:#fff8e6;border-left:4px solid #e6a100"><div class="sec-title t-grey" style="color:#9a6700">📝 Discussion &amp; Notes — read before you start</div>'
+      +'<div id="td-notes" style="color:#3d2e00;font-size:14px">'+esc(notes||'No notes added for this task.')+'</div>'
+      +(step?'':'<button class="act-btn act-primary" style="width:100%;margin-top:14px" onclick="_fcRead()"><div class="ico">✅</div><div class="l">I have read the notes</div><div class="s">Continue to customer details</div></button>')
+      +'</div>';
+    if(step){
+      const phone=String(t.contact_number||'').trim();
+      const row=(ico,l,v)=>'<div style="display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)"><div style="width:22px">'+ico+'</div><div style="flex:1"><div style="font-size:10.5px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.4px">'+l+'</div><div style="font-size:15px;font-weight:700;color:var(--text);margin-top:2px">'+v+'</div></div></div>';
+      const leadNames={'New Lead':'New Customer','Existing Customer Lead':'Existing Customer'};
+      html+='<div class="sec"><div class="sec-title t-accent">👤 Customer</div>'
+        +row('👤','Name',esc(t.customer_name||'–'))
+        +row('📞','Phone',esc(phone||'Not provided'))
+        +row('📍','Location',esc(t.location||'–'))
+        +row('🔧','Looking for',esc((t.device_details||'–')+(parseInt(t.device_qty||1)>1?' × '+parseInt(t.device_qty):'')))
+        +row('📊','Lead type',esc(leadNames[t.lead_type]||t.lead_type||'–'))
+        +'<div style="margin-top:14px;display:flex;flex-direction:column;gap:10px">'
+        +(phone?'<button class="act-btn act-green" style="width:100%" onclick="_fcCall()"><div class="ico">📞</div><div class="l">'+(step==='called'?'Call again':'Call customer')+'</div><div class="s">'+esc(phone)+'</div></button>':'')
+        +(step==='called'||!phone?'<button class="act-btn act-primary" style="width:100%" onclick="openUpdate()"><div class="ico">📝</div><div class="l">Log the call</div><div class="s">What did the customer say?</div></button>':'')
+        +'</div>'
+        +(step==='called'?'<div class="act-hint hint-blue" style="margin-top:10px">After the call, record what happened. The full task opens once the call log is saved.</div>':'<div class="act-hint" style="margin-top:10px">Tap Call — when you come back, the call log opens automatically.</div>')
+        +'</div>';
+    }
+    document.getElementById('td-body').innerHTML=html;
+  }
+  function _fcRead(){ if(!_curTask) return; _fcSet(_curTask.id,'read'); _renderFirstContact(_curTask); window.scrollTo(0,0); }
+  function _fcCall(){
+    if(!_curTask) return;
+    const p=String(_curTask.contact_number||'').replace(/[^\d+]/g,'');
+    if(!p){ toast('No phone number.'); return; }
+    _fcSet(_curTask.id,'called'); window._fcAwaitReturn=true;
+    _renderFirstContact(_curTask);
+    location.href='tel:'+p;
+  }
+  // Back from the phone call → open the call log automatically (first-contact guide only)
+  document.addEventListener('visibilitychange',()=>{
+    if(!document.hidden && window._fcAwaitReturn && _curTask && _needsFirstContact(_curTask)){
+      window._fcAwaitReturn=false; setTimeout(function(){ openUpdate(); }, 400);
+    }
+  });
 
   async function renderActionArea(){
     const area=document.getElementById('action-area'); if(!area||!_curTask)return;
