@@ -268,11 +268,13 @@ textarea.form-input{height:auto;padding:9px 12px;cursor:text;resize:vertical}
 /* New Task opens as a centred pop-up (view / edit keep the side drawer) */
 #task-modal.centered{background:rgba(15,30,30,.55);backdrop-filter:blur(2px)}
 #task-modal.centered #task-drawer{top:50% !important;left:50% !important;right:auto !important;bottom:auto !important;
-  width:860px !important;max-width:95vw !important;height:auto !important;max-height:92vh !important;border-radius:14px;overflow:hidden;
+  width:860px !important;max-width:95vw !important;height:auto !important;max-height:92vh !important;max-height:calc(100dvh - 32px) !important;border-radius:14px;overflow:hidden;
   border-left:none !important;box-shadow:0 24px 70px rgba(0,0,0,.35) !important;
   transform:translate(-50%,-47%) scale(.97) !important;opacity:0;transition:transform .2s ease,opacity .2s ease !important}
 #task-modal.centered.open #task-drawer{transform:translate(-50%,-50%) scale(1) !important;opacity:1}
-@media(max-width:640px){#task-modal.centered #task-drawer{width:100vw !important;max-width:100vw !important;max-height:100vh !important;height:100vh !important;border-radius:0}}
+@media(max-width:640px){#task-modal.centered #task-drawer{width:100vw !important;max-width:100vw !important;max-height:100vh !important;height:100vh !important;max-height:100dvh !important;height:100dvh !important;border-radius:0}}
+/* keep Cancel / Create above phone & tablet browser bars and the home-gesture area */
+#task-modal.centered #task-modal-footer{padding-bottom:calc(14px + env(safe-area-inset-bottom)) !important}
 .pay-mode-opt{padding:6px 12px;border:1.5px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text2);font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;white-space:nowrap}
 .pay-mode-opt:hover{border-color:var(--accent2);color:var(--accent2);background:var(--accent-light)}
 .pay-mode-opt.selected{border-color:var(--green);color:var(--green);background:var(--green-bg)}
