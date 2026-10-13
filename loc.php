@@ -34,8 +34,13 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_loc']) && $task){
         $pdo->prepare("UPDATE tasks SET cust_loc_lat=?, cust_loc_lng=?, cust_loc_at=NOW() WHERE id=?")
             ->execute([$lat, $lng, $task['id']]);
         try {
-            $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'system')")
-                ->execute([$task['id'], 0, "📍 Customer shared their location"]);
+            // log once — ignore a repeat submit within 2 minutes
+            $dup = $pdo->prepare("SELECT COUNT(*) FROM task_activities WHERE task_id=? AND remark=? AND created_at > (NOW() - INTERVAL 2 MINUTE)");
+            $dup->execute([$task['id'], "📍 Customer shared their location"]);
+            if (intval($dup->fetchColumn()) === 0) {
+                $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'system')")
+                    ->execute([$task['id'], 0, "📍 Customer shared their location"]);
+            }
         } catch(Exception $e){}
         $state = 'saved';
     }
