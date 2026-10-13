@@ -2971,7 +2971,7 @@ async function viewTask(id){
     ['📞 Contact Number', t.contact_number || '–'],
     ['📧 Email ID',       t.email || '<span style="color:var(--text3)">Not provided</span>'],
     ['📍 Location',       t.location || '–'],
-    ['📊 Lead Type',      t.lead_type || '–'],
+    ['📊 Lead Type',      ({'New Lead':'New Customer','Existing Customer Lead':'Existing Customer'})[t.lead_type] || t.lead_type || '–'],
     ['🏢 Company Profile',t.profile || 'BGPT'],
     ['🔧 Job Type',       t.device_details || '–'],
     ['🔢 Device Qty',     t.device_qty || 1],

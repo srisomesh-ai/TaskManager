@@ -193,7 +193,7 @@ function sendTaskCreatedCustomer(array $task, string $techName, string $techPhon
     <hr class="divider">
     <div class="details">
         <div class="row"><div class="label">Task ID</div><div class="value blue">' . $task['task_id'] . '</div></div>
-        <div class="row"><div class="label">Service Type</div><div class="value">' . htmlspecialchars($task['lead_type']) . '</div></div>
+        <div class="row"><div class="label">Service Type</div><div class="value">' . htmlspecialchars(['New Lead'=>'New Customer','Existing Customer Lead'=>'Existing Customer'][$task['lead_type'] ?? ''] ?? ($task['lead_type'] ?? '')) . '</div></div>
         <div class="row"><div class="label">GPS Type</div><div class="value">' . htmlspecialchars($task['device_details'] ?: 'Engine Status') . '</div></div>
         <div class="row"><div class="label">Device Qty</div><div class="value">' . intval($task['device_qty']) . '</div></div>
         <div class="row"><div class="label">Amount to Pay</div><div class="value highlight">' . $priceStr . '</div></div>
@@ -231,7 +231,7 @@ function sendTaskCreatedTech(array $task, string $techEmail, string $techName): 
         <div class="row"><div class="label">Customer</div><div class="value">' . htmlspecialchars($task['customer_name']) . '</div></div>
         <div class="row"><div class="label">Contact</div><div class="value highlight"><a href="tel:' . $task['contact_number'] . '" style="color:#1a3a6b">' . $task['contact_number'] . '</a></div></div>
         <div class="row"><div class="label">Location</div><div class="value">' . htmlspecialchars($task['location'] ?: '–') . '</div></div>
-        <div class="row"><div class="label">Service Type</div><div class="value">' . htmlspecialchars($task['lead_type']) . '</div></div>
+        <div class="row"><div class="label">Service Type</div><div class="value">' . htmlspecialchars(['New Lead'=>'New Customer','Existing Customer Lead'=>'Existing Customer'][$task['lead_type'] ?? ''] ?? ($task['lead_type'] ?? '')) . '</div></div>
         <div class="row"><div class="label">GPS Type</div><div class="value">' . htmlspecialchars($task['device_details'] ?: 'Engine Status') . '</div></div>
         <div class="row"><div class="label">Device Qty</div><div class="value">' . intval($task['device_qty']) . '</div></div>
         <div class="row"><div class="label">Amount to Collect</div><div class="value highlight">' . htmlspecialchars($priceStr) . '</div></div>

@@ -640,22 +640,15 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
           <div style="flex:1;overflow-y:auto">
             <input type="hidden" id="fm-task-id">
             <div style="padding:16px 20px;border-bottom:1px solid var(--border)">
-              <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--accent2);margin-bottom:12px">👤 Customer & Lead</div>
-              <div class="form-row">
-                <div class="form-group"><label>Customer Name *</label><input type="text" id="fm-customer" placeholder="Full name" oninput="checkTaskFormReady()"></div>
-                <div class="form-group"><label>Contact Number *</label><input type="tel" id="fm-contact" oninput="checkTaskFormReady()" onblur="checkBlacklist('phone')" placeholder="10-digit mobile"></div>
-              </div>
-              <div class="form-row">
-                <div class="form-group"><label>Email ID</label><input type="email" id="fm-email" placeholder="Optional" onblur="checkBlacklist('email')"></div>
-                <div id="bl-inline-warn" style="display:none;background:var(--red-bg);border:1.5px solid var(--red);border-radius:8px;padding:12px 14px;margin-bottom:2px;grid-column:1/-1"></div>
-                <div class="form-group"><label>Location / Area</label><input type="text" id="fm-location" placeholder="City, area, landmark"></div>
-              </div>
+              <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--accent2);margin-bottom:12px">👤 Lead & Customer</div>
               <div class="form-row">
                 <div class="form-group">
                   <label>Lead Type</label>
+                  <!-- Shown names differ for two types, but the SAVED values stay "New Lead" / "Existing Customer Lead"
+                       so the database, reports, customer pages and all existing logic keep working unchanged. -->
                   <select id="fm-leadtype" onchange="onLeadTypeChange(this.value); checkTaskFormReady();">
-                    <option>New Lead</option><option>Demo</option><option>3rd Party Lead</option>
-                    <option>Troubleshoot</option><option>Handover</option><option>Existing Customer Lead</option><option>Outstation Lead</option>
+                    <option value="New Lead">New Customer</option><option>Demo</option><option>3rd Party Lead</option>
+                    <option>Troubleshoot</option><option>Handover</option><option value="Existing Customer Lead">Existing Customer</option>
                   </select>
                 </div>
                 <div class="form-group" id="fm-profile-group">
@@ -665,6 +658,15 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
                     <option value="SBGT">SBGT — With 18% GST</option>
                   </select>
                 </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group"><label>Customer Name *</label><input type="text" id="fm-customer" placeholder="Full name" oninput="checkTaskFormReady()"></div>
+                <div class="form-group"><label>Contact Number *</label><input type="tel" id="fm-contact" oninput="checkTaskFormReady()" onblur="checkBlacklist('phone')" placeholder="10-digit mobile"></div>
+              </div>
+              <div class="form-row">
+                <div class="form-group"><label>Email ID</label><input type="email" id="fm-email" placeholder="Optional" onblur="checkBlacklist('email')"></div>
+                <div id="bl-inline-warn" style="display:none;background:var(--red-bg);border:1.5px solid var(--red);border-radius:8px;padding:12px 14px;margin-bottom:2px;grid-column:1/-1"></div>
+                <div class="form-group"><label>Location / Area</label><input type="text" id="fm-location" placeholder="City, area, landmark"></div>
               </div>
             </div>
             <div style="padding:16px 20px;border-bottom:1px solid var(--border)">
@@ -3758,6 +3760,7 @@ function openCreateModal(){
   onLeadTypeChange(''); // Reset Demo-hidden fields
   var invBox = document.getElementById('inv-check-box'); if(invBox) invBox.style.display='none';
   _invStockCache = null; // force fresh fetch next open
+  document.querySelectorAll('#fm-leadtype option[data-legacy]').forEach(o=>o.remove());
   ['fm-leadtype','fm-profile','fm-job','fm-travel-by']
     .forEach(id=>{const el=document.getElementById(id);if(el){el.selectedIndex=0;el.disabled=false;}});
   const qty=document.getElementById('fm-qty');if(qty){qty.value=1;qty.disabled=false;}
@@ -4421,7 +4424,8 @@ function openTaskDetail(id){ viewTask(id); }async function viewTask(id){
   else if(/handover/i.test(_lt)) custType = 'Handover';
   else if(/3rd|third/i.test(_lt)) custType = '3rd Party';
   // Lead type label — never blank; fall back sensibly
-  const leadLabel = _lt.trim() ? _lt : 'New Lead';
+  const _ltNames = {'New Lead':'New Customer','Existing Customer Lead':'Existing Customer'};   // display only
+  const leadLabel = _lt.trim() ? (_ltNames[_lt]||_lt) : 'New Customer';
 
   const infoItems = [
     ['👤 Assigned To',    t.tech_name || t.technician_name || '<span style="color:var(--text3)">Unassigned</span>'],
@@ -4860,6 +4864,8 @@ async function viewTaskInEditDrawer(id){
   sf('fm-paymode',t.payment_mode||''); sf('fm-pay-reminder',t.payment_reminder_date||'');
 
   const sel=(id,val)=>{const el=document.getElementById(id);if(el)el.value=val||'';};
+  (function(){ const lt=document.getElementById('fm-leadtype'); const v=t.lead_type||'';
+    if(lt && v && ![...lt.options].some(o=>o.value===v)){ const o=document.createElement('option'); o.value=v; o.textContent=v; o.dataset.legacy='1'; lt.appendChild(o); } })();
   sel('fm-leadtype',t.lead_type); sel('fm-profile',t.profile||'BGPT');
   sel('fm-job',t.device_details); sel('fm-travel-by',t.outstation_travel_paid_by);
 
