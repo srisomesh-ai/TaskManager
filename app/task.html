@@ -658,7 +658,12 @@
     if(!taskId){ document.getElementById('td-body').innerHTML='<div class="sec">No task id.</div>'; return; }
     const res=await api('get_task',{id:taskId});
     const t=res.task||res;
-    if(!t||!t.id){ document.getElementById('td-body').innerHTML='<div class="sec" style="color:var(--red)">Task not found.</div>'; return; }
+    if(!t||!t.id){
+      // Clear reason: a task moved to another technician vs. one that really doesn't exist
+      const msg = (res && res.error==='Not authorized')
+        ? 'This task is no longer assigned to you. It may have been moved to another technician — check <b>My Tasks</b>.'
+        : 'Task not found. It may have been deleted — check <b>My Tasks</b>.';
+      document.getElementById('td-body').innerHTML='<div class="sec" style="color:var(--red)">'+msg+'</div>'; return; }
     _curTask=t;
     // Tell the server this task was opened (stops the unopened-task reminder nudges)
     apiPost('mark_task_opened',{id:t.id}).catch(function(){});
