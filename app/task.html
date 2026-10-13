@@ -706,8 +706,21 @@
   }
 
   // ═══════════════ ACTIVITY LOG (matches web) ═══════════════
+  // Display-only clean-up of duplicate log lines saved before the duplicate fix: the same text, or two
+  // "Location skipped" lines, within 2 minutes of each other are shown once. Saved records are not changed.
+  function _dedupeActivities(list){
+    const out=[]; const norm=r=>{ r=String(r||'').trim(); return /^⏭️\s*Location skipped/.test(r) ? '__locskip__' : r; };
+    const ts=a=>{ const d=new Date(String(a.created_at||'').replace(' ','T')); return isNaN(d)?0:d.getTime(); };
+    (list||[]).forEach(function(a){
+      const k=norm(a.remark), t=ts(a);
+      const dup=out.some(function(b){ return norm(b.remark)===k && k!=='' && Math.abs(ts(b)-t)<=120000; });
+      if(!dup) out.push(a);
+    });
+    return out;
+  }
   function renderActivityLog(activities){
     const el=document.getElementById('td-activity'); if(!el) return;
+    activities=_dedupeActivities(activities);
     if(!activities || !activities.length){
       el.innerHTML='<div style="text-align:center;padding:20px 0;color:var(--text3)"><div style="font-size:28px;margin-bottom:6px">📋</div><div style="font-size:12px">No activity yet — updates will appear here</div></div>';
       return;

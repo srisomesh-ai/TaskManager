@@ -2587,9 +2587,22 @@ async function postTaskComment(){
 }
 
 // ── Render Activity Log ───────────────────────────────────────────────────
+// Display-only clean-up of duplicate log lines saved before the duplicate fix: the same text, or two
+// "Location skipped" lines, within 2 minutes of each other are shown once. Saved records are not changed.
+function _dedupeActivities(list){
+  const out=[]; const norm=r=>{ r=String(r||'').trim(); return /^⏭️\s*Location skipped/.test(r) ? '__locskip__' : r; };
+  const ts=a=>{ const d=new Date(String(a.created_at||'').replace(' ','T')); return isNaN(d)?0:d.getTime(); };
+  (list||[]).forEach(function(a){
+    const k=norm(a.remark), t=ts(a);
+    const dup=out.some(function(b){ return norm(b.remark)===k && k!=='' && Math.abs(ts(b)-t)<=120000; });
+    if(!dup) out.push(a);
+  });
+  return out;
+}
 function renderActivityLog(activities){
   const el = document.getElementById('td-activity');
   if(!el) return;
+  activities = _dedupeActivities(activities);
 
   // Find an uploaded payment screenshot (or any image) for this task, to link from the payment line
   const _t = (typeof _detailTask!=='undefined' && _detailTask) ? _detailTask : null;
