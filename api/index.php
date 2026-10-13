@@ -3954,6 +3954,43 @@ case 'bs_update_entry':
     echo json_encode(['success'=>true]);
     break;
 
+case 'backup_download':
+    // Full data backup (admin only, read-only): every table as a .sql file that can be imported
+    // back with phpMyAdmin. Login tokens are left blank in the copy, so nobody's session is in it.
+    if ($userRole!=='admin') { http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
+    @set_time_limit(600); @ini_set('memory_limit','512M');
+    while (ob_get_level() > 0) { @ob_end_clean(); }
+    $fname = 'bharatgps_backup_'.date('Y-m-d_H-i').'.sql';
+    header('Content-Type: application/sql; charset=utf-8');
+    header('Content-Disposition: attachment; filename="'.$fname.'"');
+    echo "-- Bharat GPS Task Manager — full data backup\n-- Created: ".date('Y-m-d H:i:s')." by ".($cu['name']??'admin')."\n";
+    echo "SET NAMES utf8mb4;\nSET FOREIGN_KEY_CHECKS=0;\n\n";
+    $tables = $pdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
+    foreach ($tables as $tbl) {
+        $qt = '`'.str_replace('`','``',$tbl).'`';
+        try { $cr = $pdo->query("SHOW CREATE TABLE $qt")->fetch(PDO::FETCH_NUM); } catch(Exception $e){ continue; }
+        if (!$cr || stripos($cr[1] ?? '', 'CREATE TABLE') !== 0) continue;   // skip views
+        echo "-- ---- $tbl ----\nDROP TABLE IF EXISTS $qt;\n".$cr[1].";\n";
+        $off = 0; $chunk = 1000;
+        while (true) {
+            $rows = $pdo->query("SELECT * FROM $qt LIMIT $chunk OFFSET $off")->fetchAll(PDO::FETCH_ASSOC);
+            if (!$rows) break;
+            $cols = '('.implode(',', array_map(function($c){ return '`'.str_replace('`','``',$c).'`'; }, array_keys($rows[0]))).')';
+            $vals = [];
+            foreach ($rows as $r) {
+                if ($tbl === 'users' && array_key_exists('auth_token',$r)) $r['auth_token'] = null;
+                $vals[] = '('.implode(',', array_map(function($v) use ($pdo){ return $v===null ? 'NULL' : $pdo->quote((string)$v); }, array_values($r))).')';
+            }
+            echo "INSERT INTO $qt $cols VALUES\n".implode(",\n", $vals).";\n";
+            $off += $chunk;
+            if (count($rows) < $chunk) break;
+            @flush();
+        }
+        echo "\n";
+    }
+    echo "SET FOREIGN_KEY_CHECKS=1;\n-- End of backup\n";
+    exit;
+
 case 'bs_deleted_list':
     // Balance-sheet rows that were deleted (by hand or automatically), newest first.
     if ($userRole!=='admin') { http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
