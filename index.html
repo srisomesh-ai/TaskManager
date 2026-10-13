@@ -265,15 +265,18 @@ textarea.form-input{height:auto;padding:9px 12px;cursor:text;resize:vertical}
 
 /* DRAWER */
 #task-modal.open #task-drawer{transform:translateX(0) !important}
-/* New Task opens as a centred pop-up (view / edit keep the side drawer) */
-#task-modal.centered{background:rgba(15,30,30,.55);backdrop-filter:blur(2px)}
-#task-modal.centered #task-drawer{top:50% !important;left:50% !important;right:auto !important;bottom:auto !important;
-  width:860px !important;max-width:95vw !important;height:auto !important;max-height:92vh !important;max-height:calc(100dvh - 32px) !important;border-radius:14px;overflow:hidden;
+/* New Task opens as a centred pop-up (view / edit keep the side drawer).
+   The overlay itself scrolls and the pop-up is sized to the VISIBLE screen height (--tm-h, set by
+   _sizeTaskPopup from visualViewport), so Cancel / Create Task are never hidden under a browser bar —
+   portrait, landscape, tablet or "desktop site" mode. */
+#task-modal.centered{background:rgba(15,30,30,.55);backdrop-filter:blur(2px);overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 12px 90px}
+#task-modal.centered #task-drawer{position:relative !important;top:auto !important;left:auto !important;right:auto !important;bottom:auto !important;margin:auto;
+  width:860px !important;max-width:100% !important;height:auto !important;max-height:92vh !important;max-height:var(--tm-h,calc(100dvh - 32px)) !important;
+  border-radius:14px;overflow:hidden;flex-shrink:0;
   border-left:none !important;box-shadow:0 24px 70px rgba(0,0,0,.35) !important;
-  transform:translate(-50%,-47%) scale(.97) !important;opacity:0;transition:transform .2s ease,opacity .2s ease !important}
-#task-modal.centered.open #task-drawer{transform:translate(-50%,-50%) scale(1) !important;opacity:1}
-@media(max-width:640px){#task-modal.centered #task-drawer{width:100vw !important;max-width:100vw !important;max-height:100vh !important;height:100vh !important;max-height:100dvh !important;height:100dvh !important;border-radius:0}}
-/* keep Cancel / Create above phone & tablet browser bars and the home-gesture area */
+  transform:translateY(10px) scale(.98) !important;opacity:0;transition:transform .2s ease,opacity .2s ease !important}
+#task-modal.centered.open #task-drawer{transform:none !important;opacity:1}
+@media(max-width:640px){#task-modal.centered{padding:0 0 90px}#task-modal.centered #task-drawer{width:100% !important;border-radius:0}}
 #task-modal.centered #task-modal-footer{padding-bottom:calc(14px + env(safe-area-inset-bottom)) !important}
 .pay-mode-opt{padding:6px 12px;border:1.5px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text2);font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;white-space:nowrap}
 .pay-mode-opt:hover{border-color:var(--accent2);color:var(--accent2);background:var(--accent-light)}
@@ -3779,6 +3782,7 @@ function openCreateModal(){
   _filterJobTypes(document.getElementById('fm-leadtype')?.value);   // job types allowed for the lead type
   if(typeof updateVehicleFieldVisibility === 'function') updateVehicleFieldVisibility();
   document.getElementById('task-modal').classList.add('centered');   // New Task = centred pop-up
+  _sizeTaskPopup();
   document.getElementById('task-modal').classList.add('open');
 }
 
@@ -3841,6 +3845,18 @@ async function _fillTechDropdown(selId,selectedId=null){
   if(selectedId) sel.value=String(selectedId);
 }
 
+
+// Size the New Task pop-up to the screen area actually visible (excludes browser/system bars).
+function _sizeTaskPopup(){
+  const m = document.getElementById('task-modal'); if(!m) return;
+  const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight || document.documentElement.clientHeight;
+  m.style.setProperty('--tm-h', Math.max(320, Math.floor(vh) - 32) + 'px');
+}
+(function(){
+  const re = function(){ const m=document.getElementById('task-modal'); if(m && m.classList.contains('centered')) _sizeTaskPopup(); };
+  window.addEventListener('resize', re); window.addEventListener('orientationchange', function(){ setTimeout(re, 250); });
+  if(window.visualViewport) window.visualViewport.addEventListener('resize', re);
+})();
 
 function closeTaskModal(){
   document.getElementById('task-modal').classList.remove('open');
