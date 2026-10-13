@@ -807,9 +807,9 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
               </div>
             </div>
             <div style="padding:16px 20px">
-              <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--accent2);margin-bottom:8px">📝 Discussion & Next Steps</div>
+              <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--accent2);margin-bottom:8px">📝 Discussion & Next Steps *</div>
               <div class="form-group">
-                <textarea id="fm-notes" rows="4" placeholder="What was discussed with the customer? What is the next step? Any special requirements or instructions..."></textarea>
+                <textarea id="fm-notes" rows="4" oninput="checkTaskFormReady()" placeholder="What was discussed with the customer? What is the next step? Any special requirements or instructions..."></textarea>
               </div>
             </div>
           </div>
@@ -3570,7 +3570,13 @@ function invStat(label, val, color){
 function handleTechChange(){
   const val=document.getElementById('fm-tech')?.value||'';
   const ow=document.getElementById('fm-outstation-wrap');
-  // Reminder/reschedule date stays available whether or not a technician is assigned.
+  // Reminder/reschedule date: on a NEW task it is shown only while no technician is selected
+  // (once a technician is assigned it hides and is cleared). Editing a task keeps it available.
+  const rw=document.getElementById('fm-reminder-wrap');
+  if(rw){
+    if(window._drawerMode==='create' && val){ rw.style.display='none'; const rd=document.getElementById('fm-reminder'); if(rd) rd.value=''; }
+    else rw.style.display='';
+  }
   if(ow) ow.style.display=val?'':'none';
   if(!val){
     const osCb=document.getElementById('fm-outstation'); if(osCb) osCb.checked=false;
@@ -6741,6 +6747,7 @@ function checkTaskFormReady(){
   const contact  = (document.getElementById('fm-contact')?.value||'').trim();
   const job      = document.getElementById('fm-job')?.value||'';
   const payMode  = document.getElementById('fm-paymode')?.value||'';
+  const notes    = (document.getElementById('fm-notes')?.value||'').trim();   // Discussion & Next Steps — required on new tasks
 
   // Check discount fields if discount section is visible
   const discSection = document.getElementById('fm-discount-section');
@@ -6757,7 +6764,7 @@ function checkTaskFormReady(){
   const _editMode = !!(window._drawerMode && window._drawerMode !== 'create');
   const ready = _editMode
     ? !!(customer && contact && discOk && (window._discBudgetOk !== false))
-    : !!(customer && contact && job && payMode && discOk && (window._discBudgetOk !== false));
+    : !!(customer && contact && job && payMode && notes && discOk && (window._discBudgetOk !== false));
   const btn   = document.getElementById('task-save-btn');
   if(btn){
     btn.disabled    = !ready;
