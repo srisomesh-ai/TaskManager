@@ -2679,6 +2679,27 @@ case 'my_notifications':
         $q=$pdo->prepare("SELECT id,title,body,type,task_id,url,is_read,created_at FROM notification_log WHERE user_id=? ORDER BY id DESC LIMIT $lim");
         $q->execute([$nUid]);
         $rows=$q->fetchAll(PDO::FETCH_ASSOC);
+        // Older "New Task" notifications were saved with a wrong task id (see create_task fix). Read-time
+        // repair only — nothing stored is changed: if a link points to a task that doesn't exist or isn't
+        // this technician's, find their task for the same customer created within 30 min of the notification.
+        try {
+            $chk = $pdo->prepare("SELECT assigned_to FROM tasks WHERE id=?");
+            $fix = $pdo->prepare("SELECT id FROM tasks WHERE assigned_to=? AND customer_name=?
+                                  AND created_at BETWEEN DATE_SUB(?, INTERVAL 30 MINUTE) AND DATE_ADD(?, INTERVAL 30 MINUTE)
+                                  ORDER BY ABS(TIMESTAMPDIFF(SECOND, created_at, ?)) LIMIT 1");
+            foreach ($rows as &$nr) {
+                if (($nr['type'] ?? '') !== 'new_task') continue;
+                if (!preg_match('/task\.html\?id=(\d+)/', (string)($nr['url'] ?? ''), $mm)) continue;
+                $chk->execute([intval($mm[1])]); $owner = $chk->fetchColumn();
+                if ($owner !== false && intval($owner) === $nUid) continue;          // link is fine
+                $cust = trim(explode(' · ', (string)($nr['body'] ?? ''))[0]);
+                if ($cust === '') continue;
+                $fix->execute([$nUid, $cust, $nr['created_at'], $nr['created_at'], $nr['created_at']]);
+                $realId = $fix->fetchColumn();
+                if ($realId) { $nr['url'] = 'task.html?id='.intval($realId); $nr['task_id'] = (string)intval($realId); }
+            }
+            unset($nr);
+        } catch(\Throwable $e) { /* never block the list */ }
         $unread=0; foreach($rows as $r){ if(intval($r['is_read'])===0) $unread++; }
         echo json_encode(['success'=>true,'notifications'=>$rows,'unread'=>$unread]);
     } catch(\Throwable $e){ echo json_encode(['error'=>$e->getMessage(),'where'=>basename($e->getFile()).':'.$e->getLine()]); }
