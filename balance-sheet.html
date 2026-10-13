@@ -792,7 +792,7 @@ function viewEntry(id){
     + row('Invoice', esc(e.invoice_no))
     + row('Model / Service', esc(e.device_model||e.service_type))
     + row('Quantity', qtyFmt(e.qty))
-    + row('Unit Price', e.unit_price?money(e.unit_price):'–')
+    + row('Unit Price', bsUnitPrice(e)?money(bsUnitPrice(e)):'–')
     + row('GST', e.gst?money(e.gst):'–')
   );
 
@@ -945,11 +945,20 @@ async function resyncAll(){
   }
 }
 
+// Unit price to show for a row. Task-linked rows are billed as unit × qty = total; if the task price
+// was edited later, older rows can still carry the old unit price, so show total ÷ qty instead.
+// Display only — the saved entry is not changed.
+function bsUnitPrice(e){
+  const u=parseFloat(e.unit_price||0)||0, q=parseFloat(e.qty||0)||0, t=parseFloat(e.total_price||0)||0, g=parseFloat(e.gst||0)||0;
+  if(!e.task_db_id || q<=0 || t<=0) return e.unit_price;
+  if(Math.abs(u*q-t)<=1 || Math.abs(u*q+g-t)<=1) return e.unit_price;
+  return Math.round(t/q*100)/100;
+}
 function exportXLS(){
   const data=getFiltered();
   const rows=data.map((e,i)=>({'#':i+1,'Date':e.date,'Type':e.type,'Task':e.task_id||e.task_no,'Invoice':e.invoice_no,
     'Name on Server':e.name_on_server,'Server':e.server_name,'Model/Service':e.device_model||e.service_type,
-    'Qty':e.qty,'Unit Price':e.unit_price,'GST':e.gst,'Total':e.total_price,
+    'Qty':e.qty,'Unit Price':bsUnitPrice(e),'GST':e.gst,'Total':e.total_price,
     'Received':e.payment_received,'Pending':e.pending_payment,'Mode':e.payment_mode,
     'Status':e.payment_status,
     'Payment Received On':e.payment_received_at?new Date(String(e.payment_received_at).replace(' ','T')).toLocaleString('en-IN'):(e.payment_received_on?new Date(e.payment_received_on).toLocaleDateString('en-IN'):''),
