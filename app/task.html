@@ -92,6 +92,8 @@
   .tu-card{border:2px solid var(--border);border-radius:9px;padding:10px 6px;cursor:pointer;background:var(--surface);text-align:center}
   .tu-card:active{background:var(--accent-light)}
   .tu-card.selected{background:var(--accent-light);border-color:var(--accent)}
+  .tu-card.tu-proceed{border-color:var(--green);background:var(--green-bg)}
+  .tu-card.tu-proceed.selected{background:#c9f0d6;border-color:#15803d;box-shadow:0 0 0 2px #15803d inset}
   .tu-card .ci{font-size:20px;margin-bottom:4px}
   .tu-card .ct{font-size:11px;font-weight:800;color:var(--text);line-height:1.2}
   .tu-card.selected .ct{color:var(--accent)}
@@ -1056,6 +1058,7 @@
 
   // ═══════════════ UPDATE (call log) — matches web ═══════════════
   const TU_CARDS=[
+    {resp:'Confirmed — proceeding now',ico:'✅',t:'Proceed Now',s:'Customer ready — going now',next:'Proceed with the job',remind:0,proceed:true,prefill:'I called the customer. They confirmed and are ready. I am proceeding now.'},
     {resp:'No answer',ico:'📵',t:'No Answer',s:'Nobody picked up',next:'Retry call in 2 hours',remind:2,prefill:'I called the customer but there was no answer. Will retry again shortly.'},
     {resp:'Call back later',ico:'⏰',t:'Call Back Later',s:'Asked to call later',next:'Call back as requested',remind:4,prefill:'I called the customer. They picked up and asked me to call back later as they are busy right now.'},
     {resp:'Called — come tomorrow',ico:'📅',t:'Come Tomorrow',s:'Called, come tomorrow',next:'Visit customer tomorrow',remind:24,prefill:'I called the customer. They confirmed availability and asked me to come tomorrow for the installation.'},
@@ -1075,7 +1078,7 @@
     const _db=document.getElementById('tu-date-box'); if(_db) _db.style.display='none';
     const _di=document.getElementById('tu-date'); if(_di) _di.value='';
     document.getElementById('tu-grid').innerHTML=TU_CARDS.map((c,i)=>
-      '<div class="tu-card" onclick="selTu('+i+')" id="tu-c-'+i+'"><div class="ci">'+c.ico+'</div><div class="ct">'+c.t+'</div><div class="cs">'+c.s+'</div></div>').join('');
+      '<div class="tu-card'+(c.proceed?' tu-proceed':'')+'" onclick="selTu('+i+')" id="tu-c-'+i+'"><div class="ci">'+c.ico+'</div><div class="ct">'+c.t+'</div><div class="cs">'+c.s+'</div></div>').join('');
     document.getElementById('upd-ov').classList.add('open');
     document.getElementById('upd-sheet').classList.add('open');
   }
@@ -1132,7 +1135,10 @@
     const btn=document.getElementById('tu-save'); btn.textContent='Saving…'; btn.disabled=true;
     try{
       const res=await apiPost('update_task',body);
-      if(res && res.success){ toast('✅ Update saved'); closeUpdate(); setTimeout(load,400); }
+      if(res && res.success){
+        toast(_tuSel && _tuSel.proceed ? '✅ Saved — continue with the next step' : '✅ Update saved'); closeUpdate(); setTimeout(load,400);
+        if(_tuSel && _tuSel.proceed){ setTimeout(function(){ const a=document.getElementById('td-tech-actions'); if(a) a.scrollIntoView({behavior:'smooth',block:'start'}); }, 1600); }
+      }
       else toast(res.error||'Update failed. Please try again.');
     }catch(e){ toast('Connection error. Please try again.'); }
     finally{ _tuSubmitting=false; btn.textContent='💾 Save Update'; btn.disabled=false; }
