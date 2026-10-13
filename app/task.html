@@ -1670,6 +1670,7 @@
     ['pay-cash-reason-box','pay-cash-warn','pay-cheque-box','pay-balance-box'].forEach(id=>document.getElementById(id).style.display='none');
     document.querySelectorAll('.pmode').forEach(b=>b.classList.remove('sel'));
     document.getElementById('pay-bal').innerHTML='';
+    _arrangePayModes(t);
 
     const price=parseFloat(t.price_to_collect||0), coll=parseFloat(t.amount_collected||0);
     const qty=parseInt(t.device_qty||1)||1;
@@ -1685,6 +1686,21 @@
 
     document.getElementById('pay-ov').classList.add('open');
     document.getElementById('pay-sheet').classList.add('open');
+  }
+  // Payment modes by company profile: BGPT → UPI, Cash · SBGT → UPI, Bank, Cheque (no Cash).
+  // The mode the manager agreed at task creation comes first and is pre-selected; a deferred agreement
+  // ("In 2 Days" …) pre-selects UPI. An agreed mode outside the rules is still shown so old tasks never get stuck.
+  function _arrangePayModes(t){
+    const box=document.getElementById('pay-modes'); if(!box) return;
+    const prof=String(t.profile||'BGPT').toUpperCase();
+    const allowed = prof==='SBGT' ? ['UPI','Bank Transfer','Cheque'] : ['UPI','Cash'];
+    const direct=['Cash','UPI','Bank Transfer','Cheque'];
+    const agreed=direct.indexOf(_payAgreed)!==-1 ? _payAgreed : '';
+    const order=[]; if(agreed) order.push(agreed); allowed.forEach(m=>{ if(order.indexOf(m)===-1) order.push(m); });
+    const btns={}; box.querySelectorAll('.pmode').forEach(b=>{ btns[b.dataset.m]=b; b.style.display='none'; });
+    order.forEach(m=>{ const b=btns[m]; if(b){ b.style.display=''; box.appendChild(b); } });   // re-order: agreed first
+    const pre = agreed || 'UPI';
+    if(btns[pre]) selPayMode(pre);
   }
   function closePayment(){ document.getElementById('pay-ov').classList.remove('open'); document.getElementById('pay-sheet').classList.remove('open'); }
 
