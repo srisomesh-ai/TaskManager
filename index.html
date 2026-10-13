@@ -658,7 +658,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
                 </div>
                 <div class="form-group" id="fm-profile-group">
                   <label>Company Profile</label>
-                  <select id="fm-profile" onchange="updateModalGST()">
+                  <select id="fm-profile" onchange="updateModalGST();_filterPayModes()">
                     <option value="BGPT">BGPT — No GST</option>
                     <option value="SBGT">SBGT — With 18% GST</option>
                   </select>
@@ -3309,6 +3309,26 @@ function cancelPayMode(){
   _pendingPayMode=null;
 }
 
+// Payment options per company profile — NEW TASKS ONLY (editing an existing task shows all,
+// so nothing already recorded changes). "Free Service" is handled separately (Demo/Troubleshoot).
+const _PAY_RULES = {
+  'BGPT': ['Cash','UPI','In 2 Days'],
+  'SBGT': ['UPI','Bank Transfer','In 2 Days','In 7 Days','In 15 Days','Within 30 Days']
+};
+function _filterPayModes(){
+  const creating = (window._drawerMode === 'create');
+  const allowed  = _PAY_RULES[document.getElementById('fm-profile')?.value || 'BGPT'];
+  document.querySelectorAll('.pay-mode-opt').forEach(function(b){
+    if(b.id === 'free-service-btn') return;
+    const m = (b.getAttribute('onclick')||'').match(/selectPayMode\('([^']+)'\)/);
+    if(!m) return;
+    b.style.display = (!creating || !allowed || allowed.indexOf(m[1]) !== -1) ? '' : 'none';
+  });
+  // A mode that is no longer allowed for this profile is cleared (new task only)
+  const cur = document.getElementById('fm-paymode')?.value || '';
+  if(creating && allowed && cur && cur !== 'Free Service' && allowed.indexOf(cur) === -1) clearPayMode();
+}
+
 function clearPayMode(){
   document.getElementById('fm-paymode').value='';
   document.getElementById('fm-pay-reminder').value='';
@@ -3780,6 +3800,7 @@ function openCreateModal(){
   _fillTechDropdown('fm-tech',null);
   _setDrawerMode('create', true);
   _filterJobTypes(document.getElementById('fm-leadtype')?.value);   // job types allowed for the lead type
+  _filterPayModes();                                                 // payment options allowed for the profile
   if(typeof updateVehicleFieldVisibility === 'function') updateVehicleFieldVisibility();
   document.getElementById('task-modal').classList.add('centered');   // New Task = centred pop-up
   _sizeTaskPopup();
@@ -9358,6 +9379,7 @@ function onLeadTypeChange(leadType){
     if(pc) pc.value = '';
   }
   _filterJobTypes(leadType);
+  _filterPayModes();
   checkTaskFormReady();
 }
 
