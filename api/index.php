@@ -1230,8 +1230,10 @@ case 'get_tasks':
     }
     if (!empty($_GET['search']))    {
         $q='%'.$_GET['search'].'%';
-        $where[]="(t.customer_name LIKE ? OR t.contact_number LIKE ? OR t.task_id LIKE ? OR t.location LIKE ?)";
-        $params[]=$q; $params[]=$q; $params[]=$q; $params[]=$q;
+        $where[]="(t.customer_name LIKE ? OR t.contact_number LIKE ? OR t.task_id LIKE ? OR t.location LIKE ?
+                   OR t.vehicle_number LIKE ? OR t.gps_serial_no LIKE ? OR t.name_on_server LIKE ?
+                   OR t.id IN (SELECT di.task_id FROM task_device_installs di WHERE di.vehicle_number LIKE ? OR di.gps_serial_no LIKE ? OR di.name_on_server LIKE ?))";
+        for ($qi=0; $qi<10; $qi++) $params[]=$q;
     }
 
     $limit = max(1, min(intval($_GET['limit'] ?? 500), 20000));   // admin Tasks page asks for all
@@ -1271,6 +1273,7 @@ case 'get_tasks':
     // Bulk fetch: which tasks have device installs done + how many per task
     $addingDoneIds = [];
     $installCounts = [];
+    $searchDevices = [];
     if(!empty($taskIds)){
         try {
             $in = implode(',', array_map('intval', $taskIds));
@@ -1279,6 +1282,11 @@ case 'get_tasks':
             $cntRows = $pdo->query("SELECT task_id, COUNT(*) AS c FROM task_device_installs WHERE task_id IN ($in) AND gps_serial_no IS NOT NULL AND gps_serial_no != '' GROUP BY task_id")->fetchAll(PDO::FETCH_ASSOC);
             foreach($cntRows as $cr){ $installCounts[$cr['task_id']] = intval($cr['c']); }
         } catch(Exception $e){ $addingDoneIds = []; }
+        // Vehicle numbers / IMEIs / server names of every installed device, for the Tasks search box.
+        try {
+            $sdRows = $pdo->query("SELECT task_id, GROUP_CONCAT(CONCAT_WS(' ', vehicle_number, gps_serial_no, name_on_server) SEPARATOR ' ') AS s FROM task_device_installs WHERE task_id IN ($in) GROUP BY task_id")->fetchAll(PDO::FETCH_ASSOC);
+            foreach($sdRows as $sr){ $searchDevices[$sr['task_id']] = (string)$sr['s']; }
+        } catch(Exception $e){}
     }
 
     // Compute workflow_state for each task
@@ -1290,6 +1298,7 @@ case 'get_tasks':
         $consentToken = $task['consent_token']??'';
         $addingDone   = in_array($id, $addingDoneIds);
         $task['installed_count'] = $installCounts[$id] ?? 0;
+        $task['search_devices']  = $searchDevices[$id] ?? '';
         $lastActivity = $task['last_tech_activity']??null;
         $adminViewed  = $task['admin_viewed_at']??null;
         $hasUnseenUpdate = $lastActivity && (!$adminViewed || strcmp($lastActivity, $adminViewed) > 0);
