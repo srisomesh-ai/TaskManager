@@ -672,7 +672,10 @@
     document.getElementById('td-stepper').innerHTML=buildStepper(t);
 
     const isLocked=['Awaiting Approval','Closed','Cancelled'].includes(t.task_status);
+    const _hasNotes = !!String(t.general_notes||t.remark||'').trim();
     document.getElementById('td-body').innerHTML=
+      // NOTES first — the technician must read the discussion / instructions before acting
+      '<div class="sec"'+(_hasNotes?' style="background:#fff8e6;border-left:4px solid #e6a100"':'')+'><div class="sec-title t-grey"'+(_hasNotes?' style="color:#9a6700"':'')+'>📝 Discussion &amp; Notes'+(_hasNotes?' — read before you start':'')+'</div><div id="td-notes"'+(_hasNotes?' style="color:#3d2e00;font-size:14px"':'')+'>'+esc(t.general_notes||t.remark||'No notes added.')+'</div></div>'+
       // ACTIONS panel (only if not locked)
       (isLocked?'':'<div class="sec" id="td-tech-actions"><div class="sec-title t-accent">⚡ Actions</div><div id="action-area"><div style="color:var(--text3);font-size:13px">Loading…</div></div></div>')+
       // locked banner
@@ -681,8 +684,6 @@
       '<div class="sec"><div class="sec-title t-accent">📋 Task Information</div><div class="grid2">'+infoGrid(t)+'</div></div>'+
       // PAYMENT
       '<div class="sec"><div class="sec-title t-green">💰 Payment</div><div class="grid3">'+paymentGrid(t)+'</div></div>'+
-      // NOTES
-      '<div class="sec"><div class="sec-title t-grey">📝 Discussion &amp; Notes</div><div id="td-notes">'+esc(t.general_notes||t.remark||'No notes added.')+'</div></div>'+
       // ACTIVITY LOG
       '<div class="sec"><div class="sec-title t-grey">🕐 Activity Log</div><div id="td-activity"></div></div>';
 
