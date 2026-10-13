@@ -1738,6 +1738,18 @@ case 'update_task':
     }
     if (isset($body['task_status'])&&$body['task_status']==='Closed'&&$existing['task_status']!=='Closed') $sets[]="closed_at=NOW()";
     if ($sets) { $vals[]=$id; $pdo->prepare("UPDATE tasks SET ".implode(',',$sets)." WHERE id=?")->execute($vals); }
+    // Price edited by admin/assigner → refresh the stored per-device price (price ÷ qty), so the
+    // balance sheet's Unit Price and later install billing follow the new price, not the old one.
+    $unitNow = null;
+    if (in_array($userRole,['admin','assigner']) && !array_key_exists('unit_price',$body)
+        && array_key_exists('price_to_collect',$body)
+        && (floatval($body['price_to_collect']) != floatval($existing['price_to_collect'] ?? 0)
+            || (array_key_exists('device_qty',$body) && intval($body['device_qty']) != intval($existing['device_qty'] ?? 1)))) {
+        $qN = array_key_exists('device_qty',$body) ? intval($body['device_qty']) : intval($existing['device_qty'] ?? 1);
+        if ($qN < 1) $qN = 1;
+        $unitNow = round(floatval($body['price_to_collect']) / $qN, 2);
+        try { $pdo->prepare("UPDATE tasks SET unit_price=? WHERE id=?")->execute([$unitNow, $id]); } catch(Exception $e){}
+    }
     // Assigned to a different technician → fresh 3-hour open window and 24h on-time window.
     if (array_key_exists('assigned_to',$body) && intval($body['assigned_to']) && intval($body['assigned_to']) !== intval($existing['assigned_to'] ?? 0)) {
         try { $pdo->exec("ALTER TABLE tasks ADD COLUMN assigned_at DATETIME DEFAULT NULL"); } catch(Exception $e){}
@@ -1812,6 +1824,9 @@ case 'update_task':
                 payment_mode=?, total_price=?, updated_at=NOW()
                 WHERE id=?")
                 ->execute([$recv3, $pend3, $ps3, $pmode3, $total3, $bsRow['bs_entry_id']]);
+            if ($priceChanged && $unitNow !== null) {
+                try { $pdo->prepare("UPDATE balance_sheet_entries SET unit_price=? WHERE id=?")->execute([$unitNow, $bsRow['bs_entry_id']]); } catch(Exception $e){}
+            }
             // If the technician was reassigned, update the balance-sheet technician name/id too.
             if (array_key_exists('assigned_to', $body)) {
                 try {
