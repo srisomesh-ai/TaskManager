@@ -1696,6 +1696,10 @@ case 'update_task':
                // Consent reset (when vehicle unavailable after consent)
                'consent_token','customer_consent_at','customer_consent_name','customer_consent_mobile'];
     if (in_array($userRole,['admin','assigner'])) $fields=array_merge($fields,['customer_name','contact_number','email','location','lead_type','device_qty','price_to_collect','unit_price','assigned_to','vehicle_number']);
+    // Technician may ADD the customer email (for giving GPS access) only when the task has none — never change one.
+    if (!in_array('email',$fields) && array_key_exists('email',$body) && trim((string)($existing['email'] ?? ''))==='' && filter_var(trim((string)$body['email']), FILTER_VALIDATE_EMAIL)) {
+        $body['email'] = trim((string)$body['email']); $fields[] = 'email';
+    }
     // Ensure unit_price column exists if an admin is editing it
     if (array_key_exists('unit_price',$body)) { try { $pdo->exec("ALTER TABLE tasks ADD COLUMN unit_price DECIMAL(10,2) DEFAULT NULL"); } catch(Exception $e){} }
     // Guard: a technician cannot record an amount far above the price to collect (typo protection,
@@ -5433,9 +5437,16 @@ case 'confirm_cash_deposit':
     $pendDev = max(0, $totQty - $instCnt);
     $pdo->prepare("UPDATE tasks SET pending_devices=? WHERE id=?")->execute([$pendDev, $id]);
     try { $pdo->exec("ALTER TABLE tasks ADD COLUMN cash_deposit_screenshot VARCHAR(255) NULL"); } catch(Exception $e){}
+    // Installed devices whose customer access is not given yet → record the deposit, but keep the task
+    // open (not Awaiting Approval) until access is given. Tasks with no installs are unaffected.
+    $accessPending = 0;
+    try {
+        $ap = $pdo->prepare("SELECT COUNT(*) FROM task_device_installs WHERE task_id=? AND gps_serial_no IS NOT NULL AND gps_serial_no<>'' AND COALESCE(access_given,0)<>1");
+        $ap->execute([$id]); $accessPending = intval($ap->fetchColumn());
+    } catch(Exception $e){ $accessPending = 0; }
     $pdo->prepare("UPDATE tasks SET
         cash_deposit_status='submitted',
-        task_status='Awaiting Approval',
+        task_status=IF(?=1, task_status, 'Awaiting Approval'),
         cash_deposit_method=?,
         cash_handover_to=?,
         cash_deposit_date=?,
@@ -5445,6 +5456,7 @@ case 'confirm_cash_deposit':
         cash_submitted_at=NOW()
         WHERE id=?")
         ->execute([
+            $accessPending > 0 ? 1 : 0,
             $depositMethod,
             trim($body['handover_to'] ?? ''),
             trim($body['deposit_date'] ?? '') ?: null,
@@ -5454,7 +5466,7 @@ case 'confirm_cash_deposit':
             $id
         ]);
     $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'remark')")
-        ->execute([$id, $userId, "💰 Cash deposit submitted — Method: {$depositMethod}. Awaiting admin verification."]);
+        ->execute([$id, $userId, "💰 Cash deposit submitted — Method: {$depositMethod}. Awaiting admin verification.".($accessPending>0?" Task stays open until customer access is given.":"")]);
 
     // ── Feature #2: 50 coins if submitted (via cash flow) within 24h of being assigned ──
     try {
