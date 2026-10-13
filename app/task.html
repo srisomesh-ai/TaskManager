@@ -100,6 +100,7 @@
   .tu-card:active{background:var(--accent-light)}
   .tu-card.selected{background:var(--accent-light);border-color:var(--accent)}
   .tu-card.tu-proceed{border-color:var(--green);background:var(--green-bg)}
+  .tu-card.tu-done{opacity:.45;cursor:not-allowed;background:var(--surface2);pointer-events:none}
   .tu-card.tu-proceed.selected{background:#c9f0d6;border-color:#15803d;box-shadow:0 0 0 2px #15803d inset}
   .tu-card .ci{font-size:20px;margin-bottom:4px}
   .tu-card .ct{font-size:11px;font-weight:800;color:var(--text);line-height:1.2}
@@ -1015,7 +1016,9 @@
       (_showSkipLoc?'<div style="text-align:center;margin-top:10px"><a href="#" onclick="skipLocation();return false;" style="font-size:12.5px;color:var(--text3);text-decoration:underline;font-weight:600">Customer won\'t share location? Skip &amp; continue →</a></div>':'');
   }
 
+  let _locBusy=false;   // ignore a second tap while a location action is still running
   async function askLocation(){
+    if(_locBusy) return; _locBusy=true; setTimeout(function(){ _locBusy=false; }, 4000);
     const btn=document.getElementById('loc-btn'); if(btn)btn.style.opacity='.6';
     const r=await apiPost('send_location_request',{id:_curTask.id});
     if(r&&r.success){
@@ -1049,6 +1052,7 @@
       .catch(()=>{});
   }
   async function reachedLocation(){
+    if(_locBusy) return; _locBusy=true; setTimeout(function(){ _locBusy=false; }, 4000);
     const btn=document.getElementById('loc-btn'); if(btn)btn.style.opacity='.6';
     try{ toast('📍 Capturing your arrival…'); const pos=await getPos();
       const r=await apiPost('save_trip_reached',{id:_curTask.id,lat:pos.lat,lng:pos.lng});
@@ -1058,11 +1062,10 @@
 
   async function skipLocation(){
     const ok=await cxConfirm({title:'Skip location sharing?', icon:'📍', message:'Use this only when the customer won\'t share their location and has given directions over the phone.\n\nThis moves the task to the next step without recording GPS distance.', okText:'Skip', danger:true});
-    if(!ok) return;
+    if(!ok || _locBusy) return; _locBusy=true; setTimeout(function(){ _locBusy=false; }, 4000);
     toast('⏭️ Skipping location…');
     // Mark reached without coords so the flow advances to consent/attend
-    await apiPost('save_trip_reached',{id:_curTask.id,skipped:true}).catch(()=>{});
-    await apiPost('update_task',{id:_curTask.id,remark:'⏭️ Location skipped | Customer did not share location — directions taken over phone.'}).catch(()=>{});
+    await apiPost('save_trip_reached',{id:_curTask.id,skipped:true}).catch(()=>{});   // logs "Location skipped" once (no second remark)
     _locSkippedFor=_curTask.id;
     _navStarted=true;
     renderActionArea();
@@ -1089,8 +1092,11 @@
     document.getElementById('tu-rem').style.display='none';
     const _db=document.getElementById('tu-date-box'); if(_db) _db.style.display='none';
     const _di=document.getElementById('tu-date'); if(_di) _di.value='';
-    document.getElementById('tu-grid').innerHTML=TU_CARDS.map((c,i)=>
-      '<div class="tu-card'+(c.proceed?' tu-proceed':'')+'" onclick="selTu('+i+')" id="tu-c-'+i+'"><div class="ci">'+c.ico+'</div><div class="ct">'+c.t+'</div><div class="cs">'+c.s+'</div></div>').join('');
+    // "Proceed Now" can be logged only once per task — afterwards it shows as done and can't be picked
+    const _proceedDone=(_curTask.activities||[]).some(a=>String(a.remark||'').indexOf('Confirmed — proceeding now')!==-1);
+    document.getElementById('tu-grid').innerHTML=TU_CARDS.map((c,i)=>(c.proceed&&_proceedDone)
+      ? '<div class="tu-card tu-done" id="tu-c-'+i+'"><div class="ci">✔️</div><div class="ct">Proceed Now</div><div class="cs">Already done ✓</div></div>'
+      : '<div class="tu-card'+(c.proceed?' tu-proceed':'')+'" onclick="selTu('+i+')" id="tu-c-'+i+'"><div class="ci">'+c.ico+'</div><div class="ct">'+c.t+'</div><div class="cs">'+c.s+'</div></div>').join('');
     document.getElementById('upd-ov').classList.add('open');
     document.getElementById('upd-sheet').classList.add('open');
   }

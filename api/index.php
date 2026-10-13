@@ -776,6 +776,18 @@ function _devEnsureTables($pdo){
 }
 function _devNorm($imei){ return preg_replace('/\D/', '', (string)$imei); } // digits only
 
+// Log a system activity unless the SAME text was logged on this task in the last 2 minutes
+// (stops double taps / repeated calls from filling the activity log with duplicates).
+function log_activity_once($pdo, $taskId, $userId, $remark){
+    try {
+        $d = $pdo->prepare("SELECT COUNT(*) FROM task_activities WHERE task_id=? AND remark=? AND created_at > (NOW() - INTERVAL 2 MINUTE)");
+        $d->execute([$taskId, $remark]);
+        if (intval($d->fetchColumn()) > 0) return false;
+    } catch(Exception $e){}
+    $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'system')")->execute([$taskId, $userId, $remark]);
+    return true;
+}
+
 // ── Balance-sheet safety net ─────────────────────────────────────────────
 // Before ANY balance-sheet row is deleted, a full copy is kept in bs_deleted_log so it can be
 // restored from the Balance Sheet page ("🗑 Deleted entries"). $where is a SQL condition on
@@ -5077,8 +5089,7 @@ case 'send_location_request':
             $sent = true;
         }
     } catch(Exception $e){}
-    $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'system')")
-        ->execute([$id, $userId, "📍 Location request sent to customer".($sent?" via email":"")]);
+    log_activity_once($pdo, $id, $userId, "📍 Location request sent to customer".($sent?" via email":""));
     echo json_encode(['success'=>true, 'link'=>$link, 'email_sent'=>$sent, 'phone'=>$tr['contact_number']]);
     break;
 
@@ -5102,8 +5113,7 @@ case 'save_trip_start':
     if(!$id || !$la){ echo json_encode(['error'=>'Missing data']); break; }
     _ensureTripColumns($pdo);
     $pdo->prepare("UPDATE tasks SET trip_start_lat=?, trip_start_lng=?, trip_start_at=NOW() WHERE id=?")->execute([$la,$lo,$id]);
-    $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'system')")
-        ->execute([$id, $userId, "🧭 Technician started navigation to customer"]);
+    log_activity_once($pdo, $id, $userId, "🧭 Technician started navigation to customer");
     echo json_encode(['success'=>true]);
     break;
 
@@ -5117,8 +5127,7 @@ case 'save_trip_reached':
     if($skipped && !$la){
         // Location skipped (customer would not share) — stamp reached with 0 distance so the flow advances and stays advanced on reload
         $pdo->prepare("UPDATE tasks SET trip_reach_at=NOW(), trip_km=0, trip_minutes=0 WHERE id=?")->execute([$id]);
-        $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'system')")
-            ->execute([$id, $userId, "⏭️ Location skipped — customer did not share location; directions taken over phone"]);
+        log_activity_once($pdo, $id, $userId, "⏭️ Location skipped — customer did not share location; directions taken over phone");
         echo json_encode(['success'=>true, 'skipped'=>true, 'trip_km'=>0, 'trip_minutes'=>0]);
         break;
     }
@@ -5131,8 +5140,7 @@ case 'save_trip_reached':
     }
     $pdo->prepare("UPDATE tasks SET trip_reach_lat=?, trip_reach_lng=?, trip_reach_at=NOW(), trip_km=?, trip_minutes=? WHERE id=?")
         ->execute([$la,$lo,$km,$mins,$id]);
-    $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'system')")
-        ->execute([$id, $userId, "📍 Technician reached customer location · Trip: {$km} km, {$mins} min"]);
+    log_activity_once($pdo, $id, $userId, "📍 Technician reached customer location · Trip: {$km} km, {$mins} min");
     echo json_encode(['success'=>true, 'trip_km'=>$km, 'trip_minutes'=>$mins]);
     break;
 
