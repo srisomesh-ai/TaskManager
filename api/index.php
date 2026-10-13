@@ -1452,6 +1452,9 @@ case 'create_task':
             $fbToken,
             trim($body['vehicle_number']??''),
         ]);
+        // The new task's own id — captured right after its INSERT. Later inserts (Handover balance-sheet
+        // entry, activity log …) change lastInsertId(), which made notifications open the wrong task.
+        $newTaskDbId = intval($pdo->lastInsertId());
     } catch(Exception $insertEx){
         echo json_encode(['error'=>'Database error: '.$insertEx->getMessage()]);
         break;
@@ -1462,7 +1465,7 @@ case 'create_task':
         $pdo->exec("ALTER TABLE tasks ADD COLUMN unit_price DECIMAL(10,2) DEFAULT NULL");
     } catch(Exception $e){}
     try {
-        $newIdU = $pdo->lastInsertId();
+        $newIdU = $newTaskDbId;
         $qtyU   = intval($body['device_qty']??1); if($qtyU<1) $qtyU=1;
         $unitU  = isset($body['unit_price']) ? floatval($body['unit_price'])
                                              : (floatval($body['price_to_collect']??0) / $qtyU);
@@ -1508,7 +1511,7 @@ case 'create_task':
 
     // Override status for yellow outstation
     if (!empty($body['outstation_travel_paid_by']) && $body['outstation_travel_paid_by']==='COMPANY') {
-        $newId2 = $pdo->lastInsertId();
+        $newId2 = $newTaskDbId;
         if (isset($body['task_status']) && $body['task_status']==='Pending Outstation Approval') {
             $pdo->prepare("UPDATE tasks SET task_status='Pending Outstation Approval' WHERE id=?")->execute([$newId2]);
             // Email admin
@@ -1529,7 +1532,7 @@ case 'create_task':
             } catch(Exception $e) {}
         }
     }
-    $newId = $pdo->lastInsertId();
+    $newId = $newTaskDbId;
     if (!empty($body['remark'])) $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'remark')")->execute([$newId,$userId,$body['remark']]);
     if ($at) {
         $tn=$pdo->prepare("SELECT name FROM users WHERE id=?"); $tn->execute([$at]);
