@@ -618,7 +618,7 @@
       ['📞 Contact Number',esc(t.contact_number||'–')],
       ['📧 Email ID',t.email?esc(t.email):'<span style="color:var(--text3)">Not provided</span>'],
       ['📍 Location',esc(t.location||'–')],
-      ['📊 Lead Type',esc(t.lead_type||'–')],
+      ['📊 Lead Type',esc(({'New Lead':'New Customer','Existing Customer Lead':'Existing Customer'})[t.lead_type]||t.lead_type||'–')],
       ['🏢 Company Profile',esc(t.profile||'BGPT')],
       ['🔧 Job Type',esc(t.device_details||'–')],
       ['🔢 Device Qty',esc(t.device_qty||1)],
