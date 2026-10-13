@@ -2599,6 +2599,60 @@ function _dedupeActivities(list){
   });
   return out;
 }
+// GPS device lines in the Activity Log get a read-only "Check device status" button
+// (online/offline, last update, moving/stopped) — same as the technician app.
+function _dsEsc(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _devStatusBtn(remark,idx){
+  if(!/(Device added to GPS server|Vehicle changed on GPS server)/.test(remark)) return '';
+  const m=remark.match(/IMEI:\s*(\d{6,20})/); if(!m) return '';
+  const srv=(remark.match(/Server:\s*([^|]+)/)||[])[1]||'';
+  const host=(srv.match(/bharatgps\.[a-z]+/i)||[''])[0];
+  return '<button onclick="checkDeviceStatus(\''+m[1]+'\',\''+host+'\',\'ds-'+idx+'\')" style="margin-top:8px;display:inline-block;background:#fff;border:1.5px solid var(--accent2);color:var(--accent2);border-radius:8px;padding:7px 14px;font-size:13px;font-weight:800;cursor:pointer">📡 Check device status</button>'
+    +'<div id="ds-'+idx+'"></div>';
+}
+function _dsAgo(ms){ const s=Math.max(0,Math.round((Date.now()-ms)/1000)); if(s<60) return 'just now'; const m=Math.round(s/60); if(m<60) return m+' min ago'; const h=Math.round(m/60); if(h<48) return h+' hr ago'; return Math.round(h/24)+' days ago'; }
+async function checkDeviceStatus(imei,host,boxId){
+  const box=document.getElementById(boxId); if(!box) return;
+  box.innerHTML='<div style="font-size:12px;color:var(--text3);padding:10px 2px">⏳ Checking the GPS server…</div>';
+  let r={};
+  try{ r=await fetch('gps_proxy.php'+'?action=find&keyword='+encodeURIComponent(imei)+(host?'&server='+encodeURIComponent(host):''),{headers:{'X-Auth-Token':authToken},cache:'no-store'}).then(x=>x.json()); }catch(e){ r={}; }
+  const list=(r&&r.devices)||[];
+  const d=list.find(x=>String((x.device_data||{}).imei||'')===String(imei)) || list[0];
+  if(!d){ box.innerHTML='<div style="margin-top:8px;padding:10px;border-radius:8px;background:var(--red-bg);color:var(--red);font-size:12.5px;font-weight:700">❌ Device '+_dsEsc(imei)+' was not found on the GPS server'+(r&&r.success===false&&r.error?' ('+_dsEsc(r.error)+')':'')+'.</div>'; return; }
+  const dd=d.device_data||{};
+  const onRaw=String(d.online||'').toLowerCase();
+  const tsSec=parseInt(d.timestamp||d.time_timestamp||0)||0;
+  const lastMs=tsSec>0?tsSec*1000:0;
+  const ageMin=lastMs?(Date.now()-lastMs)/60000:null;
+  const speed=parseFloat(d.speed||0)||0;
+  const isOnline=(onRaw==='online'||onRaw==='ack');
+  const state = onRaw==='online' ? ['🟢','Online','#166534','#e8f5ec'] : onRaw==='ack' ? ['🟡','Online (no GPS fix)','#92400e','#fef3c7'] : ['🔴','Offline','#b91c1c','#fdecea'];
+  // ignition / ACC from sensors, if the device reports it
+  let ign='';
+  (d.sensors||[]).forEach(function(se){ const n=String((se.name||'')+' '+(se.type||'')).toLowerCase(); if(!ign && /(ignition|acc|engine)/.test(n)){ ign=String(se.value!=null?se.value:(se.val!=null?se.val:'')); } });
+  const lat=parseFloat(d.lat||0), lng=parseFloat(d.lng||0);
+  const row=(l,v)=>'<div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed var(--border)"><span style="color:var(--text3)">'+l+'</span><span style="font-weight:700;color:var(--text);text-align:right">'+v+'</span></div>';
+  let motion = !isOnline ? 'Not reporting'+(d.stop_duration?' <span style="color:var(--text3);font-weight:600">(last seen stopped · '+_dsEsc(d.stop_duration)+')</span>':'') : (speed>0 ? '🚗 Moving · '+Math.round(speed)+' km/h' : '🅿️ Stopped'+(d.stop_duration?' · '+_dsEsc(d.stop_duration):''));
+  let advice;
+  if(!isOnline){
+    advice = (ageMin!=null && ageMin>1440) ? '⚠️ Not reporting for '+_dsAgo(lastMs).replace(' ago','')+'. Check power wiring / fuse, SIM balance & signal, and the GPS antenna.'
+                                            : '⚠️ Offline right now. If the vehicle is running, check power and SIM; it may just be parked with no signal.';
+  } else if(onRaw==='ack'){ advice='ℹ️ Connected but no GPS fix — move the vehicle to open sky / check antenna placement.'; }
+  else { advice='✅ Device is working and reporting.'; }
+  box.innerHTML='<div style="margin-top:8px;border-radius:10px;border:1.5px solid '+state[2]+';background:#fff;overflow:hidden">'
+    +'<div style="background:'+state[3]+';color:'+state[2]+';padding:9px 12px;font-weight:800;font-size:14px">'+state[0]+' '+state[1]+'<span style="float:right;font-size:11px;font-weight:700">'+_dsEsc(d._server_name||'')+'</span></div>'
+    +'<div style="padding:6px 12px 10px;font-size:12.5px">'
+      +row('Device',_dsEsc(d.name||dd.name||'—'))
+      +row('IMEI',_dsEsc(dd.imei||imei))
+      +row('Last update',_dsEsc(d.time||'—')+(lastMs?' <span style="color:var(--text3);font-weight:600">('+_dsAgo(lastMs)+')</span>':''))
+      +row('Current status',motion)
+      +(ign!==''?row('Ignition / ACC',_dsEsc(ign)):'')
+      +(lat&&lng?row('Location','<a href="https://www.google.com/maps?q='+lat+','+lng+'" target="_blank" style="color:var(--accent2)">📍 Open in Maps</a>'):'')
+      +'<div style="margin-top:8px;font-size:12px;line-height:1.5;color:var(--text2)">'+advice+'</div>'
+      +'<div style="margin-top:6px;font-size:10.5px;color:var(--text3)">Checked '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})+'</div>'
+    +'</div></div>';
+}
+
 function renderActivityLog(activities){
   const el = document.getElementById('td-activity');
   if(!el) return;
@@ -2672,6 +2726,8 @@ function renderActivityLog(activities){
         remarkHtml += `<div style="margin-top:6px;font-size:12px;font-weight:700;color:var(--green)">✅ Task closed.</div>`;
       }
     }
+
+    remarkHtml += _devStatusBtn(remark, idx);
 
     // Email sent indicator for remark entries
     const emailSent = (type === 'remark') ? `<span style="font-size:9px;background:#e8f5ec;color:#1a7a3a;padding:1px 6px;border-radius:4px;font-weight:700;display:inline-flex;align-items:center;gap:3px">✉️ Emailed to customer</span>` : '';
