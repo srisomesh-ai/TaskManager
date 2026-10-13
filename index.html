@@ -456,6 +456,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
       <div class="nav-item super-admin-only" id="nav-staff-notes" onclick="showPage('staff-notes')"><span class="nav-icon">📋</span> Staff Notes</div>
       <div class="nav-item super-admin-only" id="nav-coins" onclick="showPage('coins')"><span class="nav-icon">🪙</span> Coins</div>
       <div class="nav-item super-admin-only" id="nav-admin" onclick="showPage('admin')"><span class="nav-icon">⚙️</span> Admin Panel</div>
+      <div class="nav-item super-admin-only" id="nav-backup" onclick="downloadBackup()"><span class="nav-icon">💾</span> Download Backup</div>
       <div class="sb-footer">
         <div class="sb-av" id="sb-avatar">?</div>
         <div>
@@ -2881,6 +2882,23 @@ function toggleNoAction(){
 // Tasks search: task ID, customer name, phone, location, job, email, vehicle number(s), IMEI(s),
 // name on server and notes. Spaces / dashes are ignored, so "ts09 ea 1234", "TS09EA1234" and
 // just the last digits "1234" all find the vehicle.
+// Admin: download a full copy of all data (.sql file) to this computer. Read-only.
+async function downloadBackup(){
+  if(!currentUser || currentUser.role!=='admin'){ alert('Only admin can download the backup.'); return; }
+  const nav=document.getElementById('nav-backup'); const label=nav?nav.innerHTML:'';
+  if(nav){ nav.innerHTML='<span class="nav-icon">⏳</span> Preparing backup…'; nav.style.pointerEvents='none'; }
+  try{
+    const res=await fetch(API+'?action=backup_download',{cache:'no-store',headers:{'X-Auth-Token':authToken}});
+    const ct=res.headers.get('Content-Type')||'';
+    if(!res.ok || ct.indexOf('json')>=0){ let m='Backup failed'; try{ const j=await res.json(); m=j.error||m; }catch(e){} throw new Error(m); }
+    const blob=await res.blob();
+    const name=((res.headers.get('Content-Disposition')||'').match(/filename="([^"]+)"/)||[])[1]||('bharatgps_backup_'+new Date().toISOString().slice(0,10)+'.sql');
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },2000);
+    alert('✅ Backup downloaded: '+name+' ('+(blob.size/1048576).toFixed(1)+' MB)\n\nKeep this file safe — it contains all your data.');
+  }catch(e){ alert('❌ '+e.message); }
+  finally{ if(nav){ nav.innerHTML=label; nav.style.pointerEvents=''; } }
+}
 function _taskSearchMatch(t, search){
   const q = String(search||'').toLowerCase().trim();
   if(!q) return true;
