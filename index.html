@@ -3774,6 +3774,7 @@ function openCreateModal(){
   clearPayMode();
   _fillTechDropdown('fm-tech',null);
   _setDrawerMode('create', true);
+  _filterJobTypes(document.getElementById('fm-leadtype')?.value);   // job types allowed for the lead type
   if(typeof updateVehicleFieldVisibility === 'function') updateVehicleFieldVisibility();
   document.getElementById('task-modal').classList.add('centered');   // New Task = centred pop-up
   document.getElementById('task-modal').classList.add('open');
@@ -7840,6 +7841,7 @@ async function loadJobTypeItems(){
       o.textContent = item.product_name;
       grp.appendChild(o);
     });
+    if(typeof _filterJobTypes === 'function') _filterJobTypes(document.getElementById('fm-leadtype')?.value);
   } catch(e){
     // Any unexpected error → show the fallback rather than leaving "Loading…" forever.
     fillFallback();
@@ -9244,6 +9246,38 @@ function copyQtLink(e){
 // FREE SERVICE — show only for Troubleshoot / Demonstration
 // ══════════════════════════════════════════════════════════
 // ── DEMO LEAD TYPE ────────────────────────────────────────────────────────
+// Which Job Types each Lead Type may use — NEW TASKS ONLY. Editing an existing task always
+// shows the full list, so nothing already recorded changes. Values are the saved lead types.
+const _JOB_RULES = {
+  'New Lead':               { products:true,  services:['Re-Adding'] },
+  '3rd Party Lead':         { products:true,  services:['Re-Adding'] },
+  'Existing Customer Lead': { products:true,  services:['Troubleshoot/Offline','Vehicle to Vehicle Change','Re-Adding','Only Remove'] },
+  'Demo':                   { products:false, services:['Demonstration'] },
+  'Troubleshoot':           { products:false, services:['Troubleshoot/Offline'] },
+  'Handover':               { products:true,  services:[] }
+};
+function _filterJobTypes(leadType){
+  const job = document.getElementById('fm-job'); if(!job) return;
+  const creating = (window._drawerMode === 'create');
+  const rule = _JOB_RULES[leadType || 'New Lead'];
+  const prodGrp = document.getElementById('fm-job-gps-group');
+  job.querySelectorAll('option').forEach(function(o){
+    if(!o.value) return;                                   // "Select Job Type" / loading placeholder
+    let ok = true;
+    if(creating && rule){
+      const isProduct = prodGrp && prodGrp.contains(o);
+      ok = isProduct ? rule.products : rule.services.indexOf(o.value) !== -1;
+    }
+    o.hidden = !ok; o.disabled = !ok;
+  });
+  job.querySelectorAll('optgroup').forEach(function(g){
+    g.hidden = creating && rule && ![...g.querySelectorAll('option')].some(function(o){ return o.value && !o.hidden; });
+  });
+  // A job that is no longer allowed for this lead type is cleared (new task only)
+  const cur = job.options[job.selectedIndex];
+  if(creating && cur && cur.value && cur.hidden){ job.value=''; if(typeof setModalJobPrice==='function') setModalJobPrice(''); }
+}
+
 function onLeadTypeChange(leadType){
   const isDemo = (leadType === 'Demo');
   const isTrouble = (leadType === 'Troubleshoot');
@@ -9305,6 +9339,7 @@ function onLeadTypeChange(leadType){
     if(pr) pr.value = '';
     if(pc) pc.value = '';
   }
+  _filterJobTypes(leadType);
   checkTaskFormReady();
 }
 
