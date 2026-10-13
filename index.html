@@ -568,7 +568,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
 
         <!-- TOOLBAR -->
         <div class="tasks-toolbar">
-          <input type="text" id="ts-search" class="ts-input ts-search" placeholder="🔍 Search customer, task ID, location..." oninput="filterTasks()">
+          <input type="text" id="ts-search" class="ts-input ts-search" placeholder="🔍 Task ID, name, phone, vehicle no., IMEI..." oninput="filterTasks()">
           <select id="ts-status" class="ts-input ts-select" onchange="filterTasks()">
             <option value="">All Status</option>
             <option>Open</option>
@@ -950,7 +950,7 @@ tr.row-payment-overdue:hover{background:rgba(231,76,60,.12) !important}
 
         <!-- TOOLBAR -->
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
-          <input type="text" id="my-search" class="ts-input ts-search" placeholder="🔍 Search customer, task ID, location..." oninput="renderMyTasks()">
+          <input type="text" id="my-search" class="ts-input ts-search" placeholder="🔍 Task ID, name, phone, vehicle no., IMEI..." oninput="renderMyTasks()">
           <select id="my-status-filter" class="ts-input ts-select" onchange="renderMyTasks()">
             <option value="">All Status</option>
             <option>Open</option>
@@ -2878,6 +2878,19 @@ function toggleNoAction(){
   filterTasks();
 }
 
+// Tasks search: task ID, customer name, phone, location, job, email, vehicle number(s), IMEI(s),
+// name on server and notes. Spaces / dashes are ignored, so "ts09 ea 1234", "TS09EA1234" and
+// just the last digits "1234" all find the vehicle.
+function _taskSearchMatch(t, search){
+  const q = String(search||'').toLowerCase().trim();
+  if(!q) return true;
+  const hay = [t.customer_name, t.task_id, t.location, t.contact_number, t.device_details, t.email,
+               t.vehicle_number, t.gps_serial_no, t.name_on_server, t.search_devices, t.general_notes]
+              .map(v=>v==null?'':String(v)).join(' | ').toLowerCase();
+  if(hay.includes(q)) return true;
+  const cq = q.replace(/[^a-z0-9]/g,'');
+  return cq.length>=3 && hay.replace(/[^a-z0-9|]/g,'').includes(cq);
+}
 function filterTasks(){
   const search = (document.getElementById('ts-search')?.value||'').toLowerCase();
   const status = document.getElementById('ts-status')?.value||'';
@@ -2890,10 +2903,7 @@ function filterTasks(){
     if(tech   && String(t.assigned_to) !== String(tech)) return false;
     if(_noActionOnly && !(+t.opened_no_action===1 || t.opened_no_action==='1')) return false;
     if(window._wfFilter && t.workflow_state !== window._wfFilter) return false;
-    if(search){
-      const hay = [(t.customer_name||''),(t.task_id||''),(t.location||''),(t.contact_number||''),(t.device_details||'')].join(' ').toLowerCase();
-      if(!hay.includes(search)) return false;
-    }
+    if(search && !_taskSearchMatch(t, search)) return false;
     return true;
   });
   window._hiddenClosedCount = hiddenClosed;
@@ -4050,10 +4060,7 @@ function renderMyTasks(){
   // Filter
   myFiltered = myAllTasks.filter(t=>{
     if(status && t.task_status !== status) return false;
-    if(search){
-      const hay = [(t.customer_name||''),(t.task_id||''),(t.location||''),(t.contact_number||'')].join(' ').toLowerCase();
-      if(!hay.includes(search)) return false;
-    }
+    if(search && !_taskSearchMatch(t, search)) return false;
     return true;
   });
 
