@@ -833,6 +833,32 @@ function bs_task_row($pdo, $taskDbId, $taskIdStr = '', $linkedId = 0){
     return $found;
 }
 
+// ── Balance-sheet audit trail ─────────────────────────────────────────────
+// bs_change_log: every change to an entry's fields (who, what, old → new, when, by which action).
+// bs_payment_log: every change in the money received on an entry (+/- amount, mode, date, ref).
+// Logging never blocks the actual save.
+function bs_log_tables($pdo){
+    static $done = false; if ($done) return; $done = true;
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS bs_change_log (id INT AUTO_INCREMENT PRIMARY KEY, bs_id INT NOT NULL, field VARCHAR(60) NOT NULL, old_value TEXT NULL, new_value TEXT NULL, source VARCHAR(60) NULL, changed_by VARCHAR(100) NULL, changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_bs (bs_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $pdo->exec("CREATE TABLE IF NOT EXISTS bs_payment_log (id INT AUTO_INCREMENT PRIMARY KEY, bs_id INT NOT NULL, amount DECIMAL(10,2) NOT NULL, received_after DECIMAL(10,2) NOT NULL, mode VARCHAR(50) NULL, received_on DATE NULL, reference TEXT NULL, source VARCHAR(60) NULL, recorded_by VARCHAR(100) NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_bs (bs_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch(Exception $e){ error_log('bs_log_tables: '.$e->getMessage()); }
+}
+function bs_log_change($pdo, $bsId, $field, $old, $new, $source = null){
+    if ((string)$old === (string)$new) return;
+    if (is_numeric($old) && is_numeric($new) && abs(floatval($old) - floatval($new)) < 0.005) return;
+    bs_log_tables($pdo);
+    try { $pdo->prepare("INSERT INTO bs_change_log (bs_id,field,old_value,new_value,source,changed_by) VALUES (?,?,?,?,?,?)")
+              ->execute([intval($bsId), $field, $old, $new, $source ?: ($GLOBALS['action'] ?? null), $GLOBALS['cu']['name'] ?? 'system']); } catch(Exception $e){}
+}
+function bs_log_payment($pdo, $bsId, $oldRecv, $newRecv, $mode = null, $on = null, $ref = null, $source = null){
+    $delta = round(floatval($newRecv) - floatval($oldRecv), 2);
+    if (abs($delta) < 0.005) return;
+    bs_log_tables($pdo);
+    try { $pdo->prepare("INSERT INTO bs_payment_log (bs_id,amount,received_after,mode,received_on,reference,source,recorded_by) VALUES (?,?,?,?,?,?,?,?)")
+              ->execute([intval($bsId), $delta, round(floatval($newRecv),2), $mode ?: null, $on ?: null, $ref ?: null, $source ?: ($GLOBALS['action'] ?? null), $GLOBALS['cu']['name'] ?? 'system']); } catch(Exception $e){}
+}
+
 // Record the money received on a balance-sheet row, the same way everywhere:
 // - received is never more than the row's total; pending = total - received
 // - status: paid (within ₹1 rounding) / partially_paid / pending
@@ -851,6 +877,7 @@ function bs_set_payment($pdo, $bsId, $recv, $mode = null){
         $on   = ($recv > $old + 0.004) ? date('Y-m-d') : ($recv > 0 ? $r['payment_received_on'] : null);
         $pdo->prepare("UPDATE balance_sheet_entries SET payment_received=?, pending_payment=?, payment_status=?, payment_received_on=?, payment_mode=COALESCE(?,payment_mode), updated_at=NOW() WHERE id=?")
             ->execute([$recv, $pend, $st, $on, ($mode!==null && $mode!=='' ? $mode : null), $bsId]);
+        bs_log_payment($pdo, $bsId, $old, $recv, ($mode ?: $r['payment_mode']), ($recv > $old ? $on : date('Y-m-d')));
         return true;
     } catch(Exception $e){ error_log('bs_set_payment: '.$e->getMessage()); return false; }
 }
@@ -861,7 +888,7 @@ function bs_fix_new($pdo, $bsId){
     try {
         $q = $pdo->prepare("SELECT payment_received FROM balance_sheet_entries WHERE id=?"); $q->execute([$bsId]); $rv = floatval($q->fetchColumn());
         $pdo->prepare("UPDATE balance_sheet_entries SET payment_received=0, payment_received_on=NULL WHERE id=?")->execute([$bsId]);
-        bs_set_payment($pdo, $bsId, $rv);
+        bs_set_payment($pdo, $bsId, $rv);   // logs the opening payment (if any) as +amount
     } catch(Exception $e){}
 }
 
@@ -875,8 +902,12 @@ function bs_sync_row($pdo, $bsId, $serials, $names, $server, $qty, $unit, $total
     $bsId = intval($bsId); if ($bsId <= 0) return false;
     bs_ensure_lock_col($pdo);
     try {
-        $q = $pdo->prepare("SELECT total_locked, payment_received FROM balance_sheet_entries WHERE id=?"); $q->execute([$bsId]);
+        $q = $pdo->prepare("SELECT total_locked, payment_received, qty, total_price FROM balance_sheet_entries WHERE id=?"); $q->execute([$bsId]);
         $r = $q->fetch(PDO::FETCH_ASSOC); if (!$r) return false;
+        if (intval($r['total_locked'] ?? 0) !== 1) {
+            bs_log_change($pdo, $bsId, 'qty', $r['qty'], $qty, 'install sync');
+            bs_log_change($pdo, $bsId, 'total_price', $r['total_price'], $total, 'install sync');
+        }
         if (intval($r['total_locked'] ?? 0) === 1) {
             $pdo->prepare("UPDATE balance_sheet_entries SET gps_serial_no=?,name_on_server=?,server_name=?,payment_mode=COALESCE(?,payment_mode),updated_at=NOW() WHERE id=?")
                 ->execute([$serials ?: null, $names ?: null, $server, ($mode ?: null), $bsId]);
@@ -4042,6 +4073,7 @@ case 'bs_add_entry':
                     remarks=CASE WHEN remarks IS NULL OR remarks='' THEN ? ELSE CONCAT(remarks,' | ',?) END,
                     updated_at=NOW() WHERE id=?")
                 ->execute([$newRecv, $newPend, $newSt, (!empty($b['payment_mode'])?$b['payment_mode']:null), $onDate, $txn, $txn, $txn, $note, $note, $exId]);
+            bs_log_payment($pdo, $exId, $exRecv, $newRecv, $b['payment_mode'] ?? null, $onDate, $txn, 'Sales Entry (added to existing)');
             if (!empty($er['task_db_id'])) { try { log_activity_once($pdo, intval($er['task_db_id']), $userId, '💰 '.$note.' in the Balance Sheet'); } catch(Exception $e){} }
             echo json_encode(['success'=>true,'merged'=>true,'id'=>$exId,'existing_date'=>$er['date'],'payment_received'=>$newRecv,'pending_payment'=>$newPend,'extra'=>$extra]);
             break;
@@ -4076,6 +4108,7 @@ case 'bs_add_entry':
             $b['remarks']??null, $cu['name'],
         ]);
     $newId = $pdo->lastInsertId();
+    if ($recv > 0) bs_log_payment($pdo, $newId, 0, $recv, $b['payment_mode'] ?? null, (!empty($b['payment_received_on'])?$b['payment_received_on']:($b['date'] ?? date('Y-m-d'))), $b['payment_transaction_details'] ?? null, 'new entry by hand');
     // Link back to task if task_db_id provided
     if (!empty($b['task_db_id'])) {
         $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$newId, $b['task_db_id']]);
@@ -4098,6 +4131,20 @@ case 'bs_update_entry':
     foreach ($allowed as $f) {
         if (array_key_exists($f,$body)) { $sets[]="$f=?"; $vals[]=($body[$f]===''?null:$body[$f]); }
     }
+    // Audit trail: record each field that actually changes.
+    try {
+        $oc = $pdo->prepare("SELECT * FROM balance_sheet_entries WHERE id=?"); $oc->execute([$id]); $ocr = $oc->fetch(PDO::FETCH_ASSOC);
+        if ($ocr) {
+            foreach ($allowed as $f) {
+                if (!array_key_exists($f,$body) || !array_key_exists($f,$ocr)) continue;
+                $nv = ($body[$f]==='') ? null : $body[$f];
+                bs_log_change($pdo, $id, $f, $ocr[$f], $nv, 'edited by hand');
+            }
+            if (array_key_exists('payment_received',$body) && $body['payment_received']!=='')
+                bs_log_payment($pdo, $id, $ocr['payment_received'], $body['payment_received'], $body['payment_mode'] ?? $ocr['payment_mode'],
+                               (!empty($body['payment_received_on']) ? $body['payment_received_on'] : date('Y-m-d')), $body['payment_transaction_details'] ?? null, 'edited by hand');
+        }
+    } catch(Exception $e){}
     // A hand correction of qty / unit price / total is kept: automatic syncs won't overwrite it.
     try {
         $lc = $pdo->prepare("SELECT qty, unit_price, total_price FROM balance_sheet_entries WHERE id=?"); $lc->execute([$id]); $lcr = $lc->fetch(PDO::FETCH_ASSOC);
@@ -4106,6 +4153,10 @@ case 'bs_update_entry':
         }
     } catch(Exception $e){}
     if ($sets) { $vals[]=$id; $pdo->prepare("UPDATE balance_sheet_entries SET ".implode(',',$sets)." WHERE id=?")->execute($vals); }
+    // Total changed by hand without new payment figures → keep Pending = Total − Received.
+    if (array_key_exists('total_price',$body) && !array_key_exists('pending_payment',$body) && !array_key_exists('payment_received',$body)) {
+        try { $pdo->prepare("UPDATE balance_sheet_entries SET pending_payment=GREATEST(0,total_price-payment_received) WHERE id=?")->execute([$id]); } catch(Exception $e){}
+    }
     echo json_encode(['success'=>true]);
     break;
 
@@ -4154,6 +4205,20 @@ case 'bs_deleted_list':
         $rows = $pdo->query("SELECT id,bs_id,profile,task_id,row_json,reason,deleted_by,deleted_at,restored_at FROM bs_deleted_log ORDER BY id DESC LIMIT 500")->fetchAll(PDO::FETCH_ASSOC);
         foreach ($rows as &$r) { $r['row'] = json_decode($r['row_json'], true); unset($r['row_json']); }
         echo json_encode(['success'=>true,'rows'=>$rows]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'bs_entry_history':
+    // Payment history + change history of one entry (newest first).
+    if (!in_array($userRole,['admin','assigner'])) { http_response_code(403); echo json_encode(['error'=>'Not authorized']); break; }
+    $hid = intval($_GET['id'] ?? $body['id'] ?? 0);
+    if (!$hid) { echo json_encode(['error'=>'Missing id']); break; }
+    bs_log_tables($pdo);
+    try {
+        $pq = $pdo->prepare("SELECT amount, received_after, mode, received_on, reference, source, recorded_by, created_at FROM bs_payment_log WHERE bs_id=? ORDER BY id DESC LIMIT 200"); $pq->execute([$hid]);
+        $cq = $pdo->prepare("SELECT field, old_value, new_value, source, changed_by, changed_at FROM bs_change_log WHERE bs_id=? ORDER BY id DESC LIMIT 300"); $cq->execute([$hid]);
+        $since = $pdo->query("SELECT MIN(t) FROM (SELECT MIN(created_at) t FROM bs_payment_log UNION ALL SELECT MIN(changed_at) FROM bs_change_log) x")->fetchColumn();
+        echo json_encode(['success'=>true,'payments'=>$pq->fetchAll(PDO::FETCH_ASSOC),'changes'=>$cq->fetchAll(PDO::FETCH_ASSOC),'tracking_since'=>$since]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
@@ -4226,6 +4291,8 @@ case 'bs_merge_entries':
             ->execute([$recv, $pend, $st, $mode, $on, ($txn!==''?$txn:null), $note, $note, $keepId]);
         $pdo->prepare("DELETE FROM balance_sheet_entries WHERE id=?")->execute([$remId]);
         try { $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE bs_entry_id=?")->execute([$keepId, $remId]); } catch(Exception $e){}
+        bs_log_payment($pdo, $keepId, $k['payment_received'], $recv, $mode, $on, null, 'merged duplicate #'.$remId);
+        bs_log_change($pdo, $keepId, 'merged', null, 'entry #'.$remId.' (dated '.$r['date'].') merged in', 'merge');
         echo json_encode(['success'=>true,'keep_id'=>$keepId,'payment_received'=>$recv,'pending_payment'=>$pend,'payment_status'=>$st]);
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
@@ -4642,6 +4709,7 @@ case 'bs_resync_all':
                 payment_mode=COALESCE(?,payment_mode), type=?, payment_received_on=?, updated_at=NOW()
                 WHERE id=?")
                 ->execute([$recv, $pend, $ps, ($r['payment_mode']!==''?$r['payment_mode']:null), $bsType, $on, $r['id']]);
+            bs_log_payment($pdo, $r['id'], $r['bs_received'], $recv, $r['payment_mode'] ?? null, $on, null, 'resync');
             $count++;
         }
         echo json_encode(['success'=>true, 'updated'=>$count, 'created'=>$created]);

@@ -865,8 +865,35 @@ function viewEntry(id){
     + row('Created At', e.created_at?new Date(e.created_at).toLocaleString('en-IN'):'–')
   );
 
-  document.getElementById('bs-view-body').innerHTML = hero + jobSec + paySec + discSec + metaSec;
+  document.getElementById('bs-view-body').innerHTML = hero + jobSec + paySec + discSec + metaSec
+    + '<div id="bs-hist" style="margin-top:12px"><div style="font-size:12px;color:var(--text3);padding:6px 2px">🕘 Loading history…</div></div>';
   document.getElementById('bs-view-ov').classList.add('open');
+  loadEntryHistory(e.id);
+}
+// Payment history + change history of an entry (recorded from the day this was switched on).
+const _BS_FIELD_NAMES={payment_received:'Received',pending_payment:'Pending',payment_status:'Status',payment_mode:'Mode',payment_received_on:'Received on',
+  total_price:'Total',unit_price:'Unit price',qty:'Qty',gst:'GST',date:'Date',payment_transaction_details:'Transaction / UTR',remarks:'Remarks',
+  name_on_server:'Name on server',gps_serial_no:'GPS serial',invoice_no:'Invoice',task_id:'Task',technician_name:'Technician',profile:'Profile',merged:'Merged'};
+const _BS_SOURCE_NAMES={update_task:'Task updated',approve_task:'Approved & closed',approve_payment_keep_open:'Payment approved (task open)',verify_cash_deposit:'Cash deposit verified',
+  add_payment:'Payment added',reject_task:'Sent back to technician',bs_resync_all:'Resync',resync:'Resync',save_device_install:'Device installed',bs_get_entries:'Resync',
+  bs_backfill_installs:'Backfill',bs_from_task:'Created from task',bs_add_entry:'Sales Entry',bs_update_entry:'Edited by hand',bs_merge_entries:'Merge'};
+async function loadEntryHistory(id){
+  const box=document.getElementById('bs-hist'); if(!box) return;
+  const res=await bsApi('bs_entry_history',{id}).catch(()=>({}));
+  if(!res||!res.success){ box.innerHTML=''; return; }
+  const h=v=>String(v==null||v===''?'—':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const dt=v=>v?new Date(String(v).replace(' ','T')).toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+  const m=v=>{ const n=parseFloat(v||0)||0; return (n<0?'−':'+')+'₹'+Math.abs(n).toLocaleString('en-IN',{maximumFractionDigits:2}); };
+  let html='<div style="font-weight:800;font-size:13px;margin:4px 0 6px">💰 Payment history</div>';
+  if(!res.payments.length) html+='<div style="font-size:12px;color:var(--text3);margin-bottom:8px">No payment changes recorded yet.</div>';
+  else html+='<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:10px"><tr style="text-align:left;color:var(--text3)"><th style="padding:4px">When</th><th style="padding:4px;text-align:right">Amount</th><th style="padding:4px;text-align:right">Received total</th><th style="padding:4px">Mode</th><th style="padding:4px">Received on</th><th style="padding:4px">How</th><th style="padding:4px">By</th></tr>'
+    +res.payments.map(p=>'<tr style="border-top:1px solid var(--border)"><td style="padding:4px;white-space:nowrap">'+dt(p.created_at)+'</td><td style="padding:4px;text-align:right;font-weight:700;color:'+((+p.amount)<0?'var(--red)':'var(--green)')+'">'+m(p.amount)+'</td><td style="padding:4px;text-align:right">₹'+(+p.received_after).toLocaleString('en-IN')+'</td><td style="padding:4px">'+h(p.mode)+'</td><td style="padding:4px">'+h(p.received_on)+'</td><td style="padding:4px">'+h(_BS_SOURCE_NAMES[p.source]||p.source)+(p.reference?'<br><span style="color:var(--text3)">'+h(p.reference)+'</span>':'')+'</td><td style="padding:4px">'+h(p.recorded_by)+'</td></tr>').join('')+'</table>';
+  html+='<div style="font-weight:800;font-size:13px;margin:4px 0 6px">✏️ Change history</div>';
+  if(!res.changes.length) html+='<div style="font-size:12px;color:var(--text3)">No changes recorded yet.</div>';
+  else html+='<table style="width:100%;border-collapse:collapse;font-size:12px"><tr style="text-align:left;color:var(--text3)"><th style="padding:4px">When</th><th style="padding:4px">Field</th><th style="padding:4px">Old</th><th style="padding:4px">New</th><th style="padding:4px">How</th><th style="padding:4px">By</th></tr>'
+    +res.changes.map(c=>'<tr style="border-top:1px solid var(--border)"><td style="padding:4px;white-space:nowrap">'+dt(c.changed_at)+'</td><td style="padding:4px;font-weight:700">'+h(_BS_FIELD_NAMES[c.field]||c.field)+'</td><td style="padding:4px;color:var(--red)">'+h(c.old_value)+'</td><td style="padding:4px;color:var(--green)">'+h(c.new_value)+'</td><td style="padding:4px">'+h(_BS_SOURCE_NAMES[c.source]||c.source)+'</td><td style="padding:4px">'+h(c.changed_by)+'</td></tr>').join('')+'</table>';
+  if(res.tracking_since) html+='<div style="font-size:10.5px;color:var(--text3);margin-top:6px">History is recorded from '+dt(res.tracking_since)+'. Earlier changes were not tracked.</div>';
+  box.innerHTML='<div style="border-top:1px solid var(--border);padding-top:10px">'+html+'</div>';
 }
 function closeView(){ document.getElementById('bs-view-ov').classList.remove('open'); }
 
