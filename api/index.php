@@ -833,6 +833,62 @@ function bs_task_row($pdo, $taskDbId, $taskIdStr = '', $linkedId = 0){
     return $found;
 }
 
+// Record the money received on a balance-sheet row, the same way everywhere:
+// - received is never more than the row's total; pending = total - received
+// - status: paid (within ₹1 rounding) / partially_paid / pending
+// - payment_received_on is set to TODAY only when the received amount goes UP (the day the money
+//   came in) and is kept as-is otherwise, so approving / re-syncing later never moves it.
+function bs_set_payment($pdo, $bsId, $recv, $mode = null){
+    $bsId = intval($bsId); if ($bsId <= 0) return false;
+    try {
+        $q = $pdo->prepare("SELECT total_price, payment_received, payment_received_on, payment_mode FROM balance_sheet_entries WHERE id=?"); $q->execute([$bsId]);
+        $r = $q->fetch(PDO::FETCH_ASSOC); if (!$r) return false;
+        $total = floatval($r['total_price']); $old = floatval($r['payment_received']);
+        $recv = max(0, floatval($recv)); if ($total > 0 && $recv > $total) $recv = $total;
+        $pend = max(0, round($total - $recv, 2));
+        $st   = ($total > 0 && $recv >= $total - 1) ? 'paid' : ($recv > 0 ? 'partially_paid' : 'pending');
+        if ($st === 'paid') $pend = 0;
+        $on   = ($recv > $old + 0.004) ? date('Y-m-d') : ($recv > 0 ? $r['payment_received_on'] : null);
+        $pdo->prepare("UPDATE balance_sheet_entries SET payment_received=?, pending_payment=?, payment_status=?, payment_received_on=?, payment_mode=COALESCE(?,payment_mode), updated_at=NOW() WHERE id=?")
+            ->execute([$recv, $pend, $st, $on, ($mode!==null && $mode!=='' ? $mode : null), $bsId]);
+        return true;
+    } catch(Exception $e){ error_log('bs_set_payment: '.$e->getMessage()); return false; }
+}
+
+// Right after an automatic INSERT: apply the shared payment rule (status, pending, received date).
+function bs_fix_new($pdo, $bsId){
+    $bsId = intval($bsId); if ($bsId <= 0) return;
+    try {
+        $q = $pdo->prepare("SELECT payment_received FROM balance_sheet_entries WHERE id=?"); $q->execute([$bsId]); $rv = floatval($q->fetchColumn());
+        $pdo->prepare("UPDATE balance_sheet_entries SET payment_received=0, payment_received_on=NULL WHERE id=?")->execute([$bsId]);
+        bs_set_payment($pdo, $bsId, $rv);
+    } catch(Exception $e){}
+}
+
+// Automatic refresh of a task's row from its installs. Never lowers money already recorded on the
+// row, and keeps qty / unit price / total when they were corrected by hand (total_locked=1).
+function bs_ensure_lock_col($pdo){
+    static $done = false; if ($done) return; $done = true;
+    try { $pdo->exec("ALTER TABLE balance_sheet_entries ADD COLUMN total_locked TINYINT(1) NOT NULL DEFAULT 0"); } catch(Exception $e){}
+}
+function bs_sync_row($pdo, $bsId, $serials, $names, $server, $qty, $unit, $total, $recv, $mode = null){
+    $bsId = intval($bsId); if ($bsId <= 0) return false;
+    bs_ensure_lock_col($pdo);
+    try {
+        $q = $pdo->prepare("SELECT total_locked, payment_received FROM balance_sheet_entries WHERE id=?"); $q->execute([$bsId]);
+        $r = $q->fetch(PDO::FETCH_ASSOC); if (!$r) return false;
+        if (intval($r['total_locked'] ?? 0) === 1) {
+            $pdo->prepare("UPDATE balance_sheet_entries SET gps_serial_no=?,name_on_server=?,server_name=?,payment_mode=COALESCE(?,payment_mode),updated_at=NOW() WHERE id=?")
+                ->execute([$serials ?: null, $names ?: null, $server, ($mode ?: null), $bsId]);
+        } else {
+            $pdo->prepare("UPDATE balance_sheet_entries SET gps_serial_no=?,name_on_server=?,server_name=?,qty=?,unit_price=?,total_price=?,payment_mode=COALESCE(?,payment_mode),updated_at=NOW() WHERE id=?")
+                ->execute([$serials ?: null, $names ?: null, $server, $qty, $unit, $total, ($mode ?: null), $bsId]);
+        }
+        bs_set_payment($pdo, $bsId, max(floatval($recv), floatval($r['payment_received'])));
+        return true;
+    } catch(Exception $e){ error_log('bs_sync_row: '.$e->getMessage()); return false; }
+}
+
 // Ensure every task with installed devices has a balance-sheet entry (billing only installed devices).
 // Safe to run repeatedly — creates missing entries, updates existing ones to match installed count.
 function _bsSyncInstalls($pdo, $cuName){
@@ -904,14 +960,13 @@ function _bsSyncInstalls($pdo, $cuName){
         // service (e.g. paid Troubleshoot) fall back to the job type so the row is not blank.
         $entryName = $allNames !== '' ? $allNames : trim((string)($t2['lead_type'] ?? $t2['device_details'] ?? 'Service charge'));
         if (!empty($t2['bs_entry_id'])) {
-            $pdo->prepare("UPDATE balance_sheet_entries SET gps_serial_no=?,name_on_server=?,server_name=?,qty=?,unit_price=?,total_price=?,payment_received=?,pending_payment=?,payment_status=?,payment_mode=?,updated_at=NOW() WHERE id=?")
-                ->execute([$allSerials?:null,$entryName?:null,$serverName,$billQty,$unit2,$billTotal,$recv2,$pend2,$pStatus,$t2['payment_mode']??null,intval($t2['bs_entry_id'])]);
+            bs_sync_row($pdo, $t2['bs_entry_id'], $allSerials, $entryName, $serverName, $billQty, $unit2, $billTotal, $recv2, $t2['payment_mode'] ?? null);
             $updated++;
         } else {
             $pdo->prepare("INSERT INTO balance_sheet_entries (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,name_on_server,server_name,device_model,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_mode,technician_name,location,remarks,created_by_code) VALUES (?,?,?,?,CURDATE(),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
                 ->execute([bs_type_for_task($t2['device_details']??''),$profile2,$t2['task_id'],$tid,$allSerials?:null,$t2['lead_type']??null,$entryName?:null,$serverName,$t2['device_details']??null,$billQty,$unit2,floatval($t2['gst_amount']??0),$billTotal,$pStatus,$recv2,$pend2,$t2['payment_mode']??null,$t2['tech_name']??null,$t2['location']??null,$t2['general_notes']??null,$cuName??'system']);
             $bsId=$pdo->lastInsertId();
-            if($bsId){ $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$bsId,$tid]); }
+            if($bsId){ $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$bsId,$tid]); bs_fix_new($pdo,$bsId); }
             $created++;
         }
     }
@@ -1853,16 +1908,11 @@ case 'update_task':
             // Never reduce a payment already recorded on the entry (approved / deposit verified).
             if ($curBs && floatval($curBs['payment_received']) > $recv3) $recv3 = floatval($curBs['payment_received']);
             if ($recv3 > $total3) $recv3 = $total3;
-            $pend3 = max(0, $total3 - $recv3);
-            if ($total3 <= 0 || $recv3 <= 0)    $ps3 = 'pending';
-            elseif ($recv3 >= $total3 - 15)      $ps3 = 'paid';
-            else                                 $ps3 = 'partially_paid';
 
-            $pdo->prepare("UPDATE balance_sheet_entries SET
-                payment_received=?, pending_payment=?, payment_status=?,
-                payment_mode=?, total_price=?, updated_at=NOW()
-                WHERE id=?")
-                ->execute([$recv3, $pend3, $ps3, $pmode3, $total3, $bsRow['bs_entry_id']]);
+            $pdo->prepare("UPDATE balance_sheet_entries SET payment_mode=?, total_price=?, updated_at=NOW() WHERE id=?")
+                ->execute([$pmode3, $total3, $bsRow['bs_entry_id']]);
+            // Received / pending / status / received date — one shared rule (see bs_set_payment).
+            bs_set_payment($pdo, $bsRow['bs_entry_id'], $recv3);
             if ($priceChanged && $unitNow !== null) {
                 try { $pdo->prepare("UPDATE balance_sheet_entries SET unit_price=? WHERE id=?")->execute([$unitNow, $bsRow['bs_entry_id']]); } catch(Exception $e){}
             }
@@ -2044,13 +2094,17 @@ case 'update_task':
                 $btotal=floatval($btask['price_to_collect']??0);
                 $bunit=$bqty>0?$btotal/$bqty:$btotal;
                 $brecv=floatval($btask['amount_collected']??0);
+                // Cash is received only once deposited & confirmed; until then it is pending (with the technician).
+                if (strtolower((string)($btask['payment_mode']??''))==='cash' && ($btask['cash_deposit_status']??'') !== 'deposited') $brecv = 0;
+                if ($brecv > $btotal) $brecv = $btotal;
                 $bpend=max(0,$btotal-$brecv);
-                $bpayStatus=$brecv>=$btotal&&$btotal>0?'With Technician — Collected':'With Technician — Pending';
+                $bpayStatus=($brecv>=$btotal&&$btotal>0)?'paid':($brecv>0?'partially_paid':'pending');
                 $bprofile=!empty($btask['profile'])?$btask['profile']:'BGPT';
                 $pdo->prepare("INSERT INTO balance_sheet_entries (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,name_on_server,server_name,device_model,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_mode,technician_name,location,remarks,created_by_code) VALUES (?,?,?,?,CURDATE(),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
                     ->execute([bs_type_for_task($btask['device_details']??''),$bprofile,$btask['task_id'],$id,$btask['gps_serial_no']??null,$btask['lead_type']??null,$btask['name_on_server']??null,$btask['server_name']??null,$btask['device_details']??null,$bqty,$bunit,floatval($btask['gst_amount']??0),$btotal,$bpayStatus,$brecv,$bpend,$btask['payment_mode']??null,$btask['tech_name']??null,$btask['location']??null,$btask['general_notes']??null,$cu['name']]);
                 $bsId=$pdo->lastInsertId();
                 $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$bsId,$id]);
+                bs_fix_new($pdo,$bsId);
             }
         } catch(Exception $e) { error_log('BS awaiting error: '.$e->getMessage()); }
 
@@ -2126,8 +2180,9 @@ case 'approve_payment_keep_open':
     $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'status_change')")
         ->execute([$id,$userId,'Payment verified & received in full. Task kept OPEN — remaining device installation pending; technician to close after finishing.']);
     // Balance sheet: mark payment received (money is in), even though the task is still open.
+    $t['bs_entry_id'] = bs_task_row($pdo, $id, $t['task_id'] ?? '', $t['bs_entry_id'] ?? 0);
     if (!empty($t['bs_entry_id'])) {
-        $pdo->prepare("UPDATE balance_sheet_entries SET payment_status='paid',payment_received=?,pending_payment=0,payment_received_on=CURDATE() WHERE id=?")->execute([$collected,$t['bs_entry_id']]);
+        bs_set_payment($pdo, $t['bs_entry_id'], $collected);
     }
     // Notify the technician to finish the remaining devices.
     try {
@@ -2195,7 +2250,7 @@ case 'approve_task':
     // Update BS entry if exists — mark payment as received by company
     $t['bs_entry_id'] = bs_task_row($pdo, $id, $t['task_id'] ?? '', $t['bs_entry_id'] ?? 0);
     if ($t['bs_entry_id']) {
-        $pdo->prepare("UPDATE balance_sheet_entries SET payment_status='paid',payment_received=?,pending_payment=0,payment_received_on=CURDATE() WHERE id=?")->execute([$collected,$t['bs_entry_id']]);
+        bs_set_payment($pdo, $t['bs_entry_id'], $collected);
     } else {
         // Create BS entry now (fallback if not created at Awaiting Approval)
         try {
@@ -2207,6 +2262,7 @@ case 'approve_task':
                 ->execute([bs_type_for_task($t['device_details']??''),$taskProfile,$t['task_id'],$id,$t['gps_serial_no']??null,$t['lead_type']??null,$t['name_on_server']??null,$t['server_name']??null,$t['device_details']??null,$qty2,$unit2,floatval($t['gst_amount']??0),$total2,'paid',$collected,0,$t['payment_mode']??null,$t['tech_name']??null,$t['location']??null,$t['general_notes']??null,$cu['name']]);
             $bsId=$pdo->lastInsertId();
             $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$bsId,$id]);
+            bs_fix_new($pdo, $bsId);
         } catch(Exception $e) { error_log('BS close error: '.$e->getMessage()); }
     }
     echo json_encode(['success'=>true]);
@@ -2247,6 +2303,23 @@ case 'reject_task':
     $id=intval($body['id']??0);
     if(!$id){ echo json_encode(['error'=>'Missing id']); break; }
     $rjReason = trim($body['reason'] ?? 'Needs revision');
+    // Balance sheet: the task's collected amount is being reset. If that money was never confirmed
+    // (UPI not verified / cash not deposited), take it off the balance sheet too, so the sheet does
+    // not show money the task no longer records. Confirmed money stays.
+    try {
+        $rq = $pdo->prepare("SELECT task_id, bs_entry_id, payment_verify_status, cash_deposit_status FROM tasks WHERE id=?"); $rq->execute([$id]); $rr = $rq->fetch(PDO::FETCH_ASSOC);
+        if ($rr && ($rr['payment_verify_status'] ?? '') !== 'verified' && ($rr['cash_deposit_status'] ?? '') !== 'deposited') {
+            $rbs = bs_task_row($pdo, $id, $rr['task_id'] ?? '', $rr['bs_entry_id'] ?? 0);
+            if ($rbs) {
+                $rc = $pdo->prepare("SELECT payment_received FROM balance_sheet_entries WHERE id=?"); $rc->execute([$rbs]); $was = floatval($rc->fetchColumn());
+                if ($was > 0) {
+                    bs_set_payment($pdo, $rbs, 0);
+                    $rn = 'Sent back to technician '.date('Y-m-d').' by '.($cu['name'] ?? 'admin').': unconfirmed ₹'.number_format($was,2).' removed until re-collected';
+                    $pdo->prepare("UPDATE balance_sheet_entries SET remarks=CASE WHEN remarks IS NULL OR remarks='' THEN ? ELSE CONCAT(remarks,' | ',?) END WHERE id=?")->execute([$rn,$rn,$rbs]);
+                }
+            }
+        }
+    } catch(Exception $e){ error_log('reject_task bs: '.$e->getMessage()); }
     // Send the task back to the technician as genuinely editable again.
     // Flipping only the status leaves the collected amount + submission/cash flags in place,
     // so the technician app still shows it as "done" and they cannot fix the amount.
@@ -2288,6 +2361,16 @@ case 'add_payment':
         ->execute([$tid,$amt,$body['payment_mode']??'Cash',$body['transaction_ref']??'',$userId]);
     $total=$pdo->prepare("SELECT SUM(amount) FROM payments WHERE task_id=?"); $total->execute([$tid]); $col=$total->fetchColumn();
     $pdo->prepare("UPDATE tasks SET amount_collected=?,payment_status=IF(?>=price_to_collect,'Collected','Partial') WHERE id=?")->execute([$col,$col,$tid]);
+    // Keep the balance sheet in step (cash counts only once deposited & confirmed).
+    try {
+        $pt = $pdo->prepare("SELECT task_id, bs_entry_id, payment_mode, cash_deposit_status FROM tasks WHERE id=?"); $pt->execute([$tid]); $ptr = $pt->fetch();
+        $pBs = $ptr ? bs_task_row($pdo, $tid, $ptr['task_id'] ?? '', $ptr['bs_entry_id'] ?? 0) : 0;
+        $pMode = $body['payment_mode'] ?? 'Cash';
+        if ($pBs && !(strtolower($pMode)==='cash' && ($ptr['cash_deposit_status'] ?? '') !== 'deposited')) {
+            $cur = $pdo->prepare("SELECT payment_received FROM balance_sheet_entries WHERE id=?"); $cur->execute([$pBs]);
+            bs_set_payment($pdo, $pBs, max(floatval($col), floatval($cur->fetchColumn())), $pMode);
+        }
+    } catch(Exception $e){}
     echo json_encode(['success'=>true,'total_collected'=>$col]);
     break;
 
@@ -3652,18 +3735,7 @@ case 'save_device_install':
                 $existingBsId = bs_task_row($pdo, $tid, $t2['task_id'] ?? '', $t2['bs_entry_id'] ?? 0);
                 if ($existingBsId) {
                     // UPDATE the same task entry — club installs together, grow qty/amount
-                    $pdo->prepare("UPDATE balance_sheet_entries SET
-                        gps_serial_no=?, name_on_server=?, server_name=?,
-                        qty=?, unit_price=?, total_price=?,
-                        payment_received=?, pending_payment=?, payment_status=?,
-                        updated_at=NOW()
-                        WHERE id=?")
-                        ->execute([
-                            $allSerials ?: null, $allNames ?: null, $serverName,
-                            $billQty, $unit2, $billTotal,
-                            $recv2, $pend2, $pStatus,
-                            $existingBsId
-                        ]);
+                    bs_sync_row($pdo, $existingBsId, $allSerials, $allNames, $serverName, $billQty, $unit2, $billTotal, $recv2);
                 } else {
                     // CREATE the task entry on first install
                     $bsType2 = bs_type_for_task($t2['device_details']??'');
@@ -3693,6 +3765,7 @@ case 'save_device_install':
                     $newBsId = $pdo->lastInsertId();
                     if ($newBsId) {
                         $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$newBsId, $tid]);
+                        bs_fix_new($pdo, $newBsId);
                     }
                 }
             }
@@ -3744,18 +3817,18 @@ case 'bs_backfill_installs':
             $billQty   = $installedCount;
             $billTotal = round($unit2*$billQty, 2);
             $recv2     = floatval($t2['amount_collected']??0); if($recv2>$billTotal)$recv2=$billTotal;
+            if (strtolower((string)($t2['payment_mode']??''))==='cash' && ($t2['cash_deposit_status']??'') !== 'deposited') $recv2 = 0;
             $pend2     = max(0, $billTotal-$recv2);
             $pStatus   = ($recv2>=$billTotal && $billTotal>0) ? 'paid' : ($recv2>0 ? 'partially_paid' : 'pending');
             $profile2  = !empty($t2['profile']) ? $t2['profile'] : 'BGPT';
             if (!empty($t2['bs_entry_id'])) {
-                $pdo->prepare("UPDATE balance_sheet_entries SET gps_serial_no=?,name_on_server=?,server_name=?,qty=?,unit_price=?,total_price=?,payment_received=?,pending_payment=?,payment_status=?,updated_at=NOW() WHERE id=?")
-                    ->execute([$allSerials?:null,$allNames?:null,$serverName,$billQty,$unit2,$billTotal,$recv2,$pend2,$pStatus,intval($t2['bs_entry_id'])]);
+                bs_sync_row($pdo, $t2['bs_entry_id'], $allSerials, $allNames, $serverName, $billQty, $unit2, $billTotal, $recv2);
                 $updated++;
             } else {
                 $pdo->prepare("INSERT INTO balance_sheet_entries (type,profile,task_id,task_db_id,date,gps_serial_no,customer_type,name_on_server,server_name,device_model,qty,unit_price,gst,total_price,payment_status,payment_received,pending_payment,payment_mode,technician_name,location,remarks,created_by_code) VALUES (?,?,?,?,CURDATE(),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
                     ->execute([bs_type_for_task($t2['device_details']??''),$profile2,$t2['task_id'],$tid,$allSerials?:null,$t2['lead_type']??null,$allNames?:null,$serverName,$t2['device_details']??null,$billQty,$unit2,floatval($t2['gst_amount']??0),$billTotal,$pStatus,$recv2,$pend2,$t2['payment_mode']??null,$t2['tech_name']??null,$t2['location']??null,$t2['general_notes']??null,$cu['name']??'system']);
                 $bsId=$pdo->lastInsertId();
-                if($bsId){ $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$bsId,$tid]); }
+                if($bsId){ $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$bsId,$tid]); bs_fix_new($pdo,$bsId); }
                 $created++;
             }
         }
@@ -3796,7 +3869,12 @@ case 'bs_get_entries':
     $profile = $_GET['profile'] ?? 'BGPT';
     $where[] = "profile=?"; $params[] = $profile;
     if (!empty($_GET['type']))     { $where[]="type=?";          $params[]=$_GET['type']; }
-    if (!empty($_GET['from']))     { $where[]="date>=?";         $params[]=$_GET['from']; }
+    if (!empty($_GET['from']))     {
+        // with or_recv=1 also bring rows PAID since that date (old sales paid recently), so the
+        // page's "collected in period" figure is complete
+        if (!empty($_GET['or_recv'])) { $where[]="(date>=? OR payment_received_on>=?)"; $params[]=$_GET['from']; $params[]=$_GET['from']; }
+        else { $where[]="date>=?"; $params[]=$_GET['from']; }
+    }
     if (!empty($_GET['to']))       { $where[]="date<=?";         $params[]=$_GET['to']; }
     if (!empty($_GET['search']))   { $q='%'.$_GET['search'].'%'; $where[]="(task_id LIKE ? OR name_on_server LIKE ? OR gps_serial_no LIKE ? OR invoice_no LIKE ? OR technician_name LIKE ?)"; $params=array_merge($params,[$q,$q,$q,$q,$q]); }
     if (!empty($_GET['pending']))  { $where[]="pending_payment > 0"; }
@@ -4020,6 +4098,13 @@ case 'bs_update_entry':
     foreach ($allowed as $f) {
         if (array_key_exists($f,$body)) { $sets[]="$f=?"; $vals[]=($body[$f]===''?null:$body[$f]); }
     }
+    // A hand correction of qty / unit price / total is kept: automatic syncs won't overwrite it.
+    try {
+        $lc = $pdo->prepare("SELECT qty, unit_price, total_price FROM balance_sheet_entries WHERE id=?"); $lc->execute([$id]); $lcr = $lc->fetch(PDO::FETCH_ASSOC);
+        if ($lcr) foreach (['qty','unit_price','total_price'] as $lf) {
+            if (array_key_exists($lf,$body) && $body[$lf] !== '' && abs(floatval($body[$lf]) - floatval($lcr[$lf])) > 0.004) { bs_ensure_lock_col($pdo); $sets[]="total_locked=1"; break; }
+        }
+    } catch(Exception $e){}
     if ($sets) { $vals[]=$id; $pdo->prepare("UPDATE balance_sheet_entries SET ".implode(',',$sets)." WHERE id=?")->execute($vals); }
     echo json_encode(['success'=>true]);
     break;
@@ -4428,6 +4513,8 @@ case 'bs_from_task':
     $total = floatval($t['price_to_collect']??0);
     $unit  = $qty>0 ? $total/$qty : $total;
     $recv  = floatval($t['amount_collected']??0);
+    if (strtolower((string)($t['payment_mode']??''))==='cash' && ($t['cash_deposit_status']??'') !== 'deposited') $recv = 0;
+    if ($recv > $total) $recv = $total;
     $pend  = max(0,$total-$recv);
     $profile = $body['profile']??'BGPT';
     $pdo->prepare("INSERT INTO balance_sheet_entries
@@ -4457,6 +4544,7 @@ case 'bs_from_task':
         ]);
     $newId = $pdo->lastInsertId();
     $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$newId,$taskDbId]);
+    bs_fix_new($pdo, $newId);
     echo json_encode(['success'=>true,'id'=>$newId,'task_id'=>$t['task_id']]);
     break;
 
@@ -4510,14 +4598,21 @@ case 'bs_resync_all':
         // FIRST: create any MISSING entries for tasks that have installed devices but no BS entry yet.
         $created = 0;
         try { $syncRes = _bsSyncInstalls($pdo, $cu['name'] ?? 'system'); $created = intval($syncRes['created'] ?? 0); } catch(Exception $e){ error_log('resync create: '.$e->getMessage()); }
-        // THEN: refresh payment figures on all task-linked entries.
-        $rows = $pdo->query("SELECT b.id, b.task_db_id, b.payment_received AS bs_received, t.price_to_collect, t.amount_collected, t.payment_mode, t.task_status, t.device_details, t.cash_deposit_status
+        // THEN: refresh payment figures on all task-linked entries. The entry's own total is kept
+        // (it is billed per installed device and may have been corrected by hand) — only the
+        // payment figures are brought in step with the task.
+        $lastPaySql = "NULL";
+        try { if ($pdo->query("SHOW TABLES LIKE 'payments'")->fetchColumn()) $lastPaySql = "(SELECT MAX(p.created_at) FROM payments p WHERE p.task_id=t.id)"; } catch(Exception $e){}
+        $rows = $pdo->query("SELECT b.id, b.task_db_id, b.date AS bs_date, b.payment_received AS bs_received, b.total_price AS bs_total, b.payment_received_on AS bs_on,
+                t.price_to_collect, t.amount_collected, t.payment_mode, t.task_status, t.device_details, t.cash_deposit_status, t.cash_deposit_date,
+                ".$lastPaySql." AS last_pay
             FROM balance_sheet_entries b
             JOIN tasks t ON b.task_db_id = t.id
             WHERE b.task_db_id IS NOT NULL")->fetchAll();
         $count = 0;
         foreach ($rows as $r) {
-            $total = floatval($r['price_to_collect']??0);
+            $total = floatval($r['bs_total']??0);
+            if ($total <= 0) $total = floatval($r['price_to_collect']??0);
             // Cash counts as received only once deposited & confirmed; otherwise it is still pending.
             $isCash = strtolower((string)($r['payment_mode']??''))==='cash';
             $recv = floatval($r['amount_collected']??0);
@@ -4527,15 +4622,26 @@ case 'bs_resync_all':
             if ($recv > $total) $recv = $total;
             $pend  = max(0, $total - $recv);
             if ($total <= 0 || $recv <= 0)  $ps = 'pending';
-            elseif ($recv >= $total - 15)   $ps = 'paid';
+            elseif ($recv >= $total - 1)    { $ps = 'paid'; $pend = 0; }
             else                             $ps = 'partially_paid';
+            // Received date: keep the one already recorded. If missing, use when the money actually
+            // came in (last payment / cash deposit date). If the money is NEW in this resync, today;
+            // for an old payment with no date on record, the entry's own date (never today, so old
+            // money is not counted as collected this month).
+            $on = $r['bs_on'];
+            if ($recv > 0 && !$on) {
+                if (!empty($r['last_pay']))              $on = substr($r['last_pay'],0,10);
+                elseif (!empty($r['cash_deposit_date']))  $on = substr($r['cash_deposit_date'],0,10);
+                elseif ($recv > floatval($r['bs_received'] ?? 0) + 0.004) $on = date('Y-m-d');
+                else                                      $on = $r['bs_date'];
+            }
+            if ($recv <= 0) $on = null;
             $bsType = bs_type_for_task($r['device_details']??'');
             $pdo->prepare("UPDATE balance_sheet_entries SET
                 payment_received=?, pending_payment=?, payment_status=?,
-                payment_mode=?, total_price=?, type=?, updated_at=NOW(),
-                payment_received_on = CASE WHEN ?='paid' AND payment_received_on IS NULL THEN CURDATE() ELSE payment_received_on END
+                payment_mode=COALESCE(?,payment_mode), type=?, payment_received_on=?, updated_at=NOW()
                 WHERE id=?")
-                ->execute([$recv, $pend, $ps, $r['payment_mode'], $total, $bsType, $ps, $r['id']]);
+                ->execute([$recv, $pend, $ps, ($r['payment_mode']!==''?$r['payment_mode']:null), $bsType, $on, $r['id']]);
             $count++;
         }
         echo json_encode(['success'=>true, 'updated'=>$count, 'created'=>$created]);
@@ -5943,19 +6049,11 @@ case 'verify_cash_deposit':
             ->execute([$id2]);
         // Mark the task's balance-sheet entry as payment received
         try {
-            $trow = $pdo->prepare("SELECT bs_entry_id, amount_collected, price_to_collect FROM tasks WHERE id=?");
+            $trow = $pdo->prepare("SELECT bs_entry_id, amount_collected, price_to_collect, task_id FROM tasks WHERE id=?");
             $trow->execute([$id2]); $tr = $trow->fetch();
+            if($tr) $tr['bs_entry_id'] = bs_task_row($pdo, $id2, $tr['task_id'] ?? '', $tr['bs_entry_id'] ?? 0);
             if($tr && !empty($tr['bs_entry_id'])){
-                $recv = floatval($tr['amount_collected'] ?? 0);
-                // fetch the billed total on the entry so pending is computed against installed amount
-                $bse = $pdo->prepare("SELECT total_price FROM balance_sheet_entries WHERE id=?");
-                $bse->execute([intval($tr['bs_entry_id'])]); $bsrow = $bse->fetch();
-                $billed = $bsrow ? floatval($bsrow['total_price']) : $recv;
-                if($recv > $billed) $recv = $billed;
-                $pend = max(0, $billed - $recv);
-                $status = ($recv >= $billed && $billed > 0) ? 'paid' : ($recv>0 ? 'partially_paid' : 'pending');
-                $pdo->prepare("UPDATE balance_sheet_entries SET payment_received=?, pending_payment=?, payment_status=?, payment_received_on=CURDATE(), updated_at=NOW() WHERE id=?")
-                    ->execute([$recv, $pend, $status, intval($tr['bs_entry_id'])]);
+                bs_set_payment($pdo, $tr['bs_entry_id'], floatval($tr['amount_collected'] ?? 0), 'Cash');
             }
         } catch(Exception $e) {}
         $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'remark')")

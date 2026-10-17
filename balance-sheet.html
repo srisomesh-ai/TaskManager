@@ -145,6 +145,12 @@ tr:hover td{background:#f7f9fc}
         <option value="pending">Pending Only</option>
       </select>
     </div>
+    <div class="bs-tb-grp"><span class="bs-tb-lbl">Show by</span>
+      <select class="bs-tb-sel" id="bs-basis" onchange="bsBasisChange()" title="Sale date = when the sale/installation happened. Payment received date = when the money actually came in.">
+        <option value="sale">📅 Sale date</option>
+        <option value="received">💰 Payment received date</option>
+      </select>
+    </div>
     <div class="bs-tb-grp"><span class="bs-tb-lbl">From</span>
       <input type="date" class="bs-tb-in" id="bs-from" onchange="bsFromChange()">
     </div>
@@ -472,10 +478,11 @@ async function loadEntries(){
   const _m = (document.getElementById('bs-month')||{}).value;
   const _f = (document.getElementById('bs-from')||{}).value;
   const _cut = new Date(); _cut.setDate(_cut.getDate() - 120);
-  if(_m==='all' || _m==='pending' || (_f && new Date(_f) < _cut)) window._bsLoadAll = true;
+  if(_m==='all' || _m==='pending' || (_f && new Date(_f) < _cut) || bsBasis()==='received') window._bsLoadAll = true;
   if(!window._bsLoadAll){
     const d = new Date(); d.setDate(d.getDate() - 120); // last ~4 months
     params.from = d.toISOString().slice(0,10);
+    params.or_recv = 1;   // also old sales that were paid recently (for "Collected in period")
   }
   const res = await bsApi('bs_get_entries', params).catch(()=>({}));
   if(res.error){
@@ -589,11 +596,14 @@ function renderStats(s){
   const cards=[
     {l:'Devices Installed', v:(+s.devices_sold||0).toLocaleString('en-IN'),  c:'#0E5C5C'},
     {l:'Licenses/Services', v:(+s.license_count||0).toLocaleString('en-IN'), c:'#5b2d8e'},
-    {l:'Sales Value',       v:fmt(s.total_sales),        c:'#1a56a0'},
+    {l:(bsBasis()==='received'?'Sale value of these payments':'Sales Value'), v:fmt(s.total_sales), c:'#1a56a0'},
     {l:'License Value',     v:fmt(s.total_license),      c:'#5b2d8e'},
-    {l:'Cash Received',     v:fmt(s.payment_received),   c:'#1a7a3a'},
+    {l:(bsBasis()==='received'?'Received (by received date)':'Received on these sales'), v:fmt(s.payment_received), c:'#1a7a3a'},
     {l:'Outstanding',       v:fmt(s.pending_payment),    c:'#c0392b'},
   ];
+  // Cash view: everything collected in this period, including payments for sales of earlier months.
+  const col = bsBasis()==='sale' ? bsCollectedInPeriod() : null;
+  if(col) cards.push({l:'Collected in period (any sale month) · '+col.n+' payments', v:fmt(col.sum), c:'#0f766e'});
   document.getElementById('bs-stats').innerHTML=cards.map(c=>`
     <div class="bs-stat" style="border-top-color:${c.c}">
       <div class="v" style="color:${c.c}">${c.v}</div>
@@ -601,8 +611,35 @@ function renderStats(s){
     </div>`).join('');
 }
 
+// "Show by": sale date (default, as before) or the date the payment was received.
+function bsBasis(){ return (document.getElementById('bs-basis')||{}).value==='received' ? 'received' : 'sale'; }
+function bsRowDate(e, basis){ return basis==='received' ? String(e.payment_received_on||'').slice(0,10) : String(e.date||'').slice(0,10); }
+async function bsBasisChange(){
+  // Older sales can be paid now, so the received view needs the full history.
+  if(bsBasis()==='received' && !window._bsLoadAll){ window._bsLoadAll=true; await loadEntries(); return; }
+  curPage=1; renderTable();
+}
+// Money collected in the selected period by RECEIVED date — whatever month the sale was in.
+function bsCollectedInPeriod(){
+  const month=document.getElementById('bs-month')?.value||'current';
+  const from=document.getElementById('bs-from')?.value||'', to=document.getElementById('bs-to')?.value||'';
+  const type=document.getElementById('bs-type')?.value||'';
+  if(month!=='current' && !from && !to) return null;
+  const now=new Date(), cm=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  let sum=0, n=0;
+  allEntries.forEach(e=>{
+    if(type && e.type!==type) return;
+    const d=String(e.payment_received_on||'').slice(0,10); if(!d) return;
+    if(from||to){ if(from && d<from) return; if(to && d>to) return; }
+    else if(!d.startsWith(cm)) return;
+    const r=parseFloat(e.payment_received||0)||0; if(r<=0) return;
+    sum+=r; n++;
+  });
+  return {sum,n};
+}
 function getFiltered(){
   const search=(document.getElementById('bs-search')?.value||'').toLowerCase();
+  const basis=bsBasis();
   const month=document.getElementById('bs-month')?.value||'current';
   const type=document.getElementById('bs-type')?.value||'';
   const from=document.getElementById('bs-from')?.value||'';
@@ -611,10 +648,12 @@ function getFiltered(){
   return allEntries.filter(e=>{
     if(type && e.type!==type) return false;
     if(month==='pending' && (+e.pending_payment||0)<=0) return false;
-    if(month==='current' && !from && !to && !(e.date||'').startsWith(cm)) return false;
-    if(from && to && (e.date<from||e.date>to)) return false;
-    else if(from && !to && e.date<from) return false;
-    else if(!from && to && e.date>to) return false;
+    const d=bsRowDate(e, basis);
+    if(basis==='received' && (!d || (+e.payment_received||0)<=0)) return false;
+    if(month==='current' && !from && !to && !d.startsWith(cm)) return false;
+    if(from && to && (d<from||d>to)) return false;
+    else if(from && !to && d<from) return false;
+    else if(!from && to && d>to) return false;
     if(search){
       // Search across EVERY field of the entry so any key works (model, profile, customer,
       // payment mode, remarks, amounts, dates, etc), not just a fixed few.
@@ -713,6 +752,7 @@ function clearFilters(){
   ['bs-search','bs-from','bs-to'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('bs-month').value='current';
   document.getElementById('bs-type').value='';
+  const bb=document.getElementById('bs-basis'); if(bb) bb.value='sale';
   curPage=1; renderTable();
 }
 function toggleAll(cb){
