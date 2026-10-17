@@ -805,6 +805,34 @@ function bs_archive($pdo, $where, $params, $reason){
     } catch(Exception $e){ error_log('bs_archive: '.$e->getMessage()); }
 }
 
+// ONE row per task: find the balance-sheet row that already belongs to a task, so no path ever
+// creates a second one. Checks the task's link first (only if that row still exists), then any
+// row carrying the task's id. Repairs the link when it was missing/stale. Returns 0 if none.
+function bs_task_row($pdo, $taskDbId, $taskIdStr = '', $linkedId = 0){
+    $taskDbId = intval($taskDbId); $linkedId = intval($linkedId); $taskIdStr = trim((string)$taskIdStr);
+    $found = 0;
+    try {
+        if ($linkedId > 0) {
+            $q = $pdo->prepare("SELECT id FROM balance_sheet_entries WHERE id=?"); $q->execute([$linkedId]);
+            $found = intval($q->fetchColumn());
+        }
+        if (!$found && $taskDbId > 0) {
+            $q = $pdo->prepare("SELECT id FROM balance_sheet_entries WHERE task_db_id=? ORDER BY id ASC LIMIT 1"); $q->execute([$taskDbId]);
+            $found = intval($q->fetchColumn());
+        }
+        if (!$found && $taskIdStr !== '') {
+            $q = $pdo->prepare("SELECT id FROM balance_sheet_entries WHERE task_id=? AND type='sales' AND (task_db_id IS NULL OR task_db_id=0 OR task_db_id=?) ORDER BY id ASC LIMIT 1");
+            $q->execute([$taskIdStr, $taskDbId]);
+            $found = intval($q->fetchColumn());
+            if ($found && $taskDbId > 0) { $pdo->prepare("UPDATE balance_sheet_entries SET task_db_id=? WHERE id=? AND (task_db_id IS NULL OR task_db_id=0)")->execute([$taskDbId, $found]); }
+        }
+        if ($taskDbId > 0 && $found !== $linkedId) {
+            $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$found ?: null, $taskDbId]);
+        }
+    } catch(Exception $e){ error_log('bs_task_row: '.$e->getMessage()); return $linkedId; }
+    return $found;
+}
+
 // Ensure every task with installed devices has a balance-sheet entry (billing only installed devices).
 // Safe to run repeatedly — creates missing entries, updates existing ones to match installed count.
 function _bsSyncInstalls($pdo, $cuName){
@@ -817,6 +845,7 @@ function _bsSyncInstalls($pdo, $cuName){
         $tr = $pdo->prepare("SELECT t.*,u.name as tech_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?");
         $tr->execute([$tid]); $t2 = $tr->fetch();
         if (!$t2) continue;
+        $t2['bs_entry_id'] = bs_task_row($pdo, $tid, $t2['task_id'] ?? '', $t2['bs_entry_id'] ?? 0);
         $di = $pdo->prepare("SELECT gps_serial_no,name_on_server,server_name FROM task_device_installs WHERE task_id=? AND gps_serial_no IS NOT NULL AND gps_serial_no != '' ORDER BY device_index ASC");
         $di->execute([$tid]); $installs = $di->fetchAll();
         $installedCount = count($installs);
@@ -1795,6 +1824,7 @@ case 'update_task':
     try {
         $bsCheck = $pdo->prepare("SELECT bs_entry_id, price_to_collect, amount_collected, payment_mode, task_status, cash_deposit_status FROM tasks WHERE id=?");
         $bsCheck->execute([$id]); $bsRow = $bsCheck->fetch();
+        if ($bsRow) $bsRow['bs_entry_id'] = bs_task_row($pdo, $id, $existing['task_id'] ?? '', $bsRow['bs_entry_id'] ?? 0);
         if (!empty($bsRow['bs_entry_id'])) {
             $total3  = array_key_exists('price_to_collect', $body)
                         ? floatval($body['price_to_collect'])
@@ -2008,6 +2038,7 @@ case 'update_task':
             $pdo->exec("CREATE TABLE IF NOT EXISTS balance_sheet_entries (id INT AUTO_INCREMENT PRIMARY KEY, type VARCHAR(20) DEFAULT 'sales', profile VARCHAR(10) DEFAULT 'BGPT', task_id VARCHAR(20) NULL, task_db_id INT NULL, date DATE NOT NULL, invoice_no VARCHAR(50), gps_serial_no VARCHAR(100), customer_type VARCHAR(50), name_on_server TEXT, server_name VARCHAR(50), device_model VARCHAR(100), service_type VARCHAR(100), license_plan VARCHAR(100), qty DECIMAL(10,2) DEFAULT 1, unit_price DECIMAL(10,2) DEFAULT 0, gst DECIMAL(10,2) DEFAULT 0, total_price DECIMAL(10,2) DEFAULT 0, payment_status VARCHAR(50), payment_received DECIMAL(10,2) DEFAULT 0, pending_payment DECIMAL(10,2) DEFAULT 0, payment_mode VARCHAR(50), payment_received_on DATE NULL, payment_transaction_details TEXT, pending_reason VARCHAR(100), discount_given DECIMAL(10,2) DEFAULT 0, discount_reason TEXT, discount_incharge VARCHAR(100), payment_reminder_date DATE NULL, technician_name VARCHAR(100), location VARCHAR(200), remarks TEXT, created_by_code VARCHAR(50), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
             // Refresh task data
             $bt=$pdo->prepare("SELECT t.*,u.name as tech_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?"); $bt->execute([$id]); $btask=$bt->fetch();
+            if ($btask) $btask['bs_entry_id'] = bs_task_row($pdo, $id, $btask['task_id'] ?? '', $btask['bs_entry_id'] ?? 0);
             if ($btask && !$btask['bs_entry_id']) {
                 $bqty=floatval($btask['device_qty']??1);
                 $btotal=floatval($btask['price_to_collect']??0);
@@ -2162,6 +2193,7 @@ case 'approve_task':
         }
     } catch(Exception $e) { error_log('coin close24 error: '.$e->getMessage()); }
     // Update BS entry if exists — mark payment as received by company
+    $t['bs_entry_id'] = bs_task_row($pdo, $id, $t['task_id'] ?? '', $t['bs_entry_id'] ?? 0);
     if ($t['bs_entry_id']) {
         $pdo->prepare("UPDATE balance_sheet_entries SET payment_status='paid',payment_received=?,pending_payment=0,payment_received_on=CURDATE() WHERE id=?")->execute([$collected,$t['bs_entry_id']]);
     } else {
@@ -3617,7 +3649,7 @@ case 'save_device_install':
                 $pend2 = max(0, $billTotal - $recv2);
                 $pStatus = ($recv2 >= $billTotal && $billTotal > 0) ? 'paid' : ($recv2>0 ? 'partially_paid' : 'pending');
 
-                $existingBsId = $t2['bs_entry_id'] ? intval($t2['bs_entry_id']) : 0;
+                $existingBsId = bs_task_row($pdo, $tid, $t2['task_id'] ?? '', $t2['bs_entry_id'] ?? 0);
                 if ($existingBsId) {
                     // UPDATE the same task entry — club installs together, grow qty/amount
                     $pdo->prepare("UPDATE balance_sheet_entries SET
@@ -3698,6 +3730,7 @@ case 'bs_backfill_installs':
             $tr = $pdo->prepare("SELECT t.*,u.name as tech_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?");
             $tr->execute([$tid]); $t2 = $tr->fetch();
             if (!$t2) continue;
+            $t2['bs_entry_id'] = bs_task_row($pdo, $tid, $t2['task_id'] ?? '', $t2['bs_entry_id'] ?? 0);
             $di = $pdo->prepare("SELECT gps_serial_no,name_on_server,server_name FROM task_device_installs WHERE task_id=? AND gps_serial_no IS NOT NULL AND gps_serial_no != '' ORDER BY device_index ASC");
             $di->execute([$tid]); $installs = $di->fetchAll();
             $installedCount = count($installs);
@@ -3899,6 +3932,43 @@ case 'bs_add_entry':
     $recv  = floatval($b['payment_received']??0);
     $pend  = floatval($b['pending_payment']??($total-$recv));
     try { $pdo->exec("ALTER TABLE balance_sheet_entries ADD COLUMN technician_id INT DEFAULT NULL"); } catch(Exception $e){}
+    // Task number typed on the form (Sales Entry sends it as task_no). Link the row to the task.
+    $b['task_id'] = trim((string)($b['task_id'] ?? $b['task_no'] ?? '')) ?: null;
+    if (empty($b['task_db_id']) && $b['task_id']) {
+        try { $fq=$pdo->prepare("SELECT id, task_id FROM tasks WHERE task_id=? LIMIT 1"); $fq->execute([$b['task_id']]); $ft=$fq->fetch(PDO::FETCH_ASSOC);
+              if ($ft) { $b['task_db_id'] = intval($ft['id']); $b['task_id'] = $ft['task_id']; } } catch(Exception $e){}
+    }
+    // ONE row per task: if this task already has a balance-sheet row, record the money on THAT row
+    // (received amount, mode, received date) instead of creating a second row for the same sale.
+    if (($b['type'] ?? 'sales') === 'sales' && (!empty($b['task_db_id']) || !empty($b['task_id']))) {
+        $tl = 0;
+        if (!empty($b['task_db_id'])) { try { $lq=$pdo->prepare("SELECT bs_entry_id FROM tasks WHERE id=?"); $lq->execute([intval($b['task_db_id'])]); $tl=intval($lq->fetchColumn()); } catch(Exception $e){} }
+        $exId = bs_task_row($pdo, intval($b['task_db_id'] ?? 0), (string)$b['task_id'], $tl);
+        if ($exId) {
+            $ex = $pdo->prepare("SELECT * FROM balance_sheet_entries WHERE id=?"); $ex->execute([$exId]); $er = $ex->fetch(PDO::FETCH_ASSOC);
+            if ($recv <= 0) {
+                echo json_encode(['error'=>'Task '.$b['task_id'].' already has a balance-sheet entry (#'.$exId.', dated '.$er['date'].'). Open that entry to change it — a second entry was not created.','existing_id'=>$exId,'existing_date'=>$er['date']]);
+                break;
+            }
+            $exTotal = floatval($er['total_price']); $exRecv = floatval($er['payment_received']);
+            $newRecv = $exRecv + $recv; $extra = 0;
+            if ($exTotal > 0 && $newRecv > $exTotal) { $extra = $newRecv - $exTotal; $newRecv = $exTotal; }
+            $newPend = max(0, $exTotal - $newRecv);
+            $newSt   = ($newRecv >= $exTotal && $exTotal > 0) ? 'paid' : ($newRecv > 0 ? 'partially_paid' : 'pending');
+            $onDate  = !empty($b['payment_received_on']) ? $b['payment_received_on'] : date('Y-m-d');
+            $note    = 'Payment ₹'.number_format($recv,2).' recorded '.$onDate.' by '.($cu['name'] ?? 'staff').(!empty($b['payment_mode'])?' ('.$b['payment_mode'].')':'');
+            $txn     = trim((string)($b['payment_transaction_details'] ?? ''));
+            $pdo->prepare("UPDATE balance_sheet_entries SET payment_received=?, pending_payment=?, payment_status=?,
+                    payment_mode=COALESCE(?,payment_mode), payment_received_on=?,
+                    payment_transaction_details=CASE WHEN ?='' THEN payment_transaction_details WHEN payment_transaction_details IS NULL OR payment_transaction_details='' THEN ? ELSE CONCAT(payment_transaction_details,' | ',?) END,
+                    remarks=CASE WHEN remarks IS NULL OR remarks='' THEN ? ELSE CONCAT(remarks,' | ',?) END,
+                    updated_at=NOW() WHERE id=?")
+                ->execute([$newRecv, $newPend, $newSt, (!empty($b['payment_mode'])?$b['payment_mode']:null), $onDate, $txn, $txn, $txn, $note, $note, $exId]);
+            if (!empty($er['task_db_id'])) { try { log_activity_once($pdo, intval($er['task_db_id']), $userId, '💰 '.$note.' in the Balance Sheet'); } catch(Exception $e){} }
+            echo json_encode(['success'=>true,'merged'=>true,'id'=>$exId,'existing_date'=>$er['date'],'payment_received'=>$newRecv,'pending_payment'=>$newPend,'extra'=>$extra]);
+            break;
+        }
+    }
     $pdo->prepare("INSERT INTO balance_sheet_entries
         (type,profile,task_id,task_db_id,date,invoice_no,gps_serial_no,customer_type,
          name_on_server,server_name,device_model,service_type,license_plan,
@@ -4002,6 +4072,79 @@ case 'bs_deleted_list':
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
+case 'bs_duplicates':
+    // Admin review list: tasks that have more than one balance-sheet row, and hand-typed rows that
+    // look like a second copy of a task's row (same IMEI / name on server). Read-only.
+    if ($userRole!=='admin') { http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
+    try {
+        $cols = "id,type,profile,task_id,task_db_id,date,gps_serial_no,name_on_server,device_model,qty,total_price,payment_received,pending_payment,payment_status,payment_mode,payment_received_on,remarks,created_by_code,created_at";
+        $groups = []; $used = [];
+        // 1) Same task, more than one row
+        $dups = $pdo->query("SELECT task_db_id FROM balance_sheet_entries WHERE task_db_id IS NOT NULL AND task_db_id>0 GROUP BY task_db_id HAVING COUNT(*)>1")->fetchAll(PDO::FETCH_COLUMN);
+        foreach ($dups as $tdb) {
+            $q = $pdo->prepare("SELECT $cols FROM balance_sheet_entries WHERE task_db_id=? ORDER BY id ASC"); $q->execute([$tdb]);
+            $rows = $q->fetchAll(PDO::FETCH_ASSOC);
+            $lk = $pdo->prepare("SELECT bs_entry_id FROM tasks WHERE id=?"); $lk->execute([$tdb]); $keep = intval($lk->fetchColumn());
+            $ids = array_map('intval', array_column($rows,'id'));
+            if (!in_array($keep, $ids, true)) $keep = $ids[0];
+            foreach ($ids as $i) $used[$i] = 1;
+            $groups[] = ['kind'=>'same_task','task_id'=>$rows[0]['task_id'],'keep_id'=>$keep,'rows'=>$rows];
+        }
+        // 2) Hand-typed rows (no task link) matching a task row by task number, IMEI or name on server
+        $linked = $pdo->query("SELECT $cols FROM balance_sheet_entries WHERE task_db_id IS NOT NULL AND task_db_id>0 AND type='sales'")->fetchAll(PDO::FETCH_ASSOC);
+        $byTask = []; $bySerial = []; $byName = [];
+        foreach ($linked as $r) {
+            if (!empty($r['task_id'])) $byTask[strtolower(trim($r['task_id']))] = $r;
+            foreach (preg_split('/[,\s]+/', (string)$r['gps_serial_no']) as $sn) { $sn = preg_replace('/\D/','',$sn); if (strlen($sn) >= 8) $bySerial[$sn] = $r; }
+            foreach (explode(',', (string)$r['name_on_server']) as $nm) { $nm = strtolower(trim($nm)); if (strlen($nm) >= 4) $byName[$r['profile'].'|'.$nm] = $r; }
+        }
+        $manual = $pdo->query("SELECT $cols FROM balance_sheet_entries WHERE (task_db_id IS NULL OR task_db_id=0) AND type='sales'")->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($manual as $m) {
+            $hit = null; $why = '';
+            if (!empty($m['task_id']) && isset($byTask[strtolower(trim($m['task_id']))])) { $hit = $byTask[strtolower(trim($m['task_id']))]; $why = 'same task number'; }
+            if (!$hit) foreach (preg_split('/[,\s]+/', (string)$m['gps_serial_no']) as $sn) { $sn = preg_replace('/\D/','',$sn); if (strlen($sn) >= 8 && isset($bySerial[$sn])) { $hit = $bySerial[$sn]; $why = 'same IMEI '.$sn; break; } }
+            if (!$hit) foreach (explode(',', (string)$m['name_on_server']) as $nm) { $nm = strtolower(trim($nm)); if (strlen($nm) >= 4 && isset($byName[$m['profile'].'|'.$nm])) { $hit = $byName[$m['profile'].'|'.$nm]; $why = 'same name on server'; break; } }
+            if (!$hit || $hit['profile'] !== $m['profile']) continue;
+            $groups[] = ['kind'=>'manual_copy','why'=>$why,'task_id'=>$hit['task_id'],'keep_id'=>intval($hit['id']),'rows'=>[$hit, $m]];
+        }
+        echo json_encode(['success'=>true,'groups'=>$groups,'count'=>count($groups)]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
+case 'bs_merge_entries':
+    // Admin merges a duplicate row INTO the task's row. The duplicate is copied to the Deleted log
+    // first (restorable from "🗑 Deleted entries"), then removed. Only the kept row's payment
+    // fields change; its sale date, total and task link stay as they are.
+    if ($userRole!=='admin') { http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
+    $keepId = intval($body['keep_id'] ?? 0); $remId = intval($body['remove_id'] ?? 0);
+    if (!$keepId || !$remId || $keepId === $remId) { echo json_encode(['error'=>'Pick two different entries']); break; }
+    try {
+        $g = $pdo->prepare("SELECT * FROM balance_sheet_entries WHERE id=?");
+        $g->execute([$keepId]); $k = $g->fetch(PDO::FETCH_ASSOC);
+        $g->execute([$remId]);  $r = $g->fetch(PDO::FETCH_ASSOC);
+        if (!$k || !$r) { echo json_encode(['error'=>'Entry not found (already merged or deleted?)']); break; }
+        if ($k['profile'] !== $r['profile']) { echo json_encode(['error'=>'Entries belong to different profiles — not merged']); break; }
+        $total = floatval($k['total_price']);
+        $recv  = array_key_exists('payment_received',$body) && $body['payment_received']!=='' ? floatval($body['payment_received']) : max(floatval($k['payment_received']), floatval($r['payment_received']));
+        if ($recv < 0) $recv = 0;
+        if ($total > 0 && $recv > $total) $recv = $total;
+        $pend = max(0, $total - $recv);
+        $st   = ($recv >= $total && $total > 0) ? 'paid' : ($recv > 0 ? 'partially_paid' : 'pending');
+        $mode = (floatval($k['payment_received']) > 0 && !empty($k['payment_mode'])) ? $k['payment_mode'] : ($r['payment_mode'] ?: $k['payment_mode']);
+        $on   = $k['payment_received_on'] ?: ($r['payment_received_on'] ?: (floatval($r['payment_received'])>0 ? $r['date'] : null));
+        if ($recv <= 0) $on = $k['payment_received_on'];
+        $txn  = trim(implode(' | ', array_filter([trim((string)$k['payment_transaction_details']), trim((string)$r['payment_transaction_details'])])));
+        $note = 'Merged duplicate #'.$remId.' (dated '.$r['date'].', received ₹'.number_format(floatval($r['payment_received']),2).') by '.($cu['name'] ?? 'admin').' on '.date('Y-m-d');
+        bs_archive($pdo, "id=?", [$remId], 'Merged into entry #'.$keepId.' (duplicate)');
+        $pdo->prepare("UPDATE balance_sheet_entries SET payment_received=?, pending_payment=?, payment_status=?, payment_mode=?, payment_received_on=?,
+                payment_transaction_details=?, remarks=CASE WHEN remarks IS NULL OR remarks='' THEN ? ELSE CONCAT(remarks,' | ',?) END, updated_at=NOW() WHERE id=?")
+            ->execute([$recv, $pend, $st, $mode, $on, ($txn!==''?$txn:null), $note, $note, $keepId]);
+        $pdo->prepare("DELETE FROM balance_sheet_entries WHERE id=?")->execute([$remId]);
+        try { $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE bs_entry_id=?")->execute([$keepId, $remId]); } catch(Exception $e){}
+        echo json_encode(['success'=>true,'keep_id'=>$keepId,'payment_received'=>$recv,'pending_payment'=>$pend,'payment_status'=>$st]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'bs_restore_deleted':
     // Put a deleted balance-sheet row back exactly as it was (same id if still free).
     if ($userRole!=='admin') { http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
@@ -4017,6 +4160,13 @@ case 'bs_restore_deleted':
         if (intval($taken->fetchColumn()) > 0) unset($row['id']);     // id reused → insert as a new row
         $row = array_intersect_key($row, array_flip($cols));
         if (!$row) { echo json_encode(['error'=>'Nothing to restore']); break; }
+        // A task keeps ONE balance-sheet row: if this task already has one again, restoring would duplicate it.
+        if (!empty($row['task_db_id']) || !empty($row['task_id'])) {
+            $tl = 0;
+            if (!empty($row['task_db_id'])) { $lq=$pdo->prepare("SELECT bs_entry_id FROM tasks WHERE id=?"); $lq->execute([intval($row['task_db_id'])]); $tl=intval($lq->fetchColumn()); }
+            $have = bs_task_row($pdo, intval($row['task_db_id'] ?? 0), (string)($row['task_id'] ?? ''), $tl);
+            if ($have) { echo json_encode(['error'=>'Task '.($row['task_id'] ?? '').' already has balance-sheet entry #'.$have.'. Restoring this one would create a duplicate — edit entry #'.$have.' instead.','existing_id'=>$have]); break; }
+        }
         $names = array_keys($row);
         $pdo->prepare("INSERT INTO balance_sheet_entries (`".implode('`,`',$names)."`) VALUES (".implode(',', array_fill(0,count($names),'?')).")")
             ->execute(array_values($row));
@@ -4035,6 +4185,7 @@ case 'bs_delete_entry':
     $id = intval($body['id']??0);
     bs_archive($pdo, "id=?", [$id], 'Deleted by hand from the Balance Sheet');
     $pdo->prepare("DELETE FROM balance_sheet_entries WHERE id=?")->execute([$id]);
+    try { $pdo->prepare("UPDATE tasks SET bs_entry_id=NULL WHERE bs_entry_id=?")->execute([$id]); } catch(Exception $e){}
     echo json_encode(['success'=>true]);
     break;
 
@@ -4271,6 +4422,7 @@ case 'bs_from_task':
     $tr->execute([$taskDbId]); $t=$tr->fetch();
     if (!$t) { echo json_encode(['error'=>'Task not found']); break; }
     // Check if already has BS entry
+    $t['bs_entry_id'] = bs_task_row($pdo, $taskDbId, $t['task_id'] ?? '', $t['bs_entry_id'] ?? 0);
     if ($t['bs_entry_id']) { echo json_encode(['success'=>true,'id'=>$t['bs_entry_id'],'existing'=>true]); break; }
     $qty   = floatval($t['device_qty']??1);
     $total = floatval($t['price_to_collect']??0);
@@ -5366,6 +5518,7 @@ case 'admin_wipe':
             try {
                 bs_archive($pdo, "1=1", [], 'Admin panel: wipe balance sheet');
                 $pdo->exec("DELETE FROM balance_sheet_entries");
+                try { $pdo->exec("UPDATE tasks SET bs_entry_id=NULL WHERE bs_entry_id IS NOT NULL"); } catch(Exception $e){}
                 echo json_encode(['success'=>true,'message'=>'All balance sheet entries deleted.']);
             } catch(Exception $e){
                 echo json_encode(['error'=>'Could not delete: '.$e->getMessage()]);

@@ -120,6 +120,7 @@ tr:hover td{background:#f7f9fc}
   <button class="bs-tab"        id="bstab-license"  onclick="bsTab('license')">🔄 License / Service</button>
   <button class="bs-tab" onclick="resyncAll()" title="Rebuild any missing entries from installed tasks" style="color:var(--accent2);font-weight:700">🔁 Resync from Tasks</button>
   <button class="bs-tab" onclick="openDeletedEntries()" title="See balance sheet entries that were deleted and restore them" style="color:#b45309;font-weight:700">🗑 Deleted entries</button>
+  <button class="bs-tab" onclick="openDuplicates()" title="Find tasks that have more than one balance sheet entry and merge them" style="color:#7c3aed;font-weight:700">🧩 Duplicates</button>
   <div style="margin-left:auto;display:flex;align-items:center;padding:0 12px">
     <select class="bs-profile-sel" id="bs-profile" onchange="window._bsLoadAll=false;loadEntries()"
       style="padding:5px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-weight:700;color:var(--text);background:#fff;outline:none;cursor:pointer">
@@ -1023,7 +1024,13 @@ async function submitSales(e){
     location:v('s-loc'), remarks:v('s-remarks'),
   };
   const res=await bsApi('bs_add_entry',{},'POST',body).catch(()=>({}));
-  if(res.success){ toast('✅ Sales entry saved!'); resetSales(); bsTab('records'); }
+  if(res.success && res.merged){
+    alert('✅ This task already has a balance-sheet entry (dated '+res.existing_date+').\n\nThe payment was added to THAT entry — no second entry was created.\n\nReceived now: ₹'+(+res.payment_received).toLocaleString('en-IN')+'   Pending: ₹'+(+res.pending_payment).toLocaleString('en-IN')
+      +((+res.extra>0)?'\n\n⚠️ ₹'+(+res.extra).toLocaleString('en-IN')+' is more than the amount due and was NOT added — please check.':''));
+    resetSales(); bsTab('records');
+  }
+  else if(res.success){ toast('✅ Sales entry saved!'); resetSales(); bsTab('records'); }
+  else if(res.existing_id){ alert('ℹ️ '+res.error); }
   else toast('❌ '+(res.error||'Save failed'));
 }
 
@@ -1161,6 +1168,17 @@ function techName(selId){
 }
 </script>
 <!-- Deleted entries (restore) -->
+<div id="dup-ov" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:flex-start;justify-content:center;padding:30px 12px;overflow:auto">
+  <div style="background:#fff;border-radius:12px;max-width:1100px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.25)">
+    <div style="display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid #e5e7eb">
+      <div style="font-weight:800;font-size:16px">🧩 Duplicate balance sheet entries</div>
+      <button onclick="document.getElementById('dup-ov').style.display='none'" style="margin-left:auto;border:none;background:none;font-size:22px;cursor:pointer">×</button>
+    </div>
+    <div style="padding:8px 18px;font-size:12px;color:#6b7280;line-height:1.5">One sale should have <b>one</b> entry. Below are tasks with more than one entry, and hand-typed entries that look like a copy of a task's entry.
+      Check each one. <b>Merge</b> moves the payment onto the task's entry (✅ KEEP) and removes the copy — the copy is saved in <b>🗑 Deleted entries</b> and can be restored. Nothing changes unless you click Merge.</div>
+    <div id="dup-body" style="padding:6px 18px 18px;overflow-x:auto"></div>
+  </div>
+</div>
 <div id="del-ov" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:flex-start;justify-content:center;padding:30px 12px;overflow:auto">
   <div style="background:#fff;border-radius:12px;max-width:1000px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.25)">
     <div style="display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid #e5e7eb">
@@ -1200,12 +1218,59 @@ async function openDeletedEntries(){
   });
   body.innerHTML=t+'</table>';
 }
+async function openDuplicates(){
+  const ov=document.getElementById('dup-ov'), body=document.getElementById('dup-body');
+  ov.style.display='flex'; body.innerHTML='<div style="padding:20px;color:#6b7280">Checking all entries…</div>';
+  const res=await bsApi('bs_duplicates').catch(()=>({}));
+  if(!res||!res.success){ body.innerHTML='<div style="padding:20px;color:#b91c1c">'+((res&&res.error)||'Could not load')+'</div>'; return; }
+  if(!res.groups.length){ body.innerHTML='<div style="padding:20px;color:#15803d;font-weight:700">✅ No duplicates found.</div>'; return; }
+  const h=v=>String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const m=v=>'₹'+(parseFloat(v||0)||0).toLocaleString('en-IN');
+  window._dupGroups=res.groups;
+  let t='<div style="font-size:12.5px;margin:4px 0 10px;font-weight:700">'+res.groups.length+' to review</div>';
+  res.groups.forEach(function(g,gi){
+    const label = g.kind==='same_task' ? 'Task '+h(g.task_id)+' has '+g.rows.length+' entries' : 'Hand-typed entry looks like a copy of task '+h(g.task_id)+' ('+h(g.why)+')';
+    t+='<div style="border:1px solid #e5e7eb;border-radius:10px;margin-bottom:12px;overflow:hidden"><div style="background:#f5f3ff;padding:8px 12px;font-weight:800;font-size:13px;color:#5b21b6">'+label+'</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:12px"><tr style="background:#f9fafb;text-align:left"><th style="padding:6px">#</th><th style="padding:6px">Date</th><th style="padding:6px">Task</th><th style="padding:6px">Name / IMEI</th><th style="padding:6px;text-align:right">Total</th><th style="padding:6px;text-align:right">Received</th><th style="padding:6px;text-align:right">Pending</th><th style="padding:6px">Status</th><th style="padding:6px">Mode</th><th style="padding:6px">Added by</th><th></th></tr>';
+    g.rows.forEach(function(r){
+      const keep = +r.id===+g.keep_id;
+      t+='<tr style="border-top:1px solid #eee;'+(keep?'background:#f0fdf4':'')+'">'
+        +'<td style="padding:6px">'+h(r.id)+'</td><td style="padding:6px;white-space:nowrap">'+h(r.date)+'</td><td style="padding:6px">'+h(r.task_id||'—')+'</td>'
+        +'<td style="padding:6px">'+h(r.name_on_server||'')+(r.gps_serial_no?'<br><span style="color:#6b7280">'+h(r.gps_serial_no)+'</span>':'')+'</td>'
+        +'<td style="padding:6px;text-align:right">'+m(r.total_price)+'</td><td style="padding:6px;text-align:right">'+m(r.payment_received)+'</td><td style="padding:6px;text-align:right">'+m(r.pending_payment)+'</td>'
+        +'<td style="padding:6px">'+h(r.payment_status||'')+'</td><td style="padding:6px">'+h(r.payment_mode||'')+'</td><td style="padding:6px">'+h(r.created_by_code||'')+'</td>'
+        +'<td style="padding:6px;white-space:nowrap">'+(keep?'<span style="color:#15803d;font-weight:800">✅ KEEP</span>'
+          :'<button onclick="mergeDup('+gi+','+r.id+',this)" style="background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-weight:700;cursor:pointer">Merge into #'+g.keep_id+'</button>')+'</td></tr>';
+    });
+    t+='</table></div>';
+  });
+  body.innerHTML=t;
+}
+async function mergeDup(gi,remId,btn){
+  const g=(window._dupGroups||[])[gi]; if(!g) return;
+  const k=g.rows.find(r=>+r.id===+g.keep_id), r=g.rows.find(x=>+x.id===+remId);
+  const kr=parseFloat(k.payment_received||0)||0, rr=parseFloat(r.payment_received||0)||0, tot=parseFloat(k.total_price||0)||0;
+  // Hand-typed copy = a payment recorded separately → add it. Two automatic copies = the same payment twice → keep the larger.
+  let sug = g.kind==='manual_copy' ? kr+rr : Math.max(kr,rr);
+  if(tot>0 && sug>tot) sug=tot;
+  const ans=prompt('Merge entry #'+remId+' into #'+g.keep_id+' (task '+(g.task_id||'')+').\n\n'
+    +'Entry #'+g.keep_id+' (KEEP): total ₹'+tot.toLocaleString('en-IN')+', received ₹'+kr.toLocaleString('en-IN')+'\n'
+    +'Entry #'+remId+' (copy): received ₹'+rr.toLocaleString('en-IN')+'\n\n'
+    +'Total amount RECEIVED for this sale after merging (check and correct if needed):', String(sug));
+  if(ans===null) return;
+  const amt=parseFloat(String(ans).replace(/[^0-9.]/g,''));
+  if(isNaN(amt)){ alert('Please enter a number.'); return; }
+  btn.disabled=true; btn.textContent='Merging…';
+  const res=await bsApi('bs_merge_entries',{},'POST',{keep_id:g.keep_id, remove_id:remId, payment_received:amt}).catch(()=>({}));
+  if(res&&res.success){ toast('✅ Merged — entry #'+g.keep_id+' now received ₹'+(+res.payment_received).toLocaleString('en-IN')+', pending ₹'+(+res.pending_payment).toLocaleString('en-IN')); openDuplicates(); loadEntries(); }
+  else { btn.disabled=false; btn.textContent='Merge into #'+g.keep_id; alert('❌ '+((res&&res.error)||'Merge failed')); }
+}
 async function restoreDeleted(logId,btn){
   if(!confirm('Put this entry back into the balance sheet?')) return;
   btn.disabled=true; btn.textContent='Restoring…';
   const res=await bsApi('bs_restore_deleted',{},'POST',{log_id:logId}).catch(()=>({}));
   if(res&&res.success){ toast('✅ Entry restored'); btn.outerHTML='<span style="color:#15803d;font-weight:700">✅ Restored</span>'; loadEntries(); }
-  else { btn.disabled=false; btn.textContent='Restore'; toast('❌ '+((res&&res.error)||'Restore failed')); }
+  else { btn.disabled=false; btn.textContent='Restore'; if(res&&res.existing_id) alert('ℹ️ '+res.error); else toast('❌ '+((res&&res.error)||'Restore failed')); }
 }
 </script>
 </body>
