@@ -720,7 +720,8 @@ async function saveBSEntry(type) {
     remarks:        document.getElementById('bse-remarks')?.value,
   };
   const res = await taskApi('bs_add_entry',{},'POST',body);
-  if (res.success) { closeModal(); showAlert('Entry saved! ✅'); loadBS(); }
+  if (res.success && res.merged) { closeModal(); showAlert('✅ Task already had an entry (dated '+res.existing_date+') — payment added to it, no duplicate created.'); loadBS(); }
+  else if (res.success) { closeModal(); showAlert('Entry saved! ✅'); loadBS(); }
   else showAlert('Error: '+(res.error||'Failed'));
 }
 
