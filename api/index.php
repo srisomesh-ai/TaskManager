@@ -882,6 +882,31 @@ function bs_set_payment($pdo, $bsId, $recv, $mode = null){
     } catch(Exception $e){ error_log('bs_set_payment: '.$e->getMessage()); return false; }
 }
 
+// GST on task entries, the same way as hand-typed entries and renewals:
+//   Total = what the customer pays. SBGT (GST company): Total includes 18% GST, so
+//   Unit Price = price per unit BEFORE GST and GST = the 18% part. BGPT: GST 0, Unit = Total / Qty.
+// Only task-linked entries, never one whose amounts were corrected by hand (total_locked).
+function bs_apply_gst($pdo, $bsId){
+    $bsId = intval($bsId); if ($bsId <= 0) return;
+    bs_ensure_lock_col($pdo);
+    try {
+        $q = $pdo->prepare("SELECT task_db_id, profile, qty, total_price, unit_price, gst, total_locked FROM balance_sheet_entries WHERE id=?"); $q->execute([$bsId]);
+        $r = $q->fetch(PDO::FETCH_ASSOC);
+        if (!$r || intval($r['task_db_id']) <= 0 || intval($r['total_locked'] ?? 0) === 1) return;
+        $qty = floatval($r['qty']); if ($qty <= 0) $qty = 1;
+        $total = floatval($r['total_price']);
+        if (strtoupper((string)$r['profile']) === 'SBGT') {
+            $taxable = round($total / 1.18, 2);
+            $gst  = round($total - $taxable, 2);
+            $unit = round($taxable / $qty, 2);
+        } else { $gst = 0; $unit = round($total / $qty, 2); }
+        if (abs($unit - floatval($r['unit_price'])) < 0.005 && abs($gst - floatval($r['gst'])) < 0.005) return;
+        $pdo->prepare("UPDATE balance_sheet_entries SET unit_price=?, gst=? WHERE id=?")->execute([$unit, $gst, $bsId]);
+        bs_log_change($pdo, $bsId, 'unit_price', $r['unit_price'], $unit, 'GST split');
+        bs_log_change($pdo, $bsId, 'gst', $r['gst'], $gst, 'GST split');
+    } catch(Exception $e){ error_log('bs_apply_gst: '.$e->getMessage()); }
+}
+
 // Right after an automatic INSERT: apply the shared payment rule (status, pending, received date).
 function bs_fix_new($pdo, $bsId){
     $bsId = intval($bsId); if ($bsId <= 0) return;
@@ -889,6 +914,7 @@ function bs_fix_new($pdo, $bsId){
         $q = $pdo->prepare("SELECT payment_received FROM balance_sheet_entries WHERE id=?"); $q->execute([$bsId]); $rv = floatval($q->fetchColumn());
         $pdo->prepare("UPDATE balance_sheet_entries SET payment_received=0, payment_received_on=NULL WHERE id=?")->execute([$bsId]);
         bs_set_payment($pdo, $bsId, $rv);   // logs the opening payment (if any) as +amount
+        bs_apply_gst($pdo, $bsId);
     } catch(Exception $e){}
 }
 
@@ -912,8 +938,15 @@ function bs_sync_row($pdo, $bsId, $serials, $names, $server, $qty, $unit, $total
             $pdo->prepare("UPDATE balance_sheet_entries SET gps_serial_no=?,name_on_server=?,server_name=?,payment_mode=COALESCE(?,payment_mode),updated_at=NOW() WHERE id=?")
                 ->execute([$serials ?: null, $names ?: null, $server, ($mode ?: null), $bsId]);
         } else {
-            $pdo->prepare("UPDATE balance_sheet_entries SET gps_serial_no=?,name_on_server=?,server_name=?,qty=?,unit_price=?,total_price=?,payment_mode=COALESCE(?,payment_mode),updated_at=NOW() WHERE id=?")
-                ->execute([$serials ?: null, $names ?: null, $server, $qty, $unit, $total, ($mode ?: null), $bsId]);
+            $amtChanged = abs(floatval($r['qty']) - floatval($qty)) > 0.004 || abs(floatval($r['total_price']) - floatval($total)) > 0.004;
+            if ($amtChanged) {
+                $pdo->prepare("UPDATE balance_sheet_entries SET gps_serial_no=?,name_on_server=?,server_name=?,qty=?,unit_price=?,total_price=?,payment_mode=COALESCE(?,payment_mode),updated_at=NOW() WHERE id=?")
+                    ->execute([$serials ?: null, $names ?: null, $server, $qty, $unit, $total, ($mode ?: null), $bsId]);
+                bs_apply_gst($pdo, $bsId);
+            } else {
+                $pdo->prepare("UPDATE balance_sheet_entries SET gps_serial_no=?,name_on_server=?,server_name=?,payment_mode=COALESCE(?,payment_mode),updated_at=NOW() WHERE id=?")
+                    ->execute([$serials ?: null, $names ?: null, $server, ($mode ?: null), $bsId]);
+            }
         }
         bs_set_payment($pdo, $bsId, max(floatval($recv), floatval($r['payment_received'])));
         return true;
@@ -1640,7 +1673,7 @@ case 'create_task':
                         trim($body['location'] ?? ''), trim($body['general_notes'] ?? ''), $cu['name'] ?? 'system',
                     ]);
                 $hoBsId = $pdo->lastInsertId();
-                if ($hoBsId) { $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$hoBsId, $newIdU]); }
+                if ($hoBsId) { $pdo->prepare("UPDATE tasks SET bs_entry_id=? WHERE id=?")->execute([$hoBsId, $newIdU]); bs_fix_new($pdo, $hoBsId); }
             }
         }
     } catch(Exception $e){ error_log('Handover BS create: '.$e->getMessage()); }
@@ -1947,6 +1980,7 @@ case 'update_task':
             if ($priceChanged && $unitNow !== null) {
                 try { $pdo->prepare("UPDATE balance_sheet_entries SET unit_price=? WHERE id=?")->execute([$unitNow, $bsRow['bs_entry_id']]); } catch(Exception $e){}
             }
+            if ($priceChanged) bs_apply_gst($pdo, $bsRow['bs_entry_id']);
             // If the technician was reassigned, update the balance-sheet technician name/id too.
             if (array_key_exists('assigned_to', $body)) {
                 try {

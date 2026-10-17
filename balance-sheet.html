@@ -577,7 +577,7 @@ async function remindEntry(entryId, btn){
 function computeStats(entries){
   // Build the same stat shape as the server, but from the CURRENTLY FILTERED entries,
   // so the dashboard cards always match the filtered table result.
-  let devices_sold=0, license_count=0, total_sales=0, total_license=0, payment_received=0, pending_payment=0;
+  let devices_sold=0, license_count=0, total_sales=0, total_license=0, payment_received=0, pending_payment=0, gst_total=0;
   (entries||[]).forEach(e=>{
     const qty=parseFloat(e.qty||0)||0;
     const total=parseFloat(e.total_price||0)||0;
@@ -587,8 +587,9 @@ function computeStats(entries){
     else { license_count+=qty; total_license+=total; }
     payment_received+=recv;
     pending_payment+=pend;
+    gst_total+=bsGst(e).gst;
   });
-  return {devices_sold,license_count,total_sales,total_license,payment_received,pending_payment};
+  return {devices_sold,license_count,total_sales,total_license,payment_received,pending_payment,gst_total};
 }
 
 function renderStats(s){
@@ -602,6 +603,7 @@ function renderStats(s){
     {l:'Outstanding',       v:fmt(s.pending_payment),    c:'#c0392b'},
   ];
   // Cash view: everything collected in this period, including payments for sales of earlier months.
+  if((document.getElementById('bs-profile')||{}).value==='SBGT') cards.push({l:'GST (18%) in these sales', v:fmt(Math.round(s.gst_total)), c:'#b45309'});
   const col = bsBasis()==='sale' ? bsCollectedInPeriod() : null;
   if(col) cards.push({l:'Collected in period (any sale month) · '+col.n+' payments', v:fmt(col.sum), c:'#0f766e'});
   document.getElementById('bs-stats').innerHTML=cards.map(c=>`
@@ -833,8 +835,9 @@ function viewEntry(id){
     + row('Invoice', esc(e.invoice_no))
     + row('Model / Service', esc(e.device_model||e.service_type))
     + row('Quantity', qtyFmt(e.qty))
-    + row('Unit Price', bsUnitPrice(e)?money(bsUnitPrice(e)):'–')
-    + row('GST', e.gst?money(e.gst):'–')
+    + row('Unit Price (excl GST)', bsGst(e).unit?money(bsGst(e).unit):'–')
+    + row('GST', bsGst(e).gst?money(bsGst(e).gst):'–')
+    + row('Taxable Value', bsGst(e).taxable?money(bsGst(e).taxable):'–')
   );
 
   const paySec = section('Payment',
@@ -1022,11 +1025,24 @@ function bsUnitPrice(e){
   if(Math.abs(u*q-t)<=1 || Math.abs(u*q+g-t)<=1) return e.unit_price;
   return Math.round(t/q*100)/100;
 }
+// GST split for display / Excel — one rule for every row (display only, saved entries unchanged):
+// Total = what the customer pays. SBGT: Total includes 18% GST → Unit (before GST) + GST.
+// Older task entries kept GST inside the total with GST 0 — they are split here the same way.
+function bsGst(e){
+  const q=parseFloat(e.qty||0)||0, t=parseFloat(e.total_price||0)||0, u=parseFloat(e.unit_price||0)||0, g=parseFloat(e.gst||0)||0;
+  const r2=v=>Math.round(v*100)/100;
+  if(q>0 && t>0 && g>0 && Math.abs(u*q+g-t)<=1) return {unit:u, gst:g, taxable:r2(t-g), total:t};
+  if(q>0 && t>0 && e.task_db_id && String(e.profile||'').toUpperCase()==='SBGT' && g===0){
+    const tx=r2(t/1.18); return {unit:r2(tx/q), gst:r2(t-tx), taxable:tx, total:t};
+  }
+  const unit=parseFloat(bsUnitPrice(e))||0;
+  return {unit, gst:g, taxable:r2(t-g), total:t};
+}
 function exportXLS(){
   const data=getFiltered();
   const rows=data.map((e,i)=>({'#':i+1,'Date':e.date,'Type':e.type,'Task':e.task_id||e.task_no,'Invoice':e.invoice_no,
     'Name on Server':e.name_on_server,'Server':e.server_name,'Model/Service':e.device_model||e.service_type,
-    'Qty':e.qty,'Unit Price':bsUnitPrice(e),'GST':e.gst,'Total':e.total_price,
+    'Qty':e.qty,'Unit Price (excl GST)':bsGst(e).unit,'Taxable Value':bsGst(e).taxable,'GST':bsGst(e).gst,'Total (incl GST)':e.total_price,
     'Received':e.payment_received,'Pending':e.pending_payment,'Mode':e.payment_mode,
     'Status':e.payment_status,
     'Payment Received On':e.payment_received_at?new Date(String(e.payment_received_at).replace(' ','T')).toLocaleString('en-IN'):(e.payment_received_on?new Date(e.payment_received_on).toLocaleDateString('en-IN'):''),
