@@ -574,22 +574,35 @@ async function remindEntry(entryId, btn){
   } else { toast('❌ '+((res&&res.error)||'Failed')); if(btn){ btn.disabled=false; btn.textContent='🔔'; } }
 }
 
+// Discount on an entry: from the entry itself (typed in) or from its task (given at task creation).
+// If the money still "pending" is exactly the discount (received + discount covers the total),
+// that part is NOT to be collected — it is shown as discount, not as outstanding. Display only.
+function bsDisc(e){
+  const own=parseFloat(e.discount_given||0)||0, task=parseFloat(e.task_discount||0)||0;
+  const disc = own>0 ? own : task;
+  const total=parseFloat(e.total_price||0)||0, recv=parseFloat(e.payment_received||0)||0, pend=parseFloat(e.pending_payment||0)||0;
+  const inPend = (disc>0 && pend>0 && recv + disc >= total - 1) ? Math.min(pend, disc) : 0;
+  return { disc, inPend, toCollect: Math.max(0, Math.round((pend - inPend)*100)/100),
+           reason: own>0 ? (e.discount_reason||'') : (e.task_discount_reason||''), by: own>0 ? (e.discount_incharge||'') : (e.task_discount_by||'') };
+}
 function computeStats(entries){
   // Build the same stat shape as the server, but from the CURRENTLY FILTERED entries,
   // so the dashboard cards always match the filtered table result.
-  let devices_sold=0, license_count=0, total_sales=0, total_license=0, payment_received=0, pending_payment=0, gst_total=0;
+  let devices_sold=0, license_count=0, total_sales=0, total_license=0, payment_received=0, pending_payment=0, gst_total=0, discount_total=0, discount_count=0;
   (entries||[]).forEach(e=>{
     const qty=parseFloat(e.qty||0)||0;
     const total=parseFloat(e.total_price||0)||0;
     const recv=parseFloat(e.payment_received||0)||0;
-    const pend=parseFloat(e.pending_payment||0)||0;
+    const dsc=bsDisc(e);
+    const pend=dsc.toCollect;
+    if(dsc.disc>0){ discount_total+=dsc.disc; discount_count++; }
     if(e.type==='sales'){ devices_sold+=qty; total_sales+=total; }
     else { license_count+=qty; total_license+=total; }
     payment_received+=recv;
     pending_payment+=pend;
     gst_total+=bsGst(e).gst;
   });
-  return {devices_sold,license_count,total_sales,total_license,payment_received,pending_payment,gst_total};
+  return {devices_sold,license_count,total_sales,total_license,payment_received,pending_payment,gst_total,discount_total,discount_count};
 }
 
 function renderStats(s){
@@ -600,7 +613,8 @@ function renderStats(s){
     {l:(bsBasis()==='received'?'Sale value of these payments':'Sales Value'), v:fmt(s.total_sales), c:'#1a56a0'},
     {l:'License Value',     v:fmt(s.total_license),      c:'#5b2d8e'},
     {l:(bsBasis()==='received'?'Received (by received date)':'Received on these sales'), v:fmt(s.payment_received), c:'#1a7a3a'},
-    {l:'Outstanding',       v:fmt(s.pending_payment),    c:'#c0392b'},
+    {l:'Outstanding (to collect)', v:fmt(s.pending_payment), c:'#c0392b'},
+    {l:'Discount given · '+(s.discount_count||0)+' sales (not to collect)', v:fmt(s.discount_total), c:'#d97706'},
   ];
   // Cash view: everything collected in this period, including payments for sales of earlier months.
   if((document.getElementById('bs-profile')||{}).value==='SBGT') cards.push({l:'GST (18%) in these sales', v:fmt(Math.round(s.gst_total)), c:'#b45309'});
@@ -649,7 +663,7 @@ function getFiltered(){
   const now=new Date(), cm=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
   return allEntries.filter(e=>{
     if(type && e.type!==type) return false;
-    if(month==='pending' && (+e.pending_payment||0)<=0) return false;
+    if(month==='pending' && bsDisc(e).toCollect<=0) return false;   // discount is not "pending"
     const d=bsRowDate(e, basis);
     if(basis==='received' && (!d || (+e.payment_received||0)<=0)) return false;
     if(month==='current' && !from && !to && !d.startsWith(cm)) return false;
@@ -724,7 +738,7 @@ function renderTable(){
   tbody.innerHTML=slice.map((e,i)=>{
     const n=(curPage-1)*PAGE+i+1;
     const chk=selectedIds.has(e.id)?'checked':'';
-    const ps=e.payment_status==='paid'?'<span class="badge badge-paid">Paid</span>':e.payment_status==='partially_paid'?'<span class="badge badge-part">Partial</span>':'<span class="badge badge-pend">Pending</span>';
+    const ps=(bsDisc(e).inPend>0 && bsDisc(e).toCollect<=0)?'<span class="badge badge-paid" title="Fully paid after the approved discount">Paid (disc.)</span>':e.payment_status==='paid'?'<span class="badge badge-paid">Paid</span>':e.payment_status==='partially_paid'?'<span class="badge badge-part">Partial</span>':'<span class="badge badge-pend">Pending</span>';
     const tp=e.type==='sales'?'<span class="badge badge-sales">Sales</span>':'<span class="badge badge-lic">License</span>';
     return `<tr>
       <td><input type="checkbox" ${chk} onchange="toggleSel(${e.id},this)"></td>
@@ -733,7 +747,7 @@ function renderTable(){
       <td style="max-width:160px">${bsServerNames(e.name_on_server)}</td>
       <td>${e.server_name||'–'}</td><td>${e.device_model||e.service_type||'–'}</td><td>${qtyFmt(e.qty)}</td>
       <td style="font-weight:700">₹${parseFloat(e.total_price||0).toLocaleString('en-IN')}</td>
-      <td style="color:${(+e.pending_payment||0)>0?'var(--red)':'var(--green)'};font-weight:700">₹${parseFloat(e.pending_payment||0).toLocaleString('en-IN')}</td>
+      <td style="color:${bsDisc(e).toCollect>0?'var(--red)':'var(--green)'};font-weight:700">₹${bsDisc(e).toCollect.toLocaleString('en-IN')}${bsDisc(e).inPend>0?`<div style="font-size:10px;font-weight:700;color:#b45309;white-space:nowrap" title="Discount given — not to be collected">+ ₹${bsDisc(e).inPend.toLocaleString('en-IN')} discount</div>`:''}</td>
       <td style="color:var(--green);font-weight:700">₹${parseFloat(e.payment_received||0).toLocaleString('en-IN')}</td>
       <td>${e.payment_mode||'–'}${e.payment_transaction_details?`<div style="font-size:10px;color:var(--text3);word-break:break-all">${String(e.payment_transaction_details).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`:''}</td><td>${ps}</td>
       <td>${e.technician_name||'–'}</td><td>${e.location||'–'}</td>
@@ -742,7 +756,7 @@ function renderTable(){
         <button class="act-btn" onclick="editEntry(${e.id})" title="Edit">✏️</button>
         ${isAdmin?`<button class="act-btn" onclick="delEntry(${e.id})" title="Delete">🗑️</button>`:''}
         <button class="act-btn" onclick="waEntry(${e.id})" title="WhatsApp">📱</button>
-        ${((+e.pending_payment||0)>0 && e.technician_id)?`<button class="act-btn" onclick="remindEntry(${e.id},this)" title="Remind technician to deposit">🔔</button>`:''}
+        ${(bsDisc(e).toCollect>0 && e.technician_id)?`<button class="act-btn" onclick="remindEntry(${e.id},this)" title="Remind technician to deposit">🔔</button>`:''}
       </td>
     </tr>`;
   }).join('');
@@ -783,7 +797,7 @@ function viewEntry(id){
   const money = v => '₹'+parseFloat(v||0).toLocaleString('en-IN',{maximumFractionDigits:2});
   const total = parseFloat(e.total_price||0);
   const recv  = parseFloat(e.payment_received||0);
-  const pend  = parseFloat(e.pending_payment||0);
+  const pend  = bsDisc(e).toCollect;   // discount part is not "pending"
   const status = (e.payment_status||'pending').toLowerCase();
   const stMap = {
     paid:            {t:'PAID',           bg:'var(--green-bg)', c:'var(--green)', ic:'✅'},
@@ -811,7 +825,8 @@ function viewEntry(id){
     + inner + '</div>';
 
   const shot = _bsShot(e.payment_screenshot || e.payment_transaction_details);
-  const hasDiscount = parseFloat(e.discount_given||0)>0;
+  const _dsc = bsDisc(e);
+  const hasDiscount = _dsc.disc>0;
 
   const hero =
     '<div style="background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-radius:12px;padding:16px 18px;margin-bottom:14px">'
@@ -853,9 +868,10 @@ function viewEntry(id){
   );
 
   const discSec = hasDiscount ? section('Discount',
-      row('Discount Given', money(e.discount_given), {color:'var(--amber)', bold:true})
-    + row('Reason', esc(e.discount_reason))
-    + row('Approved By', esc(e.discount_incharge))
+      row('Discount Given', money(_dsc.disc), {color:'var(--amber)', bold:true})
+    + row('Reason', esc(_dsc.reason))
+    + row('Approved By', esc(_dsc.by))
+    + (_dsc.inPend>0 ? row('Note', '₹'+_dsc.inPend.toLocaleString('en-IN')+' of the pending is this discount — not to be collected', {color:'#b45309'}) : '')
   ) : '';
 
   const metaSec = section('Other',
@@ -1043,7 +1059,7 @@ function exportXLS(){
   const rows=data.map((e,i)=>({'#':i+1,'Date':e.date,'Type':e.type,'Task':e.task_id||e.task_no,'Invoice':e.invoice_no,
     'Name on Server':e.name_on_server,'Server':e.server_name,'Model/Service':e.device_model||e.service_type,
     'Qty':e.qty,'Unit Price (excl GST)':bsGst(e).unit,'Taxable Value':bsGst(e).taxable,'GST':bsGst(e).gst,'Total (incl GST)':e.total_price,
-    'Received':e.payment_received,'Pending':e.pending_payment,'Mode':e.payment_mode,
+    'Received':e.payment_received,'Pending':e.pending_payment,'Discount':bsDisc(e).disc||'','Discount Reason':bsDisc(e).reason||'','Pending to collect (excl. discount)':bsDisc(e).toCollect,'Mode':e.payment_mode,
     'Status':e.payment_status,
     'Payment Received On':e.payment_received_at?new Date(String(e.payment_received_at).replace(' ','T')).toLocaleString('en-IN'):(e.payment_received_on?new Date(e.payment_received_on).toLocaleDateString('en-IN'):''),
     'Transaction Details / Payment Remarks':e.payment_transaction_details||'',

@@ -3148,7 +3148,11 @@ async function saveTask(){
     payload.customer_requested_delay = 1;
     payload.payment_reminder_date = document.getElementById('fm-pay-reminder').value;
   }
-  if(editingTaskId) payload.id = editingTaskId;
+  if(editingTaskId){
+    payload.id = editingTaskId;
+    payload.from_edit_drawer = 1;     // server keeps collected amount / price / discount safe
+    delete payload.amount_collected;  // the edit window has no collected-amount box
+  }
 
   // GATE: for Troubleshoot / V2V / GPS Remove, a technician can only be assigned
   // if the vehicle exists on the server (data confirmed). Otherwise fix the number.
@@ -5016,6 +5020,27 @@ async function viewTaskInEditDrawer(id){
     const jobEl = document.getElementById('fm-job');
     if(jobEl && t.device_details){ jobEl.value = t.device_details; }
   }
+  // onLeadTypeChange() empties the price / payment boxes (that is meant for a NEW task). On edit,
+  // put the task's saved values back, so saving keeps the agreed (discounted) price and discount.
+  (function(){
+    const lt = t.lead_type||'';
+    if(lt==='Demo') return;                              // demo stays free
+    const q    = Math.max(1, parseInt(t.device_qty||1)||1);
+    const tot  = parseFloat(t.price_to_collect||0)||0;
+    const gstF = ((t.profile||'BGPT')==='SBGT') ? 1.18 : 1;   // price boxes are before GST; total includes it
+    const r2   = v=>Math.round(v*100)/100;
+    const collectUnit = r2(tot/q/gstF);
+    const disc = parseFloat(t.discount_given||0)||0;
+    let std = (typeof JOB_PRICES!=='undefined' && JOB_PRICES[t.device_details]>0) ? +JOB_PRICES[t.device_details] : 0;
+    if(!std) std = r2(collectUnit + disc/q);
+    if(disc>0 && Math.abs(std - (collectUnit + disc/q)) > 1) std = r2(collectUnit + disc/q);   // keep the discount as recorded
+    const pr=document.getElementById('fm-price'), pc=document.getElementById('fm-price-collect');
+    if(lt==='Handover'){ if(pr) pr.value = tot>0 ? collectUnit : ''; }
+    else { if(pr) pr.value = tot>0 ? std : ''; if(pc) pc.value = tot>0 ? collectUnit : ''; }
+    sf('fm-paymode', t.payment_mode||''); sf('fm-pay-reminder', t.payment_reminder_date||'');
+    sel('fm-discount-reason', t.discount_reason); sel('fm-discount-approver', t.discount_incharge);
+    if(typeof onPriceCollectChange==='function') onPriceCollectChange();
+  })();
   // Vehicle number(s) (for troubleshoot / v2v / remove) — supports multiple, comma-separated
   if(typeof updateVehicleFieldVisibility === 'function') updateVehicleFieldVisibility();
   if(typeof renderVehiclePullRows === 'function') renderVehiclePullRows();
