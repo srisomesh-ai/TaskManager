@@ -1772,6 +1772,24 @@ case 'update_task':
     $id = intval($body['id'] ?? 0);
     $ex = $pdo->prepare("SELECT * FROM tasks WHERE id=?"); $ex->execute([$id]); $existing=$ex->fetch();
     if (!$existing) { echo json_encode(['error'=>'Not found']); break; }
+    // Safety net for saves from the task Edit window: it has no "amount collected" box and could
+    // come up with empty price / payment boxes, so a save must never wipe what is already recorded.
+    // (also recognised by its full-form payload, for a browser still holding the older page)
+    if (!empty($body['from_edit_drawer']) || (array_key_exists('customer_name',$body) && array_key_exists('is_urgent',$body) && array_key_exists('discount_given',$body))) {
+        unset($body['amount_collected']);
+        $exPrice = floatval($existing['price_to_collect'] ?? 0);
+        if (array_key_exists('price_to_collect',$body) && floatval($body['price_to_collect']) <= 0 && $exPrice > 0
+            && strcasecmp(trim((string)($body['payment_mode'] ?? '')), 'Free Service') !== 0) {
+            unset($body['price_to_collect']);
+        }
+        if (array_key_exists('payment_mode',$body) && trim((string)$body['payment_mode']) === '' && trim((string)($existing['payment_mode'] ?? '')) !== '') {
+            unset($body['payment_mode']);
+        }
+        // Price not changed → the discount recorded at creation stays as it is.
+        if (!array_key_exists('price_to_collect',$body) || abs(floatval($body['price_to_collect']) - $exPrice) < 0.01) {
+            unset($body['discount_given'], $body['discount_reason'], $body['discount_incharge']);
+        }
+    }
     // ── CASH DEPOSIT LOCK ──────────────────────────────────────────────
     // A technician holding cash undeposited for more than 3 days is blocked from moving ANY
     // task forward (attend, install, give access, collect, close). They can still open & read
@@ -1852,7 +1870,7 @@ case 'update_task':
                'payment_verify_status',
                // Consent reset (when vehicle unavailable after consent)
                'consent_token','customer_consent_at','customer_consent_name','customer_consent_mobile'];
-    if (in_array($userRole,['admin','assigner'])) $fields=array_merge($fields,['customer_name','contact_number','email','location','lead_type','device_qty','price_to_collect','unit_price','assigned_to','vehicle_number']);
+    if (in_array($userRole,['admin','assigner'])) $fields=array_merge($fields,['customer_name','contact_number','email','location','lead_type','device_qty','price_to_collect','unit_price','assigned_to','vehicle_number','discount_given']);
     // Technician may ADD the customer email (for giving GPS access) only when the task has none — never change one.
     if (!in_array('email',$fields) && array_key_exists('email',$body) && trim((string)($existing['email'] ?? ''))==='' && filter_var(trim((string)$body['email']), FILTER_VALIDATE_EMAIL)) {
         $body['email'] = trim((string)$body['email']); $fields[] = 'email';
@@ -3995,6 +4013,26 @@ case 'bs_get_entries':
             unset($e);
         }
     } catch(Exception $e) { error_log('bs payment enrich: '.$e->getMessage()); }
+    // Attach the DISCOUNT given on the linked task (set when the task was created / assigned),
+    // so the page can show discount separately from money still to collect. Read-only.
+    try {
+        $dIds = [];
+        foreach ($entries as $i => $e) { $t = $tidByEntry[$i] ?? 0; if ($t) $dIds[$t] = true; }
+        if ($dIds) {
+            $ids = implode(',', array_map('intval', array_keys($dIds)));
+            $dq = $pdo->query("SELECT id, discount_given, discount_reason, discount_incharge FROM tasks WHERE id IN ($ids) AND COALESCE(discount_given,0) > 0");
+            $dBy = []; foreach ($dq->fetchAll(PDO::FETCH_ASSOC) as $d) $dBy[(int)$d['id']] = $d;
+            foreach ($entries as $i => &$e) {
+                $t = $tidByEntry[$i] ?? 0;
+                if ($t && isset($dBy[$t])) {
+                    $e['task_discount'] = $dBy[$t]['discount_given'];
+                    $e['task_discount_reason'] = $dBy[$t]['discount_reason'];
+                    $e['task_discount_by'] = $dBy[$t]['discount_incharge'];
+                }
+            }
+            unset($e);
+        }
+    } catch(Exception $e) { error_log('bs discount enrich: '.$e->getMessage()); }
     // Attach the task's payment screenshot (for sales/task entries) from task_documents.
     // License/renewal entries already carry their proof in payment_transaction_details.
     try {
