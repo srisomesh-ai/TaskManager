@@ -4020,14 +4020,28 @@ case 'bs_get_entries':
         foreach ($entries as $i => $e) { $t = $tidByEntry[$i] ?? 0; if ($t) $dIds[$t] = true; }
         if ($dIds) {
             $ids = implode(',', array_map('intval', array_keys($dIds)));
-            $dq = $pdo->query("SELECT id, discount_given, discount_reason, discount_incharge FROM tasks WHERE id IN ($ids) AND COALESCE(discount_given,0) > 0");
+            $dq = $pdo->query("SELECT id, discount_given, discount_reason, discount_incharge, device_qty, device_details FROM tasks WHERE id IN ($ids) AND COALESCE(discount_given,0) > 0");
             $dBy = []; foreach ($dq->fetchAll(PDO::FETCH_ASSOC) as $d) $dBy[(int)$d['id']] = $d;
+            // Standard (list) price per device, before GST, from the Price List — to show the
+            // actual device price next to the discount.
+            $stdBy = [];
+            try {
+                $names = array_values(array_unique(array_filter(array_map(function($d){ return trim((string)$d['device_details']); }, $dBy))));
+                if ($names) {
+                    $ph = implode(',', array_fill(0, count($names), '?'));
+                    $sq = $pdo->prepare("SELECT product_name, price_excl_gst FROM price_list WHERE product_name IN ($ph)"); $sq->execute($names);
+                    foreach ($sq->fetchAll(PDO::FETCH_ASSOC) as $sp) $stdBy[$sp['product_name']] = floatval($sp['price_excl_gst']);
+                }
+            } catch(Exception $e2){}
             foreach ($entries as $i => &$e) {
                 $t = $tidByEntry[$i] ?? 0;
                 if ($t && isset($dBy[$t])) {
                     $e['task_discount'] = $dBy[$t]['discount_given'];
                     $e['task_discount_reason'] = $dBy[$t]['discount_reason'];
                     $e['task_discount_by'] = $dBy[$t]['discount_incharge'];
+                    $e['task_qty'] = $dBy[$t]['device_qty'];
+                    $dn = trim((string)$dBy[$t]['device_details']);
+                    if (isset($stdBy[$dn]) && $stdBy[$dn] > 0) $e['std_unit_price'] = $stdBy[$dn];
                 }
             }
             unset($e);
