@@ -176,7 +176,7 @@ tr:hover td{background:#f7f9fc}
           <th><input type="checkbox" id="chk-all" onchange="toggleAll(this)"></th>
           <th>#</th><th>Date</th><th>Type</th><th>Task No</th><th>Invoice</th>
           <th>Name on Server</th><th>Server</th><th>Model/Service</th><th>Qty</th>
-          <th>Task Value</th><th>Pending</th><th>Received</th><th>Mode</th><th>Status</th>
+          <th title="Standard device price before discount">Device Price</th><th>Discount</th><th title="Agreed price after discount">Task Value</th><th>Received</th><th title="Task value − received">Balance</th><th>Mode</th><th>Status</th>
           <th>Tech</th><th>Location</th><th>Actions</th>
         </tr></thead>
         <tbody id="bs-tbody"><tr><td colspan="18" style="text-align:center;padding:32px;color:var(--text3)">Loading…</td></tr></tbody>
@@ -574,17 +574,37 @@ async function remindEntry(entryId, btn){
   } else { toast('❌ '+((res&&res.error)||'Failed')); if(btn){ btn.disabled=false; btn.textContent='🔔'; } }
 }
 
-// Discount on an entry: from the entry itself (typed in) or from its task (given at task creation).
-// If the money still "pending" is exactly the discount (received + discount covers the total),
-// that part is NOT to be collected — it is shown as discount, not as outstanding. Display only.
-function bsDisc(e){
-  const own=parseFloat(e.discount_given||0)||0, task=parseFloat(e.task_discount||0)||0;
-  const disc = own>0 ? own : task;
-  const total=parseFloat(e.total_price||0)||0, recv=parseFloat(e.payment_received||0)||0, pend=parseFloat(e.pending_payment||0)||0;
-  const inPend = (disc>0 && pend>0 && recv + disc >= total - 1) ? Math.min(pend, disc) : 0;
-  return { disc, inPend, toCollect: Math.max(0, Math.round((pend - inPend)*100)/100),
+// Price breakdown of an entry (display only — saved entries are not changed):
+//   Device price (standard, before discount) − Discount = Task value (agreed price)
+//   Task value − Received = Balance (still to collect)
+// Discount comes from the entry (typed in) or from its task (given at task creation; per device,
+// scaled to the devices on this entry, +18% GST for SBGT). Some older entries were saved at the
+// standard price instead of the agreed price — those are recognised (total = standard price, or
+// the only thing left pending is the discount) and the discount is taken off the task value.
+function bsPrice(e){
+  const r2=v=>Math.round(v*100)/100;
+  const q=parseFloat(e.qty||0)||1, total=parseFloat(e.total_price||0)||0, recv=parseFloat(e.payment_received||0)||0, pend=parseFloat(e.pending_payment||0)||0;
+  const gstF = String(e.profile||'').toUpperCase()==='SBGT' ? 1.18 : 1;
+  const own=parseFloat(e.discount_given||0)||0;
+  let disc=own;
+  if(!(own>0) && parseFloat(e.task_discount||0)>0){
+    const tq=parseFloat(e.task_qty||0)||q;
+    disc = r2(parseFloat(e.task_discount)/tq*q*gstF);
+  }
+  let atStandard=false;
+  if(disc>0){
+    const std=parseFloat(e.std_unit_price||0)||0;
+    if(std>0) atStandard = Math.abs(total - r2(std*q*gstF)) <= 1;
+    if(!atStandard) atStandard = pend>0 && recv + disc >= total - 1 && pend <= disc + 1;
+  }
+  const taskValue = atStandard ? r2(total - disc) : total;
+  const device    = r2(taskValue + disc);
+  const balance   = Math.max(0, r2(taskValue - recv));
+  return { device, disc, taskValue, recv, balance, atStandard,
            reason: own>0 ? (e.discount_reason||'') : (e.task_discount_reason||''), by: own>0 ? (e.discount_incharge||'') : (e.task_discount_by||'') };
 }
+// kept for the places that only need "how much is still to collect"
+function bsDisc(e){ const p=bsPrice(e); return {disc:p.disc, inPend:(p.atStandard?Math.min(p.disc,parseFloat(e.pending_payment||0)||0):0), toCollect:p.balance, reason:p.reason, by:p.by}; }
 function computeStats(entries){
   // Build the same stat shape as the server, but from the CURRENTLY FILTERED entries,
   // so the dashboard cards always match the filtered table result.
@@ -596,8 +616,9 @@ function computeStats(entries){
     const dsc=bsDisc(e);
     const pend=dsc.toCollect;
     if(dsc.disc>0){ discount_total+=dsc.disc; discount_count++; }
-    if(e.type==='sales'){ devices_sold+=qty; total_sales+=total; }
-    else { license_count+=qty; total_license+=total; }
+    const tv=bsPrice(e).taskValue;
+    if(e.type==='sales'){ devices_sold+=qty; total_sales+=tv; }
+    else { license_count+=qty; total_license+=tv; }
     payment_received+=recv;
     pending_payment+=pend;
     gst_total+=bsGst(e).gst;
@@ -610,7 +631,7 @@ function renderStats(s){
   const cards=[
     {l:'Devices Installed', v:(+s.devices_sold||0).toLocaleString('en-IN'),  c:'#0E5C5C'},
     {l:'Licenses/Services', v:(+s.license_count||0).toLocaleString('en-IN'), c:'#5b2d8e'},
-    {l:(bsBasis()==='received'?'Sale value of these payments':'Sales Value'), v:fmt(s.total_sales), c:'#1a56a0'},
+    {l:(bsBasis()==='received'?'Sale value of these payments':'Sales Value (after discount)'), v:fmt(s.total_sales), c:'#1a56a0'},
     {l:'License Value',     v:fmt(s.total_license),      c:'#5b2d8e'},
     {l:(bsBasis()==='received'?'Received (by received date)':'Received on these sales'), v:fmt(s.payment_received), c:'#1a7a3a'},
     {l:'Outstanding (to collect)', v:fmt(s.pending_payment), c:'#c0392b'},
@@ -738,7 +759,8 @@ function renderTable(){
   tbody.innerHTML=slice.map((e,i)=>{
     const n=(curPage-1)*PAGE+i+1;
     const chk=selectedIds.has(e.id)?'checked':'';
-    const ps=(bsDisc(e).inPend>0 && bsDisc(e).toCollect<=0)?'<span class="badge badge-paid" title="Fully paid after the approved discount">Paid (disc.)</span>':e.payment_status==='paid'?'<span class="badge badge-paid">Paid</span>':e.payment_status==='partially_paid'?'<span class="badge badge-part">Partial</span>':'<span class="badge badge-pend">Pending</span>';
+    const _bp=bsPrice(e);
+    const ps=(_bp.taskValue>0 && _bp.balance<=0)?'<span class="badge badge-paid">Paid</span>':(_bp.recv>0)?'<span class="badge badge-part">Partial</span>':e.payment_status==='paid'?'<span class="badge badge-paid">Paid</span>':e.payment_status==='partially_paid'?'<span class="badge badge-part">Partial</span>':'<span class="badge badge-pend">Pending</span>';
     const tp=e.type==='sales'?'<span class="badge badge-sales">Sales</span>':'<span class="badge badge-lic">License</span>';
     return `<tr>
       <td><input type="checkbox" ${chk} onchange="toggleSel(${e.id},this)"></td>
@@ -746,9 +768,11 @@ function renderTable(){
       <td>${e.task_id||e.task_no||'–'}</td><td>${e.invoice_no||'–'}</td>
       <td style="max-width:160px">${bsServerNames(e.name_on_server)}</td>
       <td>${e.server_name||'–'}</td><td>${e.device_model||e.service_type||'–'}</td><td>${qtyFmt(e.qty)}</td>
-      <td style="font-weight:700">₹${parseFloat(e.total_price||0).toLocaleString('en-IN')}</td>
-      <td style="color:${bsDisc(e).toCollect>0?'var(--red)':'var(--green)'};font-weight:700">₹${bsDisc(e).toCollect.toLocaleString('en-IN')}${bsDisc(e).inPend>0?`<div style="font-size:10px;font-weight:700;color:#b45309;white-space:nowrap" title="Discount given — not to be collected">+ ₹${bsDisc(e).inPend.toLocaleString('en-IN')} discount</div>`:''}</td>
-      <td style="color:var(--green);font-weight:700">₹${parseFloat(e.payment_received||0).toLocaleString('en-IN')}</td>
+      <td style="color:var(--text2)">₹${_bp.device.toLocaleString('en-IN')}</td>
+      <td style="color:${_bp.disc>0?'#b45309':'var(--text3)'};font-weight:${_bp.disc>0?700:400}" ${_bp.disc>0?`title="${(_bp.reason||'Discount').replace(/"/g,'&quot;')}${_bp.by?' · approved by '+_bp.by.replace(/"/g,'&quot;'):''}"`:''}>${_bp.disc>0?'− ₹'+_bp.disc.toLocaleString('en-IN'):'–'}</td>
+      <td style="font-weight:800">₹${_bp.taskValue.toLocaleString('en-IN')}</td>
+      <td style="color:var(--green);font-weight:700">₹${_bp.recv.toLocaleString('en-IN')}</td>
+      <td style="color:${_bp.balance>0?'var(--red)':'var(--green)'};font-weight:700">₹${_bp.balance.toLocaleString('en-IN')}</td>
       <td>${e.payment_mode||'–'}${e.payment_transaction_details?`<div style="font-size:10px;color:var(--text3);word-break:break-all">${String(e.payment_transaction_details).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`:''}</td><td>${ps}</td>
       <td>${e.technician_name||'–'}</td><td>${e.location||'–'}</td>
       <td>
@@ -795,9 +819,10 @@ function _bsShot(v){
 function viewEntry(id){
   const e=allEntries.find(x=>+x.id===+id); if(!e) return;
   const money = v => '₹'+parseFloat(v||0).toLocaleString('en-IN',{maximumFractionDigits:2});
-  const total = parseFloat(e.total_price||0);
-  const recv  = parseFloat(e.payment_received||0);
-  const pend  = bsDisc(e).toCollect;   // discount part is not "pending"
+  const _bp   = bsPrice(e);
+  const total = _bp.taskValue;          // agreed price after discount
+  const recv  = _bp.recv;
+  const pend  = _bp.balance;            // discount is not "pending"
   const status = (e.payment_status||'pending').toLowerCase();
   const stMap = {
     paid:            {t:'PAID',           bg:'var(--green-bg)', c:'var(--green)', ic:'✅'},
@@ -856,7 +881,9 @@ function viewEntry(id){
   );
 
   const paySec = section('Payment',
-      row('Total', money(total), {bold:true})
+      row('Device Price (standard)', money(_bp.device))
+    + row('Discount', _bp.disc>0 ? '− '+money(_bp.disc) : '–', {color:_bp.disc>0?'#b45309':'var(--text)'})
+    + row('Task Value (after discount)', money(total), {bold:true})
     + row('Received', money(recv), {color:'var(--green)', bold:true})
     + row('Pending', money(pend), {color:pend>0?'var(--red)':'var(--text)', bold:true})
     + row('Mode', esc(e.payment_mode))
@@ -871,7 +898,7 @@ function viewEntry(id){
       row('Discount Given', money(_dsc.disc), {color:'var(--amber)', bold:true})
     + row('Reason', esc(_dsc.reason))
     + row('Approved By', esc(_dsc.by))
-    + (_dsc.inPend>0 ? row('Note', '₹'+_dsc.inPend.toLocaleString('en-IN')+' of the pending is this discount — not to be collected', {color:'#b45309'}) : '')
+    + (_bp.atStandard ? row('Note', 'This entry was saved at the standard price; the discount is taken off — balance is ₹'+_bp.balance.toLocaleString('en-IN'), {color:'#b45309'}) : '')
   ) : '';
 
   const metaSec = section('Other',
@@ -1047,6 +1074,12 @@ function bsUnitPrice(e){
 function bsGst(e){
   const q=parseFloat(e.qty||0)||0, t=parseFloat(e.total_price||0)||0, u=parseFloat(e.unit_price||0)||0, g=parseFloat(e.gst||0)||0;
   const r2=v=>Math.round(v*100)/100;
+  const bp=bsPrice(e);
+  if(bp.atStandard && q>0){        // saved at standard price: split the agreed (discounted) value
+    const tv=bp.taskValue;
+    if(String(e.profile||'').toUpperCase()==='SBGT'){ const tx=r2(tv/1.18); return {unit:r2(tx/q), gst:r2(tv-tx), taxable:tx, total:tv}; }
+    return {unit:r2(tv/q), gst:0, taxable:tv, total:tv};
+  }
   if(q>0 && t>0 && g>0 && Math.abs(u*q+g-t)<=1) return {unit:u, gst:g, taxable:r2(t-g), total:t};
   if(q>0 && t>0 && e.task_db_id && String(e.profile||'').toUpperCase()==='SBGT' && g===0){
     const tx=r2(t/1.18); return {unit:r2(tx/q), gst:r2(t-tx), taxable:tx, total:t};
@@ -1058,8 +1091,9 @@ function exportXLS(){
   const data=getFiltered();
   const rows=data.map((e,i)=>({'#':i+1,'Date':e.date,'Type':e.type,'Task':e.task_id||e.task_no,'Invoice':e.invoice_no,
     'Name on Server':e.name_on_server,'Server':e.server_name,'Model/Service':e.device_model||e.service_type,
-    'Qty':e.qty,'Unit Price (excl GST)':bsGst(e).unit,'Taxable Value':bsGst(e).taxable,'GST':bsGst(e).gst,'Total (incl GST)':e.total_price,
-    'Received':e.payment_received,'Pending':e.pending_payment,'Discount':bsDisc(e).disc||'','Discount Reason':bsDisc(e).reason||'','Pending to collect (excl. discount)':bsDisc(e).toCollect,'Mode':e.payment_mode,
+    'Qty':e.qty,'Unit Price (excl GST)':bsGst(e).unit,'Taxable Value':bsGst(e).taxable,'GST':bsGst(e).gst,'Total (incl GST)':bsGst(e).total,
+    'Device Price (standard)':bsPrice(e).device,'Discount':bsPrice(e).disc||'','Discount Reason':bsPrice(e).reason||'','Discount Approved By':bsPrice(e).by||'','Task Value (after discount)':bsPrice(e).taskValue,
+    'Received':e.payment_received,'Balance (to collect)':bsPrice(e).balance,'Mode':e.payment_mode,
     'Status':e.payment_status,
     'Payment Received On':e.payment_received_at?new Date(String(e.payment_received_at).replace(' ','T')).toLocaleString('en-IN'):(e.payment_received_on?new Date(e.payment_received_on).toLocaleDateString('en-IN'):''),
     'Transaction Details / Payment Remarks':e.payment_transaction_details||'',
