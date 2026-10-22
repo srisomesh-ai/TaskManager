@@ -907,6 +907,23 @@ function bs_apply_gst($pdo, $bsId){
     } catch(Exception $e){ error_log('bs_apply_gst: '.$e->getMessage()); }
 }
 
+// Per-device price used for billing installed devices. The task's saved per-device price is kept
+// so billing stays right when only the quantity changes. But if the task was switched BGPT <-> SBGT
+// (price now with / without 18% GST) before price edits refreshed it, the saved price is the old
+// one — exactly the current price per device without (or with) GST. Then the current price is
+// right: use it, and repair the saved per-device price on the task.
+function bs_task_unit($pdo, $t2, $fullQty, $fullTotal){
+    $fullQty = max(1, intval($fullQty)); $cand = $fullTotal / $fullQty;
+    $stored = isset($t2['unit_price']) ? floatval($t2['unit_price']) : 0;
+    if ($stored <= 0) return $cand;
+    if (abs($stored * $fullQty - $fullTotal) <= 1) return $stored;
+    if ($cand > 0 && (abs($stored * 1.18 - $cand) <= 1 || abs($stored - $cand * 1.18) <= 1)) {
+        try { if (!empty($t2['id'])) $pdo->prepare("UPDATE tasks SET unit_price=? WHERE id=?")->execute([round($cand,2), intval($t2['id'])]); } catch(Exception $e){}
+        return $cand;
+    }
+    return $stored;
+}
+
 // Right after an automatic INSERT: apply the shared payment rule (status, pending, received date).
 function bs_fix_new($pdo, $bsId){
     $bsId = intval($bsId); if ($bsId <= 0) return;
@@ -940,6 +957,7 @@ function bs_sync_row($pdo, $bsId, $serials, $names, $server, $qty, $unit, $total
         } else {
             $amtChanged = abs(floatval($r['qty']) - floatval($qty)) > 0.004 || abs(floatval($r['total_price']) - floatval($total)) > 0.004;
             if ($amtChanged) {
+                $GLOBALS['bs_totals_fixed'] = intval($GLOBALS['bs_totals_fixed'] ?? 0) + 1;
                 $pdo->prepare("UPDATE balance_sheet_entries SET gps_serial_no=?,name_on_server=?,server_name=?,qty=?,unit_price=?,total_price=?,payment_mode=COALESCE(?,payment_mode),updated_at=NOW() WHERE id=?")
                     ->execute([$serials ?: null, $names ?: null, $server, $qty, $unit, $total, ($mode ?: null), $bsId]);
                 bs_apply_gst($pdo, $bsId);
@@ -988,8 +1006,7 @@ function _bsSyncInstalls($pdo, $cuName){
         $fullQty   = intval($t2['device_qty']??1); if($fullQty<1)$fullQty=1;
         $fullTotal = floatval($t2['price_to_collect']??0);
         // Use the per-device unit_price captured at creation; fall back to total÷qty for old tasks.
-        $storedUnit = isset($t2['unit_price']) ? floatval($t2['unit_price']) : 0;
-        $unit2     = $storedUnit>0 ? $storedUnit : ($fullQty>0 ? $fullTotal/$fullQty : $fullTotal);
+        $unit2     = bs_task_unit($pdo, $t2, $fullQty, $fullTotal);
         // Normally we bill per installed device. For a paid service task with NO device install
         // (e.g. a paid Troubleshoot charge), bill the full task price as a single line.
         if ($installedCount >= 1) {
@@ -3800,8 +3817,7 @@ case 'save_device_install':
                 // to total ÷ qty only for older tasks that have no unit_price stored yet.
                 $fullQty   = $totalQty > 0 ? $totalQty : 1;
                 $fullTotal = floatval($t2['price_to_collect']??0);
-                $storedUnit = isset($t2['unit_price']) ? floatval($t2['unit_price']) : 0;
-                $unit2     = $storedUnit > 0 ? $storedUnit : ($fullQty > 0 ? $fullTotal / $fullQty : $fullTotal);
+                $unit2     = bs_task_unit($pdo, $t2, $fullQty, $fullTotal);
                 $billQty   = $installedCount;                 // only what is installed
                 $billTotal = round($unit2 * $billQty, 2);     // installed devices × per-device price
                 $profile2  = $t2['profile']??'BGPT';
@@ -4798,7 +4814,7 @@ case 'bs_resync_all':
             bs_log_payment($pdo, $r['id'], $r['bs_received'], $recv, $r['payment_mode'] ?? null, $on, null, 'resync');
             $count++;
         }
-        echo json_encode(['success'=>true, 'updated'=>$count, 'created'=>$created]);
+        echo json_encode(['success'=>true, 'updated'=>$count, 'created'=>$created, 'totals_fixed'=>intval($GLOBALS['bs_totals_fixed'] ?? 0)]);
     } catch(Exception $e) {
         echo json_encode(['error'=>$e->getMessage()]);
     }
