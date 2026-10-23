@@ -177,7 +177,7 @@ tr:hover td{background:#f7f9fc}
           <th><input type="checkbox" id="chk-all" onchange="toggleAll(this)"></th>
           <th>#</th><th>Date</th><th>Type</th><th>Task No</th><th>Invoice</th>
           <th>Name on Server</th><th>Server</th><th>Model/Service</th><th>Qty</th>
-          <th title="Standard device price (before GST)">Device Price</th><th title="Discount on the device price (before GST)">Discount</th><th title="Agreed price after discount (before GST)">Task Value</th><th class="gst-col">GST 18%</th><th class="gst-col" title="Task value + GST = what the customer pays">Total (incl GST)</th><th>Received</th><th title="Total − received">Balance</th><th>Mode</th><th>Status</th>
+          <th title="Price List price × qty (before GST)">Actual Price</th><th title="Actual price − task value">Discount</th><th title="Agreed price after discount (before GST)">Task Value</th><th class="gst-col">GST 18%</th><th class="gst-col" title="Task value + GST = what the customer pays">Total (incl GST)</th><th>Collected</th><th title="To collect">Pending</th><th>Mode</th><th>Status</th>
           <th>Tech</th><th>Location</th><th>Actions</th>
         </tr></thead>
         <tbody id="bs-tbody"><tr><td colspan="18" style="text-align:center;padding:32px;color:var(--text3)">Loading…</td></tr></tbody>
@@ -608,7 +608,16 @@ function bsPrice(e){
   else if(g>0 && Math.abs(u*q+g-total)<=1){ gst=g; taxable=r2(total-g); }
   else if(isSB && e.task_db_id){ taxable=r2(total/1.18); gst=r2(total-taxable); }
   else { gst=g; taxable=r2(total-g); }
-  const device  = r2(taxable + disc);
+  // Actual price = Price List price per device (before GST) × qty. Discount = Actual − Task value,
+  // so it shows even when no discount was recorded. Without a Price List price: Task value + the
+  // recorded discount. (If a sale was above the list price, Actual = Task value, discount 0.)
+  const std=parseFloat(e.std_unit_price||0)||0;
+  let device;
+  if(std>0){
+    const stdTot=r2(std*q);
+    if(stdTot >= taxable - 0.5){ device=stdTot; disc=Math.max(0, r2(stdTot - taxable)); }
+    else { device=taxable; disc=0; }
+  } else device = r2(taxable + disc);
   const balance = Math.max(0, r2(totalIncl - recv));
   return { device, disc, taxable, gst, taskValue: totalIncl, recv, balance, atStandard, isSB, unit: r2(taxable/q),
            reason: own>0 ? (e.discount_reason||'') : (e.task_discount_reason||''), by: own>0 ? (e.discount_incharge||'') : (e.task_discount_by||'') };
@@ -616,41 +625,39 @@ function bsPrice(e){
 // kept for the places that only need "how much is still to collect"
 function bsDisc(e){ const p=bsPrice(e); return {disc:p.disc, inPend:(p.atStandard?Math.min(p.disc,parseFloat(e.pending_payment||0)||0):0), toCollect:p.balance, reason:p.reason, by:p.by}; }
 function computeStats(entries){
-  // Build the same stat shape as the server, but from the CURRENTLY FILTERED entries,
-  // so the dashboard cards always match the filtered table result.
-  let devices_sold=0, license_count=0, total_sales=0, total_license=0, payment_received=0, pending_payment=0, gst_total=0, discount_total=0, discount_count=0;
+  // Totals of the CURRENTLY FILTERED entries (cards always match the table), using the same
+  // breakdown as each row: Actual price − Discount = Task value (+ GST) = Total; Collected; Pending.
+  const t={devices:0, services:0, actual:0, discount:0, discount_n:0, value:0, gst:0, total:0, collected:0, pending:0, pending_n:0};
   (entries||[]).forEach(e=>{
-    const qty=parseFloat(e.qty||0)||0;
-    const total=parseFloat(e.total_price||0)||0;
-    const recv=parseFloat(e.payment_received||0)||0;
-    const dsc=bsDisc(e);
-    const pend=dsc.toCollect;
-    if(dsc.disc>0){ discount_total+=dsc.disc; discount_count++; }
-    const tv=bsPrice(e).taskValue;
-    if(e.type==='sales'){ devices_sold+=qty; total_sales+=tv; }
-    else { license_count+=qty; total_license+=tv; }
-    payment_received+=recv;
-    pending_payment+=pend;
-    gst_total+=bsGst(e).gst;
+    const p=bsPrice(e), qty=parseFloat(e.qty||0)||0;
+    if(e.type==='sales') t.devices+=qty; else t.services+=qty;
+    t.actual+=p.device; t.value+=p.taxable; t.gst+=p.gst; t.total+=p.taskValue;
+    t.collected+=p.recv; t.pending+=p.balance;
+    if(p.disc>0){ t.discount+=p.disc; t.discount_n++; }
+    if(p.balance>0) t.pending_n++;
   });
-  return {devices_sold,license_count,total_sales,total_license,payment_received,pending_payment,gst_total,discount_total,discount_count};
+  return t;
 }
 
-function renderStats(s){
-  const fmt=v=>'₹'+parseFloat(v||0).toLocaleString('en-IN',{minimumFractionDigits:0});
+function renderStats(t){
+  const rs=v=>'₹'+Math.round(+v||0).toLocaleString('en-IN');
+  const isSB=(document.getElementById('bs-profile')||{}).value==='SBGT';
+  const byRecv=bsBasis()==='received';
   const cards=[
-    {l:'Devices Installed', v:(+s.devices_sold||0).toLocaleString('en-IN'),  c:'#0E5C5C'},
-    {l:'Licenses/Services', v:(+s.license_count||0).toLocaleString('en-IN'), c:'#5b2d8e'},
-    {l:(bsBasis()==='received'?'Sale value of these payments':'Sales Value (after discount'+((document.getElementById('bs-profile')||{}).value==='SBGT'?', incl GST)':')')), v:fmt(s.total_sales), c:'#1a56a0'},
-    {l:'License Value',     v:fmt(s.total_license),      c:'#5b2d8e'},
-    {l:(bsBasis()==='received'?'Received (by received date)':'Received on these sales'), v:fmt(s.payment_received), c:'#1a7a3a'},
-    {l:'Outstanding (to collect)', v:fmt(s.pending_payment), c:'#c0392b'},
-    {l:'Discount given (before GST) · '+(s.discount_count||0)+' sales', v:fmt(s.discount_total), c:'#d97706'},
+    {l:'Devices sold'+(t.services?' · '+t.services+' licenses / services':''), v:(+t.devices||0).toLocaleString('en-IN'), c:'#0E5C5C'},
+    {l:'Actual value (Price List'+(isSB?', before GST':'')+')', v:rs(t.actual), c:'#475569'},
+    {l:'Discount given · '+t.discount_n+' sales', v:'− '+rs(t.discount), c:'#d97706'},
+    {l:'Task value (after discount'+(isSB?', before GST':'')+')', v:rs(t.value), c:'#1a56a0'},
   ];
-  // Cash view: everything collected in this period, including payments for sales of earlier months.
-  if((document.getElementById('bs-profile')||{}).value==='SBGT') cards.push({l:'GST (18%) in these sales', v:fmt(Math.round(s.gst_total)), c:'#b45309'});
-  const col = bsBasis()==='sale' ? bsCollectedInPeriod() : null;
-  if(col) cards.push({l:'Collected in period (any sale month) · '+col.n+' payments', v:fmt(col.sum), c:'#0f766e'});
+  if(isSB){
+    cards.push({l:'GST 18% (on task value)', v:rs(t.gst), c:'#b45309'});
+    cards.push({l:'Total billed (task value + GST)', v:rs(t.total), c:'#1e3a8a'});
+  }
+  cards.push({l:(byRecv?'Collected (by received date)':'Collected'), v:rs(t.collected), c:'#1a7a3a'});
+  cards.push({l:'Pending to collect · '+t.pending_n+' entries', v:rs(t.pending), c:'#c0392b'});
+  // Cash view: all money received in this period, including payments for sales of earlier months.
+  const col = !byRecv ? bsCollectedInPeriod() : null;
+  if(col) cards.push({l:'Cash received this period (incl. older sales) · '+col.n+' payments', v:rs(col.sum), c:'#0f766e'});
   document.getElementById('bs-stats').innerHTML=cards.map(c=>`
     <div class="bs-stat" style="border-top-color:${c.c}">
       <div class="v" style="color:${c.c}">${c.v}</div>
@@ -893,12 +900,12 @@ function viewEntry(id){
   );
 
   const paySec = section('Payment',
-      row('Device Price'+(_bp.isSB?' (before GST)':''), money(_bp.device))
+      row('Actual Price (Price List'+(_bp.isSB?', before GST':'')+')', money(_bp.device))
     + row('Discount'+(_bp.isSB?' (before GST)':''), _bp.disc>0 ? '− '+money(_bp.disc) : '–', {color:_bp.disc>0?'#b45309':'var(--text)'})
     + row('Task Value (after discount'+(_bp.isSB?', before GST)':')'), money(_bp.taxable), {bold:true})
     + (_bp.isSB ? row('GST 18%', money(_bp.gst), {color:'#b45309'}) + row('Total (incl GST)', money(total), {bold:true}) : '')
-    + row('Received', money(recv), {color:'var(--green)', bold:true})
-    + row('Pending', money(pend), {color:pend>0?'var(--red)':'var(--text)', bold:true})
+    + row('Collected', money(recv), {color:'var(--green)', bold:true})
+    + row('Pending to collect', money(pend), {color:pend>0?'var(--red)':'var(--text)', bold:true})
     + row('Mode', esc(e.payment_mode))
     + row('Transaction / UTR', esc(e.payment_transaction_details))
     + row('Status', S.ic+' '+S.t, {bold:true, color:S.c})
@@ -1090,9 +1097,9 @@ function exportXLS(){
   const rows=data.map((e,i)=>({'#':i+1,'Date':e.date,'Type':e.type,'Task':e.task_id||e.task_no,'Invoice':e.invoice_no,
     'Name on Server':e.name_on_server,'Server':e.server_name,'Model/Service':e.device_model||e.service_type,
     'Qty':e.qty,'Unit Price (excl GST)':bsPrice(e).unit,
-    'Device Price (excl GST)':bsPrice(e).device,'Discount (excl GST)':bsPrice(e).disc||'','Discount Reason':bsPrice(e).reason||'','Discount Approved By':bsPrice(e).by||'',
+    'Actual Price (Price List, excl GST)':bsPrice(e).device,'Discount (excl GST)':bsPrice(e).disc||'','Discount Reason':bsPrice(e).reason||'','Discount Approved By':bsPrice(e).by||'',
     'Task Value / Taxable (excl GST)':bsPrice(e).taxable,'GST':bsPrice(e).gst,'Total (incl GST)':bsPrice(e).taskValue,
-    'Received':e.payment_received,'Balance (to collect)':bsPrice(e).balance,'Mode':e.payment_mode,
+    'Collected':e.payment_received,'Pending (to collect)':bsPrice(e).balance,'Mode':e.payment_mode,
     'Status':e.payment_status,
     'Payment Received On':e.payment_received_at?new Date(String(e.payment_received_at).replace(' ','T')).toLocaleString('en-IN'):(e.payment_received_on?new Date(e.payment_received_on).toLocaleDateString('en-IN'):''),
     'Transaction Details / Payment Remarks':e.payment_transaction_details||'',

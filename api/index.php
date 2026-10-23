@@ -4029,39 +4029,49 @@ case 'bs_get_entries':
             unset($e);
         }
     } catch(Exception $e) { error_log('bs payment enrich: '.$e->getMessage()); }
-    // Attach the DISCOUNT given on the linked task (set when the task was created / assigned),
-    // so the page can show discount separately from money still to collect. Read-only.
+    // Attach, for every entry: the ACTUAL device price from the Price List (standard price per
+    // device, before GST — matched on the task's job type, else the entry's model) and the
+    // DISCOUNT recorded on the linked task. The page shows Actual price − Discount = Task value.
+    // Read-only.
     try {
-        $dIds = [];
-        foreach ($entries as $i => $e) { $t = $tidByEntry[$i] ?? 0; if ($t) $dIds[$t] = true; }
-        if ($dIds) {
-            $ids = implode(',', array_map('intval', array_keys($dIds)));
-            $dq = $pdo->query("SELECT id, discount_given, discount_reason, discount_incharge, device_qty, device_details FROM tasks WHERE id IN ($ids) AND COALESCE(discount_given,0) > 0");
-            $dBy = []; foreach ($dq->fetchAll(PDO::FETCH_ASSOC) as $d) $dBy[(int)$d['id']] = $d;
-            // Standard (list) price per device, before GST, from the Price List — to show the
-            // actual device price next to the discount.
-            $stdBy = [];
+        $tIds = [];
+        foreach ($entries as $i => $e) { $t = $tidByEntry[$i] ?? 0; if ($t) $tIds[$t] = true; }
+        $tBy = [];
+        if ($tIds) {
+            $ids = implode(',', array_map('intval', array_keys($tIds)));
+            foreach ($pdo->query("SELECT id, discount_given, discount_reason, discount_incharge, device_qty, device_details FROM tasks WHERE id IN ($ids)")->fetchAll(PDO::FETCH_ASSOC) as $d) $tBy[(int)$d['id']] = $d;
+        }
+        $names = [];
+        foreach ($entries as $i => $e) {
+            $t = $tidByEntry[$i] ?? 0;
+            $n = ($t && isset($tBy[$t])) ? trim((string)$tBy[$t]['device_details']) : '';
+            if ($n === '') $n = trim((string)($e['device_model'] ?? ''));
+            if ($n !== '') $names[$n] = true;
+        }
+        $stdBy = [];
+        if ($names) {
+            $nl = array_keys($names); $ph = implode(',', array_fill(0, count($nl), '?'));
             try {
-                $names = array_values(array_unique(array_filter(array_map(function($d){ return trim((string)$d['device_details']); }, $dBy))));
-                if ($names) {
-                    $ph = implode(',', array_fill(0, count($names), '?'));
-                    $sq = $pdo->prepare("SELECT product_name, price_excl_gst FROM price_list WHERE product_name IN ($ph)"); $sq->execute($names);
-                    foreach ($sq->fetchAll(PDO::FETCH_ASSOC) as $sp) $stdBy[$sp['product_name']] = floatval($sp['price_excl_gst']);
-                }
+                $sq = $pdo->prepare("SELECT product_name, price_excl_gst FROM price_list WHERE product_name IN ($ph) ORDER BY is_active DESC, id ASC"); $sq->execute($nl);
+                foreach ($sq->fetchAll(PDO::FETCH_ASSOC) as $sp) { if (!isset($stdBy[$sp['product_name']]) && floatval($sp['price_excl_gst']) > 0) $stdBy[$sp['product_name']] = floatval($sp['price_excl_gst']); }
             } catch(Exception $e2){}
-            foreach ($entries as $i => &$e) {
-                $t = $tidByEntry[$i] ?? 0;
-                if ($t && isset($dBy[$t])) {
-                    $e['task_discount'] = $dBy[$t]['discount_given'];
-                    $e['task_discount_reason'] = $dBy[$t]['discount_reason'];
-                    $e['task_discount_by'] = $dBy[$t]['discount_incharge'];
-                    $e['task_qty'] = $dBy[$t]['device_qty'];
-                    $dn = trim((string)$dBy[$t]['device_details']);
-                    if (isset($stdBy[$dn]) && $stdBy[$dn] > 0) $e['std_unit_price'] = $stdBy[$dn];
+        }
+        foreach ($entries as $i => &$e) {
+            $t = $tidByEntry[$i] ?? 0;
+            $d = ($t && isset($tBy[$t])) ? $tBy[$t] : null;
+            $n = $d ? trim((string)$d['device_details']) : '';
+            if ($n === '' || !isset($stdBy[$n])) $n = trim((string)($e['device_model'] ?? ''));
+            if ($n !== '' && isset($stdBy[$n])) $e['std_unit_price'] = $stdBy[$n];
+            if ($d) {
+                $e['task_qty'] = $d['device_qty'];
+                if (floatval($d['discount_given'] ?? 0) > 0) {
+                    $e['task_discount'] = $d['discount_given'];
+                    $e['task_discount_reason'] = $d['discount_reason'];
+                    $e['task_discount_by'] = $d['discount_incharge'];
                 }
             }
-            unset($e);
         }
+        unset($e);
     } catch(Exception $e) { error_log('bs discount enrich: '.$e->getMessage()); }
     // Attach the task's payment screenshot (for sales/task entries) from task_documents.
     // License/renewal entries already carry their proof in payment_transaction_details.
