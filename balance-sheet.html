@@ -595,6 +595,11 @@ function bsPrice(e){
   if(!(own>0) && parseFloat(e.task_discount||0)>0){
     const tq=parseFloat(e.task_qty||0)||q;
     disc = r2(parseFloat(e.task_discount)/tq*q);
+    // A discount saved on a task whose price is now at the full Price List price is a leftover
+    // from an earlier edit — there is no discount.
+    const stdU=parseFloat(e.std_unit_price||0)||0, tp=parseFloat(e.task_price||0)||0;
+    const paidDiscounted = recv>0 && Math.abs(recv - (tp - parseFloat(e.task_discount)*gstF)) <= 1;   // customer paid the discounted price → real
+    if(stdU>0 && tp>0 && !paidDiscounted && (tp/tq/gstF) + 0.5 >= stdU) disc = 0;
   }
   let atStandard=false;
   if(disc>0){
@@ -940,8 +945,9 @@ function viewEntry(id){
     + row('Quantity', qtyFmt(e.qty))
     + row('Unit Price (excl GST)', bsGst(e).unit?money(bsGst(e).unit):'–')
     + (e.task_price!=null ? row('Task price (on the task)', money(e.task_price)+' for '+(e.task_qty||1)+' device(s)'+(e.task_job?' · '+esc(e.task_job):'')) : '')
-    + ((e.task_price!=null && +e.task_qty===+e.qty && Math.abs((+e.total_price||0)-(+e.task_price||0))>1 && !(+e.total_locked))
-        ? row('⚠️ Check', 'This entry (₹'+(+e.total_price).toLocaleString('en-IN')+') does not match the task price — press 🔁 Resync from Tasks', {color:'var(--red)'}) : '')
+    + ((e.task_price!=null && +e.task_qty===+e.qty && Math.abs((+e.total_price||0)-(+e.task_price||0))>1)
+        ? row('⚠️ Check', 'This entry (₹'+(+e.total_price).toLocaleString('en-IN')+') does not match the task price (₹'+(+e.task_price).toLocaleString('en-IN')+')'
+            + (window._bsRole==='admin' ? ' <button onclick="bsMatchTask('+e.id+',this)" style="margin-left:6px;background:#0E5C5C;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-weight:700;cursor:pointer">Use task price</button>' : ' — ask admin to fix'), {color:'var(--red)'}) : '')
   );
 
   const paySec = section('Payment',
@@ -1117,7 +1123,7 @@ async function resyncAll(){
   if(!confirm('This will sync all payment data from Task Manager into Balance Sheet. Continue?')) return;
   const res = await bsApi('bs_resync_all',{},'POST',{}).catch(()=>({}));
   if(res.success){
-    toast('✅ Synced — '+(res.created||0)+' new entries created, '+res.updated+' checked'+((res.totals_fixed>0)?', '+res.totals_fixed+' totals corrected from tasks':'')+((res.dates_fixed>0)?', '+res.dates_fixed+' received dates corrected':'')+((res.amounts_restored>0)?', '+res.amounts_restored+' entries restored (total/received wrongly cut)':''));
+    toast('✅ Synced — '+(res.created||0)+' new entries created, '+res.updated+' checked'+((res.totals_fixed>0)?', '+res.totals_fixed+' totals corrected from tasks':'')+((res.dates_fixed>0)?', '+res.dates_fixed+' received dates corrected':'')+((res.amounts_restored>0)?', '+res.amounts_restored+' entries restored (total/received wrongly cut)':'')+((res.discounts_cleared>0)?', '+res.discounts_cleared+' old discounts cleared':''));
     loadEntries();
   } else {
     toast('❌ '+(res.error||'Sync failed'));
@@ -1401,6 +1407,13 @@ async function openDeletedEntries(){
       +'</tr>';
   });
   body.innerHTML=t+'</table>';
+}
+async function bsMatchTask(id,btn){
+  if(!confirm('Re-bill this entry from its task\'s current price?\n\nThe change is recorded in the entry history.')) return;
+  btn.disabled=true; btn.textContent='Updating…';
+  const res=await bsApi('bs_match_task',{},'POST',{id}).catch(()=>({}));
+  if(res&&res.success){ toast('✅ Entry total ₹'+(+res.old_total).toLocaleString('en-IN')+' → ₹'+(+res.total).toLocaleString('en-IN')); closeView(); loadEntries(); }
+  else { btn.disabled=false; btn.textContent='Use task price'; alert('❌ '+((res&&res.error)||'Failed')); }
 }
 async function openDuplicates(){
   const ov=document.getElementById('dup-ov'), body=document.getElementById('dup-body');

@@ -969,6 +969,43 @@ function bs_repair_sync_shrink($pdo){
     } catch(Exception $e){ error_log('bs_repair_sync_shrink: '.$e->getMessage()); }
     return $fixed;
 }
+// Repair: a discount saved on a task whose price is now at (or above) the full Price List price is a
+// leftover from an earlier edit (the Edit window did not save discount changes before 21 Oct).
+// Clear it and note it in the task's Activity Log.
+function bs_repair_stale_discounts($pdo){
+    $fixed = 0;
+    try {
+        // (matched in PHP — the two tables may use different text collations)
+        $pl = [];
+        foreach ($pdo->query("SELECT product_name, price_excl_gst FROM price_list WHERE price_excl_gst > 0 ORDER BY is_active DESC, id ASC")->fetchAll(PDO::FETCH_ASSOC) as $p) {
+            $k = strtolower(trim((string)$p['product_name'])); if (!isset($pl[$k])) $pl[$k] = floatval($p['price_excl_gst']);
+        }
+        $rows = [];
+        foreach ($pdo->query("SELECT id, price_to_collect, device_qty, profile, discount_given, device_details, amount_collected FROM tasks
+                WHERE COALESCE(discount_given,0) > 0 AND COALESCE(price_to_collect,0) > 0")->fetchAll(PDO::FETCH_ASSOC) as $t) {
+            $k = strtolower(trim((string)$t['device_details']));
+            if (isset($pl[$k])) { $t['price_excl_gst'] = $pl[$k]; $rows[] = $t; }
+        }
+        $seen = [];
+        foreach ($rows as $r) {
+            if (isset($seen[$r['id']])) continue; $seen[$r['id']] = 1;
+            $q = max(1, intval($r['device_qty'])); $f = strtoupper((string)$r['profile']) === 'SBGT' ? 1.18 : 1;
+            $unitEx = floatval($r['price_to_collect']) / $q / $f;
+            // Real discount (price was later inflated by the old Edit bug): the customer paid exactly
+            // the discounted amount — keep it.
+            $paid = floatval($r['amount_collected'] ?? 0);
+            $discounted = floatval($r['price_to_collect']) - floatval($r['discount_given']) * $f;
+            if ($paid > 0 && abs($paid - $discounted) <= 1) continue;
+            if ($unitEx + 0.5 >= floatval($r['price_excl_gst'])) {
+                $pdo->prepare("UPDATE tasks SET discount_given=0 WHERE id=?")->execute([$r['id']]);
+                $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'system')")
+                    ->execute([$r['id'], $GLOBALS['userId'] ?? null, '🧾 Old discount ₹'.number_format(floatval($r['discount_given']),0).' cleared — the task is at the full price ₹'.number_format(floatval($r['price_to_collect']),0).' (the discount was left over from an earlier edit)']);
+                $fixed++;
+            }
+        }
+    } catch(Exception $e){ error_log('bs_repair_stale_discounts: '.$e->getMessage()); }
+    return $fixed;
+}
 function bs_is_sync_action(){ return in_array($GLOBALS['action'] ?? '', ['bs_resync_all','bs_get_entries','bs_backfill_installs'], true); }
 
 // Record the money received on a balance-sheet row, the same way everywhere:
@@ -1094,9 +1131,9 @@ function bs_sync_row($pdo, $bsId, $serials, $names, $server, $qty, $unit, $total
 
 // Ensure every task with installed devices has a balance-sheet entry (billing only installed devices).
 // Safe to run repeatedly — creates missing entries, updates existing ones to match installed count.
-function _bsSyncInstalls($pdo, $cuName){
+function _bsSyncInstalls($pdo, $cuName, $onlyTaskId = 0){
     try { $pdo->exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS bs_entry_id INT NULL"); } catch(Exception $e){}
-    $rows = $pdo->query("SELECT DISTINCT t.id FROM tasks t
+    $rows = $onlyTaskId ? [intval($onlyTaskId)] : $pdo->query("SELECT DISTINCT t.id FROM tasks t
                          JOIN task_device_installs di ON di.task_id=t.id
                          WHERE di.gps_serial_no IS NOT NULL AND di.gps_serial_no != ''")->fetchAll(PDO::FETCH_COLUMN);
     $created=0; $updated=0;
@@ -4513,6 +4550,24 @@ case 'bs_entry_history':
     } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
     break;
 
+case 'bs_match_task':
+    // Admin: re-bill one entry from its task's current price (also for an entry corrected by hand).
+    if ($userRole!=='admin') { http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
+    $mid = intval($body['id'] ?? 0);
+    try {
+        $g = $pdo->prepare("SELECT * FROM balance_sheet_entries WHERE id=?"); $g->execute([$mid]); $me = $g->fetch(PDO::FETCH_ASSOC);
+        if (!$me || empty($me['task_db_id'])) { echo json_encode(['error'=>'This entry is not linked to a task']); break; }
+        bs_ensure_lock_col($pdo);
+        $pdo->prepare("UPDATE balance_sheet_entries SET total_locked=0 WHERE id=?")->execute([$mid]);
+        $GLOBALS['bs_totals_fixed'] = 0;
+        _bsSyncInstalls($pdo, $cu['name'] ?? 'admin', intval($me['task_db_id']));
+        $g->execute([$mid]); $ne = $g->fetch(PDO::FETCH_ASSOC);
+        if ($ne && abs(floatval($ne['total_price']) - floatval($me['total_price'])) > 0.004)
+            bs_log_change($pdo, $mid, 'total_price', $me['total_price'], $ne['total_price'], 'matched to task price (admin)');
+        echo json_encode(['success'=>true,'old_total'=>$me['total_price'],'total'=>$ne['total_price'] ?? null]);
+    } catch(Exception $e){ echo json_encode(['error'=>$e->getMessage()]); }
+    break;
+
 case 'bs_duplicates':
     // Admin review list: tasks that have more than one balance-sheet row, and hand-typed rows that
     // look like a second copy of a task's row (same IMEI / name on server). Read-only.
@@ -4955,6 +5010,7 @@ case 'bs_resync_all':
     if ($userRole !== 'admin') { http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
     try {
         $amountsRestored = bs_repair_sync_shrink($pdo);
+        $discountsCleared = bs_repair_stale_discounts($pdo);
         $datesFixed = bs_repair_sync_dates($pdo);
         // FIRST: create any MISSING entries for tasks that have installed devices but no BS entry yet.
         $created = 0;
@@ -5005,7 +5061,7 @@ case 'bs_resync_all':
             bs_log_payment($pdo, $r['id'], $r['bs_received'], $recv, $r['payment_mode'] ?? null, $on, null, 'resync');
             $count++;
         }
-        echo json_encode(['success'=>true, 'updated'=>$count, 'created'=>$created, 'totals_fixed'=>intval($GLOBALS['bs_totals_fixed'] ?? 0), 'dates_fixed'=>$datesFixed, 'amounts_restored'=>$amountsRestored]);
+        echo json_encode(['success'=>true, 'updated'=>$count, 'created'=>$created, 'totals_fixed'=>intval($GLOBALS['bs_totals_fixed'] ?? 0), 'dates_fixed'=>$datesFixed, 'amounts_restored'=>$amountsRestored, 'discounts_cleared'=>$discountsCleared]);
     } catch(Exception $e) {
         echo json_encode(['error'=>$e->getMessage()]);
     }
