@@ -3151,6 +3151,7 @@ async function saveTask(){
   if(editingTaskId){
     payload.id = editingTaskId;
     payload.from_edit_drawer = 1;     // server keeps collected amount / price / discount safe
+    if(window._priceChangeReason) payload.price_change_reason = window._priceChangeReason;
     delete payload.amount_collected;  // the edit window has no collected-amount box
   }
 
@@ -3183,6 +3184,36 @@ async function saveTask(){
   } else {
     alert(res.error||'Save failed. Please try again.');
   }
+}
+
+// ── Price lock (Edit window) ──────────────────────────────────────────────
+// Once the technician has opened the task, the price is final: price, quantity, profile, job type
+// and discount are read-only. Admin can still change it, but must give a reason (logged).
+const _PRICE_LOCK_FIELDS=['fm-price-collect','fm-qty','fm-profile','fm-job','fm-discount-reason','fm-discount-approver'];
+function _applyPriceLock(t){
+  window._priceChangeReason = null;
+  const grp=document.getElementById('fm-price-group'); if(!grp) return;
+  let note=document.getElementById('fm-price-lock-note'); if(note) note.remove();
+  const locked = !!(+t.price_locked);
+  // only fields this lock disabled are re-enabled (Demo / Troubleshoot keep their own job lock)
+  _PRICE_LOCK_FIELDS.forEach(id=>{ const el=document.getElementById(id); if(!el) return;
+    if(locked){ if(!el.disabled){ el.disabled=true; el.dataset.plock='1'; } }
+    else if(el.dataset.plock==='1'){ el.disabled=false; delete el.dataset.plock; } });
+  if(!locked) return;
+  note=document.createElement('div'); note.id='fm-price-lock-note';
+  note.style.cssText='background:#fff7e6;border:1.5px solid #f3c77a;border-radius:8px;padding:8px 12px;font-size:12px;color:#7a4b00;margin-bottom:8px;line-height:1.5';
+  const isAdmin = currentUser && currentUser.role==='admin';
+  note.innerHTML='🔒 <b>Price locked</b> — the technician has opened this task, so the price, quantity, profile and discount can no longer be changed.'
+    + (isAdmin ? ' <a href="#" onclick="_unlockPriceAdmin();return false" style="color:#b45309;font-weight:800">Change price (admin, reason required)</a>' : '');
+  grp.insertBefore(note, grp.firstChild);
+}
+function _unlockPriceAdmin(){
+  const why=prompt('Reason for changing the locked price (it will be recorded in the task log):','');
+  if(!why || !why.trim()) return;
+  window._priceChangeReason = why.trim();
+  _PRICE_LOCK_FIELDS.forEach(id=>{ const el=document.getElementById(id); if(el && el.dataset.plock==='1'){ el.disabled=false; delete el.dataset.plock; } });
+  const n=document.getElementById('fm-price-lock-note');
+  if(n) n.innerHTML='🔓 Price unlocked for this change — reason: <b>'+why.trim().replace(/</g,'&lt;')+'</b>. It will be recorded in the task log.';
 }
 
 // ── Delete Task ───────────────────────────────────────────────────────────
@@ -3880,6 +3911,7 @@ function openCreateModal(){
   loadJobTypeItems(); // refresh GPS device list from Item Master
   loadPricesFromPriceList(); // refresh prices from price list
   editingTaskId=null;
+  _applyPriceLock({price_locked:0});   // a new task is never locked
   document.getElementById('task-modal-title').textContent='New Task';
   document.getElementById('task-save-btn').textContent='✅ Create Task';
   document.getElementById('fm-task-id').value='';
@@ -5062,6 +5094,7 @@ async function viewTaskInEditDrawer(id){
   handleTechChange();
 
   _setDrawerMode('edit', isAdmin);
+  _applyPriceLock(t);     // after the drawer mode, which sets the fields' editable state
   checkTaskFormReady();   // enable Save Changes now that the existing task data is loaded
   document.getElementById('task-modal').classList.remove('centered');  // view/edit keep the side drawer
   document.getElementById('task-modal').classList.add('open');
