@@ -1119,7 +1119,7 @@ async function resyncAll(){
   if(!confirm('This will sync all payment data from Task Manager into Balance Sheet. Continue?')) return;
   const res = await bsApi('bs_resync_all',{},'POST',{}).catch(()=>({}));
   if(res.success){
-    toast('✅ Synced — '+(res.created||0)+' new entries created, '+res.updated+' checked'+((res.totals_fixed>0)?', '+res.totals_fixed+' totals corrected from tasks':'')+((res.dates_fixed>0)?', '+res.dates_fixed+' received dates corrected':''));
+    toast('✅ Synced — '+(res.created||0)+' new entries created, '+res.updated+' checked'+((res.totals_fixed>0)?', '+res.totals_fixed+' totals corrected from tasks':'')+((res.dates_fixed>0)?', '+res.dates_fixed+' received dates corrected':'')+((res.amounts_restored>0)?', '+res.amounts_restored+' entries restored (total/received wrongly cut)':''));
     loadEntries();
   } else {
     toast('❌ '+(res.error||'Sync failed'));

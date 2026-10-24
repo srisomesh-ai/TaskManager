@@ -901,6 +901,47 @@ function bs_repair_sync_dates($pdo){
     } catch(Exception $e){ error_log('bs_repair_sync_dates: '.$e->getMessage()); }
     return $fixed;
 }
+// Repair: an earlier automatic sync cut some entries' total (and with it the received amount) —
+// e.g. Handover entries billed at full price, or totals cut below money already received.
+// Uses the change / payment history to put back the total, qty and received amount. Logged.
+function bs_repair_sync_shrink($pdo){
+    $fixed = 0;
+    try {
+        bs_log_tables($pdo);
+        $sync = "('bs_resync_all','resync','bs_get_entries','bs_backfill_installs','install sync')";
+        $rows = $pdo->query("SELECT c.id, c.bs_id, c.old_value, c.new_value, c.changed_at, b.payment_received, b.total_price, t.lead_type
+                FROM bs_change_log c JOIN balance_sheet_entries b ON b.id=c.bs_id LEFT JOIN tasks t ON t.id=b.task_db_id
+                WHERE c.field='total_price' AND c.source='install sync' AND CAST(c.new_value AS DECIMAL(12,2)) + 0.5 < CAST(c.old_value AS DECIMAL(12,2))
+                ORDER BY c.id ASC")->fetchAll(PDO::FETCH_ASSOC);
+        $done = [];
+        foreach ($rows as $r) {
+            $bs = intval($r['bs_id']); if (isset($done[$bs])) continue;
+            $oldTotal = floatval($r['old_value']);
+            // Money the sync took off at that time
+            $pq = $pdo->prepare("SELECT COALESCE(SUM(amount),0) FROM bs_payment_log WHERE bs_id=? AND amount<0 AND source IN $sync AND created_at BETWEEN DATE_SUB(?, INTERVAL 2 MINUTE) AND DATE_ADD(?, INTERVAL 2 MINUTE)");
+            $pq->execute([$bs, $r['changed_at'], $r['changed_at']]); $lost = -floatval($pq->fetchColumn());
+            $isHandover = strcasecmp(trim((string)$r['lead_type']), 'Handover') === 0;
+            if (!$isHandover && $lost <= 0) continue;                    // a normal install-count change — leave it
+            if (abs(floatval($r['total_price']) - floatval($r['new_value'])) > 0.5) continue;   // changed again since — leave it
+            $done[$bs] = 1;
+            $qq = $pdo->prepare("SELECT old_value FROM bs_change_log WHERE bs_id=? AND field='qty' AND source='install sync' AND changed_at=? ORDER BY id ASC LIMIT 1");
+            $qq->execute([$bs, $r['changed_at']]); $oldQty = $qq->fetchColumn();
+            $cq = $pdo->prepare("SELECT qty FROM balance_sheet_entries WHERE id=?"); $cq->execute([$bs]); $curQty = $cq->fetchColumn();
+            $newRecv = min($oldTotal, floatval($r['payment_received']) + $lost);
+            $pend = max(0, round($oldTotal - $newRecv, 2));
+            $st = ($newRecv >= $oldTotal - 1 && $oldTotal > 0) ? 'paid' : ($newRecv > 0 ? 'partially_paid' : 'pending');
+            if ($st === 'paid') $pend = 0;
+            $pdo->prepare("UPDATE balance_sheet_entries SET total_price=?, qty=COALESCE(?,qty), payment_received=?, pending_payment=?, payment_status=?, updated_at=NOW() WHERE id=?")
+                ->execute([$oldTotal, ($oldQty!==false && $oldQty!==null ? $oldQty : null), $newRecv, $pend, $st, $bs]);
+            bs_log_change($pdo, $bs, 'total_price', $r['new_value'], $oldTotal, 'restored (wrongly cut by install sync)');
+            if ($oldQty !== false && $oldQty !== null) bs_log_change($pdo, $bs, 'qty', $curQty, $oldQty, 'restored (wrongly cut by install sync)');
+            if ($lost > 0) bs_log_payment($pdo, $bs, floatval($r['payment_received']), $newRecv, null, null, null, 'restored (wrongly cut by install sync)');
+            bs_apply_gst($pdo, $bs);
+            $fixed++;
+        }
+    } catch(Exception $e){ error_log('bs_repair_sync_shrink: '.$e->getMessage()); }
+    return $fixed;
+}
 function bs_is_sync_action(){ return in_array($GLOBALS['action'] ?? '', ['bs_resync_all','bs_get_entries','bs_backfill_installs'], true); }
 
 // Record the money received on a balance-sheet row, the same way everywhere:
@@ -989,8 +1030,14 @@ function bs_sync_row($pdo, $bsId, $serials, $names, $server, $qty, $unit, $total
     $bsId = intval($bsId); if ($bsId <= 0) return false;
     bs_ensure_lock_col($pdo);
     try {
-        $q = $pdo->prepare("SELECT total_locked, payment_received, qty, total_price FROM balance_sheet_entries WHERE id=?"); $q->execute([$bsId]);
+        $q = $pdo->prepare("SELECT b.total_locked, b.payment_received, b.qty, b.total_price, t.lead_type FROM balance_sheet_entries b LEFT JOIN tasks t ON t.id=b.task_db_id WHERE b.id=?"); $q->execute([$bsId]);
         $r = $q->fetch(PDO::FETCH_ASSOC); if (!$r) return false;
+        // Keep qty / total as they are when:
+        //  - Handover: billed at full price when the task is created, not per installed device;
+        //  - the new total would be below money already received (a sync must never cut money).
+        $keepAmounts = (strcasecmp(trim((string)($r['lead_type'] ?? '')), 'Handover') === 0)
+                    || (floatval($total) + 0.5 < floatval($r['payment_received']));
+        if ($keepAmounts) $r['total_locked'] = 1;
         if (intval($r['total_locked'] ?? 0) !== 1) {
             bs_log_change($pdo, $bsId, 'qty', $r['qty'], $qty, 'install sync');
             bs_log_change($pdo, $bsId, 'total_price', $r['total_price'], $total, 'install sync');
@@ -1060,6 +1107,9 @@ function _bsSyncInstalls($pdo, $cuName){
             $billQty   = 1;
             $billTotal = round($fullTotal, 2);
         }
+        // Paid in advance for more than the installed devices (e.g. full payment, remaining devices
+        // to be installed later): bill the whole order, so the money received is never cut.
+        if (floatval($t2['amount_collected'] ?? 0) > $billTotal + 0.5 && $fullTotal > $billTotal) { $billQty = $fullQty; $billTotal = round($fullTotal, 2); }
         $recv2     = floatval($t2['amount_collected']??0); if($recv2>$billTotal)$recv2=$billTotal;
         // CASH is only truly RECEIVED once the technician has deposited it and admin confirmed
         // (cash_deposit_status='deposited'). While pending/submitted, the cash is still with the
@@ -3864,6 +3914,9 @@ case 'save_device_install':
                 $unit2     = bs_task_unit($pdo, $t2, $fullQty, $fullTotal);
                 $billQty   = $installedCount;                 // only what is installed
                 $billTotal = round($unit2 * $billQty, 2);     // installed devices × per-device price
+                // Paid in advance for more than the installed devices (e.g. full payment, remaining devices
+                // to be installed later): bill the whole order, so the money received is never cut.
+                if (floatval($t2['amount_collected'] ?? 0) > $billTotal + 0.5 && $fullTotal > $billTotal) { $billQty = $fullQty; $billTotal = round($fullTotal, 2); }
                 $profile2  = $t2['profile']??'BGPT';
 
                 // Payment received stays as recorded on the task; pending is only on installed amount
@@ -3959,6 +4012,9 @@ case 'bs_backfill_installs':
             $unit2     = $fullQty>0 ? $fullTotal/$fullQty : $fullTotal;
             $billQty   = $installedCount;
             $billTotal = round($unit2*$billQty, 2);
+            // Paid in advance for more than the installed devices (e.g. full payment, remaining devices
+            // to be installed later): bill the whole order, so the money received is never cut.
+            if (floatval($t2['amount_collected'] ?? 0) > $billTotal + 0.5 && $fullTotal > $billTotal) { $billQty = $fullQty; $billTotal = round($fullTotal, 2); }
             $recv2     = floatval($t2['amount_collected']??0); if($recv2>$billTotal)$recv2=$billTotal;
             if (strtolower((string)($t2['payment_mode']??''))==='cash' && ($t2['cash_deposit_status']??'') !== 'deposited') $recv2 = 0;
             $pend2     = max(0, $billTotal-$recv2);
@@ -4819,6 +4875,7 @@ case 'bs_task_diagnose':
 case 'bs_resync_all':
     if ($userRole !== 'admin') { http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
     try {
+        $amountsRestored = bs_repair_sync_shrink($pdo);
         $datesFixed = bs_repair_sync_dates($pdo);
         // FIRST: create any MISSING entries for tasks that have installed devices but no BS entry yet.
         $created = 0;
@@ -4869,7 +4926,7 @@ case 'bs_resync_all':
             bs_log_payment($pdo, $r['id'], $r['bs_received'], $recv, $r['payment_mode'] ?? null, $on, null, 'resync');
             $count++;
         }
-        echo json_encode(['success'=>true, 'updated'=>$count, 'created'=>$created, 'totals_fixed'=>intval($GLOBALS['bs_totals_fixed'] ?? 0), 'dates_fixed'=>$datesFixed]);
+        echo json_encode(['success'=>true, 'updated'=>$count, 'created'=>$created, 'totals_fixed'=>intval($GLOBALS['bs_totals_fixed'] ?? 0), 'dates_fixed'=>$datesFixed, 'amounts_restored'=>$amountsRestored]);
     } catch(Exception $e) {
         echo json_encode(['error'=>$e->getMessage()]);
     }
