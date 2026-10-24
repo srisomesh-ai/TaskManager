@@ -602,7 +602,11 @@ function bsPrice(e){
     if(stdU>0 && tp>0 && !paidDiscounted && (tp/tq/gstF) + 0.5 >= stdU) disc = 0;
   }
   let atStandard=false;
-  if(disc>0){
+  // Hand-typed entries (Sales Entry / License form): the Total is the FULL price and the discount is
+  // typed separately (as the reason for the pending amount) — so the discount comes off the total.
+  // Not if the money received is already more than total − discount (total typed after discount).
+  if(own>0 && !(recv > total - own*gstF + 1)){ atStandard = true; }
+  else if(disc>0){
     const std=parseFloat(e.std_unit_price||0)||0;
     if(std>0) atStandard = Math.abs(total - r2(std*q*gstF)) <= 1;
     if(!atStandard) atStandard = pend>0 && recv + disc*gstF >= total - 1 && pend <= disc*gstF + 1;
