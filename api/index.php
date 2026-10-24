@@ -859,6 +859,50 @@ function bs_log_payment($pdo, $bsId, $oldRecv, $newRecv, $mode = null, $on = nul
               ->execute([intval($bsId), $delta, round(floatval($newRecv),2), $mode ?: null, $on ?: null, $ref ?: null, $source ?: ($GLOBALS['action'] ?? null), $GLOBALS['cu']['name'] ?? 'system']); } catch(Exception $e){}
 }
 
+// When the money on a row is caught up by an AUTOMATIC sync (Resync / backfill), "today" is not when
+// it was received. Best evidence, in order: last payment recorded on the task, cash deposit date,
+// task closing date, the entry's own date.
+function bs_evidence_date($pdo, $bsId){
+    try {
+        $q = $pdo->prepare("SELECT b.date AS bdate, b.task_db_id, t.cash_deposit_date, t.closed_at FROM balance_sheet_entries b LEFT JOIN tasks t ON t.id=b.task_db_id WHERE b.id=?");
+        $q->execute([intval($bsId)]); $r = $q->fetch(PDO::FETCH_ASSOC);
+        if (!$r) return date('Y-m-d');
+        if (!empty($r['task_db_id'])) {
+            try { $p = $pdo->prepare("SELECT MAX(created_at) FROM payments WHERE task_id=?"); $p->execute([intval($r['task_db_id'])]); $lp = $p->fetchColumn(); if ($lp) return substr($lp,0,10); } catch(Exception $e){}
+        }
+        if (!empty($r['cash_deposit_date'])) return substr($r['cash_deposit_date'],0,10);
+        if (!empty($r['closed_at']))         return substr($r['closed_at'],0,10);
+        return $r['bdate'] ?: date('Y-m-d');
+    } catch(Exception $e){ return date('Y-m-d'); }
+}
+// Repair: payments caught up by an earlier Resync were dated the day of that Resync. Give them their
+// real date (bs_evidence_date) — only when no real payment action touched the entry afterwards.
+function bs_repair_sync_dates($pdo){
+    $fixed = 0;
+    try {
+        bs_log_tables($pdo);
+        $rows = $pdo->query("SELECT l.id AS log_id, l.bs_id, l.received_on FROM bs_payment_log l
+                JOIN balance_sheet_entries b ON b.id=l.bs_id
+                WHERE l.source IN ('bs_resync_all','resync','bs_get_entries','bs_backfill_installs') AND l.amount>0
+                  AND l.received_on IS NOT NULL AND l.received_on = DATE(l.created_at) AND b.payment_received_on = l.received_on
+                  AND NOT EXISTS (SELECT 1 FROM bs_payment_log l2 WHERE l2.bs_id=l.bs_id AND l2.id>l.id
+                                  AND (l2.source IS NULL OR l2.source NOT IN ('bs_resync_all','resync','bs_get_entries','bs_backfill_installs')))")->fetchAll(PDO::FETCH_ASSOC);
+        $seen = [];
+        foreach ($rows as $r) {
+            if (isset($seen[$r['bs_id']])) continue; $seen[$r['bs_id']] = 1;
+            $ev = bs_evidence_date($pdo, $r['bs_id']);
+            if ($ev && $ev !== $r['received_on'] && $ev <= $r['received_on']) {
+                $pdo->prepare("UPDATE balance_sheet_entries SET payment_received_on=? WHERE id=?")->execute([$ev, $r['bs_id']]);
+                $pdo->prepare("UPDATE bs_payment_log SET received_on=? WHERE id=?")->execute([$ev, $r['log_id']]);
+                bs_log_change($pdo, $r['bs_id'], 'payment_received_on', $r['received_on'], $ev, 'received date repaired (was the Resync day)');
+                $fixed++;
+            }
+        }
+    } catch(Exception $e){ error_log('bs_repair_sync_dates: '.$e->getMessage()); }
+    return $fixed;
+}
+function bs_is_sync_action(){ return in_array($GLOBALS['action'] ?? '', ['bs_resync_all','bs_get_entries','bs_backfill_installs'], true); }
+
 // Record the money received on a balance-sheet row, the same way everywhere:
 // - received is never more than the row's total; pending = total - received
 // - status: paid (within ₹1 rounding) / partially_paid / pending
@@ -874,7 +918,7 @@ function bs_set_payment($pdo, $bsId, $recv, $mode = null){
         $pend = max(0, round($total - $recv, 2));
         $st   = ($total > 0 && $recv >= $total - 1) ? 'paid' : ($recv > 0 ? 'partially_paid' : 'pending');
         if ($st === 'paid') $pend = 0;
-        $on   = ($recv > $old + 0.004) ? date('Y-m-d') : ($recv > 0 ? $r['payment_received_on'] : null);
+        $on   = ($recv > $old + 0.004) ? (bs_is_sync_action() ? bs_evidence_date($pdo, $bsId) : date('Y-m-d')) : ($recv > 0 ? $r['payment_received_on'] : null);
         $pdo->prepare("UPDATE balance_sheet_entries SET payment_received=?, pending_payment=?, payment_status=?, payment_received_on=?, payment_mode=COALESCE(?,payment_mode), updated_at=NOW() WHERE id=?")
             ->execute([$recv, $pend, $st, $on, ($mode!==null && $mode!=='' ? $mode : null), $bsId]);
         bs_log_payment($pdo, $bsId, $old, $recv, ($mode ?: $r['payment_mode']), ($recv > $old ? $on : date('Y-m-d')));
@@ -2189,7 +2233,7 @@ case 'update_task':
             // Refresh task data
             $bt=$pdo->prepare("SELECT t.*,u.name as tech_name FROM tasks t LEFT JOIN users u ON t.assigned_to=u.id WHERE t.id=?"); $bt->execute([$id]); $btask=$bt->fetch();
             if ($btask) $btask['bs_entry_id'] = bs_task_row($pdo, $id, $btask['task_id'] ?? '', $btask['bs_entry_id'] ?? 0);
-            if ($btask && !$btask['bs_entry_id']) {
+            if ($btask && !$btask['bs_entry_id'] && floatval($btask['price_to_collect'] ?? 0) > 0) {   // free (₹0) jobs never go to the balance sheet
                 $bqty=floatval($btask['device_qty']??1);
                 $btotal=floatval($btask['price_to_collect']??0);
                 $bunit=$bqty>0?$btotal/$bqty:$btotal;
@@ -2351,7 +2395,7 @@ case 'approve_task':
     $t['bs_entry_id'] = bs_task_row($pdo, $id, $t['task_id'] ?? '', $t['bs_entry_id'] ?? 0);
     if ($t['bs_entry_id']) {
         bs_set_payment($pdo, $t['bs_entry_id'], $collected);
-    } else {
+    } elseif (floatval($t['price_to_collect'] ?? 0) > 0) {   // free (₹0) jobs never go to the balance sheet
         // Create BS entry now (fallback if not created at Awaiting Approval)
         try {
             $pdo->exec("CREATE TABLE IF NOT EXISTS balance_sheet_entries (id INT AUTO_INCREMENT PRIMARY KEY, type VARCHAR(20) DEFAULT 'sales', profile VARCHAR(10) DEFAULT 'BGPT', task_id VARCHAR(20) NULL, task_db_id INT NULL, date DATE NOT NULL, invoice_no VARCHAR(50), gps_serial_no VARCHAR(100), customer_type VARCHAR(50), name_on_server TEXT, server_name VARCHAR(50), device_model VARCHAR(100), service_type VARCHAR(100), license_plan VARCHAR(100), qty DECIMAL(10,2) DEFAULT 1, unit_price DECIMAL(10,2) DEFAULT 0, gst DECIMAL(10,2) DEFAULT 0, total_price DECIMAL(10,2) DEFAULT 0, payment_status VARCHAR(50), payment_received DECIMAL(10,2) DEFAULT 0, pending_payment DECIMAL(10,2) DEFAULT 0, payment_mode VARCHAR(50), payment_received_on DATE NULL, payment_transaction_details TEXT, pending_reason VARCHAR(100), discount_given DECIMAL(10,2) DEFAULT 0, discount_reason TEXT, discount_incharge VARCHAR(100), payment_reminder_date DATE NULL, technician_name VARCHAR(100), location VARCHAR(200), remarks TEXT, created_by_code VARCHAR(50), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
@@ -4209,7 +4253,7 @@ case 'bs_add_entry':
             $qty, $unit, $gst, $total,
             $b['payment_status']??null, $recv, $pend,
             $b['payment_mode']??null,
-            !empty($b['payment_received_on'])?$b['payment_received_on']:null,
+            !empty($b['payment_received_on'])?$b['payment_received_on']:($recv>0 ? ($b['date'] ?? date('Y-m-d')) : null),   // money received → it has a received date
             $b['payment_transaction_details']??null,
             $b['pending_reason']??null, floatval($b['discount_given']??0),
             $b['discount_reason']??null, $b['discount_incharge']??null,
@@ -4690,6 +4734,7 @@ case 'bs_from_task':
     if ($t['bs_entry_id']) { echo json_encode(['success'=>true,'id'=>$t['bs_entry_id'],'existing'=>true]); break; }
     $qty   = floatval($t['device_qty']??1);
     $total = floatval($t['price_to_collect']??0);
+    if ($total <= 0) { echo json_encode(['success'=>false,'error'=>'Free service (₹0) — not added to the balance sheet']); break; }
     $unit  = $qty>0 ? $total/$qty : $total;
     $recv  = floatval($t['amount_collected']??0);
     if (strtolower((string)($t['payment_mode']??''))==='cash' && ($t['cash_deposit_status']??'') !== 'deposited') $recv = 0;
@@ -4774,6 +4819,7 @@ case 'bs_task_diagnose':
 case 'bs_resync_all':
     if ($userRole !== 'admin') { http_response_code(403); echo json_encode(['error'=>'Admins only']); break; }
     try {
+        $datesFixed = bs_repair_sync_dates($pdo);
         // FIRST: create any MISSING entries for tasks that have installed devices but no BS entry yet.
         $created = 0;
         try { $syncRes = _bsSyncInstalls($pdo, $cu['name'] ?? 'system'); $created = intval($syncRes['created'] ?? 0); } catch(Exception $e){ error_log('resync create: '.$e->getMessage()); }
@@ -4811,8 +4857,7 @@ case 'bs_resync_all':
             if ($recv > 0 && !$on) {
                 if (!empty($r['last_pay']))              $on = substr($r['last_pay'],0,10);
                 elseif (!empty($r['cash_deposit_date']))  $on = substr($r['cash_deposit_date'],0,10);
-                elseif ($recv > floatval($r['bs_received'] ?? 0) + 0.004) $on = date('Y-m-d');
-                else                                      $on = $r['bs_date'];
+                else                                      $on = bs_evidence_date($pdo, $r['id']);
             }
             if ($recv <= 0) $on = null;
             $bsType = bs_type_for_task($r['device_details']??'');
@@ -4824,7 +4869,7 @@ case 'bs_resync_all':
             bs_log_payment($pdo, $r['id'], $r['bs_received'], $recv, $r['payment_mode'] ?? null, $on, null, 'resync');
             $count++;
         }
-        echo json_encode(['success'=>true, 'updated'=>$count, 'created'=>$created, 'totals_fixed'=>intval($GLOBALS['bs_totals_fixed'] ?? 0)]);
+        echo json_encode(['success'=>true, 'updated'=>$count, 'created'=>$created, 'totals_fixed'=>intval($GLOBALS['bs_totals_fixed'] ?? 0), 'dates_fixed'=>$datesFixed]);
     } catch(Exception $e) {
         echo json_encode(['error'=>$e->getMessage()]);
     }
