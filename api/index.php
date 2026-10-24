@@ -778,6 +778,33 @@ function _devNorm($imei){ return preg_replace('/\D/', '', (string)$imei); } // d
 
 // Log a system activity unless the SAME text was logged on this task in the last 2 minutes
 // (stops double taps / repeated calls from filling the activity log with duplicates).
+// ── Task price record & lock ────────────────────────────────────────────
+// Readable price line, e.g. "₹6,600 (2 × ₹3,300) · Standard ₹3,500/device · Discount ₹400 (reason, approved by X) · Payment: UPI"
+function task_price_text($t){
+    $q = max(1, intval($t['device_qty'] ?? 1)); $tot = floatval($t['price_to_collect'] ?? 0);
+    $sb = strtoupper((string)($t['profile'] ?? '')) === 'SBGT';
+    if ($tot <= 0) return '₹0 (free service)';
+    $unitEx = $tot / $q / ($sb ? 1.18 : 1);
+    $disc = floatval($t['discount_given'] ?? 0);
+    $txt = '₹'.number_format($tot, 0).' ('.$q.' × ₹'.number_format($unitEx, 0).($sb ? ' + 18% GST' : '').')';
+    if ($disc > 0) {
+        $txt .= ' · Standard ₹'.number_format($unitEx + $disc / $q, 0).'/device · Discount ₹'.number_format($disc, 0);
+        $why = trim((string)($t['discount_reason'] ?? '')); $who = trim((string)($t['discount_incharge'] ?? ''));
+        if ($why !== '' || $who !== '') $txt .= ' ('.trim($why.($who !== '' ? ', approved by '.$who : ''), ', ').')';
+    }
+    if (!empty($t['payment_mode'])) $txt .= ' · Payment: '.$t['payment_mode'];
+    return $txt;
+}
+// Price is locked once the technician has opened the task (permanent, even after reassignment),
+// or work / money has already started on it (older tasks).
+function task_price_locked($pdo, $t){
+    if (!empty($t['price_locked_at']) || !empty($t['tech_viewed_at'])) return true;
+    if (floatval($t['amount_collected'] ?? 0) > 0) return true;
+    if (in_array((string)($t['task_status'] ?? ''), ['In Progress','Task Pending','Awaiting Approval','Closed'], true)) return true;
+    try { $q = $pdo->prepare("SELECT COUNT(*) FROM task_device_installs WHERE task_id=? AND gps_serial_no IS NOT NULL AND gps_serial_no!=''"); $q->execute([intval($t['id'])]); if (intval($q->fetchColumn()) > 0) return true; } catch(Exception $e){}
+    return false;
+}
+
 function log_activity_once($pdo, $taskId, $userId, $remark){
     try {
         $d = $pdo->prepare("SELECT COUNT(*) FROM task_activities WHERE task_id=? AND remark=? AND created_at > (NOW() - INTERVAL 2 MINUTE)");
@@ -1622,6 +1649,19 @@ case 'get_task':
     if ($userRole === 'technician' && $task['assigned_to'] == $userId && empty($task['tech_viewed_at'])) {
         try { $pdo->prepare("UPDATE tasks SET tech_viewed_at=NOW() WHERE id=? AND tech_viewed_at IS NULL")->execute([$id]); $task['tech_viewed_at']=date('Y-m-d H:i:s'); } catch(Exception $e){}
     }
+    // Price lock: from the first time the technician opens the task, the price is final.
+    try { $pdo->exec("ALTER TABLE tasks ADD COLUMN price_locked_at DATETIME DEFAULT NULL"); } catch(Exception $e){}
+    if ($userRole === 'technician' && $task['assigned_to'] == $userId && empty($task['price_locked_at'])) {
+        try {
+            $pl = $pdo->prepare("UPDATE tasks SET price_locked_at=NOW() WHERE id=? AND price_locked_at IS NULL"); $pl->execute([$id]);
+            if ($pl->rowCount() > 0) {
+                $task['price_locked_at'] = date('Y-m-d H:i:s');
+                $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'system')")
+                    ->execute([$id, $userId, '🔒 Price locked (technician opened the task): '.task_price_text($task)]);
+            }
+        } catch(Exception $e){}
+    }
+    $task['price_locked'] = task_price_locked($pdo, $task) ? 1 : 0;
     $a=$pdo->prepare("SELECT a.*,u.name as user_name FROM task_activities a LEFT JOIN users u ON a.user_id=u.id WHERE a.task_id=? ORDER BY a.created_at ASC"); $a->execute([$id]); $task['activities']=$a->fetchAll();
     $d=$pdo->prepare("SELECT * FROM task_documents WHERE task_id=?"); $d->execute([$id]); $task['documents']=$d->fetchAll();
     $p=$pdo->prepare("SELECT p.*,u.name as collector_name FROM payments p LEFT JOIN users u ON p.collected_by=u.id WHERE p.task_id=?"); $p->execute([$id]); $task['payments']=$p->fetchAll();
@@ -1839,6 +1879,12 @@ case 'create_task':
         } catch(Exception $e){ error_log('FCM new-task push error: '.$e->getMessage()); }
     }
 
+    // Record the price confirmed at creation in the Activity Log (permanent record).
+    try {
+        $pc = $pdo->prepare("SELECT * FROM tasks WHERE id=?"); $pc->execute([$newTaskDbId]); $pct = $pc->fetch(PDO::FETCH_ASSOC);
+        if ($pct) $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'system')")
+                      ->execute([$newTaskDbId, $userId, '💰 Price confirmed by '.($cu['name'] ?? 'staff').': '.task_price_text($pct)]);
+    } catch(Exception $e){ error_log('price record: '.$e->getMessage()); }
     echo json_encode(['success'=>true,'task_id'=>$taskId,'id'=>$newId]);
 
     // Send emails — independently (customer and tech are separate)
@@ -1899,6 +1945,26 @@ case 'update_task':
         // Price not changed → the discount recorded at creation stays as it is.
         if (!array_key_exists('price_to_collect',$body) || abs(floatval($body['price_to_collect']) - $exPrice) < 0.01) {
             unset($body['discount_given'], $body['discount_reason'], $body['discount_incharge']);
+        }
+    }
+    // PRICE LOCK — once the technician has opened the task, the price (amount, quantity, profile,
+    // discount) cannot be changed by office staff. Only admin can, with a reason; it is logged.
+    $priceChangeNote = null;
+    if (in_array($userRole, ['admin','assigner','manager'], true)) {
+        $pChanged = (array_key_exists('price_to_collect',$body) && abs(floatval($body['price_to_collect']) - floatval($existing['price_to_collect'] ?? 0)) >= 0.5)
+                 || (array_key_exists('device_qty',$body) && intval($body['device_qty']) !== intval($existing['device_qty'] ?? 1))
+                 || (array_key_exists('profile',$body) && trim((string)$body['profile']) !== '' && strtoupper(trim((string)$body['profile'])) !== strtoupper(trim((string)($existing['profile'] ?? 'BGPT'))))
+                 || (array_key_exists('discount_given',$body) && abs(floatval($body['discount_given']) - floatval($existing['discount_given'] ?? 0)) >= 0.5);
+        if ($pChanged) {
+            if (task_price_locked($pdo, $existing)) {
+                $why = trim((string)($body['price_change_reason'] ?? ''));
+                if ($userRole !== 'admin' || $why === '') {
+                    http_response_code(400);
+                    echo json_encode(['error'=>'🔒 Price is locked — the technician has already opened this task. '.($userRole==='admin' ? 'To change it, give a reason.' : 'Only admin can change the price.'),'price_locked'=>true]);
+                    break;
+                }
+                $priceChangeNote = $why;
+            } else { $priceChangeNote = ''; }
         }
     }
     // ── CASH DEPOSIT LOCK ──────────────────────────────────────────────
@@ -2024,6 +2090,14 @@ case 'update_task':
     }
     if (isset($body['task_status'])&&$body['task_status']==='Closed'&&$existing['task_status']!=='Closed') $sets[]="closed_at=NOW()";
     if ($sets) { $vals[]=$id; $pdo->prepare("UPDATE tasks SET ".implode(',',$sets)." WHERE id=?")->execute($vals); }
+    // Price changed → permanent record in the Activity Log (old → new, who, reason if locked).
+    if ($priceChangeNote !== null) {
+        try {
+            $nt = $pdo->prepare("SELECT * FROM tasks WHERE id=?"); $nt->execute([$id]); $ntr = $nt->fetch(PDO::FETCH_ASSOC);
+            if ($ntr) $pdo->prepare("INSERT INTO task_activities (task_id,user_id,remark,activity_type) VALUES (?,?,?,'system')")
+                ->execute([$id, $userId, '💰 Price changed by '.($cu['name'] ?? 'staff').': '.task_price_text($existing).' → '.task_price_text($ntr).($priceChangeNote !== '' ? ' · Reason: '.$priceChangeNote.' (price was locked)' : '')]);
+        } catch(Exception $e){}
+    }
     // Price edited by admin/assigner → refresh the stored per-device price (price ÷ qty), so the
     // balance sheet's Unit Price and later install billing follow the new price, not the old one.
     $unitNow = null;
