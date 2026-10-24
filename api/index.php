@@ -1029,7 +1029,10 @@ function bs_task_unit($pdo, $t2, $fullQty, $fullTotal){
     $stored = isset($t2['unit_price']) ? floatval($t2['unit_price']) : 0;
     if ($stored <= 0) return $cand;
     if (abs($stored * $fullQty - $fullTotal) <= 1) return $stored;
-    if ($cand > 0 && (abs($stored * 1.18 - $cand) <= 1 || abs($stored - $cand * 1.18) <= 1)) {
+    // The saved per-device price no longer matches the task's current price (it was set before a
+    // later price / job / profile change). Every screen that changes the quantity also sets the
+    // price, so the task's current price is the right one: use it and repair the saved value.
+    if ($cand > 0) {
         try { if (!empty($t2['id'])) $pdo->prepare("UPDATE tasks SET unit_price=? WHERE id=?")->execute([round($cand,2), intval($t2['id'])]); } catch(Exception $e){}
         return $cand;
     }
@@ -4213,7 +4216,7 @@ case 'bs_get_entries':
         $tBy = [];
         if ($tIds) {
             $ids = implode(',', array_map('intval', array_keys($tIds)));
-            foreach ($pdo->query("SELECT id, discount_given, discount_reason, discount_incharge, device_qty, device_details FROM tasks WHERE id IN ($ids)")->fetchAll(PDO::FETCH_ASSOC) as $d) $tBy[(int)$d['id']] = $d;
+            foreach ($pdo->query("SELECT id, discount_given, discount_reason, discount_incharge, device_qty, device_details, price_to_collect, lead_type FROM tasks WHERE id IN ($ids)")->fetchAll(PDO::FETCH_ASSOC) as $d) $tBy[(int)$d['id']] = $d;
         }
         $names = [];
         foreach ($entries as $i => $e) {
@@ -4238,6 +4241,8 @@ case 'bs_get_entries':
             if ($n !== '' && isset($stdBy[$n])) $e['std_unit_price'] = $stdBy[$n];
             if ($d) {
                 $e['task_qty'] = $d['device_qty'];
+                $e['task_price'] = $d['price_to_collect'];          // the task's own price (incl GST for SBGT)
+                $e['task_job'] = $d['device_details'];
                 if (floatval($d['discount_given'] ?? 0) > 0) {
                     $e['task_discount'] = $d['discount_given'];
                     $e['task_discount_reason'] = $d['discount_reason'];

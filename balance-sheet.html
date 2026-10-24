@@ -944,6 +944,9 @@ function viewEntry(id){
     + row('Model / Service', esc(e.device_model||e.service_type))
     + row('Quantity', qtyFmt(e.qty))
     + row('Unit Price (excl GST)', bsGst(e).unit?money(bsGst(e).unit):'–')
+    + (e.task_price!=null ? row('Task price (on the task)', money(e.task_price)+' for '+(e.task_qty||1)+' device(s)'+(e.task_job?' · '+esc(e.task_job):'')) : '')
+    + ((e.task_price!=null && +e.task_qty===+e.qty && Math.abs((+e.total_price||0)-(+e.task_price||0))>1 && !(+e.total_locked))
+        ? row('⚠️ Check', 'This entry (₹'+(+e.total_price).toLocaleString('en-IN')+') does not match the task price — press 🔁 Resync from Tasks', {color:'var(--red)'}) : '')
   );
 
   const paySec = section('Payment',
