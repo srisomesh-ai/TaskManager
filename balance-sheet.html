@@ -613,7 +613,8 @@ function bsPrice(e){
   // recorded discount. (If a sale was above the list price, Actual = Task value, discount 0.)
   const std=parseFloat(e.std_unit_price||0)||0;
   let device;
-  if(std>0){
+  if(!(taxable>0)){ device=0; disc=0; }               // free service (₹0) — no price, no discount
+  else if(std>0){
     const stdTot=r2(std*q);
     if(stdTot >= taxable - 0.5){ device=stdTot; disc=Math.max(0, r2(stdTot - taxable)); }
     else { device=taxable; disc=0; }
@@ -625,16 +626,21 @@ function bsPrice(e){
 // kept for the places that only need "how much is still to collect"
 function bsDisc(e){ const p=bsPrice(e); return {disc:p.disc, inPend:(p.atStandard?Math.min(p.disc,parseFloat(e.pending_payment||0)||0):0), toCollect:p.balance, reason:p.reason, by:p.by}; }
 function computeStats(entries){
-  // Totals of the CURRENTLY FILTERED entries (cards always match the table), using the same
-  // breakdown as each row: Actual price − Discount = Task value (+ GST) = Total; Collected; Pending.
-  const t={devices:0, services:0, actual:0, discount:0, discount_n:0, value:0, gst:0, total:0, collected:0, pending:0, pending_n:0};
+  // Totals of the CURRENTLY SHOWN entries (same filters as the table: profile, type, dates,
+  // search, card), using each row's own breakdown — so cards always add up to the table.
+  const t={devices:0, renewals:0, readding:0, services:0, n_dev:0, n_ren:0, n_rad:0, n_svc:0,
+           v_dev:0, v_ren:0, v_rad:0, v_svc:0,
+           actual:0, discount:0, discount_n:0, value:0, gst:0, total:0, collected:0, collected_n:0, pending:0, pending_n:0};
   (entries||[]).forEach(e=>{
-    const p=bsPrice(e), qty=parseFloat(e.qty||0)||0;
-    if(e.type==='sales') t.devices+=qty; else t.services+=qty;
+    const p=bsPrice(e), qty=parseFloat(e.qty||0)||0, c=bsCat(e);
+    if(c==='device'){ t.devices+=qty; t.n_dev++; t.v_dev+=p.taskValue; }
+    else if(c==='renewal'){ t.renewals+=qty; t.n_ren++; t.v_ren+=p.taskValue; }
+    else if(c==='readding'){ t.readding+=qty; t.n_rad++; t.v_rad+=p.taskValue; }
+    else { t.services+=qty; t.n_svc++; t.v_svc+=p.taskValue; }
     t.actual+=p.device; t.value+=p.taxable; t.gst+=p.gst; t.total+=p.taskValue;
-    t.collected+=p.recv; t.pending+=p.balance;
+    t.collected+=p.recv; if(p.recv>0) t.collected_n++;
+    t.pending+=p.balance; if(p.balance>0) t.pending_n++;
     if(p.disc>0){ t.discount+=p.disc; t.discount_n++; }
-    if(p.balance>0) t.pending_n++;
   });
   return t;
 }
@@ -642,24 +648,35 @@ function computeStats(entries){
 function renderStats(t){
   const rs=v=>'₹'+Math.round(+v||0).toLocaleString('en-IN');
   const isSB=(document.getElementById('bs-profile')||{}).value==='SBGT';
+  const type=(document.getElementById('bs-type')||{}).value||'';
   const byRecv=bsBasis()==='received';
-  const cards=[
-    {l:'Devices sold'+(t.services?' · '+t.services+' licenses / services':''), v:(+t.devices||0).toLocaleString('en-IN'), c:'#0E5C5C'},
-    {l:'Actual value (Price List'+(isSB?', before GST':'')+')', v:rs(t.actual), c:'#475569'},
-    {l:'Discount given · '+t.discount_n+' sales', v:'− '+rs(t.discount), c:'#d97706'},
-    {l:'Task value (after discount'+(isSB?', before GST':'')+')', v:rs(t.value), c:'#1a56a0'},
-  ];
-  if(isSB){
-    cards.push({l:'GST 18% (on task value)', v:rs(t.gst), c:'#b45309'});
-    cards.push({l:'Total billed (task value + GST)', v:rs(t.total), c:'#1e3a8a'});
+  const cf=window._bsCardF||null;
+  const q=n=>(+n||0).toLocaleString('en-IN');
+  const cards=[];
+  // What was done (counts) — only the kinds that match the Type filter
+  if(type!=='license') cards.push({k:'device', l:'Devices sold · '+rs(t.v_dev), v:q(t.devices), c:'#0E5C5C'});
+  if(type!=='sales'){
+    cards.push({k:'renewal',  l:'Renewals done · '+rs(t.v_ren), v:q(t.n_ren), c:'#5b2d8e'});
+    cards.push({k:'readding', l:'Re-adding done · '+rs(t.v_rad), v:q(t.n_rad), c:'#7c3aed'});
+    cards.push({k:'service',  l:'Other paid services · '+rs(t.v_svc), v:q(t.n_svc), c:'#6d28d9'});
   }
-  cards.push({l:(byRecv?'Collected (by received date)':'Collected'), v:rs(t.collected), c:'#1a7a3a'});
-  cards.push({l:'Pending to collect · '+t.pending_n+' entries', v:rs(t.pending), c:'#c0392b'});
-  // Cash view: all money received in this period, including payments for sales of earlier months.
+  // Money — Actual − Discount = Task value (+ GST = Total); Collected; Pending
+  cards.push({k:'all', l:'Actual value (Price List'+(isSB?', before GST':'')+')', v:rs(t.actual), c:'#475569'});
+  cards.push({k:'discount', l:'Discount given · '+t.discount_n+' entries', v:'− '+rs(t.discount), c:'#d97706'});
+  cards.push({k:'all', l:'Task value (after discount'+(isSB?', before GST':'')+')', v:rs(t.value), c:'#1a56a0'});
+  if(isSB){
+    cards.push({k:'all', l:'GST 18% (on task value)', v:rs(t.gst), c:'#b45309'});
+    cards.push({k:'all', l:'Total billed (task value + GST)', v:rs(t.total), c:'#1e3a8a'});
+  }
+  cards.push({k:'collected', l:(byRecv?'Received in this period · ':'Collected on these entries · ')+t.collected_n+' entries', v:rs(t.collected), c:'#1a7a3a'});
+  cards.push({k:'pending', l:'Pending to collect · '+t.pending_n+' entries', v:rs(t.pending), c:'#c0392b'});
+  // Money that came in during the selected period (by the date it was received), whatever month
+  // the sale was in. Shown only in the sale-date view; click it to see those entries.
   const col = !byRecv ? bsCollectedInPeriod() : null;
-  if(col) cards.push({l:'Cash received this period (incl. older sales) · '+col.n+' payments', v:rs(col.sum), c:'#0f766e'});
-  document.getElementById('bs-stats').innerHTML=cards.map(c=>`
-    <div class="bs-stat" style="border-top-color:${c.c}">
+  if(col) cards.push({k:'recvperiod', l:'Received '+col.label+' (by payment date, incl. older sales) · '+col.n+' entries', v:rs(col.sum), c:'#0f766e'});
+  const chip = cf ? '<div style="grid-column:1/-1;font-size:12px;font-weight:700;color:#0E5C5C">Showing: '+(_BS_CARD_NAMES[cf]||cf)+' <a href="#" onclick="bsCardFilter(\'all\');return false" style="color:#c0392b;text-decoration:none;margin-left:6px">✕ show all</a></div>' : '';
+  document.getElementById('bs-stats').innerHTML=chip+cards.map(c=>`
+    <div class="bs-stat" onclick="bsCardFilter('${c.k}')" title="Click to filter the table" style="cursor:pointer;border-top-color:${c.c};${cf&&cf===c.k?'box-shadow:0 0 0 2px '+c.c+';':''}">
       <div class="v" style="color:${c.c}">${c.v}</div>
       <div class="l">${c.l}</div>
     </div>`).join('');
@@ -680,8 +697,11 @@ function bsCollectedInPeriod(){
   const type=document.getElementById('bs-type')?.value||'';
   if(month!=='current' && !from && !to) return null;
   const now=new Date(), cm=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const fmtD=d=>{ const x=new Date(d+'T00:00:00'); return isNaN(x)?d:x.toLocaleDateString('en-IN',{day:'2-digit',month:'short'}); };
+  const label = (from||to) ? ((from?fmtD(from):'…')+' – '+(to?fmtD(to):'today')) : 'this month';
   let sum=0, n=0;
   allEntries.forEach(e=>{
+    if(bsIsFree(e)) return;
     if(type && e.type!==type) return;
     const d=String(e.payment_received_on||'').slice(0,10); if(!d) return;
     if(from||to){ if(from && d<from) return; if(to && d>to) return; }
@@ -689,10 +709,29 @@ function bsCollectedInPeriod(){
     const r=parseFloat(e.payment_received||0)||0; if(r<=0) return;
     sum+=r; n++;
   });
-  return {sum,n};
+  return {sum,n,label};
+}
+// What an entry is: a device sale, a license renewal, a re-adding, or another service.
+function bsCat(e){
+  if(e.type==='sales') return 'device';
+  const h=[e.service_type,e.device_model,e.license_plan].map(v=>String(v||'')).join(' ').toLowerCase();
+  if(/re[\s_-]?add/.test(h)) return 'readding';
+  if(e.license_plan || /renew|licen/.test(h)) return 'renewal';
+  return 'service';
+}
+// Free services (₹0 task, nothing received) are not money and are not listed.
+function bsIsFree(e){ return !!e.task_db_id && !(parseFloat(e.total_price||0)>0) && !(parseFloat(e.payment_received||0)>0); }
+// Card click filter: device / renewal / readding / service / discount / pending / collected
+const _BS_CARD_NAMES={device:'Devices sold',renewal:'Renewals',readding:'Re-adding',service:'Other services',discount:'With discount',pending:'Pending to collect',collected:'Collected'};
+function bsCardFilter(k){
+  window._bsCardF = (window._bsCardF===k) ? null : k;
+  if(k==='recvperiod'){ window._bsCardF=null; const bb=document.getElementById('bs-basis'); if(bb){ bb.value='received'; bsBasisChange(); return; } }
+  if(k==='all') window._bsCardF=null;
+  curPage=1; renderTable();
 }
 function getFiltered(){
   const search=(document.getElementById('bs-search')?.value||'').toLowerCase();
+  const cf=window._bsCardF||null;
   const basis=bsBasis();
   const month=document.getElementById('bs-month')?.value||'current';
   const type=document.getElementById('bs-type')?.value||'';
@@ -700,8 +739,15 @@ function getFiltered(){
   const to=document.getElementById('bs-to')?.value||'';
   const now=new Date(), cm=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
   return allEntries.filter(e=>{
+    if(bsIsFree(e)) return false;
     if(type && e.type!==type) return false;
     if(month==='pending' && bsDisc(e).toCollect<=0) return false;   // discount is not "pending"
+    if(cf){
+      if(['device','renewal','readding','service'].includes(cf) && bsCat(e)!==cf) return false;
+      if(cf==='discount' && !(bsPrice(e).disc>0)) return false;
+      if(cf==='pending' && !(bsPrice(e).balance>0)) return false;
+      if(cf==='collected' && !(bsPrice(e).recv>0)) return false;
+    }
     const d=bsRowDate(e, basis);
     if(basis==='received' && (!d || (+e.payment_received||0)<=0)) return false;
     if(month==='current' && !from && !to && !d.startsWith(cm)) return false;
@@ -814,6 +860,7 @@ function clearFilters(){
   document.getElementById('bs-month').value='current';
   document.getElementById('bs-type').value='';
   const bb=document.getElementById('bs-basis'); if(bb) bb.value='sale';
+  window._bsCardF=null;
   curPage=1; renderTable();
 }
 function toggleAll(cb){
@@ -1072,7 +1119,7 @@ async function resyncAll(){
   if(!confirm('This will sync all payment data from Task Manager into Balance Sheet. Continue?')) return;
   const res = await bsApi('bs_resync_all',{},'POST',{}).catch(()=>({}));
   if(res.success){
-    toast('✅ Synced — '+(res.created||0)+' new entries created, '+res.updated+' checked'+((res.totals_fixed>0)?', '+res.totals_fixed+' totals corrected from tasks':''));
+    toast('✅ Synced — '+(res.created||0)+' new entries created, '+res.updated+' checked'+((res.totals_fixed>0)?', '+res.totals_fixed+' totals corrected from tasks':'')+((res.dates_fixed>0)?', '+res.dates_fixed+' received dates corrected':''));
     loadEntries();
   } else {
     toast('❌ '+(res.error||'Sync failed'));
