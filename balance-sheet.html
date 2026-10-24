@@ -19,6 +19,11 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:var(--text)}
 /* topbar removed */
 /* tabs */
 .bs-tabbar{background:#fff;border-bottom:2px solid var(--border);display:flex;flex-shrink:0}
+.bs-subtabs{display:flex;gap:8px;margin:0 0 12px;flex-wrap:wrap}
+.bs-subtab{padding:9px 16px;border:1.5px solid var(--border);border-radius:10px;background:var(--surface,#fff);font-size:13px;font-weight:800;color:var(--text2);cursor:pointer}
+.bs-subtab.active{background:#0E5C5C;border-color:#0E5C5C;color:#fff}
+.bs-subtab small{display:block;font-size:10.5px;font-weight:600;opacity:.8}
+.bs-tasklink{color:#0E5C5C;font-weight:700;text-decoration:underline;cursor:pointer}
 .bs-tab{padding:11px 18px;border:none;border-bottom:3px solid transparent;background:none;font-size:13px;font-weight:700;color:var(--text3);cursor:pointer;white-space:nowrap;transition:all .15s}
 .no-gst .gst-col{display:none}
 .bs-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
@@ -133,6 +138,10 @@ tr:hover td{background:#f7f9fc}
 
 <!-- RECORDS -->
 <div class="bs-pane active" id="bspane-records">
+  <div class="bs-subtabs">
+    <button class="bs-subtab active" id="bssub-sales" onclick="bsSubTab('sales')">🛒 Sales<small>GPS devices sold</small></button>
+    <button class="bs-subtab" id="bssub-license" onclick="bsSubTab('license')">🔄 License &amp; Services<small>Renewals · Re-adding · Troubleshoot · V2V · other services</small></button>
+  </div>
   <div class="bs-stats" id="bs-stats"></div>
   <div id="bs-cash-pending"></div>
   <div class="bs-toolbar">
@@ -158,10 +167,10 @@ tr:hover td{background:#f7f9fc}
     <div class="bs-tb-grp"><span class="bs-tb-lbl">To</span>
       <input type="date" class="bs-tb-in" id="bs-to" onchange="renderTable()">
     </div>
-    <div class="bs-tb-grp"><span class="bs-tb-lbl">Type</span>
+    <div class="bs-tb-grp" style="display:none"><span class="bs-tb-lbl">Type</span>
       <select class="bs-tb-sel" id="bs-type" onchange="renderTable()">
         <option value="">All</option>
-        <option value="sales">Sales</option>
+        <option value="sales" selected>Sales</option>
         <option value="license">License</option>
       </select>
     </div>
@@ -834,7 +843,7 @@ function renderTable(){
     return `<tr>
       <td><input type="checkbox" ${chk} onchange="toggleSel(${e.id},this)"></td>
       <td>${n}</td><td>${e.date||'–'}</td><td>${tp}</td>
-      <td>${e.task_id||e.task_no||'–'}</td><td>${e.invoice_no||'–'}</td>
+      <td>${e.task_link_id?`<a class="bs-tasklink" onclick="bsOpenTask(${+e.task_link_id})" title="Open this task">${e.task_id||e.task_no||('#'+e.task_link_id)}</a>`:(e.task_id||e.task_no||'–')}</td><td>${e.invoice_no||'–'}</td>
       <td style="max-width:160px">${bsServerNames(e.name_on_server)}</td>
       <td>${e.server_name||'–'}</td><td>${e.device_model||e.service_type||'–'}</td><td>${qtyFmt(e.qty)}</td>
       <td style="color:var(--text2)">₹${_bp.device.toLocaleString('en-IN')}</td>
@@ -862,7 +871,6 @@ function bsPg(d){ curPage+=d; renderTable(); }
 function clearFilters(){
   ['bs-search','bs-from','bs-to'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('bs-month').value='current';
-  document.getElementById('bs-type').value='';
   const bb=document.getElementById('bs-basis'); if(bb) bb.value='sale';
   window._bsCardF=null;
   curPage=1; renderTable();
@@ -1164,9 +1172,10 @@ function exportXLS(){
     'Last Updated':e.updated_at?new Date(e.updated_at).toLocaleString('en-IN'):''}));
   const ws=XLSX.utils.json_to_sheet(rows);
   const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'Balance Sheet');
+  XLSX.utils.book_append_sheet(wb,ws,((document.getElementById('bs-type')||{}).value==='license')?'License & Services':'Sales');
   const profile=document.getElementById('bs-profile').value;
-  XLSX.writeFile(wb,`BS_${profile}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  const _tab=((document.getElementById('bs-type')||{}).value==='license')?'License_Services':'Sales';
+  XLSX.writeFile(wb,`BS_${profile}_${_tab}_${new Date().toISOString().slice(0,10)}.xlsx`);
   toast('✅ Excel downloaded');
 }
 
@@ -1418,6 +1427,25 @@ async function bsMatchTask(id,btn){
   const res=await bsApi('bs_match_task',{},'POST',{id}).catch(()=>({}));
   if(res&&res.success){ toast('✅ Entry total ₹'+(+res.old_total).toLocaleString('en-IN')+' → ₹'+(+res.total).toLocaleString('en-IN')); closeView(); loadEntries(); }
   else { btn.disabled=false; btn.textContent='Use task price'; alert('❌ '+((res&&res.error)||'Failed')); }
+}
+// Records sub-tabs: Sales (devices) | License & Services. Each keeps the company (BGPT/SBGT) selector,
+// dates and search; cards, table and Excel show only that tab's entries.
+function bsSubTab(t){
+  t = (t==='license') ? 'license' : 'sales';
+  const sel=document.getElementById('bs-type'); if(sel) sel.value=t;
+  ['sales','license'].forEach(k=>{ const b=document.getElementById('bssub-'+k); if(b) b.classList.toggle('active', k===t); });
+  window._bsCardF=null; curPage=1;
+  try{ localStorage.setItem('bs_subtab', t); }catch(e){}
+  renderTable();
+}
+(function(){ let t='sales'; try{ t=localStorage.getItem('bs_subtab')||'sales'; }catch(e){}
+  const apply=()=>{ const sel=document.getElementById('bs-type'); if(sel) sel.value=(t==='license'?'license':'sales');
+    ['sales','license'].forEach(k=>{ const b=document.getElementById('bssub-'+k); if(b) b.classList.toggle('active', k===(t==='license'?'license':'sales')); }); };
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', apply); else apply(); })();
+// Open the linked task (in the main portal's task panel)
+function bsOpenTask(id){
+  try{ if(window.parent && window.parent!==window && typeof window.parent.viewTask==='function'){ window.parent.viewTask(id); return; } }catch(e){}
+  alert('Open this task from All Tasks (task id '+id+').');
 }
 async function openDuplicates(){
   const ov=document.getElementById('dup-ov'), body=document.getElementById('dup-body');
