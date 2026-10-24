@@ -177,7 +177,7 @@ tr:hover td{background:#f7f9fc}
           <th><input type="checkbox" id="chk-all" onchange="toggleAll(this)"></th>
           <th>#</th><th>Date</th><th>Type</th><th>Task No</th><th>Invoice</th>
           <th>Name on Server</th><th>Server</th><th>Model/Service</th><th>Qty</th>
-          <th title="Price List price × qty (before GST)">Actual Price</th><th title="Actual price − task value">Discount</th><th title="Agreed price after discount (before GST)">Task Value</th><th class="gst-col">GST 18%</th><th class="gst-col" title="Task value + GST = what the customer pays">Total (incl GST)</th><th>Collected</th><th title="To collect">Pending</th><th>Mode</th><th>Status</th>
+          <th title="Task value + discount given (before GST)">Actual Price</th><th title="Discount recorded on the task">Discount</th><th title="Agreed price after discount (before GST)">Task Value</th><th class="gst-col">GST 18%</th><th class="gst-col" title="Task value + GST = what the customer pays">Total (incl GST)</th><th>Collected</th><th title="To collect">Pending</th><th>Mode</th><th>Status</th>
           <th>Tech</th><th>Location</th><th>Actions</th>
         </tr></thead>
         <tbody id="bs-tbody"><tr><td colspan="18" style="text-align:center;padding:32px;color:var(--text3)">Loading…</td></tr></tbody>
@@ -608,17 +608,12 @@ function bsPrice(e){
   else if(g>0 && Math.abs(u*q+g-total)<=1){ gst=g; taxable=r2(total-g); }
   else if(isSB && e.task_db_id){ taxable=r2(total/1.18); gst=r2(total-taxable); }
   else { gst=g; taxable=r2(total-g); }
-  // Actual price = Price List price per device (before GST) × qty. Discount = Actual − Task value,
-  // so it shows even when no discount was recorded. Without a Price List price: Task value + the
-  // recorded discount. (If a sale was above the list price, Actual = Task value, discount 0.)
-  const std=parseFloat(e.std_unit_price||0)||0;
+  // Discount = ONLY what was recorded (on the task when it was created / approved, or typed on the
+  // entry). Actual price = Task value + that discount. The Price List is NOT used to invent a
+  // discount: if a task was simply priced differently, there is no discount.
   let device;
   if(!(taxable>0)){ device=0; disc=0; }               // free service (₹0) — no price, no discount
-  else if(std>0){
-    const stdTot=r2(std*q);
-    if(stdTot >= taxable - 0.5){ device=stdTot; disc=Math.max(0, r2(stdTot - taxable)); }
-    else { device=taxable; disc=0; }
-  } else device = r2(taxable + disc);
+  else device = r2(taxable + disc);
   const balance = Math.max(0, r2(totalIncl - recv));
   return { device, disc, taxable, gst, taskValue: totalIncl, recv, balance, atStandard, isSB, unit: r2(taxable/q),
            reason: own>0 ? (e.discount_reason||'') : (e.task_discount_reason||''), by: own>0 ? (e.discount_incharge||'') : (e.task_discount_by||'') };
@@ -661,7 +656,7 @@ function renderStats(t){
     cards.push({k:'service',  l:'Other paid services · '+rs(t.v_svc), v:q(t.n_svc), c:'#6d28d9'});
   }
   // Money — Actual − Discount = Task value (+ GST = Total); Collected; Pending
-  cards.push({k:'all', l:'Actual value (Price List'+(isSB?', before GST':'')+')', v:rs(t.actual), c:'#475569'});
+  cards.push({k:'all', l:'Actual value (before discount'+(isSB?', before GST':'')+')', v:rs(t.actual), c:'#475569'});
   cards.push({k:'discount', l:'Discount given · '+t.discount_n+' entries', v:'− '+rs(t.discount), c:'#d97706'});
   cards.push({k:'all', l:'Task value (after discount'+(isSB?', before GST':'')+')', v:rs(t.value), c:'#1a56a0'});
   if(isSB){
@@ -950,7 +945,7 @@ function viewEntry(id){
   );
 
   const paySec = section('Payment',
-      row('Actual Price (Price List'+(_bp.isSB?', before GST':'')+')', money(_bp.device))
+      row('Actual Price'+(_bp.isSB?' (before GST)':''), money(_bp.device))
     + row('Discount'+(_bp.isSB?' (before GST)':''), _bp.disc>0 ? '− '+money(_bp.disc) : '–', {color:_bp.disc>0?'#b45309':'var(--text)'})
     + row('Task Value (after discount'+(_bp.isSB?', before GST)':')'), money(_bp.taxable), {bold:true})
     + (_bp.isSB ? row('GST 18%', money(_bp.gst), {color:'#b45309'}) + row('Total (incl GST)', money(total), {bold:true}) : '')
@@ -1147,7 +1142,7 @@ function exportXLS(){
   const rows=data.map((e,i)=>({'#':i+1,'Date':e.date,'Type':e.type,'Task':e.task_id||e.task_no,'Invoice':e.invoice_no,
     'Name on Server':e.name_on_server,'Server':e.server_name,'Model/Service':e.device_model||e.service_type,
     'Qty':e.qty,'Unit Price (excl GST)':bsPrice(e).unit,
-    'Actual Price (Price List, excl GST)':bsPrice(e).device,'Discount (excl GST)':bsPrice(e).disc||'','Discount Reason':bsPrice(e).reason||'','Discount Approved By':bsPrice(e).by||'',
+    'Actual Price (excl GST)':bsPrice(e).device,'Discount (excl GST)':bsPrice(e).disc||'','Discount Reason':bsPrice(e).reason||'','Discount Approved By':bsPrice(e).by||'',
     'Task Value / Taxable (excl GST)':bsPrice(e).taxable,'GST':bsPrice(e).gst,'Total (incl GST)':bsPrice(e).taskValue,
     'Collected':e.payment_received,'Pending (to collect)':bsPrice(e).balance,'Mode':e.payment_mode,
     'Status':e.payment_status,
