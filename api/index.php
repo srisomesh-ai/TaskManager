@@ -4272,6 +4272,7 @@ case 'bs_get_entries':
         }
         foreach ($entries as $i => &$e) {
             $t = $tidByEntry[$i] ?? 0;
+            if ($t) $e['task_link_id'] = $t;                 // numeric task id, for the "open task" link
             $d = ($t && isset($tBy[$t])) ? $tBy[$t] : null;
             $n = $d ? trim((string)$d['device_details']) : '';
             if ($n === '' || !isset($stdBy[$n])) $n = trim((string)($e['device_model'] ?? ''));
